@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scenes/stub.gd" id="1_stub"]
+[ext_resource type="Script" path="res://scenes/main_menu.gd" id="1_menu"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -9,7 +9,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_stub")
+script = ExtResource("1_menu")
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -20,25 +20,72 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.117647, 0.12549, 0.188235, 1)
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Title" type="Label" parent="."]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+offset_left = 96.0
+offset_top = 56.0
+offset_right = 640.0
+offset_bottom = 130.0
+theme_override_font_sizes/font_size = 48
+text = "GAME_TITLE"
+metadata/tr_key = "GAME_TITLE"
 
-[node name="VBox" type="VBoxContainer" parent="Center"]
+[node name="Menu" type="VBoxContainer" parent="."]
+layout_mode = 1
+offset_left = 96.0
+offset_top = 200.0
+offset_right = 400.0
+offset_bottom = 600.0
 theme_override_constants/separation = 16
 
-[node name="Title" type="Label" parent="Center/VBox"]
-theme_override_font_sizes/font_size = 48
-text = "MENU_TITLE"
-metadata/tr_key = "MENU_TITLE"
+[node name="Play" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+text = "MENU_PLAY"
+metadata/tr_key = "MENU_PLAY"
 
-[node name="Note" type="Label" parent="Center/VBox"]
-custom_minimum_size = Vector2(560, 0)
-text = "MENU_STUB"
-autowrap_mode = 3
-horizontal_alignment = 1
-metadata/tr_key = "MENU_STUB"
+[node name="Friends" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+disabled = true
+text = "MENU_FRIENDS"
+metadata/tr_key = "MENU_FRIENDS"
+
+[node name="Wardrobe" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+disabled = true
+text = "MENU_WARDROBE"
+metadata/tr_key = "MENU_WARDROBE"
+
+[node name="Settings" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+disabled = true
+text = "MENU_SETTINGS"
+metadata/tr_key = "MENU_SETTINGS"
+
+[node name="Quit" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+text = "MENU_QUIT"
+metadata/tr_key = "MENU_QUIT"
+
+[node name="Note" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 96.0
+offset_top = -80.0
+offset_right = -96.0
+offset_bottom = -32.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 18
+text = "MENU_STAGE1_NOTE"
+metadata/tr_key = "MENU_STAGE1_NOTE"
+
+[connection signal="pressed" from="Menu/Play" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="Menu/Quit" to="." method="_on_quit_pressed"]

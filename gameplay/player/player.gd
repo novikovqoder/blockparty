@@ -138,6 +138,14 @@ func give_up_hang() -> void:
 	EventBus.hang_ended.emit()  # сцена забега переносит на чекпоинт
 
 
+func is_hanging() -> bool:
+	return _state == State.HANGING
+
+
+func hang_time_left() -> float:
+	return _hang_left
+
+
 func _on_hang_started() -> void:
 	set_control(false)
 

@@ -14,12 +14,12 @@ const ZONE_HEIGHT: float = 720.0
 ## Y верхнего уровня пола во всех секциях (раздел 5: вход/выход на y = 576).
 const FLOOR_Y: float = 576.0
 
-var def: ChunkDef
+var chunk_def: ChunkDef
 var offset_x: float = 0.0
 
 
 func setup(p_def: ChunkDef, p_offset_x: float) -> void:
-	def = p_def
+	chunk_def = p_def
 	offset_x = p_offset_x
 	position.x = offset_x
 

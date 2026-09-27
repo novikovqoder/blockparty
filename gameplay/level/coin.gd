@@ -27,8 +27,8 @@ func _ready() -> void:
 	EventBus.coin_picked.connect(_on_coin_picked)
 	# Лёгкое покачивание, чтобы монета была заметна.
 	var t := create_tween().set_loops()
-	t.tween_property(scale, Vector2(1.15, 1.15), 0.5)
-	t.tween_property(scale, Vector2.ONE, 0.5)
+	t.tween_property(self, "scale", Vector2(1.15, 1.15), 0.5)
+	t.tween_property(self, "scale", Vector2.ONE, 0.5)
 
 
 func setup(p_spawn_id: int) -> void:

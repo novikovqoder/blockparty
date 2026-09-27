@@ -38,7 +38,7 @@ locale/fallback="en"
 
 [input]
 
-# Бинды по таблице раздела 4 SPEC; physical_keycode не зависит от раскладки.
+; Бинды по таблице раздела 4 SPEC; physical_keycode не зависит от раскладки.
 move_left={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventKey,"physical_keycode":4194319)]

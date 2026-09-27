@@ -6,7 +6,20 @@ OFFLINE_TEXT,"Запустите Steam и перезапустите игру. �
 OFFLINE_PLAY,Играть офлайн (режим разработки),Play offline (development mode)
 OFFLINE_QUIT,Выход,Quit
 MENU_TITLE,Главное меню,Main Menu
-MENU_STUB,"Каркас проекта (этап 0). Одиночный геймплей появится на этапе 1.","Project skeleton (stage 0). Single-player gameplay arrives at stage 1."
+MENU_PLAY,Играть,Play
+MENU_FRIENDS,С друзьями,Friends
+MENU_WARDROBE,Гардероб,Wardrobe
+MENU_SETTINGS,Настройки,Settings
+MENU_QUIT,Выход,Quit
+MENU_STAGE1_NOTE,"Этап 1: одиночный забег. С ними играть, гардероб и настройки — на этапах 4–7.","Stage 1: single-player run. Friends, wardrobe and settings arrive at stages 4–7."
 LOBBY_STUB,Лобби — заглушка этапа 0,Lobby — stage 0 stub
-RUN_STUB,Забег — заглушка этапа 0,Run — stage 0 stub
-RESULTS_STUB,Результаты — заглушка этапа 0,Results — stage 0 stub
+RESULTS_STUB,Результаты — заглушка (этап 6),Results — stub (stage 6)
+HUD_COINS,Монеты,Coins
+RUN_GO,Вперёд!,Go!
+RUN_HANGING,"Висит — нужна помощь (в одиночном забеге через 8 с вернёт на чекпоинт)","Hanging — need help (in a solo run you return to the checkpoint after 8 s)"
+RUN_GIVE_UP,Сдаться,Give up
+RUN_FINISHED,Забег пройден!,Run complete!
+RUN_TIMEOUT,Время вышло,Time is up
+RUN_RESULT_COINS,Монет за забег: %d,Coins earned: %d
+RUN_AGAIN,Ещё раз,Play again
+RUN_TO_MENU,В меню,To menu
