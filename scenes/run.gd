@@ -29,9 +29,12 @@ func _ready() -> void:
 	Session.begin_run()
 	plan = LevelPlanner.plan(Session.level_seed, LevelBuilder.pool(), _section_count())
 	add_child(LevelBuilder.build(plan))
+	var order: Array[String] = []
+	for entry: Dictionary in plan.entries:
+		order.append(entry["id"])
 	Log.info(
-		"Уровень собран: seed=%d, секций=%d, мобов=%d, монет=%d, ширина=%d px"
-		% [Session.level_seed, plan.entries.size(), plan.mob_spawns.size(), plan.coin_spawns.size(), plan.total_width],
+		"Уровень собран: seed=%d, секций=%d [%s], мобов=%d, монет=%d, ширина=%d px"
+		% [Session.level_seed, plan.entries.size(), " → ".join(order), plan.mob_spawns.size(), plan.coin_spawns.size(), plan.total_width],
 		"Run"
 	)
 

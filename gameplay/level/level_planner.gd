@@ -36,8 +36,8 @@ static func plan(seed: int, pool: Array[ChunkDef], section_count: int) -> LevelP
 			plan.spawn_point = Vector2(offset_x + def.checkpoint.x, def.checkpoint.y - 32.0)
 		if def.type == ChunkDef.Type.FINISH and def.finish_x >= 0.0:
 			plan.finish_x = offset_x + def.finish_x
-		# Чекпоинт в начале каждой секции, кроме стартовой площадки.
-		if def.type != ChunkDef.Type.START:
+		# Чекпоинт в начале каждой игровой секции; площадкам он не нужен.
+		if def.type != ChunkDef.Type.START and def.type != ChunkDef.Type.FINISH:
 			section_index += 1
 			plan.checkpoints.append({
 				"index": section_index,
