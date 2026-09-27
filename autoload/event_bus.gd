@@ -46,6 +46,29 @@ signal hang_started()
 signal hang_ended()
 ## Хост подтвердил возврат игрока на чекпоинт (rpc_respawn) — телепорт.
 signal player_respawned(position: Vector2)
+## Состояние «Висит» игрока (свой — по hang_started, чужие — от хоста);
+## deadline_run_time — когда вис кончится по часам забега (-1 — неизвестно).
+signal hang_state_changed(peer_id: int, hanging: bool, deadline_run_time: float)
+
+# --- Кооп-механики (раздел 7) ---
+
+## Локальный игрок отправил эмоцию (origin — его позиция, facing — взгляд).
+signal emote_requested(emote_id: int, origin: Vector2, facing: int)
+## Хост доставил эмоцию: показать пузырь и маркеры («Сюда!», «Помогите!»).
+signal emote_shown(sender_peer: int, emote_id: int, origin: Vector2, facing: int)
+## Помощник удержал E у висящего — просит вытянуть (проверяет хост).
+signal pull_requested(target_peer: int)
+## Хост подтвердил вытягивание: helper вытащил target (раздел 7.1).
+signal player_pulled(helper_peer: int, target_peer: int)
+## Хост открыл кооп-объект (ворота / лестница / запасная платформа);
+## fallback =true — открыто запасным таймером, без участников.
+signal coop_object_opened(object_id: int, fallback: bool, participant_peers: Array[int])
+## Состояние падающей платформы: fallen=true — упала (раздел 6).
+signal platform_state_changed(platform_id: int, fallen: bool)
+## Первый удар по золотой цели — уязвима окно golden_hit_window (раздел 7.4).
+signal mob_damaged(spawn_id: int, hitter_peer: int)
+## Локальный игрок прыгнул с головы игрока peer_id (раздел 11, локально).
+signal head_jump_performed(peer_id: int)
 
 # --- Финиш (раздел 7.6) ---
 

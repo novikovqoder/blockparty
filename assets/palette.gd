@@ -22,6 +22,10 @@ extends Resource
 @export var checkpoint: Color = Color("90e0ef")
 @export var finish: Color = Color("ffadad")
 @export var ladder: Color = Color("d4a373")
+@export var plate: Color = Color("cdb4db")
+@export var gate: Color = Color("9d4edd")
+@export var golden: Color = Color("fff3b0")
+@export var marker: Color = Color("ff9f1c")
 
 @export_group("Игрок и HUD")
 @export var player_body: Color = Color("f2f7f5")

@@ -62,7 +62,61 @@ extends Resource
 ## Смещение висящего игрока от точки HangPoint, px (висит ниже края).
 @export var hang_offset_y: float = 14.0
 
+@export_group("Вытягивание из пропасти (раздел 7.1)")
+## Сколько секунд удерживать E рядом с висящим, с.
+@export var pull_hold_time: float = 0.5
+## Радиус от висящего, в котором доступно вытягивание, px (раздел 7.1 — 64).
+@export var pull_range: float = 64.0
+## Допуск хоста при проверке дистанции вытягивания (пинг интерполяции), px.
+@export var pull_accept_range: float = 128.0
+
+@export_group("Кооп-ворота и уступы (разделы 7.2, 7.3)")
+## Запасной таймер ворот: столько секунд у закрытых ворот стоит игрок —
+## ворота открываются сами, с.
+@export var gate_fallback_time: float = 45.0
+## Запасной таймер уступа: столько секунд у уступа — появляется платформа, с.
+@export var ledge_fallback_time: float = 45.0
+## Верхняя граница N игроков для ворот (раздел 7.2 — не больше 3).
+@export var coop_max_players: int = 3
+
+@export_group("Золотая цель (разделы 6, 7.4)")
+## Окно между ударами двух разных игроков, с.
+@export var golden_hit_window: float = 3.0
+
+@export_group("Падающие платформы (раздел 6)")
+## Падает через столько секунд после того, как на неё встал игрок, с.
+@export var falling_platform_delay: float = 0.6
+## Восстанавливается через столько секунд после падения, с.
+@export var falling_platform_restore: float = 5.0
+
+@export_group("Эмоции (разделы 4, 7.5)")
+## Перезарядка между эмоциями, с.
+@export var emote_cooldown: float = 1.0
+## Сколько секунд висит пузырь эмоции, с.
+@export var emote_show_time: float = 2.5
+## Радиус доставки эмоций от отправителя (фильтр хоста), px.
+@export var emote_radius: float = 1920.0
+## Радиус стрелки-указателя «Помогите!» на висящего, px (раздел 7.1 — 1280).
+@export var help_marker_radius: float = 1280.0
+## Сколько секунд стоит маркер-стрелка «Сюда!», с.
+@export var here_marker_time: float = 3.0
+## Как далеко от персонажа ставится стрелка «Сюда!», px.
+@export var here_marker_distance: float = 200.0
+
+@export_group("Взаимодействия (раздел 11; очки для Interactions)")
+## Он вытянул меня / я вытянул его.
+@export var pts_pull_up: float = 10.0
+## Вместе открыли кооп-ворота.
+@export var pts_gate_open: float = 6.0
+## Прыгнул с его головы.
+@export var pts_head_jump: float = 4.0
+## Вместе убили золотую цель.
+@export var pts_golden_kill: float = 6.0
+
 @export_group("Забег (разделы 5, 7.6)")
+## Сколько игровых секций выбирается из пула 14 (раздел 5: 8 секций + старт
+## и финиш = 10).
+@export var sections_per_run: int = 8
 ## Жёсткий лимит забега, с.
 @export var run_time_limit: float = 600.0
 ## За сколько секунд до конца забега HUD показывает таймер, с.
