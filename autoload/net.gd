@@ -43,6 +43,13 @@ var _picked_coins: Dictionary = {}    # spawn_id -> peer_id победителя
 var _killed_mobs: Dictionary = {}     # spawn_id -> true
 var _last_hit_msec: Dictionary = {}   # peer_id -> мс последнего подтверждённого удара
 
+# --- Кооп-механики (разделы 6, 7; решает хост) ---
+
+var _coop: CoopDirector = null        # плиты/ворота/уступы/платформы
+var _golden := GoldenTracker.new()    # золотая цель: удары двух разных игроков
+var _coop_accum: float = 0.0
+var _last_emote_msec: Dictionary = {} # peer_id -> мс последней эмоции (анти-спам)
+
 # --- Снапшоты и удалённые игроки ---
 
 var _local_player: Player = null
@@ -105,6 +112,9 @@ func _ready() -> void:
 	EventBus.hang_started.connect(_on_hang_started)
 	EventBus.hang_ended.connect(_on_hang_ended)
 	EventBus.player_finished.connect(_on_player_finished)
+	EventBus.emote_requested.connect(_on_emote_requested)
+	EventBus.pull_requested.connect(_on_pull_requested)
+	EventBus.head_jump_performed.connect(_on_head_jump)
 
 
 func _process(delta: float) -> void:
@@ -125,6 +135,14 @@ func _process(delta: float) -> void:
 			_ping_accum = 0.0
 			var now: int = Time.get_ticks_msec()
 			_send(func() -> void: rpc_id(1, "rpc_ping", now), true)
+	# Кооп-логика (плиты, уступы, платформы) — на хосте, по позициям игроков.
+	if is_host() and Session.run_active and _coop != null:
+		_coop_accum += delta
+		if _coop_accum >= Protocol.COOP_TICK_INTERVAL:
+			var step: float = _coop_accum
+			_coop_accum = 0.0
+			for event: Dictionary in _coop.tick(step, _host_positions()):
+				_host_apply_coop_event(event)
 
 
 # --- Публичный интерфейс ---
@@ -183,10 +201,34 @@ func report_ready() -> void:
 		_send(func() -> void: rpc_client_ready.rpc(), false)
 
 
-## Сцена забега передаёт хосту мир для проверок: мобов и точки чекпоинтов.
-func bind_world(mobs: Dictionary, checkpoints: Array[Vector2]) -> void:
+## Сцена забега передаёт хосту мир для проверок: мобов, точки чекпоинтов и
+## зоны кооп-объектов (LevelBuilder.host_zones; {} — кооп-объектов нет).
+func bind_world(mobs: Dictionary, checkpoints: Array[Vector2], coop_zones: Dictionary = {}) -> void:
 	_mobs = mobs
 	_checkpoints = checkpoints
+	if is_host():
+		_coop = CoopDirector.new()
+		_coop.setup(coop_zones.get("coop", []), coop_zones.get("platforms", []))
+	_golden = GoldenTracker.new()
+
+
+## Позиции всех участников для логики хоста: локальный игрок и снапшоты
+## чужих (Vector2.INF — данных нет).
+func _host_positions() -> Dictionary:
+	var positions := {}
+	for peer_id: int in players.keys():
+		if peer_id == local_peer_id:
+			positions[peer_id] = _local_player.global_position if _local_player != null else Vector2.INF
+		else:
+			positions[peer_id] = remote_position(peer_id)
+	return positions
+
+
+## Позиция участника (для проверок хоста).
+func _peer_position(peer_id: int) -> Vector2:
+	if peer_id == local_peer_id:
+		return _local_player.global_position if _local_player != null else Vector2.INF
+	return remote_position(peer_id)
 
 
 ## Свой персонаж (для снапшотов) и удалённые игроки (для доставки снапшотов).
@@ -406,10 +448,11 @@ func rpc_hang() -> void:
 	_broadcast_hang(sender, true)
 
 
-## Состояние «Висит» игрока — всем (иконка и анимация у чужих персонажей).
+## Состояние «Висит» игрока — всем (иконка и анимация у чужих персонажей);
+## deadline_run_time — когда вис кончится по часам забега (-1 — не висит).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hang_state(peer_id: int, hanging: bool) -> void:
-	_apply_hang(peer_id, hanging)
+func rpc_hang_state(peer_id: int, hanging: bool, deadline_run_time: float) -> void:
+	_apply_hang(peer_id, hanging, deadline_run_time)
 
 
 ## Клиент сдаётся или истёк таймаут 8 с — просит возврат на чекпоинт.
@@ -438,6 +481,53 @@ func rpc_player_finished(run_time: float) -> void:
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
 func rpc_run_ended(reason: int) -> void:
 	_apply_run_ended(reason)
+
+
+## Клиент отправил эмоцию (раздел 7.5): хост фильтрует спам и радиус.
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_emote(emote_id: int, origin: Vector2, facing: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_host_handle_emote(multiplayer.get_remote_sender_id(), emote_id, origin, facing)
+
+
+## Хост доставил эмоцию тем, кто в радиусе emote_radius от отправителя.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_emote_shown(sender_peer: int, emote_id: int, origin: Vector2, facing: int) -> void:
+	_apply_emote_shown(sender_peer, emote_id, origin, facing)
+
+
+## Клиент удержал E у висящего — просит вытянуть (раздел 7.1, проверяет хост).
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_request_pull(target_peer: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_host_handle_pull(multiplayer.get_remote_sender_id(), target_peer)
+
+
+## Хост подтвердил вытягивание: helper вытащил target (награда — helper'у).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_pulled(helper_peer: int, target_peer: int) -> void:
+	_apply_pulled(helper_peer, target_peer)
+
+
+## Хост открыл кооп-объект: ворота (participants), лестница или запасная
+## платформа (fallback=true, участников нет) — навсегда (разделы 7.2, 7.3).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_coop_open(object_id: int, fallback: bool, participants: Array) -> void:
+	_apply_coop_open(object_id, fallback, participants)
+
+
+## Состояние падающей платформы (раздел 6): fallen=true — упала.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_platform_state(platform_id: int, fallen: bool) -> void:
+	_apply_platform_state(platform_id, fallen)
+
+
+## Первый удар по золотой цели: цель «заведена» — уязвима окно 3 с (раздел 7.4).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_mob_damaged(spawn_id: int, hitter_peer: int) -> void:
+	EventBus.mob_damaged.emit(spawn_id, hitter_peer)
 
 
 # --- Обработка событий геймплея (единый путь для соло и сети) ---
@@ -493,6 +583,28 @@ func _on_player_finished(run_time: float) -> void:
 		_send(func() -> void: rpc_player_finished.rpc(run_time), false)
 
 
+func _on_emote_requested(emote_id: int, origin: Vector2, facing: int) -> void:
+	if not Session.run_active:
+		return
+	if is_host():
+		_host_handle_emote(local_peer_id, emote_id, origin, facing)
+	else:
+		_send(func() -> void: rpc_emote.rpc(emote_id, origin, facing), false)
+
+
+func _on_pull_requested(target_peer: int) -> void:
+	if is_host():
+		_host_handle_pull(local_peer_id, target_peer)
+	else:
+		_send(func() -> void: rpc_request_pull.rpc(target_peer), false)
+
+
+## Прыжок с головы — локальное событие каждого клиента (раздел 11): сеть
+## не нужна, очки взаимодействий считает каждый у себя.
+func _on_head_jump(peer_id: int) -> void:
+	Interactions.add_points(peer_id, Interactions.KIND_HEAD_JUMP, B.pts_head_jump, Session.run_time)
+
+
 # --- Логика хоста (раздел 6: всё, что даёт награду, решает хост) ---
 
 ## Монета: первый запрос выигрывает, остальные отклоняются.
@@ -525,6 +637,18 @@ func _host_handle_hit(peer_id: int, spawn_id: int, at_run_time: float, from_posi
 			Log.debug("Отказ попадания %d по мобу %d: перезарядка" % [peer_id, spawn_id], "Net")
 		return
 	_last_hit_msec[peer_id] = now
+	if mob is GoldenMob:
+		# Золотая цель живёт до ударов двух разных игроков в окне 3 с (раздел 7.4).
+		var result: Dictionary = _golden.register_hit(spawn_id, peer_id, at_run_time)
+		if result["killed"]:
+			_killed_mobs[spawn_id] = true
+			Log.debug(
+				"Золотая цель %d убита игроками %s" % [spawn_id, str(result["participants"])], "Net"
+			)
+			_broadcast_mob_killed(spawn_id, result["participants"], B.golden_kill_coins)
+		else:
+			_broadcast_mob_damaged(spawn_id, peer_id)
+		return
 	_killed_mobs[spawn_id] = true
 	Log.debug("Моб %d убит игроком %d" % [spawn_id, peer_id], "Net")
 	_broadcast_mob_killed(spawn_id, [peer_id], B.mob_kill_coins)
@@ -545,6 +669,67 @@ func _host_handle_finished(peer_id: int, run_time: float) -> void:
 			break
 	if all_done:
 		_host_end_run(RunEndReason.ALL_FINISHED)
+
+
+## Эмоция (раздел 7.5): номер 1..6, перезарядка emote_cooldown, доставка
+## только тем, кто в радиусе emote_radius от отправителя.
+func _host_handle_emote(sender: int, emote_id: int, origin: Vector2, facing: int) -> void:
+	if not Session.run_active or not players.has(sender):
+		return
+	if emote_id < 1 or emote_id > 6:
+		return
+	var now: int = Time.get_ticks_msec()
+	var cooldown_msec: int = int(B.emote_cooldown * 1000.0)
+	if _last_emote_msec.has(sender) and now - int(_last_emote_msec[sender]) < cooldown_msec:
+		return  # анти-спам (раздел 7.5: перезарядка 1 с)
+	_last_emote_msec[sender] = now
+	if is_networked():
+		for pid: int in multiplayer.get_peers():
+			if _peer_position(pid).distance_to(origin) <= B.emote_radius:
+				_send(
+					func() -> void: rpc_id(pid, "rpc_emote_shown", sender, emote_id, origin, facing),
+					false
+				)
+	else:
+		_apply_emote_shown(sender, emote_id, origin, facing)
+
+
+## Вытягивание из пропасти (раздел 7.1): цель висит, помощник рядом
+## (допуск pull_accept_range) и сам не висит.
+func _host_handle_pull(helper: int, target: int) -> void:
+	if not Session.run_active or helper == target:
+		return
+	if not players.has(helper) or not players.has(target):
+		return
+	if not players[target]["hanging"] or players[helper]["hanging"]:
+		return
+	var helper_pos: Vector2 = _peer_position(helper)
+	var target_pos: Vector2 = _peer_position(target)
+	if helper_pos == Vector2.INF or target_pos == Vector2.INF:
+		return
+	if helper_pos.distance_to(target_pos) > B.pull_accept_range:
+		if _net_log:
+			Log.debug("Отказ вытягивания %d -> %d: дистанция" % [helper, target], "Net")
+		return
+	players[target]["hanging"] = false
+	Log.debug("Игрок %d вытянул игрока %d" % [helper, target], "Net")
+	_broadcast_pulled(helper, target)
+
+
+## Событие тика CoopDirector: рассылается как открытие кооп-объекта или
+## состояние платформы.
+func _host_apply_coop_event(event: Dictionary) -> void:
+	match int(event["event"]):
+		CoopDirector.Event.GATE_OPEN:
+			_broadcast_coop_open(int(event["id"]), false, event["participants"])
+		CoopDirector.Event.LADDER_DROP:
+			_broadcast_coop_open(int(event["id"]), false, [])
+		CoopDirector.Event.LEDGE_PLATFORM:
+			_broadcast_coop_open(int(event["id"]), true, [])
+		CoopDirector.Event.PLATFORM_FALL:
+			_broadcast_platform_state(int(event["id"]), true)
+		CoopDirector.Event.PLATFORM_RESTORE:
+			_broadcast_platform_state(int(event["id"]), false)
 
 
 ## Условия конца забега, которые считает только хост (разделы 5, 7.6).
@@ -605,10 +790,40 @@ func _broadcast_mob_killed(spawn_id: int, killer_ids: Array, coins: int) -> void
 
 
 func _broadcast_hang(peer_id: int, hanging: bool) -> void:
+	# Дедлайн «Висит» по часам забега: отсчёт hang_time начинает хост.
+	var deadline: float = Session.run_time + B.hang_time if hanging else -1.0
 	if is_networked():
-		rpc_hang_state.rpc(peer_id, hanging)
+		rpc_hang_state.rpc(peer_id, hanging, deadline)
 	else:
-		_apply_hang(peer_id, hanging)
+		_apply_hang(peer_id, hanging, deadline)
+
+
+func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
+	if is_networked():
+		rpc_pulled.rpc(helper_peer, target_peer)
+	else:
+		_apply_pulled(helper_peer, target_peer)
+
+
+func _broadcast_coop_open(object_id: int, fallback: bool, participants: Array) -> void:
+	if is_networked():
+		rpc_coop_open.rpc(object_id, fallback, participants)
+	else:
+		_apply_coop_open(object_id, fallback, participants)
+
+
+func _broadcast_platform_state(platform_id: int, fallen: bool) -> void:
+	if is_networked():
+		rpc_platform_state.rpc(platform_id, fallen)
+	else:
+		_apply_platform_state(platform_id, fallen)
+
+
+func _broadcast_mob_damaged(spawn_id: int, hitter_peer: int) -> void:
+	if is_networked():
+		rpc_mob_damaged.rpc(spawn_id, hitter_peer)
+	else:
+		EventBus.mob_damaged.emit(spawn_id, hitter_peer)
 
 
 func _broadcast_respawn(peer_id: int, position: Vector2) -> void:
@@ -632,9 +847,16 @@ func _apply_mob_killed(spawn_id: int, killer_ids: Array, coins: int) -> void:
 	EventBus.mob_killed.emit(spawn_id, killers)
 	if local_peer_id in killers:
 		Session.add_run_coins(coins)
+	# Золотая цель убита вдвоём — очки взаимодействий каждому напарнику (раздел 11).
+	if killers.size() > 1:
+		for pid: int in killers:
+			if pid != local_peer_id:
+				Interactions.add_points(
+					pid, Interactions.KIND_GOLDEN_KILL, B.pts_golden_kill, Session.run_time
+				)
 
 
-func _apply_hang(peer_id: int, hanging: bool) -> void:
+func _apply_hang(peer_id: int, hanging: bool, deadline_run_time: float = -1.0) -> void:
 	if peer_id == local_peer_id:
 		return  # своё состояние «Висит» игрок ведёт сам
 	if players.has(peer_id):
@@ -642,6 +864,46 @@ func _apply_hang(peer_id: int, hanging: bool) -> void:
 	var remote: RemotePlayer = _remotes.get(peer_id)
 	if remote != null:
 		remote.set_remote_hanging(hanging)
+	EventBus.hang_state_changed.emit(peer_id, hanging, deadline_run_time)
+
+
+func _apply_emote_shown(sender_peer: int, emote_id: int, origin: Vector2, facing: int) -> void:
+	EventBus.emote_shown.emit(sender_peer, emote_id, origin, facing)
+
+
+func _apply_pulled(helper_peer: int, target_peer: int) -> void:
+	EventBus.player_pulled.emit(helper_peer, target_peer)
+	# Награда 3 монеты — помощнику (раздел 7.1); очки — каждому у себя.
+	if helper_peer == local_peer_id:
+		Session.add_run_coins(B.pull_up_coins)
+		if target_peer != local_peer_id:
+			Interactions.add_points(
+				target_peer, Interactions.KIND_PULL_GAVE, B.pts_pull_up, Session.run_time
+			)
+	elif target_peer == local_peer_id:
+		Interactions.add_points(
+			helper_peer, Interactions.KIND_PULL_GOT, B.pts_pull_up, Session.run_time
+		)
+
+
+func _apply_coop_open(object_id: int, fallback: bool, participants: Array) -> void:
+	var peers: Array[int] = []
+	for pid: int in participants:
+		peers.append(int(pid))
+	EventBus.coop_object_opened.emit(object_id, fallback, peers)
+	# Монеты за ворота — каждому, кто стоял на плитах (раздел 7.2); за
+	# запасное открытие награды нет.
+	if not fallback and local_peer_id in peers:
+		Session.add_run_coins(B.gate_coins)
+		for pid: int in peers:
+			if pid != local_peer_id:
+				Interactions.add_points(
+					pid, Interactions.KIND_GATE_OPEN, B.pts_gate_open, Session.run_time
+				)
+
+
+func _apply_platform_state(platform_id: int, fallen: bool) -> void:
+	EventBus.platform_state_changed.emit(platform_id, fallen)
 
 
 func _apply_respawn(peer_id: int, position: Vector2) -> void:
@@ -705,6 +967,10 @@ func _reset_run_state() -> void:
 	_picked_coins.clear()
 	_killed_mobs.clear()
 	_last_hit_msec.clear()
+	_coop = null  # зоны придут с bind_world после сборки уровня
+	_golden.reset()
+	_coop_accum = 0.0
+	_last_emote_msec.clear()
 	_remotes.clear()
 	go_host_msec = 0
 	_first_finish_run_time = -1.0

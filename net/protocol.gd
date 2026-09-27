@@ -6,7 +6,8 @@ class_name Protocol
 extends RefCounted
 
 ## Версия протокола: несовместимые лобби не видны друг другу (раздел 8).
-const PROTOCOL_VERSION: int = 2
+## 3 — кооп-механики этапа 3 (эмоции, вытягивание, ворота, платформы).
+const PROTOCOL_VERSION: int = 3
 
 ## Максимум игроков в забеге; код должен работать до MAX_PLAYERS_HARD (раздел 8).
 const MAX_PLAYERS: int = 12
@@ -57,6 +58,9 @@ const GO_DELAY: float = 3.0
 
 ## Допуск к перезарядке атаки при проверке попадания на хосте, с.
 const HIT_COOLDOWN_TOLERANCE: float = 0.25
+
+## Период проверок кооп-логики хоста (плиты, уступы, платформы), с.
+const COOP_TICK_INTERVAL: float = 0.1
 
 # --- Эмуляция плохой сети (раздел 16; аргументы --net-lag, --net-loss) ---
 
