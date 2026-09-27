@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="Balance" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://gameplay/balance.gd" id="1_bal"]
+
+[resource]
+script = ExtResource("1_bal")
+run_speed = 260.0
+accel_ground = 1800.0
+friction_ground = 2200.0
+air_control = 0.7
+jump_speed = 520.0
+gravity = 1400.0
+gravity_fall_multiplier = 1.4
+max_fall_speed = 900.0
+coyote_time = 0.1
+jump_buffer_time = 0.1
+jump_cut_factor = 0.45
+hitbox_width = 28.0
+hitbox_height = 44.0
+head_jump_bonus = 1.25
+attack_width = 40.0
+attack_height = 32.0
+attack_active_time = 0.12
+attack_cooldown = 0.35
+hit_invuln_time = 1.0
+hazard_knockback_x = 300.0
+hazard_knockback_y = 220.0
+mob_push_speed = 260.0
+hit_blink_time = 1.0
+hang_time = 8.0
+hang_offset_y = 14.0
+run_time_limit = 600.0
+timer_visible_last = 120.0
+start_countdown_time = 3.0
+bird_hits_to_die = 1
+critter_hits_to_die = 1
+golden_hits_to_die = 2
+mob_kill_coins = 1
+golden_kill_coins = 10
+coin_value = 1
+pull_up_coins = 3
+gate_coins = 2
+finish_coins = 5
+hit_accept_range = 96.0
+camera_lead = 96.0
+camera_smoothing = 8.0
