@@ -1,5 +1,6 @@
-# Бонусная секция (раздел 5): много монет, без опасностей — передышка.
-# TODO (этап 3): золотая цель, убиваемая ударами двух разных игроков.
+# Бонусная секция (раздел 5): золотая цель и много монет, без опасностей —
+# передышка. Золотая цель (раздел 7.4) умирает только от ударов двух разных
+# игроков в пределах golden_hit_window — повод для кооперации.
 class_name BonusCoinsChunk
 extends Chunk
 
@@ -18,6 +19,9 @@ static func def() -> ChunkDef:
 		var y := 500.0 - 64.0 * sin(TAU * float(i) / 11.0)
 		coins.append(Vector2(x, y))
 	d.coin_spawns = coins
+	d.mob_spawns = [
+		{"kind": "golden", "x": 960.0, "y": 380.0, "params": {"span_x": 300.0, "span_y": 100.0, "period_x": 3.2, "period_y": 4.6, "phase": 0.0}},
+	]
 	return d
 
 

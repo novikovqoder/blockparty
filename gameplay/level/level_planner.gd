@@ -60,6 +60,33 @@ static func plan(seed: int, pool: Array[ChunkDef], section_count: int) -> LevelP
 				"y": coin.y,
 			})
 			next_spawn_id += 1
+		for co: Dictionary in def.coop_spawns:
+			var world: Dictionary = {"spawn_id": next_spawn_id, "kind": co["kind"]}
+			for key: String in co.keys():
+				if key == "kind":
+					continue
+				var value: Variant = co[key]
+				# Горизонтальные координаты спавна — локальные x, сдвигаем в мир;
+				# высоты (top_y, min_players) остаются как есть.
+				if key in ["plates"]:
+					var plates: Array[float] = []
+					for x: float in value:
+						plates.append(offset_x + x)
+					world["plates"] = plates
+				elif key in ["gate_x", "ladder_x", "fallback_x", "zone_from", "zone_to", "top_from", "top_to"]:
+					world[key] = offset_x + float(value)
+				else:
+					world[key] = value
+			plan.coop_spawns.append(world)
+			next_spawn_id += 1
+		for pl: Dictionary in def.platform_spawns:
+			plan.platform_spawns.append({
+				"spawn_id": next_spawn_id,
+				"cx": offset_x + pl["cx"],
+				"top_y": pl["top_y"],
+				"width": pl["width"],
+			})
+			next_spawn_id += 1
 		for hp: float in def.hang_points:
 			plan.hang_points.append(Vector2(offset_x + hp, 576.0))
 		offset_x += def.width

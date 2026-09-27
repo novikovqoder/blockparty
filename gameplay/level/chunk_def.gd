@@ -23,6 +23,15 @@ var mob_spawns: Array[Dictionary] = []
 var coin_spawns: Array[Vector2] = []
 ## Локальные x-координаты краёв пропастей (y — уровень пола 576).
 var hang_points: Array[float] = []
+## Кооп-объекты секции (разделы 7.2, 7.3), локальные координаты:
+## ворота {kind:"gate", plates:Array[float], gate_x:float, min_players:int,
+##         zone_from:float, zone_to:float};
+## уступ {kind:"ledge", ladder_x:float, top_y:float, fallback_x:float,
+##        fallback_top_y:float, zone_from:float, zone_to:float,
+##        top_from:float, top_to:float}.
+var coop_spawns: Array[Dictionary] = []
+## Падающие платформы (раздел 6), локальные координаты: {cx, top_y, width}.
+var platform_spawns: Array[Dictionary] = []
 ## x финишной черты (только для секции FINISH, -1 — нет).
 var finish_x: float = -1.0
 
