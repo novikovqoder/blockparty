@@ -20,6 +20,18 @@ bash setup_server.sh ~/mvp_kit.zip ~/game-mvp
 - Steam-клиент с выполненным входом (для этапов 4–5)
 - `git lfs install` перед клонированием
 
+## Зафиксированные версии
+| Компонент | Версия |
+| --- | --- |
+| Godot | 4.7.2.stable.official.ed1daf0bf |
+| GodotSteam | GDExtension 4.22.1 (Asset Library) |
+| GUT | 9.7.1 |
+
+Версии не меняются без явного решения (раздел 2 SPEC). Актуальные версии также продублированы в docs/STATUS.md.
+
 ## Команды
-- Локальный сетевой тест без Steam: `tools/run_local.sh` (появится на этапе 0)
+- Первый импорт ассетов (после клонирования): `godot --headless --import`
+- Запуск: `godot` (или открыть проект в редакторе Godot той же версии)
+- Локальный сетевой тест без Steam: `tools/run_local.sh [N] [--headless]`
+  (хост + N клиентов, по умолчанию 3; на Windows — `tools/run_local.ps1`)
 - Тесты: `godot --headless -s addons/gut/gut_cmdln.gd`
