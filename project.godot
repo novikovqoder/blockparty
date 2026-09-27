@@ -1,0 +1,42 @@
+; Engine configuration file.
+; Проект Blockparty — кооперативный социальный 2D-платформер (см. docs/SPEC.md).
+
+config_version=5
+
+[application]
+
+config/name="Blockparty"
+config/description="Кооперативный социальный 2D-платформер для Steam. MVP."
+run/main_scene="res://scenes/boot.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+Log="*res://autoload/log.gd"
+EventBus="*res://autoload/event_bus.gd"
+Settings="*res://autoload/settings.gd"
+Save="*res://autoload/save.gd"
+Dev="*res://autoload/dev.gd"
+SteamService="*res://autoload/steam_service.gd"
+Net="*res://autoload/net.gd"
+Session="*res://autoload/session.gd"
+Voice="*res://autoload/voice.gd"
+Interactions="*res://autoload/interactions.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_height"
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://i18n/strings.en.translation", "res://i18n/strings.ru.translation")
+locale/fallback="en"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
