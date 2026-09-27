@@ -6,6 +6,9 @@ extends Node
 
 ## Порт ENet для --dev-host (раздел 3 SPEC).
 const DEV_PORT: int = 7777
+## Лимит FPS headless-копий в режиме --bot: без него каждая копия грузит
+## процессор на 100% и нагрузочный прогон 12 экземпляров душит сам себя.
+const HEADLESS_BOT_MAX_FPS: int = 60
 
 var host_mode: bool = false      # --dev-host: запуститься хостом через ENet
 var join_address: String = ""    # --dev-join=IP: подключиться клиентом

@@ -23,7 +23,9 @@ func setup(size: Vector2, p_params: Dictionary) -> void:
 
 
 func _ready() -> void:
-	_origin = global_position
+	# Локальная точка пути: чанк уже стоит на своём offset_x, глобальная
+	# позиция здесь дала бы двойное смещение.
+	_origin = position
 
 
 func _physics_process(_delta: float) -> void:

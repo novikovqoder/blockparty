@@ -1,9 +1,9 @@
-# Сцена забега (разделы 5, 8, 13 SPEC): фиксирует seed, строит уровень по плану,
-# спавнит игрока, ведёт отсчёт 3-2-1-GO и часы run_time, следит за лимитом
-# 10 минут и финишем. На этапе 1 забег одиночный: локальная роль «хоста» —
-# подтверждение подбора монет и смерти мобов (раздел 6) выполняет эта сцена;
-# на этапе 2 логика переедет в сетевой слой без смены сигналов EventBus.
-# Не делает: паузу и выход из забега по Esc (этап 7), ботов (этап 2).
+# Сцена забега (разделы 5, 8, 13 SPEC): строит уровень по seed, спавнит своего
+# игрока и удалённых участников, ведёт отсчёт до GO (по часам хоста в сети),
+# следит за HUD. Подтверждения событий (монеты, мобы, чекпоинты, «Висит»,
+# финиш и конец забега) решает хост — сетевую часть исполняет Net, в одиночной
+# игре Net играет роль хоста локально, те же сигналы EventBus.
+# Не делает: паузу и выход из забега по Esc (этап 7).
 class_name RunScene
 extends Node2D
 
@@ -14,8 +14,8 @@ const MAIN_MENU_SCENE: String = "res://scenes/main_menu.tscn"
 var plan: LevelPlan
 var player: Player
 
-var _mobs: Dictionary = {}  # spawn_id -> Mob (для проверок «хоста»)
-var _picked_coins: Dictionary = {}  # spawn_id -> true (первый запрос выигрывает)
+var _mobs: Dictionary = {}  # spawn_id -> Mob (проверки хоста, Net.bind_world)
+var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
 var _checkpoint: Vector2 = Vector2.ZERO
 var _checkpoint_index: int = 0
 var _countdown_left: float = 0.0
@@ -42,10 +42,23 @@ func _ready() -> void:
 	player.position = plan.spawn_point
 	add_child(player)
 	player.set_camera_limits(plan.total_width)
+	Net.set_local_player(player)
 	_checkpoint = plan.spawn_point
+	_spawn_remotes()
 
 	hud.setup(plan.entries.size())
+	hud.set_play_again_allowed(not Net.is_networked() or Net.is_host())
 	_connect_events()
+
+	for child: Node in get_node("Level").get_children():
+		var mob := child as Mob
+		if mob != null:
+			_mobs[mob.spawn_id] = mob
+	var checkpoints: Array[Vector2] = [plan.spawn_point]
+	for cp: Dictionary in plan.checkpoints:
+		checkpoints.append(Vector2(cp["x"], cp["y"]))
+	Net.bind_world(_mobs, checkpoints)
+	Net.report_ready()
 
 	_countdown_left = B.start_countdown_time
 	EventBus.run_countdown_started.emit()
@@ -60,21 +73,34 @@ func _physics_process(delta: float) -> void:
 	_update_hang_panel()
 
 
+## Отсчёт до GO: в сети — по часам хоста (rpc_go на 3 с позже времени хоста),
+## в одиночной игре — локальный таймер.
 func _process_countdown(delta: float) -> void:
-	_countdown_left -= delta
-	hud.show_countdown(_countdown_left)
-	if _countdown_left <= 0.0:
-		_started = true
-		Session.start_run_clock()
-		EventBus.run_go.emit()
+	if Net.is_networked():
+		if not Net.go_scheduled():
+			hud.show_countdown_waiting()
+			return
+		var left := Net.seconds_until_go()
+		hud.show_countdown(maxf(left, 0.0))
+		if left <= 0.0:
+			_go()
+	else:
+		_countdown_left -= delta
+		hud.show_countdown(_countdown_left)
+		if _countdown_left <= 0.0:
+			Net.mark_go_now()
+			_go()
 
 
-func _process_run(delta: float) -> void:
-	Session.run_time += delta
+func _go() -> void:
+	_started = true
+	Session.begin_go_clock()
+	EventBus.run_go.emit()
+
+
+func _process_run(_delta: float) -> void:
+	# Часы run_time и условия конца забега ведёт Net (по времени хоста).
 	hud.set_time_left(B.run_time_limit - Session.run_time, B.timer_visible_last)
-	if Session.run_time >= B.run_time_limit:
-		_end_run(false)
-		return
 	_update_section_hud()
 
 
@@ -90,18 +116,30 @@ func _section_count() -> int:
 
 func _connect_events() -> void:
 	EventBus.checkpoint_reached.connect(_on_checkpoint_reached)
-	EventBus.hang_ended.connect(_on_hang_ended)
-	EventBus.coin_pickup_requested.connect(_on_coin_pickup_requested)
-	EventBus.mob_hit_requested.connect(_on_mob_hit_requested)
-	EventBus.player_finished.connect(_on_player_finished)
+	EventBus.player_respawned.connect(_on_player_respawned)
+	EventBus.player_finished.connect(_on_player_finished_local)
+	EventBus.run_finished.connect(_on_run_finished)
+	EventBus.host_lost.connect(_on_host_lost)
+	EventBus.peer_left.connect(_on_peer_left)
 	hud.give_up_pressed.connect(func() -> void: player.give_up_hang())
 	hud.play_again_pressed.connect(_on_play_again)
 	hud.to_menu_pressed.connect(func() -> void: get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 
-	for child: Node in get_node("Level").get_children():
-		var mob := child as Mob
-		if mob != null:
-			_mobs[mob.spawn_id] = mob
+
+## Чужие игроки из ростера (без себя); позиции до первых снапшотов — старт.
+func _spawn_remotes() -> void:
+	if not Net.is_networked():
+		return
+	for peer_id: int in Net.players.keys():
+		if peer_id == Net.local_peer_id:
+			continue
+		var remote := RemotePlayer.new()
+		remote.setup(peer_id, str(Net.players[peer_id]["name"]))
+		remote.position = plan.spawn_point
+		add_child(remote)
+		Net.register_remote(peer_id, remote)
+		_remotes[peer_id] = remote
+	Log.info("Удалённых игроков на сцене: %d" % _remotes.size(), "Run")
 
 
 func _update_section_hud() -> void:
@@ -110,6 +148,7 @@ func _update_section_hud() -> void:
 		var entry: Dictionary = plan.entries[i]
 		if x < entry["offset_x"] + entry["width"] or i == plan.entries.size() - 1:
 			hud.set_section(i + 1, plan.entries.size())
+			Session.current_section = i + 1
 			return
 
 
@@ -118,30 +157,7 @@ func _update_hang_panel() -> void:
 		hud.set_hang_time(player.hang_time_left())
 
 
-# --- Локальная роль «хоста» (раздел 6; на этапе 2 переедет в сеть) ---
-
-## Первый запрос на монету выигрывает; подтверждение рассылается всем.
-func _on_coin_pickup_requested(spawn_id: int) -> void:
-	if _picked_coins.has(spawn_id):
-		return
-	_picked_coins[spawn_id] = true
-	EventBus.coin_picked.emit(spawn_id)
-	Session.add_run_coins(B.coin_value)
-
-
-## Проверка попадания по мобу: моб жив и атакующий в пределах 96 px
-## от расчётной позиции моба (раздел 6, шаг 3).
-func _on_mob_hit_requested(spawn_id: int, _run_time: float, from_position: Vector2) -> void:
-	var mob: Mob = _mobs.get(spawn_id)
-	if mob == null or not mob.alive:
-		return
-	if mob.global_position.distance_to(from_position) > B.hit_accept_range:
-		return  # отказ: эффект удара уже сыгран локально, это допустимо
-	EventBus.mob_killed.emit(spawn_id, 0)
-	Session.add_run_coins(B.mob_kill_coins)
-
-
-# --- Чекпоинты и «Висит» (разделы 5, 7.1) ---
+# --- Чекпоинты и «Висит» (разделы 5, 7.1); подтверждение — хост через Net ---
 
 ## Чекпоинты идут только вперёд: возврат назад не откатывает точку.
 func _on_checkpoint_reached(index: int, position: Vector2) -> void:
@@ -152,28 +168,24 @@ func _on_checkpoint_reached(index: int, position: Vector2) -> void:
 	Log.debug("Чекпоинт секции %d (%d, %d)" % [index, int(position.x), int(position.y)], "Run")
 
 
-func _on_hang_ended() -> void:
-	# Возврат на последний чекпоинт (таймаут 8 с или «Сдаться», раздел 7.1).
-	player.respawn_at(_checkpoint)
+## Хост подтвердил возврат на чекпоинт (rpc_respawn) — телепорт своего игрока.
+func _on_player_respawned(position: Vector2) -> void:
+	player.respawn_at(position)
 
 
-# --- Финиш и конец забега (разделы 7.6, 5) ---
+# --- Финиш и конец забега (решает хост; сюда приходит только результат) ---
 
-func _on_player_finished(run_time: float) -> void:
-	if _ended:
-		return
-	Session.add_run_coins(B.finish_coins)
-	_end_run(true, run_time)
+## Свой финиш: в сети показываем «ждём остальных», финальный оверлей придёт
+## от хоста (rpc_run_ended); в одиночной игре всё завершится сразу.
+func _on_player_finished_local(_run_time: float) -> void:
+	if Net.is_networked():
+		hud.show_wait_finish(Session.run_coins)
 
 
-func _end_run(finished: bool, time: float = -1.0) -> void:
+func _on_run_finished(finished: bool, time: float) -> void:
 	if _ended:
 		return
 	_ended = true
-	if time < 0.0:
-		time = Session.run_time
-	Session.end_run(finished)
-	EventBus.run_finished.emit(finished, time)
 	hud.show_end(finished, Session.run_coins)
 	Log.info(
 		"Забег завершён: finished=%s, время=%.1f с, монет=%d"
@@ -182,7 +194,27 @@ func _end_run(finished: bool, time: float = -1.0) -> void:
 	)
 
 
+func _on_host_lost(_reason: String) -> void:
+	# Раздел 8: хост отключился — экран с сообщением, дальше только в меню.
+	_ended = true
+	hud.show_host_lost()
+
+
+## Участник вышел из забега: персонаж исчезает (раздел 8).
+func _on_peer_left(peer_id: int) -> void:
+	if _remotes.has(peer_id):
+		var remote: RemotePlayer = _remotes[peer_id]
+		remote.queue_free()
+		_remotes.erase(peer_id)
+		Log.info("Персонаж игрока %d удалён (вышел из забега)" % peer_id, "Run")
+
+
 func _on_play_again() -> void:
-	# Новый забег с новым seed (фиксированный --dev-seed сохранит уровень).
+	if Net.is_networked():
+		# Новый забег той же компанией запускает хост (раздел 9 — этап 6).
+		if Net.is_host():
+			Net.start_run_as_host()
+		return
+	# Одиночный «Ещё раз»: новый seed (фиксированный --dev-seed сохранит уровень).
 	Session.level_seed = Dev.level_seed
 	get_tree().change_scene_to_file("res://scenes/run.tscn")

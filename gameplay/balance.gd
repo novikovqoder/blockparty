@@ -62,13 +62,16 @@ extends Resource
 ## Смещение висящего игрока от точки HangPoint, px (висит ниже края).
 @export var hang_offset_y: float = 14.0
 
-@export_group("Забег (раздел 5)")
+@export_group("Забег (разделы 5, 7.6)")
 ## Жёсткий лимит забега, с.
 @export var run_time_limit: float = 600.0
 ## За сколько секунд до конца забега HUD показывает таймер, с.
 @export var timer_visible_last: float = 120.0
 ## Отсчёт перед стартом (3-2-1-GO), с (раздел 8).
 @export var start_countdown_time: float = 3.0
+## Отсчёт после первого финиша, с: забег заканчивается, когда время истекло
+## или финишировали все (раздел 7.6).
+@export var finish_wait_time: float = 90.0
 
 @export_group("Мобы и монеты (раздел 6)")
 ## Ударов до смерти: птица, зверёк, золотая цель.
@@ -95,3 +98,27 @@ extends Resource
 @export var camera_lead: float = 96.0
 ## Скорость сглаживания камеры.
 @export var camera_smoothing: float = 8.0
+
+@export_group("Бот (раздел 3, --bot)")
+## Дальность взгляда вперёд: стена ближе — прыжок, px.
+@export var bot_look_ahead: float = 48.0
+## Глубина луча под ногами впереди: достаёт и до пола на 160 ниже (сброс
+## с уступа кооп-секции), под настоящей пропастью пусто, px.
+@export var bot_gap_depth: float = 220.0
+## Смещение дальнего луча пропасти: если и тут пола нет — пропасть шире
+## прыжка, бот ждёт движущуюся платформу (узкие пропасти 128 px этот луч
+## перебрасывает), px.
+@export var bot_gap_far_x: float = 170.0
+## Высота луча-детектора платформы над центром персонажа (платформы выше
+## центра тела), px.
+@export var bot_platform_cast_y: float = -40.0
+## Смещение лучей от центра персонажа, px.
+@export var bot_cast_offset_x: float = 24.0
+## Дальность атаки по мобу впереди, px.
+@export var bot_attack_range: float = 64.0
+## Сколько стоять на месте, чтобы прыгнуть от безысходности, с.
+@export var bot_stuck_time: float = 0.6
+## Сколько держать кнопку прыжка (полная высота), с.
+@export var bot_jump_hold: float = 0.25
+## Сдаться в «Висит» через это время (раньше таймаута 8 с), с.
+@export var bot_hang_give_up: float = 1.0

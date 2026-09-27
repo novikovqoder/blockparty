@@ -2,7 +2,9 @@
 # атака, неуязвимость после шипов, состояние «Висит» (раздел 7.1).
 # Владелец персонажа авторитетен над его движением; подтверждения событий
 # (мобы, монеты) уходят через EventBus — в сетевом режиме их решает хост.
-# Не делает: удалённых игроков и коллайдера головы (этап 2), эмоции (этап 3).
+# Ввод приходит с клавиатуры/геймпада или от бота (--bot, BotController);
+# состояние для снапшота 20 Гц отдаёт get_anim_state()/get_flags().
+# Не делает: эмоции (этап 3).
 class_name Player
 extends CharacterBody2D
 
@@ -26,7 +28,9 @@ var _attack_active_left: float = 0.0
 var _invuln_left: float = 0.0
 var _hang_left: float = 0.0
 var _was_on_floor: bool = true
+var _prev_jump_held: bool = false
 var _hit_targets: Array[int] = []  # spawn_id мобов, задетых текущим ударом
+var _bot: BotController = null
 
 
 func _ready() -> void:
@@ -36,6 +40,10 @@ func _ready() -> void:
 	EventBus.hang_ended.connect(_on_hang_ended)
 	EventBus.run_go.connect(_on_run_go)
 	EventBus.run_finished.connect(_on_run_finished)
+	if Session.bot:
+		_bot = BotController.new()
+		_bot.setup(self)
+		add_child(_bot)
 
 
 func _physics_process(delta: float) -> void:
@@ -178,10 +186,64 @@ func _tick_timers(delta: float) -> void:
 		visual.stop_blink()
 
 
+## Состояние аниматора для снапшота (Protocol.AnimState).
+func get_anim_state() -> int:
+	if _state == State.HANGING:
+		return Protocol.AnimState.HANG
+	if _attack_active_left > 0.0:
+		return Protocol.AnimState.ATTACK
+	if not is_on_floor():
+		return Protocol.AnimState.JUMP if velocity.y < 0.0 else Protocol.AnimState.FALL
+	if absf(velocity.x) > 20.0:
+		return Protocol.AnimState.RUN
+	return Protocol.AnimState.IDLE
+
+
+## Флаги снапшота (раздел 8: направление, на земле, висит, говорит).
+func get_flags() -> int:
+	var flags: int = 0
+	if _facing > 0:
+		flags |= Protocol.FLAG_FACING_RIGHT
+	if is_on_floor():
+		flags |= Protocol.FLAG_ON_FLOOR
+	if _state == State.HANGING:
+		flags |= Protocol.FLAG_HANGING
+	# FLAG_TALKING появится вместе с голосом (этап 5).
+	return flags
+
+
+func _input_axis() -> float:
+	if not control_enabled:
+		return 0.0
+	if _bot != null:
+		return _bot.axis()
+	return Input.get_axis("move_left", "move_right")
+
+
+func _jump_just_pressed() -> bool:
+	if not control_enabled:
+		return false
+	if _bot != null:
+		return _bot.consume_jump()
+	return Input.is_action_just_pressed("jump")
+
+
+func _jump_held() -> bool:
+	if _bot != null:
+		return _bot.jump_held()
+	return Input.is_action_pressed("jump")
+
+
+func _attack_pressed() -> bool:
+	if not control_enabled:
+		return false
+	if _bot != null:
+		return _bot.consume_attack()
+	return Input.is_action_pressed("attack")
+
+
 func _apply_horizontal(delta: float) -> void:
-	var dir := 0.0
-	if control_enabled:
-		dir = Input.get_axis("move_left", "move_right")
+	var dir := _input_axis()
 	var target := dir * B.run_speed
 	var accel := B.accel_ground
 	if not is_on_floor():
@@ -206,7 +268,7 @@ func _update_coyote(delta: float) -> void:
 
 
 func _update_jump_buffer(delta: float) -> void:
-	if control_enabled and Input.is_action_just_pressed("jump"):
+	if _jump_just_pressed():
 		_jump_buffer_left = B.jump_buffer_time
 	else:
 		_jump_buffer_left = maxf(0.0, _jump_buffer_left - delta)
@@ -214,8 +276,10 @@ func _update_jump_buffer(delta: float) -> void:
 
 func _try_jump() -> void:
 	# Переменная высота: отпускание кнопки режет скорость подъёма.
-	if control_enabled and Input.is_action_just_released("jump") and velocity.y < 0.0:
+	var held := control_enabled and _jump_held()
+	if _prev_jump_held and not held and velocity.y < 0.0:
 		velocity.y *= B.jump_cut_factor
+	_prev_jump_held = held
 	if _jump_buffer_left > 0.0 and _coyote_left > 0.0:
 		velocity.y = -B.jump_speed
 		_jump_buffer_left = 0.0
@@ -224,11 +288,9 @@ func _try_jump() -> void:
 
 
 func _try_attack() -> void:
-	if not control_enabled:
+	if not _attack_pressed():
 		return
 	if _attack_active_left > 0.0 or _attack_cooldown_left > 0.0:
-		return
-	if not Input.is_action_pressed("attack"):
 		return
 	_attack_active_left = B.attack_active_time
 	_attack_cooldown_left = B.attack_cooldown

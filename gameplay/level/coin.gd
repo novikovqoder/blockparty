@@ -42,7 +42,7 @@ func _on_body_entered(body: Node2D) -> void:
 	EventBus.coin_pickup_requested.emit(spawn_id)
 
 
-func _on_coin_picked(picked_id: int) -> void:
+func _on_coin_picked(picked_id: int, _winner_peer: int) -> void:
 	if picked_id != spawn_id or _picked:
 		return
 	_picked = true

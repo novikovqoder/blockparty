@@ -11,15 +11,20 @@ MENU_FRIENDS,С друзьями,Friends
 MENU_WARDROBE,Гардероб,Wardrobe
 MENU_SETTINGS,Настройки,Settings
 MENU_QUIT,Выход,Quit
-MENU_STAGE1_NOTE,"Этап 1: одиночный забег. С ними играть, гардероб и настройки — на этапах 4–7.","Stage 1: single-player run. Friends, wardrobe and settings arrive at stages 4–7."
+MENU_NOTE,"Этап 2: одиночный забег и сеть ENet (--dev-host / --dev-join). С друзьями, гардероб и настройки — этапы 4–7.","Stage 2: solo run and ENet networking (--dev-host / --dev-join). Friends, wardrobe and settings arrive at stages 4–7."
+MENU_NET_HOST_STATUS,"Вы хост (ENet). Игроков: %d / %d — жмите «Играть»","You are the host (ENet). Players: %d / %d — press Play"
+MENU_NET_CLIENT_WAIT,Подключено к хосту. Ожидание начала забега…,Connected to the host. Waiting for the run to start…
 LOBBY_STUB,Лобби — заглушка этапа 0,Lobby — stage 0 stub
 RESULTS_STUB,Результаты — заглушка (этап 6),Results — stub (stage 6)
 HUD_COINS,Монеты,Coins
 RUN_GO,Вперёд!,Go!
-RUN_HANGING,"Висит — нужна помощь (в одиночном забеге через 8 с вернёт на чекпоинт)","Hanging — need help (in a solo run you return to the checkpoint after 8 s)"
+RUN_WAITING,Ждём игроков…,Waiting for players…
+RUN_HANGING,"Висит — нужна помощь (без помощи через 8 с вернёт на чекпоинт)","Hanging — need help (without help you return to the checkpoint after 8 s)"
 RUN_GIVE_UP,Сдаться,Give up
 RUN_FINISHED,Забег пройден!,Run complete!
+RUN_FINISHED_EARLY,Финиш! Ждём остальных…,Finished! Waiting for the others…
 RUN_TIMEOUT,Время вышло,Time is up
+RUN_HOST_LEFT,Хост покинул игру,Host left the game
 RUN_RESULT_COINS,Монет за забег: %d,Coins earned: %d
 RUN_AGAIN,Ещё раз,Play again
 RUN_TO_MENU,В меню,To menu

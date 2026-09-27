@@ -55,6 +55,15 @@ func set_facing(dir: int) -> void:
 	_eye.position = Vector2(dir * 6.0 - _eye.size.x * 0.5, -17.0)
 
 
+## Оттенок тела: различать удалённых игроков (плейсхолдер до косметики этапа 7).
+## Вызывать после добавления в дерево (блоки строятся в _ready).
+func tint(color: Color) -> void:
+	if _body == null:
+		return
+	_body.color = color
+	_head.color = color.lerp(PAL.player_accent, 0.35)
+
+
 ## Сила бега 0..1 — лёгкий наклон вперёд.
 func set_run_blend(blend: float) -> void:
 	rotation = clampf(blend, -1.0, 1.0) * 0.08

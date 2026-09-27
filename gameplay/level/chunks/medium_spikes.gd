@@ -38,9 +38,11 @@ func build() -> void:
 	_add_spikes(1240.0)
 	# Подвешенная платформа со зверьком (64 px над полом).
 	add_block(1100.0, 512.0, 400.0, 24.0)
-	# Движущаяся платформа возит через пропасть 1600..1792.
+	# Движущаяся платформа возит через пропасть 1600..1792. Верх платформы
+	# на 80 px выше пола: прыжком (96 px) с пола на неё можно зайти, а под ней
+	# (зазор 56 px) можно пройти не нагибаясь.
 	var platform := MovingPlatform.new()
-	platform.position = Vector2(1696.0, 480.0)
+	platform.position = Vector2(1696.0, 508.0)
 	platform.setup(Vector2(128, 24), {"axis": Vector2.RIGHT, "amp": 160.0, "period": 4.6, "phase": 0.0})
 	add_child(platform)
 

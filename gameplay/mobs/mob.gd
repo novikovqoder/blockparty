@@ -57,6 +57,11 @@ func compute_offset(t: float) -> Vector2:
 	return Vector2.ZERO
 
 
+## Полная позиция моба в момент t (для проверки попадания на хосте, раздел 6).
+func position_at(t: float) -> Vector2:
+	return _origin + compute_offset(t)
+
+
 ## Смещение как чистая функция параметров спавна и времени (для тестов).
 static func trajectory(_params: Dictionary, _t: float) -> Vector2:
 	return Vector2.ZERO
@@ -93,7 +98,7 @@ func _on_body_entered(body: Node2D) -> void:
 		player.push_from(global_position)
 
 
-func _on_mob_killed(killed_id: int, _killer_id: int) -> void:
+func _on_mob_killed(killed_id: int, _killer_ids: Array[int]) -> void:
 	if killed_id != spawn_id:
 		return
 	alive = false
