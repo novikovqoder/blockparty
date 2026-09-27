@@ -36,6 +36,70 @@ window/stretch/aspect="keep_height"
 locale/translations=PackedStringArray("res://i18n/strings.en.translation", "res://i18n/strings.ru.translation")
 locale/fallback="en"
 
+[input]
+
+# Бинды по таблице раздела 4 SPEC; physical_keycode не зависит от раскладки.
+move_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventKey,"physical_keycode":4194319)]
+}
+move_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":68), Object(InputEventKey,"physical_keycode":4194321)]
+}
+jump={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":32)]
+}
+attack={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":74), Object(InputEventMouseButton,"button_index":1)]
+}
+interact={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":69)]
+}
+push_to_talk={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":86)]
+}
+emote_wheel={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":81)]
+}
+emote_1={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":49)]
+}
+emote_2={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":50)]
+}
+emote_3={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":51)]
+}
+emote_4={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":52)]
+}
+emote_5={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":53)]
+}
+emote_6={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":54)]
+}
+player_list={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194306)]
+}
+pause={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194305)]
+}
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
