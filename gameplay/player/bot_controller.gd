@@ -1,7 +1,9 @@
 # Простой бот для нагрузочных тестов (раздел 3 SPEC, --bot): бежит вправо,
 # прыгает перед стеной или пропастью, выпрыгивает при застревании, бьёт моба
-# впереди и сам сдаётся при «Висит». Заменяет ввод игрока, больше ничего
-# не решает. Параметры — группа «Бот» в balance.tres.
+# впереди и сам сдаётся при «Висит». У закрытых кооп-ворот (раздел 7.2) встаёт
+# на «свою» плиту — по номеру peer, чтобы боты расходились по разным плитам.
+# Заменяет ввод игрока, больше ничего не решает. Параметры — группа «Бот»
+# в balance.tres.
 class_name BotController
 extends Node
 
@@ -20,6 +22,7 @@ var _stuck_left: float = 0.0
 var _hang_left: float = 0.0
 var _wide_gap: bool = false
 var _floor_y: float = 0.0  # уровень пола по точке спавна
+var _plate_x: float = -1.0  # цель: своя плита у закрытых ворот (-1 — нет)
 
 
 func setup(player: Player) -> void:
@@ -66,6 +69,9 @@ func _physics_process(delta: float) -> void:
 	_hang_left = 0.0
 
 	_wall_cast.force_raycast_update()
+	if _gate_ahead():
+		return  # стоим на своей плите, пока ворота закрыты (раздел 7.2)
+	_plate_x = -1.0
 	_gap_cast.force_raycast_update()
 	_gap_far_cast.force_raycast_update()
 	_plat_cast.force_raycast_update()
@@ -106,9 +112,37 @@ func _request_jump() -> void:
 	_jump_hold_left = B.bot_jump_hold
 
 
+## Впереди закрытые кооп-ворота: бот уходит на свою плиту (раздел 7.2).
+func _gate_ahead() -> bool:
+	var gate := _wall_cast.get_collider() as CoopGate
+	if gate == null or gate.is_open():
+		return false
+	if _plate_x < 0.0:
+		_plate_x = _own_plate_x()
+	return true
+
+
+## Своя плита ворот: боты с разными peer расходятся по разным плитам,
+## N = min(min_players, игроков, 3) набирается без договорённостей.
+func _own_plate_x() -> float:
+	var plates: Array[Node] = _player.get_tree().get_nodes_in_group("pressure_plate")
+	if plates.is_empty():
+		return -1.0
+	var xs: Array[float] = []
+	for node: Node in plates:
+		xs.append((node as Node2D).global_position.x)
+	xs.sort()
+	return xs[maxi(0, Net.local_peer_id - 1) % xs.size()]
+
+
 ## Направление бега: бот всегда вправо (раздел 3: «бежит вправо и прыгает»),
-## кроме ожидания платформы у широкой пропасти — в полёте бежит всегда.
+## кроме ожидания платформы у широкой пропасти и режима плит у ворот.
 func axis() -> float:
+	if _plate_x >= 0.0:
+		var diff: float = _plate_x - _player.global_position.x
+		if absf(diff) < 16.0:
+			return 0.0  # стоим на плите, пока ворота не откроются
+		return 1.0 if diff > 0.0 else -1.0
 	return 0.0 if _wide_gap and _player.is_on_floor() else 1.0
 
 

@@ -56,6 +56,34 @@ func test_jump_height_matches_spec() -> void:
 	assert_almost_eq(height, 96.0, 1.0)
 
 
+func test_coop_mechanics_stage3() -> void:
+	# Раздел 7.1: вытягивание — 0,5 с удержания в радиусе 64 px.
+	assert_almost_eq(B.pull_hold_time, 0.5, EPS)
+	assert_almost_eq(B.pull_range, 64.0, EPS)
+	# Разделы 7.2, 7.3: запасные таймеры кооп-объектов — 45 с, N ≤ 3.
+	assert_almost_eq(B.gate_fallback_time, 45.0, EPS)
+	assert_almost_eq(B.ledge_fallback_time, 45.0, EPS)
+	assert_eq(B.coop_max_players, 3)
+	# Разделы 6, 7.4: золотая цель — окно двух разных игроков 3 с.
+	assert_almost_eq(B.golden_hit_window, 3.0, EPS)
+	# Раздел 6: падающие платформы — 0,6 с и восстановление 5 с.
+	assert_almost_eq(B.falling_platform_delay, 0.6, EPS)
+	assert_almost_eq(B.falling_platform_restore, 5.0, EPS)
+
+
+func test_emotes_section7_5() -> void:
+	assert_almost_eq(B.emote_cooldown, 1.0, EPS)
+	assert_almost_eq(B.emote_show_time, 2.5, EPS)
+	assert_almost_eq(B.emote_radius, 1920.0, EPS)
+	assert_almost_eq(B.help_marker_radius, 1280.0, EPS)
+	assert_almost_eq(B.here_marker_time, 3.0, EPS)
+
+
+func test_sections_per_run_section5() -> void:
+	# Раздел 5: 8 игровых секций из пула 14 (+ старт и финиш).
+	assert_eq(B.sections_per_run, 8)
+
+
 func test_palette_loads() -> void:
 	var pal: Palette = preload("res://assets/palette.tres")
 	assert_ne(pal.ground, Color.BLACK)

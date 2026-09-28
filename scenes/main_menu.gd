@@ -23,9 +23,19 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Автостарт хоста-бота: считаем только сказавших rpc_hello (peer_count
+	# Автостарт бота: считаем только сказавших rpc_hello (peer_count
 	# видит и недоподключившихся — старт раньше времени закрыл бы лобби).
-	if _auto_started or not (Session.bot and Net.is_networked() and Net.is_host()):
+	if _auto_started or not Session.bot:
+		return
+	if not Net.is_networked():
+		# Соло-бот: headless-проверка проходимости одиночного забега.
+		_auto_wait += delta
+		if _auto_wait >= 1.0:
+			_auto_started = true
+			Log.info("Автостарт одиночного забега бота", "Menu")
+			get_tree().change_scene_to_file(RUN_SCENE)
+		return
+	if not Net.is_host():
 		return
 	if Session.run_active or Net.go_scheduled():
 		return

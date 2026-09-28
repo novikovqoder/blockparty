@@ -13,13 +13,15 @@ static func def() -> ChunkDef:
 	d.width = 1920
 	d.checkpoint = Vector2(96, FLOOR_Y)
 	d.mob_spawns = [
-		{"kind": "golden", "x": 960.0, "y": 340.0, "params": {"span_x": 360.0, "span_y": 90.0, "period_x": 2.8, "period_y": 3.9, "phase": 1.3}},
+		# Нижняя точка траектории (460) — в пределах удара в прыжке: стоя на
+		# полу, до цели не дотянуться, бить надо в нижней фазе полёта.
+		{"kind": "golden", "x": 960.0, "y": 380.0, "params": {"span_x": 360.0, "span_y": 80.0, "period_x": 2.8, "period_y": 3.9, "phase": 1.3}},
 	]
 	# Кольцо из 10 монет вокруг траектории цели — собирается, пока её бьёшь.
 	var coins: Array[Vector2] = []
 	for i: int in 10:
 		var angle := TAU * float(i) / 10.0
-		coins.append(Vector2(960.0 + 420.0 * cos(angle), 400.0 + 120.0 * sin(angle) - 60.0))
+		coins.append(Vector2(960.0 + 420.0 * cos(angle), 440.0 + 110.0 * sin(angle)))
 	d.coin_spawns = coins
 	return d
 

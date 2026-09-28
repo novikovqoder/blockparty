@@ -14,6 +14,10 @@ func _ready() -> void:
 		_go_to_menu()
 	elif SteamService.available:
 		_go_to_menu()
+	elif Session.bot:
+		# Headless-бот без Steam: кнопки жать некому — продолжаем офлайн.
+		Log.info("Boot: Steam нет, бот продолжает офлайн", "Boot")
+		_go_to_menu()
 	else:
 		# SteamService уже выяснил причину и залогировал её.
 		%OfflineBox.show()

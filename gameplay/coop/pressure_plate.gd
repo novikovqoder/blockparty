@@ -15,6 +15,7 @@ var _top_y: float = 0.0
 func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 2
+	add_to_group("pressure_plate")  # бот находит свою плиту по группе
 	_top_y = position.y
 	var shape := CollisionShape2D.new()
 	var box := RectangleShape2D.new()

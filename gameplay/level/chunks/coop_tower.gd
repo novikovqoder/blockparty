@@ -19,7 +19,7 @@ static func def() -> ChunkDef:
 			"kind": "ledge",
 			"ladder_x": 1660.0,
 			"top_y": 400.0,
-			"fallback_x": 1520.0,
+			"fallback_x": 1536.0,
 			"fallback_top_y": 488.0,
 			"zone_from": 1250.0,
 			"zone_to": 1600.0,
