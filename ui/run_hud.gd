@@ -19,6 +19,9 @@ var _timer_label: Label
 var _countdown_label: Label
 var _hang_panel: Control
 var _hang_time_label: Label
+var _pull_panel: Control
+var _pull_bar: ColorRect
+var _pull_bar_bg: ColorRect
 var _end_overlay: Control
 var _end_title: Label
 var _end_coins: Label
@@ -43,6 +46,7 @@ func _ready() -> void:
 	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_label.visible = false
 	_hang_panel = _build_hang_panel(root)
+	_pull_panel = _build_pull_panel(root)
 	_end_overlay = _build_end_overlay(root)
 
 	EventBus.run_coins_changed.connect(func(total: int) -> void: _coins_label.text = "%s: %d" % [tr("HUD_COINS"), total])
@@ -88,6 +92,16 @@ func set_time_left(seconds_left: float, visible_after: float) -> void:
 ## Оставшееся время висения для панели.
 func set_hang_time(seconds_left: float) -> void:
 	_hang_time_label.text = "%.1f" % maxf(0.0, seconds_left)
+
+
+## Подсказка помощнику у висящего (раздел 7.1): видна, пока он рядом держит E.
+func show_pull_hint(visible_hint: bool) -> void:
+	_pull_panel.visible = visible_hint
+
+
+## Прогресс удержания E: 0..1 (полоса заполняется pull_hold_time секунд).
+func set_pull_progress(ratio: float) -> void:
+	_pull_bar.size.x = 0.0 if ratio <= 0.0 else maxf(12.0, 296.0 * clampf(ratio, 0.0, 1.0))
 
 
 ## Оверлей конца забега: дошёл (finished) или время вышло.
@@ -169,6 +183,32 @@ func _build_hang_panel(root: Control) -> Control:
 	button.text = tr("RUN_GIVE_UP")
 	button.pressed.connect(func() -> void: give_up_pressed.emit())
 	box.add_child(button)
+	return panel
+
+
+## Панель помощнику: «Держите E» и полоса прогресса вытягивания (раздел 7.1).
+func _build_pull_panel(root: Control) -> Control:
+	var panel := PanelContainer.new()
+	panel.position = Vector2(640 - 160, 720 - 170)
+	panel.visible = false
+	root.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	panel.add_child(box)
+	var title := Label.new()
+	title.text = tr("RUN_PULL_HINT")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 18)
+	box.add_child(title)
+	_pull_bar_bg = ColorRect.new()
+	_pull_bar_bg.color = Color(0.1, 0.1, 0.15, 0.8)
+	_pull_bar_bg.custom_minimum_size = Vector2(300, 14)
+	box.add_child(_pull_bar_bg)
+	_pull_bar = ColorRect.new()
+	_pull_bar.color = PAL.marker
+	_pull_bar.size = Vector2(0, 14)
+	_pull_bar_bg.add_child(_pull_bar)
+	set_pull_progress(0.0)
 	return panel
 
 

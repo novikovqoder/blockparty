@@ -130,6 +130,16 @@ func play_hang() -> void:
 	set_run_blend(0.0)
 
 
+## Вытягивание висящего (раздел 7.1): рука тянется к нему и возвращается.
+func play_pull() -> void:
+	_arm.visible = true
+	_arm.position.y = 4.0
+	var t := create_tween()
+	t.tween_property(_arm, "position:x", _facing * 34.0, 0.12)
+	t.tween_property(_arm, "position:x", _facing * 22.0, 0.2)
+	t.tween_callback(func() -> void: _arm.visible = false)
+
+
 func _rect(size: Vector2, color: Color, center: Vector2 = Vector2.ZERO) -> ColorRect:
 	var rect := ColorRect.new()
 	rect.color = color

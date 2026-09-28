@@ -1,10 +1,11 @@
 # Контроллер локального игрока: движение и физика из раздела 4 SPEC,
-# атака, неуязвимость после шипов, состояние «Висит» (раздел 7.1).
+# атака, неуязвимость после шипов, состояние «Висит» и вытягивание на край
+# (раздел 7.1), прыжок с чужой головы (раздел 4).
 # Владелец персонажа авторитетен над его движением; подтверждения событий
-# (мобы, монеты) уходят через EventBus — в сетевом режиме их решает хост.
+# (мобы, монеты, помощь) уходят через EventBus — в сетевом режиме их решает хост.
 # Ввод приходит с клавиатуры/геймпада или от бота (--bot, BotController);
 # состояние для снапшота 20 Гц отдаёт get_anim_state()/get_flags().
-# Не делает: эмоции (этап 3).
+# Не делает: ввод эмоций и колеса (это сцена забега), голос (этап 5).
 class_name Player
 extends CharacterBody2D
 
@@ -31,11 +32,19 @@ var _was_on_floor: bool = true
 var _prev_jump_held: bool = false
 var _hit_targets: Array[int] = []  # spawn_id мобов, задетых текущим ударом
 var _bot: BotController = null
+var _hang_point: Vector2 = Vector2.ZERO  # край пропасти, за который держимся
+var _head_cast: RayCast2D = null         # детект чужой головы под ногами
 
 
 func _ready() -> void:
 	attack_area.area_entered.connect(_on_attack_area_entered)
 	attack_area.monitoring = false
+	# Луч под ногами: чужая голова помечена meta peer_id («ступенька», раздел 4).
+	_head_cast = RayCast2D.new()
+	_head_cast.position = Vector2(0.0, B.hitbox_height * 0.5 - 2.0)
+	_head_cast.target_position = Vector2(0.0, 12.0)
+	_head_cast.collision_mask = 1
+	add_child(_head_cast)
 	EventBus.hang_started.connect(_on_hang_started)
 	EventBus.hang_ended.connect(_on_hang_ended)
 	EventBus.run_go.connect(_on_run_go)
@@ -126,6 +135,7 @@ func enter_hang(point: Vector2) -> void:
 		return
 	_state = State.HANGING
 	_hang_left = B.hang_time
+	_hang_point = point
 	velocity = Vector2.ZERO
 	# Держится руками за левый край пропасти: тело в яме, голова над краем.
 	global_position = Vector2(
@@ -134,6 +144,22 @@ func enter_hang(point: Vector2) -> void:
 	)
 	visual.play_hang()
 	EventBus.hang_started.emit()
+
+
+## Хост подтвердил вытягивание (раздел 7.1): помощник поднял нас на край
+## у точки висения — продолжаем с места падения.
+func pulled_up() -> void:
+	if _state != State.HANGING:
+		return
+	_state = State.NORMAL
+	set_control(true)
+	_invuln_left = B.hit_invuln_time
+	global_position = Vector2(
+		_hang_point.x + B.hitbox_width * 0.75,
+		_hang_point.y - B.hitbox_height * 0.5
+	)
+	velocity = Vector2(0.0, -B.jump_speed * 0.5)  # лёгкий подскок на край
+	visual.play_jump()
 
 
 ## Досрочный выход из «Висит» (кнопка «Сдаться» или таймаут 8 с).
@@ -148,6 +174,16 @@ func give_up_hang() -> void:
 
 func is_hanging() -> bool:
 	return _state == State.HANGING
+
+
+## Направление взгляда (для эмоций и маркеров).
+func facing() -> int:
+	return _facing
+
+
+## Анимация вытягивания: рука к висящему (раздел 7.1).
+func play_pull() -> void:
+	visual.play_pull()
 
 
 func hang_time_left() -> float:
@@ -281,10 +317,17 @@ func _try_jump() -> void:
 		velocity.y *= B.jump_cut_factor
 	_prev_jump_held = held
 	if _jump_buffer_left > 0.0 and _coyote_left > 0.0:
-		velocity.y = -B.jump_speed
 		_jump_buffer_left = 0.0
 		_coyote_left = 0.0
-		visual.play_jump()
+		# Прыжок с чужой головы — усиленный («ступенька», раздел 4).
+		_head_cast.force_raycast_update()
+		var collider: Object = _head_cast.get_collider()
+		if collider != null and collider.has_meta("peer_id"):
+			apply_head_jump_bonus()
+			EventBus.head_jump_performed.emit(int(collider.get_meta("peer_id")))
+		else:
+			velocity.y = -B.jump_speed
+			visual.play_jump()
 
 
 func _try_attack() -> void:

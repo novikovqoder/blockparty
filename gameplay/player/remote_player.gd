@@ -1,8 +1,9 @@
-# Чужой игрок на сцене (разделы 4, 8 SPEC): позиция — интерполяция буфера
+# Чужой игрок на сцене (разделы 4, 7, 8 SPEC): позиция — интерполяция буфера
 # снапшотов (задержка 100 мс, экстраполяция до 150 мс, телепорт дальше 256 px),
 # ник над головой, отдельный кинематический коллайдер головы — односторонняя
-# платформа, на неё можно встать и подпрыгнуть выше («ступенька», раздел 4).
-# Не делает: эмоции и иконки (этапы 3, 5), косметику (этап 7).
+# платформа, на неё можно встать и подпрыгнуть выше («ступенька», раздел 4);
+# здесь же пузырь эмоций и подъём при вытягивании (раздел 7).
+# Не делает: иконку микрофона (этап 5), косметику (этап 7).
 class_name RemotePlayer
 extends Node2D
 
@@ -16,6 +17,7 @@ var player_name: String = ""
 var _visual: PlayerVisual
 var _name_label: Label
 var _head: AnimatableBody2D
+var _bubble: EmoteBubble
 var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
 var _last_facing: int = 0
@@ -49,6 +51,8 @@ func _ready() -> void:
 	_head.collision_layer = 1
 	_head.collision_mask = 0
 	_head.position = Vector2(0, -B.hitbox_height * 0.5 - 4)
+	# Метка для «ступеньки»: локальный игрок узнаёт, с чьей головы прыгнул.
+	_head.set_meta("peer_id", peer_id)
 	var shape := CollisionShape2D.new()
 	var box := RectangleShape2D.new()
 	box.size = Vector2(B.hitbox_width, 8)
@@ -79,6 +83,23 @@ func last_position() -> Vector2:
 ## Состояние «Висит» приходит надёжным RPC (у снапшота флаг может потеряться).
 func set_remote_hanging(hanging: bool) -> void:
 	_remote_hanging = hanging
+
+
+## Хост подтвердил вытягивание (раздел 7.1): снимаем вис и даём подскок —
+## точную позицию принесёт ближайший снапшот самого игрока.
+func rescued() -> void:
+	_remote_hanging = false
+	global_position += Vector2(0.0, -60.0)
+	_visual.play_jump()
+
+
+## Пузырь эмоции над головой (раздел 7.5).
+func show_emote(emote_id: int) -> void:
+	if _bubble == null:
+		_bubble = EmoteBubble.new()
+		add_child(_bubble)
+	_bubble.position = Vector2(0.0, -B.hitbox_height * 0.5 - 22.0)
+	_bubble.show_emote(emote_id)
 
 
 func _physics_process(_delta: float) -> void:

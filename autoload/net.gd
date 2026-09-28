@@ -872,6 +872,8 @@ func _apply_emote_shown(sender_peer: int, emote_id: int, origin: Vector2, facing
 
 
 func _apply_pulled(helper_peer: int, target_peer: int) -> void:
+	if players.has(target_peer):
+		players[target_peer]["hanging"] = false
 	EventBus.player_pulled.emit(helper_peer, target_peer)
 	# Награда 3 монеты — помощнику (раздел 7.1); очки — каждому у себя.
 	if helper_peer == local_peer_id:

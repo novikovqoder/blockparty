@@ -5,7 +5,8 @@ extends Area2D
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Мировые координаты краёв пропасти, за которые можно зацепиться.
+## Края пропасти, за которые можно зацепиться, — в локальных координатах
+## секции (Chunk.add_pit); в мировые переводятся в момент зацепа.
 var hang_points: Array[Vector2] = []
 
 
@@ -32,9 +33,11 @@ func _on_body_entered(body: Node2D) -> void:
 	var player := body as Player
 	if player == null:
 		return
-	# Раздел 5: зацеп за ближайший левый край пропасти.
-	var best: Vector2 = hang_points[0] if not hang_points.is_empty() else global_position
+	# Раздел 5: зацеп за ближайший левый край пропасти (сравнение локально,
+	# игроку отдаём мировую точку — чанк смещён на offset_x).
+	var local_x := to_local(player.global_position).x
+	var best: Vector2 = hang_points[0] if not hang_points.is_empty() else position
 	for point: Vector2 in hang_points:
-		if point.x <= player.global_position.x and point.x >= best.x:
+		if point.x <= local_x and point.x >= best.x:
 			best = point
-	player.enter_hang(best)
+	player.enter_hang(to_global(best))
