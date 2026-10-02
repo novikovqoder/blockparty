@@ -1,20 +1,23 @@
-# Разбор аргументов командной строки для локальных тестов (раздел 3 SPEC):
-# --dev-host, --dev-join=IP, --dev-name, --dev-seed, --bot, --net-lag, --net-loss, --log-net.
-# Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
+# Разбор аргументов командной строки для локальных тестов (раздел 4 SPEC):
+# --dev-host, --dev-join=IP, --dev-name, --dev-spawn=ZONE, --bot, --net-lag,
+# --net-loss, --log-net. Аргументы передаются Godot после «--» и читаются
+# через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
 
-## Порт ENet для --dev-host (раздел 3 SPEC).
+## Порт ENet для --dev-host (раздел 4 SPEC).
 const DEV_PORT: int = 7777
 ## Лимит FPS headless-копий в режиме --bot: без него каждая копия грузит
 ## процессор на 100% и нагрузочный прогон 12 экземпляров душит сам себя.
 const HEADLESS_BOT_MAX_FPS: int = 60
+## Зоны появления для --dev-spawn (раздел 4 SPEC; Площадь — по умолчанию).
+const SPAWN_ZONES: PackedStringArray = ["plaza", "forest", "ruins", "hills", "crevasse", "lake"]
 
 var host_mode: bool = false      # --dev-host: запуститься хостом через ENet
 var join_address: String = ""    # --dev-join=IP: подключиться клиентом
 var player_name: String = ""     # --dev-name: имя игрока без Steam
-var level_seed: int = -1         # --dev-seed: фиксированный seed уровня (-1 = генерировать)
-var bot: bool = false            # --bot: простой бот для нагрузочных тестов
+var spawn_zone: String = ""      # --dev-spawn=ZONE: появиться сразу в зоне
+var bot: bool = false            # --bot: бот для нагрузочных тестов (ходьба — П3)
 var net_lag_ms: int = 0          # --net-lag: эмуляция задержки сети, мс
 var net_loss_percent: int = 0    # --net-loss: эмуляция потери пакетов, %
 var log_net: bool = false        # --log-net: подробный лог сетевых RPC
@@ -25,7 +28,7 @@ func _init() -> void:
 	host_mode = parsed["host_mode"]
 	join_address = parsed["join_address"]
 	player_name = parsed["player_name"]
-	level_seed = parsed["level_seed"]
+	spawn_zone = parsed["spawn_zone"]
 	bot = parsed["bot"]
 	net_lag_ms = parsed["net_lag_ms"]
 	net_loss_percent = parsed["net_loss_percent"]
@@ -39,7 +42,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"host_mode": false,
 		"join_address": "",
 		"player_name": "",
-		"level_seed": -1,
+		"spawn_zone": "",
 		"bot": false,
 		"net_lag_ms": 0,
 		"net_loss_percent": 0,
@@ -56,8 +59,11 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["join_address"] = arg.get_slice("=", 1)
 		elif arg.begins_with("--dev-name="):
 			result["player_name"] = arg.get_slice("=", 1)
-		elif arg.begins_with("--dev-seed="):
-			result["level_seed"] = _to_int(arg.get_slice("=", 1), -1)
+		elif arg.begins_with("--dev-spawn="):
+			# Неизвестная зона игнорируется — остаётся стандартная Площадь.
+			var zone: String = arg.get_slice("=", 1)
+			if zone in SPAWN_ZONES:
+				result["spawn_zone"] = zone
 		elif arg.begins_with("--net-lag="):
 			result["net_lag_ms"] = maxi(0, _to_int(arg.get_slice("=", 1), 0))
 		elif arg.begins_with("--net-loss="):

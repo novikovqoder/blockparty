@@ -1,17 +1,18 @@
-# Буфер снапшотов чужого игрока (раздел 8 SPEC): линейная интерполяция
-# позиции с задержкой отрисовки, ограниченная экстраполяция, телепорт при
-# большом расхождении, отбрасывание снапшотов со старым seq. Чистая логика
-# без узлов — проверяется тестами GUT.
+# Буфер 3D-снапшотов чужого игрока (раздел 10 SPEC): линейная интерполяция
+# позиции и поворота (по кратчайшей дуге) с задержкой отрисовки, ограниченная
+# экстраполяция скоростью, телепорт при расхождении больше 5 м, отбрасывание
+# снапшотов со старым seq. Чистая логика без узлов — проверяется тестами GUT.
 class_name SnapshotBuffer
 extends RefCounted
 
 const WRAP_HALF: int = 0x8000  # половина диапазона uint16 для сравнения seq
 const KEEP_WINDOW_MSEC: int = 2000  # сколько истории держать в буфере
 
-## Принятые снапшоты: {t: мс получения, seq, x, y, vx, vy, anim, flags}.
+## Принятые снапшоты: {t: мс получения, seq, x, y, z, yaw, vx, vy, vz, anim, flags}.
 var _samples: Array[Dictionary] = []
 var _last_seq: int = -1
-var _last_rendered: Vector2 = Vector2.ZERO
+var _last_rendered := Vector3.ZERO
+var _last_yaw: float = 0.0
 var _has_rendered: bool = false
 
 
@@ -20,7 +21,7 @@ func is_empty() -> bool:
 	return _samples.is_empty()
 
 
-## Сбросить буфер (новый забег, телепорт).
+## Сбросить буфер (новый мир, телепорт).
 func clear() -> void:
 	_samples.clear()
 	_last_seq = -1
@@ -41,13 +42,16 @@ func push(snap: Dictionary, recv_msec: int) -> bool:
 
 
 ## Состояние на момент render_msec (обычно «сейчас минус задержка»).
-## Возвращает {x, y, vx, vy, anim, flags, teleported, frozen}.
+## Возвращает {x, y, z, yaw, vx, vy, vz, anim, flags, teleported, frozen}.
 func sample(render_msec: int) -> Dictionary:
 	var result := {
 		"x": _last_rendered.x,
 		"y": _last_rendered.y,
+		"z": _last_rendered.z,
+		"yaw": _last_yaw,
 		"vx": 0.0,
 		"vy": 0.0,
+		"vz": 0.0,
 		"anim": Protocol.AnimState.IDLE,
 		"flags": 0,
 		"teleported": false,
@@ -65,6 +69,7 @@ func sample(render_msec: int) -> Dictionary:
 			var dt: float = float(ahead_msec) / 1000.0
 			result["x"] = float(last["x"]) + float(last["vx"]) * dt
 			result["y"] = float(last["y"]) + float(last["vy"]) * dt
+			result["z"] = float(last["z"]) + float(last["vz"]) * dt
 		else:
 			result["frozen"] = true
 	else:
@@ -80,14 +85,20 @@ func sample(render_msec: int) -> Dictionary:
 			)
 			result["x"] = lerpf(float(older["x"]), float(newer["x"]), blend)
 			result["y"] = lerpf(float(older["y"]), float(newer["y"]), blend)
+			result["z"] = lerpf(float(older["z"]), float(newer["z"]), blend)
+			# Поворот — по кратчайшей дуге (раздел 10), не через 2π.
+			result["yaw"] = lerp_angle(float(older["yaw"]), float(newer["yaw"]), blend)
 			result["vx"] = lerpf(float(older["vx"]), float(newer["vx"]), blend)
 			result["vy"] = lerpf(float(older["vy"]), float(newer["vy"]), blend)
+			result["vz"] = lerpf(float(older["vz"]), float(newer["vz"]), blend)
 			_copy_state(result, newer)
 			break
 
-	if _has_rendered and Vector2(result["x"], result["y"]).distance_to(_last_rendered) > Protocol.TELEPORT_DISTANCE:
+	var rendered := Vector3(float(result["x"]), float(result["y"]), float(result["z"]))
+	if _has_rendered and rendered.distance_to(_last_rendered) > Protocol.TELEPORT_DISTANCE:
 		result["teleported"] = true
-	_last_rendered = Vector2(result["x"], result["y"])
+	_last_rendered = rendered
+	_last_yaw = float(result["yaw"])
 	_has_rendered = true
 	return result
 
