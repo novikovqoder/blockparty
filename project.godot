@@ -1,14 +1,14 @@
 ; Engine configuration file.
-; Проект Blockparty — кооперативный социальный 2D-платформер (см. docs/SPEC.md).
+; Проект Blockparty — социальный 3D открытый мир в кубическом стиле (см. docs/SPEC.md).
 
 config_version=5
 
 [application]
 
 config/name="Blockparty"
-config/description="Кооперативный социальный 2D-платформер для Steam. MVP."
+config/description="Социальный 3D открытый мир в кубическом стиле для Steam. MVP."
 run/main_scene="res://scenes/boot.tscn"
-config/features=PackedStringArray("4.7", "GL Compatibility")
+config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -38,7 +38,9 @@ locale/fallback="en"
 
 [input]
 
-; Бинды по таблице раздела 4 SPEC; physical_keycode не зависит от раскладки.
+; Бинды по таблице раздела 5 SPEC; physical_keycode не зависит от раскладки.
+; Геймпад и остальные действия (взять за руку, карта и др.) — с появлением
+; персонажа и UI (этапы П1, П5, П8).
 move_left={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventKey,"physical_keycode":4194319)]
@@ -46,6 +48,22 @@ move_left={
 move_right={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":68), Object(InputEventKey,"physical_keycode":4194321)]
+}
+move_forward={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":87), Object(InputEventKey,"physical_keycode":4194320)]
+}
+move_backward={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":83), Object(InputEventKey,"physical_keycode":4194322)]
+}
+walk={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194325)]
+}
+map={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":77)]
 }
 jump={
 "deadzone": 0.5,
@@ -102,5 +120,4 @@ pause={
 
 [rendering]
 
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method="forward_plus"

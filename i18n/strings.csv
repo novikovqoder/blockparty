@@ -1,37 +1,16 @@
 keys,ru,en
-GAME_TITLE,Блокпати,Blockparty
+GAME_TITLE,Blockparty,Blockparty
 BOOT_LOADING,Инициализация…,Initializing…
 OFFLINE_TITLE,Steam не запущен,Steam is not running
 OFFLINE_TEXT,"Запустите Steam и перезапустите игру. Либо продолжите офлайн в режиме разработки (сеть ENet на локальной машине).","Start Steam and relaunch the game. Or continue offline in development mode (ENet networking on the local machine)."
 OFFLINE_PLAY,Играть офлайн (режим разработки),Play offline (development mode)
 OFFLINE_QUIT,Выход,Quit
-MENU_TITLE,Главное меню,Main Menu
-MENU_PLAY,Играть,Play
-MENU_FRIENDS,С друзьями,Friends
+MENU_ENTER_WORLD,В мир,Enter world
+MENU_FRIENDS_WORLD,Мир для друзей,World for friends
+MENU_MEETINGS,Встречи,Meetings
 MENU_WARDROBE,Гардероб,Wardrobe
 MENU_SETTINGS,Настройки,Settings
 MENU_QUIT,Выход,Quit
-MENU_NOTE,"Этап 3: кооп-механики — помощь из пропасти, ворота, «ступенька», золотая цель, эмоции (1–6 или колесо на Q). С друзьями, гардероб и настройки — этапы 4–7.","Stage 3: co-op mechanics — pulling from pits, gates, the step-up, the golden target, emotes (1–6 or the wheel on Q). Friends, wardrobe and settings arrive at stages 4–7."
-MENU_NET_HOST_STATUS,"Вы хост (ENet). Игроков: %d / %d — жмите «Играть»","You are the host (ENet). Players: %d / %d — press Play"
-MENU_NET_CLIENT_WAIT,Подключено к хосту. Ожидание начала забега…,Connected to the host. Waiting for the run to start…
-LOBBY_STUB,Лобби — заглушка этапа 0,Lobby — stage 0 stub
-RESULTS_STUB,Результаты — заглушка (этап 6),Results — stub (stage 6)
-HUD_COINS,Монеты,Coins
-RUN_GO,Вперёд!,Go!
-RUN_WAITING,Ждём игроков…,Waiting for players…
-RUN_HANGING,"Висит — нужна помощь (без помощи через 8 с вернёт на чекпоинт)","Hanging — need help (without help you return to the checkpoint after 8 s)"
-RUN_GIVE_UP,Сдаться,Give up
-RUN_PULL_HINT,"Держите E — вытянуть!","Hold E to pull them up!"
-EMOTE_1,Привет!,Hi!
-EMOTE_2,Спасибо!,Thanks!
-EMOTE_3,Сюда!,Over here!
-EMOTE_4,Подожди!,Wait!
-EMOTE_5,Ха-ха!,Ha-ha!
-EMOTE_6,Помогите!,Help!
-RUN_FINISHED,Забег пройден!,Run complete!
-RUN_FINISHED_EARLY,Финиш! Ждём остальных…,Finished! Waiting for the others…
-RUN_TIMEOUT,Время вышло,Time is up
-RUN_HOST_LEFT,Хост покинул игру,Host left the game
-RUN_RESULT_COINS,Монет за забег: %d,Coins earned: %d
-RUN_AGAIN,Ещё раз,Play again
-RUN_TO_MENU,В меню,To menu
+MENU_NOTE,"Этап П0: тестовая площадка 3D-мира (персонаж — этап П1, остров — П2, сеть в мире — П3). «Мир для друзей» — этап П4.","Stage P0: 3D world test playground (character at P1, island at P2, in-world networking at P3). 'World for friends' arrives at P4."
+MENU_NET_HOST_STATUS,"Вы хост (ENet). Игроков: %d / %d — мир открыт","You are the host (ENet). Players: %d / %d — the world is open"
+MENU_NET_CLIENT_STATUS,Подключено к хосту (ENet). Нажмите «В мир»,Connected to the host (ENet). Press “Enter world”

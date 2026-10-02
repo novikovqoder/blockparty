@@ -1,4 +1,4 @@
-# Запуск хоста и N клиентов в режиме разработки (ENet, без Steam) — раздел 3 SPEC.
+# Запуск хоста и N клиентов в режиме разработки (ENet, без Steam) — раздел 4 SPEC.
 #
 # Использование (из корня проекта):
 #   powershell -ExecutionPolicy Bypass -File tools\run_local.ps1 [-Clients 3]
