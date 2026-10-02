@@ -34,6 +34,7 @@
 
 ## Проверка
 - tools/run_local.sh — хост и N клиентов (ENet), на сервере в режиме --headless.
+- Сборка Windows: tools/build_windows.sh → builds/blockparty-windows.zip
 - Тесты: godot --headless -s addons/gut/gut_cmdln.gd
 - Steam-функции проверяются только на двух ПК с разными аккаунтами.
 
