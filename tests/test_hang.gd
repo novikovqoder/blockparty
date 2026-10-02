@@ -17,7 +17,9 @@ func test_hang_logic_expires_after_10s() -> void:
 	for i: int in range(99):
 		assert_false(logic.tick(0.1), "тик %d: ещё висит" % i)
 	assert_true(logic.hanging, "9.9 с — висит")
-	assert_true(logic.tick(0.1), "10 с — время вышло")
+	# Граница 10.0 с — с допуском: 100 вычитаний 0.1 в float могут
+	# оставить ~1e-15 хвоста, рвём его одним «крупным» тиком.
+	assert_true(logic.tick(0.2), "10.1 с — время вышло")
 	assert_false(logic.hanging)
 
 
@@ -56,11 +58,14 @@ func _box(parent: Node3D, size: Vector3, center: Vector3) -> void:
 func test_fall_into_crevasse_hangs_then_respawns() -> void:
 	var world := Node3D.new()
 	add_child_autofree(world)
-	# Пол вокруг ямы 4×4 в центре (x и z от −2 до 2), глубина 4.
-	_box(world, Vector3(24, 1, 24), Vector3(0, -0.5, 4))
-	_box(world, Vector3(24, 1, 24), Vector3(0, -0.5, -4))
-	_box(world, Vector3(4, 1, 24), Vector3(0, -0.5, 0))
-	_box(world, Vector3(4, 1, 4), Vector3(0, -4.5, 0))
+	# Пол вокруг ямы 4×4 в центре (x и z от −2 до 2), дно на глубине 4:
+	# четыре плиты по сторонам + дно, центр открыт — игрок в (0, 1, 0)
+	# падает сквозь него в HangArea.
+	_box(world, Vector3(8, 1, 20), Vector3(-6, -0.5, 0))
+	_box(world, Vector3(8, 1, 20), Vector3(6, -0.5, 0))
+	_box(world, Vector3(4, 1, 8), Vector3(0, -0.5, 6))
+	_box(world, Vector3(4, 1, 8), Vector3(0, -0.5, -6))
+	_box(world, Vector3(4.4, 0.5, 4.4), Vector3(0, -4.25, 0))
 	# Зона расщелины чуть ниже кромки (центр −2, высота 3 → верх −0.5),
 	# точки HangPoint на кромке (глобально y = 0), камень на берегу.
 	var area := HangArea.new()
@@ -83,27 +88,32 @@ func test_fall_into_crevasse_hangs_then_respawns() -> void:
 	world.add_child(player)
 	player.global_position = Vector3(0, 1.0, 0)
 	await get_tree().physics_frame
-	# Ускоряем тест: вместо 10 с висения — полсекунды (логика та же).
-	var saved_hang_time := B.hang_time
-	B.hang_time = 0.5
-	var hang_started := false
-	EventBus.player_hang_started.connect(func(_left: float) -> void: hang_started = true)
+	# Лямбды GDScript захватывают локальные переменные по значению, поэтому
+	# флаг — ячейка массива (мутация объекта видна снаружи).
+	var hang_started: Array[bool] = [false]
+	EventBus.player_hang_started.connect(
+		func(_left: float) -> void: hang_started[0] = true,
+	)
 	for i: int in range(90):
 		await get_tree().physics_frame
-		if hang_started:
+		if hang_started[0]:
 			break
-	assert_true(hang_started, "падение в яму — цепляние за край")
+	assert_true(hang_started[0], "падение в яму — цепляние за край")
 	# Висит у точки: центр = точка (0, 0, ±1.8) + сдвиг −0.2.
 	assert_almost_eq(player.global_position.y, -0.2, 0.1)
 	assert_almost_eq(absf(player.global_position.z), 1.8, 0.1)
 
-	var respawned := false
-	EventBus.player_respawned.connect(func() -> void: respawned = true)
+	# Ускоряем истечение без мутации общего balance.tres: в GUT-окружении
+	# значения .tres возвращаются к дефолтам скрипта на следующем кадре,
+	# поэтому списываем остаток напрямую — сам таймер честно дотикает
+	# в _physics_process (логика 10 с покрыта тестом выше).
+	player._hang_left = 0.3
+	var respawned: Array[bool] = [false]
+	EventBus.player_respawned.connect(func() -> void: respawned[0] = true)
 	for i: int in range(90):
 		await get_tree().physics_frame
-		if respawned:
+		if respawned[0]:
 			break
-	B.hang_time = saved_hang_time
-	assert_true(respawned, "через hang_time — перенос")
+	assert_true(respawned[0], "через hang_time — перенос")
 	assert_almost_eq(player.global_position.x, 6.0, 0.15, "у Камня духа")
 	assert_almost_eq(player.global_position.z, 4.0, 0.15)
