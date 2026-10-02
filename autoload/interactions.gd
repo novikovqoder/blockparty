@@ -1,19 +1,26 @@
-# Учёт взаимодействий между игроками для экрана результатов (раздел 11 SPEC).
-# Считается на каждом клиенте для себя: очки по peer_id и журнал событий.
-# Этап 3 наполняется событиями помощи от хоста (вытягивание, кооп-ворота,
-# золотая цель) и локальным прыжком с головы; очки одинаковые у Net и здесь.
-# Не делает: секунды рядом, голос, ответные эмоции, выбор фразы-момента и
-# сам экран результатов — этап 6.
+# Учёт взаимодействий для экрана «Встречи» (раздел 13 SPEC): очки по peer_id,
+# окно — текущее пребывание в мире. Считается на каждом клиенте для себя.
+# Этап П0 хранит каркас: события наполнятся на этапах П3–П5 (мобы, кооп),
+# голос — П6; выбор фраз, история 10 сессий и симпатии — П7.
+# Не делает: накопительные лимиты по видам событий («не больше 20» и т.д.) —
+# появятся вместе с источниками событий, чтобы не хранить мёртвый код.
 extends Node
 
 const B: Balance = preload("res://gameplay/balance.tres")
 
 ## Типы событий (значения очков — в balance.tres, группа «Взаимодействия»).
-const KIND_PULL_GOT: String = "pull_got"          # он вытянул меня
-const KIND_PULL_GAVE: String = "pull_gave"        # я вытянул его
-const KIND_GATE_OPEN: String = "gate_open"        # вместе открыли ворота
-const KIND_GOLDEN_KILL: String = "golden_kill"    # вместе убили золотую цель
-const KIND_HEAD_JUMP: String = "head_jump"        # прыгнул с его головы
+const KIND_PROXIMITY: String = "proximity"      # секунда рядом (до 8 м)
+const KIND_VOICE_HEARD: String = "voice_heard"  # секунда его голоса
+const KIND_PULL_GOT: String = "pull_got"        # он вытянул меня из расщелины
+const KIND_PULL_GAVE: String = "pull_gave"      # я вытянул его
+const KIND_HAND_HELD: String = "hand_held"      # держались за руку (каждые 30 с)
+const KIND_CAMPFIRE: String = "campfire"        # сидели рядом у костра (30 с)
+const KIND_BEACON_LIT: String = "beacon_lit"    # вместе зажгли маяк
+const KIND_GATE_OPEN: String = "gate_open"      # вместе открыли ворота руин
+const KIND_BOOST_GOT: String = "boost_got"      # он подсадил меня на уступ
+const KIND_BOOST_GAVE: String = "boost_gave"    # я подсадил его
+const KIND_FIREFLY: String = "firefly"          # вместе поймали золотого светлячка
+const KIND_EMOTE_REPLY: String = "emote_reply"  # ответная эмоция в течение 5 с
 
 ## peer_id -> суммарные очки.
 var _scores: Dictionary = {}
@@ -21,10 +28,10 @@ var _scores: Dictionary = {}
 var _events: Array[Dictionary] = []
 
 
-## Записать событие взаимодействия с другим игроком.
-func add_points(peer_id: int, kind: String, points: float, at_run_time: float) -> void:
+## Записать событие взаимодействия с другим игроком (at_world_time — с).
+func add_points(peer_id: int, kind: String, points: float, at_world_time: float) -> void:
 	_scores[peer_id] = score(peer_id) + points
-	_events.append({"peer_id": peer_id, "kind": kind, "points": points, "time": at_run_time})
+	_events.append({"peer_id": peer_id, "kind": kind, "points": points, "time": at_world_time})
 
 
 ## Очки, набранные во взаимодействиях с игроком peer_id.
@@ -32,12 +39,12 @@ func score(peer_id: int) -> float:
 	return float(_scores.get(peer_id, 0.0))
 
 
-## Журнал событий забега (для экрана результатов — этап 6).
+## Журнал событий текущего пребывания в мире (для экрана «Встречи» — П7).
 func events() -> Array[Dictionary]:
 	return _events
 
 
-## Peer_id с наибольшими очками (топ для карточек; без себя — caller фильтрует).
+## Peer_id с наибольшими очками (топ карточек «Встреч»; caller фильтрует себя).
 func top_peers(limit: int) -> Array[int]:
 	var peers: Array[int] = []
 	for peer_id: int in _scores.keys():
@@ -46,7 +53,7 @@ func top_peers(limit: int) -> Array[int]:
 	return peers.slice(0, limit)
 
 
-## Новый забег — журналы пусты (вызывает сцена забега).
+## Новый заход в мир — журналы пусты (история прошлых сессий — П7).
 func reset() -> void:
 	_scores.clear()
 	_events.clear()

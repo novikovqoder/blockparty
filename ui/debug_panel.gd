@@ -1,9 +1,8 @@
-# Отладочная панель F3 (разделы 13, 16 SPEC): FPS, пинг, число пиров, трафик
-# снапшотов вход/выход, run_time, seed, текущая секция и режим сети.
-# Переключается клавишей F3 (физическая, раскладконезависимая).
-# Технические метки не локализуются — это dev-инструмент, не UI продукта.
-# Не делает: полный трафик ENet по интерфейсу пира (движок не отдаёт) —
-# считаем полезную нагрузку снапшотов.
+# Отладочная панель F3 (разделы 15, 18 SPEC): FPS, пинг, число пиров, режим
+# сети, часы мира, время сессии и монеты. Переключается клавишей F3
+# (физическая, раскладконезависимая). Технические метки не локализуются —
+# это dev-инструмент, не UI продукта.
+# Не делает: трафик снапшотов и зону — появятся на этапах П2–П3.
 class_name DebugPanel
 extends CanvasLayer
 
@@ -13,8 +12,6 @@ var _label: Label
 var _visible_panel: bool = false
 var _was_pressed: bool = false
 var _accum: float = 0.0
-var _sent_before: int = 0
-var _recv_before: int = 0
 
 
 func _ready() -> void:
@@ -49,12 +46,6 @@ func _process(delta: float) -> void:
 
 
 func _refresh() -> void:
-	# Скорость снапшотного трафика за прошедшее окно.
-	var window_sec: float = maxf(0.25, float(UPDATE_INTERVAL))
-	var sent_rate: float = (Net.bytes_sent - _sent_before) / 1024.0 / window_sec
-	var recv_rate: float = (Net.bytes_received - _recv_before) / 1024.0 / window_sec
-	_sent_before = Net.bytes_sent
-	_recv_before = Net.bytes_received
 	var ping: int = Net.ping_msec()
 	_label.text = "\n".join([
 		"FPS %d | ping %s | peers %d | mode %s" % [
@@ -63,6 +54,7 @@ func _refresh() -> void:
 			Net.peer_count(),
 			Net.mode,
 		],
-		"snapshots out %.1f KB/s | in %.1f KB/s" % [sent_rate, recv_rate],
-		"run_time %.2f s | seed %d | section %d" % [Session.run_time, Session.level_seed, Session.current_section],
+		"world_time %.1f s | session %.1f s | coins %d" % [
+			Session.world_time, Session.session_time, Session.world_coins,
+		],
 	])
