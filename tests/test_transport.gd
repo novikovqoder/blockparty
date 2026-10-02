@@ -1,5 +1,5 @@
-# Эмуляция плохой сети в EnetTransport (раздел 16, аргументы --net-lag /
-# --net-loss) и константы протокола (раздел 8). --net-lag трактуется как RTT:
+# Эмуляция плохой сети в EnetTransport (раздел 18, аргументы --net-lag /
+# --net-loss) и константы протокола (раздел 10). --net-lag трактуется как RTT:
 # каждая отправка задерживается на половину с джиттером.
 extends GutTest
 
@@ -21,18 +21,20 @@ func test_loss_threshold() -> void:
 	assert_false(EnetTransport._is_dropped(0, 0.0), "без потерь ничего не теряется")
 
 
-func test_protocol_constants_section8() -> void:
-	assert_true(Protocol.PROTOCOL_VERSION >= 1)
+func test_protocol_constants_section10() -> void:
+	# Раздел 10: версия 2, лимиты, каналы, снапшоты, интерполяция.
+	assert_eq(Protocol.PROTOCOL_VERSION, 2)
 	assert_eq(Protocol.MAX_PLAYERS, 12)
 	assert_eq(Protocol.MAX_PLAYERS_HARD, 16)
-	assert_eq(Protocol.MIN_PLAYERS_TO_START, 2)
-	# Каналы 0..2 из раздела 8, все разные.
+	# Каналы 0..2 из раздела 10, все разные.
 	assert_eq(Protocol.CHANNEL_RELIABLE, 0)
 	assert_eq(Protocol.CHANNEL_SNAPSHOT, 1)
 	assert_eq(Protocol.CHANNEL_VOICE, 2)
 	assert_eq(Protocol.SNAPSHOT_HZ, 20.0)
+	assert_eq(Protocol.SNAPSHOT_MAX_BYTES, 26)
 	assert_eq(Protocol.INTERP_DELAY_MS, 100)
 	assert_eq(Protocol.EXTRAPOLATION_MS, 150)
-	assert_eq(Protocol.TELEPORT_DISTANCE, 256.0)
-	assert_eq(Protocol.START_READY_TIMEOUT, 15.0)
-	assert_eq(Protocol.GO_DELAY, 3.0)
+	assert_eq(Protocol.TELEPORT_DISTANCE, 5.0)
+	# Часы мира (раздел 7): ping каждую секунду, окно 8.
+	assert_eq(Protocol.CLOCK_PING_INTERVAL, 1.0)
+	assert_eq(Protocol.CLOCK_WINDOW, 8)
