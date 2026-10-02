@@ -1,0 +1,35 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://gameplay/activities/pressure_plate.gd" id="1_plate"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_plate"]
+size = Vector3(2, 0.2, 2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_plate"]
+size = Vector3(2, 0.2, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_sense"]
+size = Vector3(2, 1, 2)
+
+[node name="PressurePlate" type="Node3D"]
+script = ExtResource("1_plate")
+
+[node name="PlateRest" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+
+[node name="Plate" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Plate"]
+shape = SubResource("BoxShape3D_plate")
+
+[node name="PlateMesh" type="MeshInstance3D" parent="Plate"]
+mesh = SubResource("BoxMesh_plate")
+
+[node name="Sense" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 2
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Sense"]
+shape = SubResource("BoxShape3D_sense")
