@@ -18,10 +18,13 @@ func test_no_args_gives_defaults() -> void:
 
 
 func test_flags() -> void:
-	var d: Dictionary = DevScript.parse_args(PackedStringArray(["--dev-host", "--bot", "--log-net"]))
+	var d: Dictionary = DevScript.parse_args(PackedStringArray([
+		"--dev-host", "--bot", "--log-net", "--simple-graphics",
+	]))
 	assert_true(d["host_mode"])
 	assert_true(d["bot"])
 	assert_true(d["log_net"])
+	assert_true(d["simple_graphics"])
 
 
 func test_values_with_equals() -> void:

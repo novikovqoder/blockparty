@@ -28,3 +28,8 @@ extends Resource
 @export var firefly: Color = Color("fff3b0")
 @export var hud_text: Color = Color("1d3557")
 @export var hud_panel: Color = Color(0.09, 0.13, 0.18, 0.85)
+
+@export_group("Мобы и костёр (П2, раздел 8)")
+@export var bird: Color = Color("6a7fcb")
+@export var critter: Color = Color("e8955c")
+@export var fire: Color = Color("ff9a3d")

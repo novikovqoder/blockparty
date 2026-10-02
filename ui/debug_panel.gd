@@ -13,11 +13,17 @@ var _visible_panel: bool = false
 var _was_pressed: bool = false
 var _accum: float = 0.0
 var _player: Player = null
+var _island: Island = null
 
 
 ## Показывать позицию этого игрока (вызывает сцена мира).
 func watch_player(player: Player) -> void:
 	_player = player
+
+
+## Остров для имени зоны (раздел 15: в панели есть зона).
+func watch_island(island: Island) -> void:
+	_island = island
 
 
 func _ready() -> void:
@@ -54,9 +60,14 @@ func _process(delta: float) -> void:
 func _refresh() -> void:
 	var ping: int = Net.ping_msec()
 	var pos_text: String = "—"
+	var zone_text: String = "—"
 	if _player != null:
 		var pos := _player.global_position
 		pos_text = "(%.1f, %.1f, %.1f)" % [pos.x, pos.y, pos.z]
+		if _island != null:
+			zone_text = _island.zone_name_at(pos)
+			if zone_text == "":
+				zone_text = "—"
 	_label.text = "\n".join([
 		"FPS %d | ping %s | peers %d | mode %s" % [
 			Engine.get_frames_per_second(),
@@ -67,5 +78,5 @@ func _refresh() -> void:
 		"world_time %.1f s | session %.1f s | coins %d" % [
 			Session.world_time, Session.session_time, Session.world_coins,
 		],
-		"pos %s" % pos_text,
+		"pos %s | zone %s" % [pos_text, zone_text],
 	])

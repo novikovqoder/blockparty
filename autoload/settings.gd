@@ -11,3 +11,7 @@ var locale: String = ""
 var mouse_sensitivity: float = 1.0
 ## Инвертировать наклон камеры по оси Y (раздел 15).
 var camera_invert_y: bool = false
+## «Простая графика» (раздел 15): без теней, ближе туман и дальность камеры.
+## В dev-прогонах включается флагом --simple-graphics (применяет Dev — он
+## в порядке автолоадов позже); экран настроек — П8.
+var simple_graphics: bool = false

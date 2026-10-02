@@ -18,6 +18,7 @@ const START_PITCH: float = -0.3
 
 @onready var pivot: Node3D = $Pivot
 @onready var arm: SpringArm3D = $Pivot/SpringArm
+@onready var camera: Camera3D = $Pivot/SpringArm/Camera3D
 
 
 func _ready() -> void:
@@ -56,6 +57,12 @@ func _physics_process(delta: float) -> void:
 	global_position = global_position.lerp(
 		target, 1.0 - exp(-B.camera_follow_speed * delta)
 	)
+
+
+## Дальность видимости, м (раздел 15: «Простая графика» режет far камеры,
+## чтобы слабые встроенные GPU не тянули весь остров).
+func set_view_distance(distance: float) -> void:
+	camera.far = distance
 
 
 ## Направление взгляда камеры в плоскости земли (для движения персонажа).

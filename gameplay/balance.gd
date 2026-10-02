@@ -85,6 +85,42 @@ extends Resource
 ## Базовая чувствительность мыши, рад на пиксель (умножается на настройку).
 @export var mouse_base_sensitivity: float = 0.0032
 
+@export_group("Мир: цикл дня и графика (разделы 6, 7, 15)")
+## Длина суток, с (раздел 7: 20 минут).
+@export var day_cycle_sec: float = 1200.0
+## Доля суток, когда солнце над горизонтом (день 60% / ночь 40%).
+@export var day_share: float = 0.6
+## Максимальный угол солнца над горизонтом, рад.
+@export var sun_max_elevation: float = deg_to_rad(62.0)
+## Размах азимута солнца за день (± рад от юга).
+@export var sun_azimuth_swing: float = deg_to_rad(55.0)
+## Энергия солнца в полдень (П1: 0.3 — «без пересвета»).
+@export var sun_energy_noon: float = 0.3
+## Дальность видимости камеры, м (обычная / «Простая графика», раздел 15).
+@export var view_distance: float = 160.0
+@export var view_distance_simple: float = 70.0
+## Плотность тумана (раздел 7): обычная / «Простая графика» (плотнее — мир
+## меньше кажется, слабее видно дальние холмы).
+@export var fog_density: float = 0.006
+@export var fog_density_simple: float = 0.02
+
+@export_group("Мобы (раздел 8)")
+## Возрождение убитого моба, с (светлячок — отдельно).
+@export var mob_respawn_sec: float = 180.0
+## Возрождение золотого светлячка, с.
+@export var firefly_respawn_sec: float = 300.0
+## Монет за птицу / зверька (по одному удару).
+@export var bird_reward: int = 1
+@export var critter_reward: int = 1
+
+@export_group("Монеты острова (раздел 8)")
+## Статичных монет на острове (SPEC: ровно 60 — тест).
+@export var static_coins: int = 60
+## Возрождение собранной монеты, с.
+@export var coin_respawn_sec: float = 300.0
+## Монет за монету острова.
+@export var coin_reward: int = 1
+
 @export_group("Взаимодействия (раздел 13)")
 ## Секунда рядом (до 8 м) и лимит за сессию.
 @export var pts_proximity: float = 0.05

@@ -1,14 +1,21 @@
-# HUD мира (раздел 15 SPEC): на этапе П1 — панель «Висит» с таймером у края
-# расщелины. Монеты, маяки, иконка микрофона и подсказки взаимодействия —
-# П2–П6, ников и пузырей над головами нет (это 3D-надписи, П3).
+# HUD мира (раздел 15 SPEC): монеты (П2 — их уже можно собирать), название
+# зоны при переходе (П2), панель «Висит» с таймером у края расщелины.
+# Мини-индикатор маяков, иконка микрофона и подсказки взаимодействия — П5–П6;
+# ники и пузыри над головами — 3D-надписи П3.
 # Весь текст — через tr() и i18n/strings.csv (правило проекта).
 class_name WorldHud
 extends CanvasLayer
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
+## Сколько секунд висит название зоны при переходе.
+const ZONE_HINT_TIME: float = 3.0
+
 var _panel: PanelContainer
 var _label: Label
+var _coins: Label
+var _zone: Label
+var _zone_left: float = 0.0
 
 
 func _ready() -> void:
@@ -18,6 +25,14 @@ func _ready() -> void:
 	EventBus.player_hang_updated.connect(_on_hang_updated)
 	EventBus.player_hang_ended.connect(_on_hang_ended)
 	EventBus.player_respawned.connect(_on_hang_ended)
+	EventBus.world_coins_changed.connect(_on_coins_changed)
+
+
+func _process(delta: float) -> void:
+	if _zone_left > 0.0:
+		_zone_left -= delta
+		if _zone_left <= 0.0:
+			_zone.hide()
 
 
 func _build() -> void:
@@ -47,6 +62,42 @@ func _build() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.add_child(_panel)
+	# Монеты: слева сверху (раздел 15 — минималистичный HUD).
+	_coins = Label.new()
+	_coins.position = Vector2(20, 14)
+	_coins.add_theme_font_size_override("font_size", 20)
+	_coins.add_theme_color_override("font_color", PAL.coin)
+	_coins.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_coins.add_theme_constant_override("outline_size", 4)
+	root.add_child(_coins)
+	_on_coins_changed(Session.world_coins)
+	# Название зоны: по центру сверху, показывается при переходе (П2).
+	_zone = Label.new()
+	_zone.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_zone.position = Vector2(540, 12)
+	_zone.size = Vector2(200, 30)
+	_zone.add_theme_font_size_override("font_size", 22)
+	_zone.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
+	_zone.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_zone.add_theme_constant_override("outline_size", 4)
+	_zone.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_zone.hide()
+	root.add_child(_zone)
+
+
+## Показать название зоны (ключ ZONE_<ИМЯ>); пустая зона прячет подсказку.
+func show_zone(zone_name: String) -> void:
+	if zone_name == "":
+		_zone_left = 0.0
+		_zone.hide()
+		return
+	_zone.text = tr("ZONE_%s" % zone_name.to_upper())
+	_zone.show()
+	_zone_left = ZONE_HINT_TIME
+
+
+func _on_coins_changed(total: int) -> void:
+	_coins.text = tr("HUD_COINS") % total
 
 
 func _on_hang_started(time_left: float) -> void:
