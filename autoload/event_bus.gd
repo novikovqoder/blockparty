@@ -13,6 +13,17 @@ signal world_left(session_time: float)
 ## Изменилось число монет за текущее пребывание в мире.
 signal world_coins_changed(total: int)
 
+# --- Локальный игрок (разделы 5, 9.1) ---
+
+## Игрок упал в расщелину и повис у края; time_left — сколько секунд висит.
+signal player_hang_started(time_left: float)
+## Оставшееся время висения (каждый тик).
+signal player_hang_updated(time_left: float)
+## Висение закончилось (перенос к Камню духа; вытягивание другим — П5).
+signal player_hang_ended()
+## Игрок перенесён на точку возрождения (Камень духа).
+signal player_respawned()
+
 # --- Сеть (раздел 10) ---
 
 ## Изменился состав участников мира.
