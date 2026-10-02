@@ -118,6 +118,12 @@ pause={
 "events": [Object(InputEventKey,"physical_keycode":4194305)]
 }
 
+[physics]
+
+3d_physics/layer_names/3d_layer_1="world"
+3d_physics/layer_names/3d_layer_2="players"
+3d_physics/layer_names/3d_layer_3="head_top"
+
 [rendering]
 
 renderer/rendering_method="forward_plus"

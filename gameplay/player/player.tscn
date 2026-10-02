@@ -1,0 +1,58 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://gameplay/player/player.gd" id="1_player"]
+[ext_resource type="PackedScene" path="res://gameplay/player/player_visual.tscn" id="2_visual"]
+[ext_resource type="Script" path="res://gameplay/player/player_camera.gd" id="3_camera"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.35
+height = 1.6
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_head_top"]
+size = Vector3(0.6, 0.1, 0.6)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_attack"]
+size = Vector3(1.2, 1, 1.2)
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 0.2
+script = ExtResource("1_player")
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="Model" type="Node3D" parent="."]
+
+[node name="PlayerVisual" parent="Model" instance=ExtResource("2_visual")]
+
+[node name="HeadTop" type="AnimatableBody3D" parent="."]
+collision_layer = 4
+collision_mask = 0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.65, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="HeadTop"]
+shape = SubResource("BoxShape3D_head_top")
+
+[node name="CameraRig" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+script = ExtResource("3_camera")
+
+[node name="Pivot" type="Node3D" parent="CameraRig"]
+
+[node name="SpringArm" type="SpringArm3D" parent="CameraRig/Pivot"]
+collision_mask = 1
+spring_length = 6.0
+margin = 0.2
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/Pivot/SpringArm"]
+current = true
+
+[node name="AttackArea" type="Area3D" parent="."]
+monitorable = false
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0.9)
+
+[node name="Shape" type="CollisionShape3D" parent="AttackArea"]
+shape = SubResource("BoxShape3D_attack")

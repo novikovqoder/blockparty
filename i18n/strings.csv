@@ -11,6 +11,10 @@ MENU_MEETINGS,Встречи,Meetings
 MENU_WARDROBE,Гардероб,Wardrobe
 MENU_SETTINGS,Настройки,Settings
 MENU_QUIT,Выход,Quit
-MENU_NOTE,"Этап П0: тестовая площадка 3D-мира (персонаж — этап П1, остров — П2, сеть в мире — П3). «Мир для друзей» — этап П4.","Stage P0: 3D world test playground (character at P1, island at P2, in-world networking at P3). 'World for friends' arrives at P4."
+MENU_NOTE,"Этап П1: тестовая площадка с персонажем и камерой (остров — П2, сеть в мире — П3). «Мир для друзей» — этап П4.","Stage P1: test playground with character and camera (island at P2, in-world networking at P3). 'World for friends' arrives at P4."
 MENU_NET_HOST_STATUS,"Вы хост (ENet). Игроков: %d / %d — мир открыт","You are the host (ENet). Players: %d / %d — the world is open"
 MENU_NET_CLIENT_STATUS,Подключено к хосту (ENet). Нажмите «В мир»,Connected to the host (ENet). Press “Enter world”
+HUD_HANG,"Ты висишь — перенос через %.1f с","You are hanging — teleport in %.1f s"
+ESC_TITLE,Пауза,Paused
+ESC_RESUME,Продолжить,Resume
+ESC_EXIT_WORLD,Выйти из мира,Leave the world

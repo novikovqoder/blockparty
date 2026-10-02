@@ -46,12 +46,20 @@ extends Resource
 ## Наклон камеры, пределы в градусах (−60 … +35).
 @export var camera_pitch_min_deg: float = -60.0
 @export var camera_pitch_max_deg: float = 35.0
+## Скорость мягкого следования за персонажем (экспоненциальное сглаживание).
+@export var camera_follow_speed: float = 10.0
 
 @export_group("Подсадка на голову (раздел 5)")
 ## Коллайдер головы на макушке: плоский бокс, отдельный физический слой.
 @export var head_box_size: Vector3 = Vector3(0.6, 0.1, 0.6)
 ## Усиление прыжка с головы другого игрока (хватает на уступ в 3 блока).
 @export var head_jump_boost: float = 1.3
+## Допуск для условия «ступни выше верхней грани бокса», м (кадр контакта).
+@export var head_stand_epsilon: float = 0.05
+
+@export_group("Расщелина: состояние «Висит» (раздел 9.1)")
+## Сколько секунд упавший висит у края без помощи, с.
+@export var hang_time: float = 10.0
 
 @export_group("Удар (раздел 5)")
 ## Зона взмаха перед персонажем, м.
@@ -60,6 +68,22 @@ extends Resource
 @export var attack_active_time: float = 0.12
 ## Перезарядка, с.
 @export var attack_cooldown: float = 0.35
+## Длительность реакции «тычок» у получившего удар игрока, с.
+@export var bonk_time: float = 0.4
+
+@export_group("Вода (раздел 6)")
+## Скорость движения в воде — шаг (раздел 6), м/с.
+@export var swim_speed: float = 2.5
+## Насколько тело погружено при плавании на поверхности (0 — по щиколотку), м.
+@export var swim_submerge: float = 0.7
+## Жёсткость всплытия к поверхности (скорость = отклонение × жёсткость).
+@export var swim_buoyancy: float = 5.0
+## Предел вертикальной скорости в воде, м/с.
+@export var swim_vertical_speed: float = 2.5
+
+@export_group("Камера: мышь (раздел 5)")
+## Базовая чувствительность мыши, рад на пиксель (умножается на настройку).
+@export var mouse_base_sensitivity: float = 0.0032
 
 @export_group("Взаимодействия (раздел 13)")
 ## Секунда рядом (до 8 м) и лимит за сессию.

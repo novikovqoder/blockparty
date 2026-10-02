@@ -1,7 +1,7 @@
 # Отладочная панель F3 (разделы 15, 18 SPEC): FPS, пинг, число пиров, режим
-# сети, часы мира, время сессии и монеты. Переключается клавишей F3
-# (физическая, раскладконезависимая). Технические метки не локализуются —
-# это dev-инструмент, не UI продукта.
+# сети, часы мира, время сессии, монеты и позиция игрока. Переключается
+# клавишей F3 (физическая, раскладконезависимая). Технические метки не
+# локализуются — это dev-инструмент, не UI продукта.
 # Не делает: трафик снапшотов и зону — появятся на этапах П2–П3.
 class_name DebugPanel
 extends CanvasLayer
@@ -12,6 +12,12 @@ var _label: Label
 var _visible_panel: bool = false
 var _was_pressed: bool = false
 var _accum: float = 0.0
+var _player: Player = null
+
+
+## Показывать позицию этого игрока (вызывает сцена мира).
+func watch_player(player: Player) -> void:
+	_player = player
 
 
 func _ready() -> void:
@@ -47,6 +53,10 @@ func _process(delta: float) -> void:
 
 func _refresh() -> void:
 	var ping: int = Net.ping_msec()
+	var pos_text: String = "—"
+	if _player != null:
+		var pos := _player.global_position
+		pos_text = "(%.1f, %.1f, %.1f)" % [pos.x, pos.y, pos.z]
 	_label.text = "\n".join([
 		"FPS %d | ping %s | peers %d | mode %s" % [
 			Engine.get_frames_per_second(),
@@ -57,4 +67,5 @@ func _refresh() -> void:
 		"world_time %.1f s | session %.1f s | coins %d" % [
 			Session.world_time, Session.session_time, Session.world_coins,
 		],
+		"pos %s" % pos_text,
 	])
