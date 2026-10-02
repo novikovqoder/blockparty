@@ -21,6 +21,7 @@ var bot: bool = false            # --bot: бот для нагрузочных �
 var net_lag_ms: int = 0          # --net-lag: эмуляция задержки сети, мс
 var net_loss_percent: int = 0    # --net-loss: эмуляция потери пакетов, %
 var log_net: bool = false        # --log-net: подробный лог сетевых RPC
+var shot_dir: String = ""        # --shot-dir=PATH: скриншоты площадки и выход
 
 
 func _init() -> void:
@@ -33,6 +34,7 @@ func _init() -> void:
 	net_lag_ms = parsed["net_lag_ms"]
 	net_loss_percent = parsed["net_loss_percent"]
 	log_net = parsed["log_net"]
+	shot_dir = parsed["shot_dir"]
 
 
 ## Разбор списка аргументов в словарь с полями-константами этого автолоада.
@@ -47,6 +49,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"net_lag_ms": 0,
 		"net_loss_percent": 0,
 		"log_net": false,
+		"shot_dir": "",
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -68,6 +71,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["net_lag_ms"] = maxi(0, _to_int(arg.get_slice("=", 1), 0))
 		elif arg.begins_with("--net-loss="):
 			result["net_loss_percent"] = clampi(_to_int(arg.get_slice("=", 1), 0), 0, 100)
+		elif arg.begins_with("--shot-dir="):
+			result["shot_dir"] = arg.get_slice("=", 1)
 	return result
 
 
