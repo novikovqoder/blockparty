@@ -2,11 +2,11 @@
 # движение относительно камеры (бег/шаг, ускорение/торможение, 60% в воздухе),
 # прыжок с coyote time, буфером и переменной высотой, автоподъём на полублоки,
 # плавание на поверхности, состояние «Висит» с переносом к Камню духа, удар
-# («тычок» по игрокам), коллайдер головы для подсадки (отдельный слой,
-# столкновение только при падении сверху — условие в HeadStand).
+# («тычок» по игрокам, мобы — один удар, раздел 8), коллайдер головы для
+# подсадки (отдельный слой, столкновение только при падении сверху — HeadStand).
 # Игроки проходят друг сквозь друга: маска не содержит слой игроков.
 # Не делает: снапшоты в сеть (П3 подключит anim_state()/snapshot_flags()),
-# мобов для удара (П2), вытягивание другим игроком и эмоции (П5).
+# вытягивание другим игроком и эмоции (П5), светлячка на двоих (П5).
 class_name Player
 extends CharacterBody3D
 
@@ -188,11 +188,19 @@ func _try_attack() -> void:
 
 
 func _end_attack() -> void:
+	# Пересечения читаем, пока monitoring включён: после выключения
+	# get_overlapping_* пуст (и ругается в консоль движка).
+	var bodies := attack_area.get_overlapping_bodies()
+	var areas := attack_area.get_overlapping_areas()
 	attack_area.monitoring = false
-	# По игрокам — только визуальный «тычок» (раздел 5); мобы — этап П2.
-	for body in attack_area.get_overlapping_bodies():
+	# По игрокам — только визуальный «тычок» (раздел 5).
+	for body in bodies:
 		if body is Player and body != self:
 			(body as Player).receive_bonk()
+	# Мобы (раздел 8): птица и зверёк — один удар; светлячок на двоих — П5.
+	for area in areas:
+		if area is Mob:
+			(area as Mob).take_hit()
 
 
 func receive_bonk() -> void:
@@ -221,17 +229,30 @@ func _process_hang(delta: float) -> void:
 		_respawn()
 
 
-## Перенос к ближайшему Камню духа без штрафа (раздел 9.1).
+## Перенос к ближайшему Камню духа без штрафа (раздел 9.1; камней на острове
+## несколько — по одному на зону).
 func _respawn() -> void:
 	_hanging = false
 	velocity = Vector3.ZERO
-	var stone := get_tree().get_first_node_in_group(RespawnStone.GROUP)
-	if stone is Node3D:
-		global_position = (stone as Node3D).global_position + Vector3(0.0, 1.0, 0.0)
+	var stone := _nearest_stone()
+	if stone != null:
+		global_position = stone.global_position + Vector3(0.0, 1.0, 0.0)
 	_set_anim(Protocol.AnimState.IDLE)
 	EventBus.player_hang_ended.emit()
 	EventBus.player_respawned.emit()
 	Log.info("Перенос к Камню духа", "Player")
+
+
+func _nearest_stone() -> Node3D:
+	var best: Node3D = null
+	var best_distance: float = 1e9
+	for node in get_tree().get_nodes_in_group(RespawnStone.GROUP):
+		if node is Node3D:
+			var distance: float = (node as Node3D).global_position.distance_squared_to(global_position)
+			if distance < best_distance:
+				best_distance = distance
+				best = node
+	return best
 
 
 # --- Вода (раздел 6) ---

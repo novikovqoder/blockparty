@@ -51,6 +51,7 @@ margin = 0.2
 current = true
 
 [node name="AttackArea" type="Area3D" parent="."]
+collision_mask = 2
 monitorable = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0.9)
 
