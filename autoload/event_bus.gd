@@ -49,3 +49,10 @@ signal roster_changed(count: int)
 signal peer_left(peer_id: int, player_name: String)
 ## Хост мира вышел: мир закрывается у всех с сообщением «Хозяин мира вышел».
 signal host_lost(reason: String)
+
+# --- Steam (раздел 11) ---
+
+## Лобби-мир Steam подключён и транспорт поднят (хостом или клиентом) —
+## можно загружать остров. Dev-режим ENet этим сигналом не пользуется:
+## там мир поднимается на старте и входят кнопкой вручную.
+signal steam_world_ready()

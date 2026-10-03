@@ -47,7 +47,6 @@ metadata/tr_key = "MENU_ENTER_WORLD"
 [node name="FriendsWorld" type="Button" parent="Menu"]
 custom_minimum_size = Vector2(280, 56)
 theme_override_font_sizes/font_size = 26
-disabled = true
 text = "MENU_FRIENDS_WORLD"
 metadata/tr_key = "MENU_FRIENDS_WORLD"
 
@@ -110,4 +109,5 @@ text = "MENU_NOTE"
 metadata/tr_key = "MENU_NOTE"
 
 [connection signal="pressed" from="Menu/EnterWorld" to="." method="_on_enter_world_pressed"]
+[connection signal="pressed" from="Menu/FriendsWorld" to="." method="_on_friends_world_pressed"]
 [connection signal="pressed" from="Menu/Quit" to="." method="_on_quit_pressed"]

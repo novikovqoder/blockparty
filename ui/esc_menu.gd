@@ -1,6 +1,7 @@
-# Меню Esc в мире (раздел 15 SPEC): «Продолжить» и «Выйти из мира»,
-# курсор освобождается, мир не ставится на паузу. Полное меню (пригласить
-# друга, «Встречи», «Вернуться на площадь», настройки) — этап П8.
+# Меню Esc в мире (раздел 15 SPEC): «Продолжить», «Пригласить друга»
+# (оверлей Steam, раздел 11 — в Steam-мире) и «Выйти из мира», курсор
+# освобождается, мир не ставится на паузу. Полное меню («Встречи»,
+# «Вернуться на площадь», настройки) — этап П8.
 # Сцена мира переключает меню по action «pause»; при выходе из мира
 # слушает только сигнал exit_requested.
 class_name EscMenu
@@ -75,6 +76,15 @@ func _build() -> void:
 	resume.add_theme_font_size_override("font_size", 22)
 	resume.pressed.connect(close)
 	box.add_child(resume)
+
+	# Раздел 11: в Steam-мире — приглашение через оверлей Steam.
+	if Net.mode == "steam" and SteamService.current_lobby_id != 0:
+		var invite := Button.new()
+		invite.text = tr("ESC_INVITE_FRIEND")
+		invite.custom_minimum_size = Vector2(240, 48)
+		invite.add_theme_font_size_override("font_size", 22)
+		invite.pressed.connect(func() -> void: SteamService.open_invite_overlay())
+		box.add_child(invite)
 
 	var exit := Button.new()
 	exit.text = tr("ESC_EXIT_WORLD")

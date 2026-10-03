@@ -136,7 +136,12 @@ func _exit_to_menu() -> void:
 		return
 	_leaving = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	Net.left_world()
+	if Net.mode == "steam":
+		# Раздел 11: выход из Steam-мира закрывает и лобби — из меню можно
+		# войти в другой мир (dev-режим ENet держит связь для повторного входа).
+		Net.leave_steam_world()
+	else:
+		Net.left_world()
 	Session.leave_world()
 	get_tree().call_deferred("change_scene_to_file", MENU_SCENE)
 
