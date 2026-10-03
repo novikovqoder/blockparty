@@ -102,7 +102,7 @@ func _on_peer_snapshot(peer_id: int, snap: Dictionary, recv_msec: int) -> void:
 	remote.apply_snapshot(snap, recv_msec)
 
 
-func _on_peer_left(peer_id: int) -> void:
+func _on_peer_left(peer_id: int, _player_name: String) -> void:
 	var remote: RemotePlayer = _remotes.get(peer_id)
 	if remote == null:
 		return

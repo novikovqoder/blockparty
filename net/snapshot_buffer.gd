@@ -60,10 +60,21 @@ func sample(render_msec: int) -> Dictionary:
 	if _samples.is_empty():
 		return result
 	var last: Dictionary = _samples[_samples.size() - 1]
+	# База — последний снапшот: если данных нет дольше лимита экстраполяции,
+	# замираем на его позиции (а не на нуле до первого рендера).
+	result["x"] = float(last["x"])
+	result["y"] = float(last["y"])
+	result["z"] = float(last["z"])
+	result["yaw"] = float(last["yaw"])
+	result["vx"] = float(last["vx"])
+	result["vy"] = float(last["vy"])
+	result["vz"] = float(last["vz"])
 	_copy_state(result, last)
 
 	if render_msec >= last["t"]:
-		# Данных нет: экстраполяция скоростью не дольше лимита, затем замри.
+		# Данных нет: экстраполяция скоростью не дольше лимита, затем замри
+		# на последней отрисованной позиции (до первого рендера — на последнем
+		# снапшоте, не в нуле).
 		var ahead_msec: int = render_msec - int(last["t"])
 		if ahead_msec <= Protocol.EXTRAPOLATION_MS:
 			var dt: float = float(ahead_msec) / 1000.0
@@ -72,6 +83,11 @@ func sample(render_msec: int) -> Dictionary:
 			result["z"] = float(last["z"]) + float(last["vz"]) * dt
 		else:
 			result["frozen"] = true
+			if _has_rendered:
+				result["x"] = _last_rendered.x
+				result["y"] = _last_rendered.y
+				result["z"] = _last_rendered.z
+				result["yaw"] = _last_yaw
 	else:
 		# Найти пару снапшотов, между которыми попадает время отрисовки.
 		for i: int in range(_samples.size() - 1, 0, -1):

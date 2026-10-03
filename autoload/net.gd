@@ -243,10 +243,10 @@ func rpc_roster_update(entries: Array) -> void:
 		if old_id == local_peer_id:
 			continue
 		if not fresh.has(old_id):
-			EventBus.peer_left.emit(old_id)
+			EventBus.peer_left.emit(old_id, str(players[old_id]["name"]))
 		elif bool(players[old_id].get("in_world", false)) \
 				and not bool(fresh[old_id].get("in_world", false)):
-			EventBus.peer_left.emit(old_id)
+			EventBus.peer_left.emit(old_id, str(players[old_id]["name"]))
 	players = fresh
 	EventBus.roster_changed.emit(players.size())
 
@@ -608,6 +608,15 @@ func _new_slot(player_name: String) -> Dictionary:
 func _peer_in_world(peer_id: int) -> bool:
 	var slot: Variant = players.get(peer_id)
 	return slot != null and bool(slot.get("in_world", false))
+
+
+## Сколько игроков сейчас в мире (включая себя) — панель F3.
+func in_world_count() -> int:
+	var count: int = 1 if _peer_in_world(local_peer_id) else 0
+	for peer_id: int in players.keys():
+		if peer_id != local_peer_id and _peer_in_world(peer_id):
+			count += 1
+	return count
 
 
 ## Позиция игрока для проверок хоста: свой — из сцены, чужой — последний

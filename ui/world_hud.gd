@@ -1,7 +1,7 @@
 # HUD мира (раздел 15 SPEC): монеты (П2 — их уже можно собирать), название
-# зоны при переходе (П2), панель «Висит» с таймером у края расщелины.
-# Мини-индикатор маяков, иконка микрофона и подсказки взаимодействия — П5–П6;
-# ники и пузыри над головами — 3D-надписи П3.
+# зоны при переходе (П2), панель «Висит» с таймером у края расщелины,
+# уведомления «игрок вошёл/покинул мир» (П3). Мини-индикатор маяков, иконка
+# микрофона и подсказки взаимодействия — П5–П6.
 # Весь текст — через tr() и i18n/strings.csv (правило проекта).
 class_name WorldHud
 extends CanvasLayer
@@ -16,6 +16,8 @@ var _label: Label
 var _coins: Label
 var _zone: Label
 var _zone_left: float = 0.0
+var _toast: Label
+var _toast_left: float = 0.0
 
 
 func _ready() -> void:
@@ -26,6 +28,8 @@ func _ready() -> void:
 	EventBus.player_hang_ended.connect(_on_hang_ended)
 	EventBus.player_respawned.connect(_on_hang_ended)
 	EventBus.world_coins_changed.connect(_on_coins_changed)
+	EventBus.peer_joined_world.connect(_on_peer_joined)
+	EventBus.peer_left.connect(_on_peer_left)
 
 
 func _process(delta: float) -> void:
@@ -33,6 +37,10 @@ func _process(delta: float) -> void:
 		_zone_left -= delta
 		if _zone_left <= 0.0:
 			_zone.hide()
+	if _toast_left > 0.0:
+		_toast_left -= delta
+		if _toast_left <= 0.0:
+			_toast.hide()
 
 
 func _build() -> void:
@@ -83,6 +91,18 @@ func _build() -> void:
 	_zone.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_zone.hide()
 	root.add_child(_zone)
+	# «Игрок вошёл/покинул мир» (П3): под названием зоны, гаснет сам.
+	_toast = Label.new()
+	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_toast.position = Vector2(540, 46)
+	_toast.size = Vector2(200, 26)
+	_toast.add_theme_font_size_override("font_size", 17)
+	_toast.add_theme_font_color_override("font_color", Color(0.85, 0.92, 1.0))
+	_toast.add_theme_font_color_override("font_outline_color", Color(0, 0, 0))
+	_toast.add_theme_constant_override("outline_size", 4)
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.hide()
+	root.add_child(_toast)
 
 
 ## Показать название зоны (ключ ZONE_<ИМЯ>); пустая зона прячет подсказку.
@@ -111,6 +131,20 @@ func _on_hang_updated(time_left: float) -> void:
 
 func _on_hang_ended() -> void:
 	_panel.hide()
+
+
+func _show_toast(text: String) -> void:
+	_toast.text = text
+	_toast.show()
+	_toast_left = ZONE_HINT_TIME
+
+
+func _on_peer_joined(_peer_id: int, player_name: String) -> void:
+	_show_toast(tr("HUD_PLAYER_JOIN") % player_name)
+
+
+func _on_peer_left(_peer_id: int, player_name: String) -> void:
+	_show_toast(tr("HUD_PLAYER_LEAVE") % player_name)
 
 
 func _refresh(time_left: float) -> void:

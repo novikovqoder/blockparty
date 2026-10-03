@@ -46,6 +46,6 @@ signal peer_joined_world(peer_id: int, player_name: String)
 ## Изменился состав участников мира.
 signal roster_changed(count: int)
 ## Участник покинул мир — его персонаж убирается со сцены.
-signal peer_left(peer_id: int)
+signal peer_left(peer_id: int, player_name: String)
 ## Хост мира вышел: мир закрывается у всех с сообщением «Хозяин мира вышел».
 signal host_lost(reason: String)

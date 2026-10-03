@@ -39,12 +39,13 @@ func _ready() -> void:
 
 	# Ник над головой (раздел 6: в радиусе 40 м), к игроку лицом.
 	var label := Label3D.new()
+	label.name = "NameLabel"
 	label.text = player_name
 	label.position = Vector3(0.0, NAME_LABEL_Y, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.font_size = 48
 	label.outline_size = 12
-	label.visibility_range = 40.0
+	label.visibility_range_end = 40.0
 	add_child(label)
 
 	# Голова — плоский бокс на макушке, слой голов (подсадка, раздел 5).
