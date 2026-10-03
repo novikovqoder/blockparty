@@ -1,12 +1,13 @@
 # NetworkManager (раздел 10 SPEC): выбор транспорта (ENet для разработки,
-# Steam — этап П4), ростер мира и синхронизация часов мира. Мир открыт для
-# входа в любой момент: rpc_hello добавляет игрока и сразу получает
-# world_state (часы, игроки, мёртвые мобы, собранные монеты). Снапшоты
-# движения идут 20 Гц через хост, хост пересылает их с AOI-фильтром по
-# расстоянию; мобы и монеты решает хост (HostAuthority). Выход хоста
-# закрывает мир у всех. В одиночной игре без сети Net сам исполняет роль
-# хоста — те же события EventBus.
-# Не делает: голос (П6), Steam-лобби (П4).
+# Steam — лобби-миры раздела 11: владелец лобби становится хостом),
+# ростер мира и синхронизация часов мира. Мир открыт для входа в любой
+# момент: rpc_hello добавляет игрока и сразу получает world_state (часы,
+# игроки, мёртвые мобы, собранные монеты). Снапшоты движения идут 20 Гц
+# через хост, хост пересылает их с AOI-фильтром по расстоянию; мобы и
+# монеты решает хост (HostAuthority). Выход хоста закрывает мир у всех.
+# В одиночной игре без сети Net сам исполняет роль хоста — те же события
+# EventBus.
+# Не делает: голос (П6).
 extends Node
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -52,6 +53,9 @@ var _ping_accum: float = 0.0
 
 func _ready() -> void:
 	_net_log = Dev.log_net
+	# Лобби Steam (раздел 11): поднимаем транспорт мира, когда SteamService
+	# вошёл в лобби (кнопки меню, приглашение, +connect_lobby).
+	SteamService.lobby_joined.connect(_on_steam_lobby_joined)
 	if Dev.host_mode and Dev.join_address != "":
 		Log.warn("--dev-host и --dev-join вместе: клиентский режим проигнорирован", "Net")
 	if Dev.host_mode:
@@ -66,12 +70,7 @@ func _ready() -> void:
 		enet.setup(Dev.net_lag_ms, Dev.net_loss_percent)
 		transport = enet
 		add_child(transport)
-		transport.wire_multiplayer(multiplayer)
-		transport.peer_connected.connect(_on_peer_connected)
-		transport.peer_disconnected.connect(_on_peer_disconnected)
-		transport.server_disconnected.connect(_on_server_disconnected)
-		transport.connection_failed.connect(_on_connection_failed)
-		multiplayer.connected_to_server.connect(_on_connected_to_server)
+		_wire_transport_signals()
 		if mode == "dev-host":
 			var err: Error = transport.host_game(Dev.DEV_PORT)
 			if err == OK:
@@ -94,7 +93,64 @@ func _ready() -> void:
 	local_peer_id = multiplayer.get_unique_id()
 	players[local_peer_id] = _new_slot(_display_name())
 	if mode == "none":
-		Log.info("Сеть не запущена: локальный мир (Steam-режим — этап П4)", "Net")
+		Log.info("Сеть не запущена: локальный мир (Steam-режим — кнопки меню, раздел 11)", "Net")
+
+
+## Сигналы транспорта и MultiplayerAPI — одинаково для ENet и Steam.
+func _wire_transport_signals() -> void:
+	if transport == null:
+		return
+	transport.wire_multiplayer(multiplayer)
+	transport.peer_connected.connect(_on_peer_connected)
+	transport.peer_disconnected.connect(_on_peer_disconnected)
+	transport.server_disconnected.connect(_on_server_disconnected)
+	transport.connection_failed.connect(_on_connection_failed)
+	if not multiplayer.connected_to_server.is_connected(_on_connected_to_server):
+		multiplayer.connected_to_server.connect(_on_connected_to_server)
+
+
+# --- Steam-мир (раздел 11: лобби = мир, владелец лобби — хост) ---
+
+## SteamService вошёл в лобби: владелец поднимает мир (хост), остальные
+## подключаются к нему. Дальше — общий путь rpc_hello/world_state (раздел 10).
+func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
+	if mode == "steam" or transport != null:
+		return  # уже в мире
+	var steam := SteamTransport.new()
+	steam.setup(lobby_id)
+	transport = steam
+	add_child(steam)
+	_wire_transport_signals()
+	mode = "steam"
+	var err: Error = FAILED
+	if as_owner:
+		err = steam.host_lobby(lobby_id)
+	else:
+		err = steam.join_lobby(lobby_id)
+	if err != OK:
+		_teardown_network()
+		EventBus.host_lost.emit("Не удалось подключиться к миру Steam")
+		return
+	multiplayer.multiplayer_peer = steam.peer
+	if as_owner:
+		local_peer_id = multiplayer.get_unique_id()
+		# Мир создан вместе с хостом: часы мира пошли (раздел 7), как в dev-host.
+		world_epoch_msec = Time.get_ticks_msec()
+		authority.clear()
+		_aoi.clear()
+		_peer_pos.clear()
+		Log.info("Хост Steam-мира: лобби %d, мир создан" % lobby_id, "Net")
+		EventBus.steam_world_ready.emit()
+	else:
+		Log.info("Клиент Steam-мира: подключение к лобби %d" % lobby_id, "Net")
+
+
+## Полный выход из Steam-мира (Esc → «Выйти из мира», раздел 11): транспорт
+## и лобби закрываются — игрок снова в меню и может войти в другой мир.
+func leave_steam_world() -> void:
+	if mode != "steam":
+		return
+	_teardown_network()
 
 
 func _process(delta: float) -> void:
@@ -540,6 +596,9 @@ func _on_connected_to_server() -> void:
 	if not players.has(local_peer_id):
 		players[local_peer_id] = _new_slot(_display_name())
 	_send(func() -> void: rpc_hello.rpc(_display_name()), false)
+	if mode == "steam":
+		# Лобби подключено и хост ответил — можно загружать остров (раздел 11).
+		EventBus.steam_world_ready.emit()
 
 
 func _on_peer_connected(peer_id: int) -> void:
@@ -564,7 +623,10 @@ func _on_server_disconnected() -> void:
 
 
 func _on_connection_failed() -> void:
-	Log.error("Не удалось подключиться к хосту %s" % Dev.join_address, "Net")
+	Log.error(
+		"Не удалось подключиться к хосту %s" % ("(Steam-лобби)" if mode == "steam" else Dev.join_address),
+		"Net",
+	)
 	_teardown_network()
 	EventBus.host_lost.emit("Не удалось подключиться")
 
@@ -578,6 +640,7 @@ func _on_host_lost(reason: String) -> void:
 
 
 func _teardown_network() -> void:
+	var was_steam: bool = mode == "steam"
 	if transport != null:
 		transport.close()
 	multiplayer.multiplayer_peer = null
@@ -594,6 +657,9 @@ func _teardown_network() -> void:
 	_seq = 0
 	last_world_state = {}
 	authority.clear()
+	if was_steam:
+		# Раздел 11: выход из мира — выход из лобби (Rich Presence очищается).
+		SteamService.leave_lobby()
 
 
 func _kick(peer_id: int) -> void:
@@ -677,6 +743,9 @@ func _roster_entries() -> Array:
 
 
 func _broadcast_roster() -> void:
+	# Хост держит данные лобби свежими: «players» из раздела 11 (видно в поиске).
+	if mode == "steam" and multiplayer.is_server():
+		SteamService.set_lobby_players(players.size())
 	if is_networked():
 		rpc_roster_update.rpc(_roster_entries())
 	else:
