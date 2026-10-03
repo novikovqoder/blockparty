@@ -130,6 +130,9 @@ func _refresh_net_status(count: int) -> void:
 	if not Net.is_networked():
 		status.text = ""
 		return
+	if Net.mode == "steam":
+		# Статус Steam-потока ведёт _flow_status (поиск/создание/подключение).
+		return
 	# Мир всегда открыт (раздел 10): вход не зависит от остальных.
 	if Net.is_host():
 		status.text = tr("MENU_NET_HOST_STATUS") % [count, Protocol.MAX_PLAYERS]
