@@ -11,9 +11,18 @@ MENU_MEETINGS,Встречи,Meetings
 MENU_WARDROBE,Гардероб,Wardrobe
 MENU_SETTINGS,Настройки,Settings
 MENU_QUIT,Выход,Quit
-MENU_NOTE,"Этап П2: остров с зонами, мобами и монетами в одиночном режиме (сеть в мире — П3, Steam — П4).","Stage P2: the island with zones, mobs and coins in single-player (in-world networking at P3, Steam at P4)."
+MENU_NOTE,"«В мир» — быстрый вход в общий мир или свой остров; «Мир для друзей» — с приглашением через Steam.","“Enter world” — quick join a shared world or host your own island; “World for friends” — with a Steam invite."
 MENU_NET_HOST_STATUS,"Вы хост (ENet). Игроков: %d / %d — мир открыт","You are the host (ENet). Players: %d / %d — the world is open"
 MENU_NET_CLIENT_STATUS,Подключено к хосту (ENet). Нажмите «В мир»,Connected to the host (ENet). Press “Enter world”
+MENU_NET_SEARCHING,Ищем мир…,Searching for a world…
+MENU_NET_CREATING,Создаём новый мир…,Creating a new world…
+MENU_NET_JOINING,Подключение к миру…,Joining the world…
+MENU_NET_JOIN_FAILED,"Не удалось войти в мир: %s","Could not enter the world: %s"
+LOBBY_FAIL_CREATE,"не удалось создать мир (код %d)","failed to create the world (code %d)"
+LOBBY_FAIL_FULL,мир заполнен,the world is full
+LOBBY_FAIL_CLOSED,мир уже закрыт,the world is already closed
+LOBBY_FAIL_GENERIC,"ошибка Steam (код %d)","Steam error (code %d)"
+RP_IN_WORLD,"На острове (%d / %d)","On the island (%d / %d)"
 HUD_HANG,"Ты висишь — перенос через %.1f с","You are hanging — teleport in %.1f s"
 HUD_COINS,Монеты: %d,Coins: %d
 ZONE_PLAZA,Площадь,Plaza
@@ -24,6 +33,7 @@ ZONE_CREVASSE,Расщелина,Crevasse
 ZONE_LAKE,Озеро,Lake
 ESC_TITLE,Пауза,Paused
 ESC_RESUME,Продолжить,Resume
+ESC_INVITE_FRIEND,Пригласить друга,Invite a friend
 ESC_EXIT_WORLD,Выйти из мира,Leave the world
 HUD_PLAYER_JOIN,"%s вошёл(ла) в мир","%s entered the world"
 HUD_PLAYER_LEAVE,"%s покинул(а) мир","%s left the world"
