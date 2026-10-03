@@ -23,13 +23,15 @@ var _last_hits: Dictionary = {}
 ## с допуском на пинг, перезарядку и что моб жив). Возвращает словарь
 ## события {spawn_id, respawn_at} или пустой словарь, если отказано.
 ## mob_pos — расчётная позиция моба на client_world_time (траектории
-## детерминированы), killer_pos — последняя позиция убийцы из снапшотов.
+## детерминированы), killer_pos — последняя позиция убийцы из снапшотов,
+## respawn_sec — время возрождения этого типа моба (светлячок дольше).
 func try_kill_mob(
 	spawn_id: int,
 	killer_peer: int,
 	world_time: float,
 	mob_pos: Vector3,
 	killer_pos: Vector3,
+	respawn_sec: float,
 	b: Balance,
 ) -> Dictionary:
 	if dead_mobs.has(spawn_id):
@@ -40,7 +42,7 @@ func try_kill_mob(
 	if mob_pos.distance_to(killer_pos) > allowed:
 		return {}
 	_last_hits[killer_peer] = world_time
-	var respawn_at: float = world_time + b.mob_respawn_sec
+	var respawn_at: float = world_time + respawn_sec
 	dead_mobs[spawn_id] = respawn_at
 	return {"spawn_id": spawn_id, "respawn_at": respawn_at}
 

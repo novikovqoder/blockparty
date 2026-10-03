@@ -18,6 +18,10 @@ func _apply_motion(world_time: float) -> void:
 	material.emission_energy_multiplier = 0.8 + 1.2 * glow
 
 
+func position_at(world_time: float) -> Vector3:
+	return MobMotion.firefly_position(motion, world_time)
+
+
 func is_killable() -> bool:
 	return false
 

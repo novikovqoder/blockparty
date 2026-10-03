@@ -1,6 +1,6 @@
 # Глобальные сигналы для связи сцен и сервисов: сцены не обращаются друг к
 # другу напрямую (правило проекта). Сигналы добавляются по мере появления
-# механик (монеты и мобы — П2, кооп и эмоции — П5, «Встречи» — П7).
+# механик (снапшоты и мир — П3, кооп и эмоции — П5, «Встречи» — П7).
 # Не делает: не содержит никакой логики, только сигналы.
 extends Node
 
@@ -24,14 +24,24 @@ signal player_hang_ended()
 ## Игрок перенесён на точку возрождения (Камень духа).
 signal player_respawned()
 
-# --- Монеты и мобы (раздел 8) ---
+# --- Монеты и мобы (раздел 8; подтверждает хост — раздел 10) ---
 
-## Игрок собрал статичную монету острова (spawn_id — какая именно).
-signal coin_collected(spawn_id: int)
-## Игрок убил моба (spawn_id — какой именно; «кто» на П2 не нужно — локально).
-signal mob_killed(spawn_id: int)
+## Хост подтвердил подбор монеты: spawn_id — какая, collector_peer — кому
+## монеты, respawn_at — время возрождения по world_time.
+signal coin_collected(spawn_id: int, collector_peer: int, respawn_at: float)
+## Хост подтвердил убийство моба: killer_peer — кому награда, respawn_at —
+## время возрождения по world_time (клиенты оживляют моба сами).
+signal mob_killed(spawn_id: int, killer_peer: int, respawn_at: float)
+## Хост прислал полное состояние мира (вход в идущий мир, раздел 10):
+## dead_mobs и taken_coins — массивы {spawn_id, respawn_at}.
+signal world_state_applied(dead_mobs: Array, taken_coins: Array)
 
 # --- Сеть (раздел 10) ---
+
+## Снапшот чужого игрока (хост переслал после AOI-фильтра).
+signal peer_snapshot(peer_id: int, snap: Dictionary, recv_msec: int)
+## Игрок вошёл в мир — его персонаж появляется у всех (rpc_player_joined).
+signal peer_joined_world(peer_id: int, player_name: String)
 
 ## Изменился состав участников мира.
 signal roster_changed(count: int)

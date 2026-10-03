@@ -14,6 +14,10 @@ func _apply_motion(world_time: float) -> void:
 	_model.rotation.y = MobMotion.critter_yaw(motion, world_time)
 
 
+func position_at(world_time: float) -> Vector3:
+	return MobMotion.critter_position(motion, world_time)
+
+
 func reward() -> int:
 	return B.critter_reward
 

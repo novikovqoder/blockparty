@@ -13,7 +13,9 @@ func _kill(
 	authority: HostAuthority, spawn_id: int, peer: int, at: float,
 	mob_at: Vector3, killer_at: Vector3,
 ) -> Dictionary:
-	return authority.try_kill_mob(spawn_id, peer, at, mob_at, killer_at, B)
+	return authority.try_kill_mob(
+		spawn_id, peer, at, mob_at, killer_at, B.mob_respawn_sec, B
+	)
 
 
 func test_kill_close_mob_schedules_respawn() -> void:

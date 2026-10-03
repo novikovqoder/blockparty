@@ -1,20 +1,25 @@
 # Моб (раздел 8 SPEC): Area3D на слое игроков — в него попадает удар
 # (Player._end_attack проверяет overlapping_areas). Траектория — чистая
 # функция от часов мира (MobMotion + параметры из IslandGen), поэтому моб
-# одинаков у всех и не требует синхронизации в сети (П3 подключит только
-# события «убит/возрождён» от хоста). Убитый моб исчезает, даёт монеты
-# и возрождается по таймеру (раздел 8). Визуал — дочерние узлы из примитивов,
-# собираются в _build подвидами (модели можно заменить сцеными).
+# одинаков у всех и не требует синхронизации в сети. «Убит» и «возрождён»
+# решает хост (раздел 10): событие mob_killed приносит respawn_at, моб
+# оживает сам, когда world_time его достигает, — позднее подключившийся
+# получает то же расписание из world_state. Визуал — дочерние узлы из
+# примитивов, собираются в _build подвидами (модели можно заменить сцеными).
 class_name Mob
 extends Area3D
 
 const B: Balance = preload("res://gameplay/balance.tres")
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Какой это моб в данных острова (события mob_killed, снапшоты П3).
+## Группа узлов мобов (хост ищет моба для проверки удара).
+const GROUP: StringName = &"mob"
+
+## Какой это моб в данных острова (события mob_killed, world_state).
 @export var spawn_id: int = 0
 
-var _killed: bool = false
+## Время возрождения по world_time (<= 0 — жив).
+var _respawn_at: float = -1.0
 
 
 func _ready() -> void:
@@ -24,6 +29,9 @@ func _ready() -> void:
 	collision_mask = 0
 	monitoring = false
 	monitorable = true
+	add_to_group(GROUP)
+	EventBus.mob_killed.connect(_on_mob_killed)
+	EventBus.world_state_applied.connect(_on_world_state)
 	_build()
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -33,9 +41,16 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _killed:
+	if not is_alive():
+		if Session.world_time >= _respawn_at:
+			_revive()
 		return
 	_apply_motion(Session.world_time)
+
+
+## Жив ли моб сейчас (возрождение — по расписанию от хоста).
+func is_alive() -> bool:
+	return _respawn_at <= 0.0 or Session.world_time >= _respawn_at
 
 
 ## Выставить позицию/поворот по траектории (переопределяют подвиды).
@@ -43,21 +58,36 @@ func _apply_motion(_world_time: float) -> void:
 	pass
 
 
-## Удар игрока (раздел 8: птица и зверёк — один удар).
+## Расчётная позиция в момент world_time (переопределяют подвиды) — хост
+## проверяет по ней дистанцию удара (раздел 8), не доверяя клиенту.
+func position_at(_world_time: float) -> Vector3:
+	return global_position
+
+
+## Удар игрока (раздел 8: попадание видит клиент, убийство решает хост).
 func take_hit() -> void:
-	if _killed or not is_killable():
+	if is_alive() and is_killable():
+		Net.request_mob_hit(spawn_id, Net.world_time_sec())
+
+
+## Хост подтвердил убийство (раздел 10): прячем до respawn_at.
+func _on_mob_killed(killed_id: int, _killer_peer: int, respawn_at: float) -> void:
+	if killed_id != spawn_id:
 		return
-	_killed = true
+	_respawn_at = respawn_at
 	hide()
-	Session.add_world_coins(reward())
-	EventBus.mob_killed.emit(spawn_id)
-	Log.info("Моб %d убит" % spawn_id, "Mob")
-	var timer: SceneTreeTimer = get_tree().create_timer(respawn_sec())
-	timer.timeout.connect(_revive)
+
+
+## Вход в идущий мир (раздел 10): расписание мёртвых мобов — из world_state.
+func _on_world_state(dead_mobs: Array, _taken_coins: Array) -> void:
+	for entry: Dictionary in dead_mobs:
+		if int(entry["spawn_id"]) == spawn_id:
+			_respawn_at = maxf(_respawn_at, float(entry["respawn_at"]))
+			hide()
 
 
 func _revive() -> void:
-	_killed = false
+	_respawn_at = -1.0
 	show()
 
 
