@@ -136,13 +136,17 @@ extends Resource
 @export var bot_jump_chance_per_sec: float = 0.25
 ## Радиус атаки мобов ботом, м (0 — не атакует).
 @export var bot_attack_radius: float = 2.2
-## Секунд без прогресса до смены цели (застрял у склона/в воде).
+## Секунд без прогресса до прыжка/смены цели (застрял у склона/дерева).
 @export var bot_stuck_time: float = 4.0
-## Прыжок при застревании: шанс в секунду.
-@export var bot_stuck_jump_chance: float = 2.0
+## Дойти до цели считается на этом расстоянии, м.
+@export var bot_arrive_radius: float = 2.0
+## Сколько секунд бот держит кнопку прыжка (полная высота).
+@export var bot_jump_hold: float = 0.25
 
 @export_group("Взаимодействия (раздел 13)")
-## Секунда рядом (до 8 м) и лимит за сессию.
+## Радиус «секунды рядом», м (раздел 13: до 8 м).
+@export var proximity_m: float = 8.0
+## Секунда рядом и лимит за сессию.
 @export var pts_proximity: float = 0.05
 @export var pts_proximity_max: float = 20.0
 ## Секунда его голоса и лимит.
