@@ -3,8 +3,10 @@
 # игроки, мобы и монеты (в острове), цикл дня (DayCycle), карта (M), HUD.
 # Спавн — на Площади или в зоне --dev-spawn. «Простая графика» (раздел 15):
 # без теней, ближе туман и дальность камеры — флаг --simple-graphics
-# (экран настроек — П8).
-# Не делает: снапшоты и вход в идущий мир по сети — этап П3.
+# (экран настроек — П8). По сети (раздел 10): снапшоты локального игрока
+# шлёт Net, чужие игроки — RemotePlayer по снапшотам хоста, вход в идущий
+# мир — world_state. Проксимити-очки Interactions (раздел 13) — тик раз
+# в секунду по позициям ремоутов.
 extends Node3D
 
 const MENU_SCENE: String = "res://scenes/main_menu.tscn"
@@ -17,6 +19,8 @@ const B: Balance = preload("res://gameplay/balance.tres")
 const SHOT_ZONES: PackedStringArray = ["plaza", "forest", "ruins", "hills", "crevasse", "lake"]
 ## Сдвиг часов для ночного снимка: 0.7 суток — глубокая ночь (день 0.6).
 const NIGHT_TIME_SEC: float = 840.0
+## Пауза тика проксимити Interactions (раздел 13: «секунда рядом»), с.
+const PROXIMITY_TICK: float = 1.0
 
 var _debug: DebugPanel
 var _esc_menu: EscMenu
@@ -26,6 +30,8 @@ var _player: Player
 var _day_cycle: DayCycle
 var _leaving: bool = false
 var _zone_now: String = ""
+var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
+var _proximity_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -48,19 +54,75 @@ func _ready() -> void:
 	add_child(_debug)
 	_debug.watch_player(_player)
 	_debug.watch_island(_island)
+	_wire_network()
 	Session.enter_world()
+	Net.entered_world()
 	EventBus.host_lost.connect(_on_host_lost)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if not Dev.shot_dir.is_empty():
 		_screenshot_tour()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# Название зоны при переходе (подсказка HUD, раздел 6).
 	var zone := _island.zone_name_at(_player.global_position)
 	if zone != _zone_now:
 		_zone_now = zone
 		_hud.show_zone(zone)
+	_proximity_tick(delta)
+
+
+## Подключение к сети (раздел 10): события чужих игроков, применение
+## world_state (пакет мог прийти, пока игрок был в меню) и объявление себя.
+func _wire_network() -> void:
+	EventBus.peer_joined_world.connect(_on_peer_joined_world)
+	EventBus.peer_snapshot.connect(_on_peer_snapshot)
+	EventBus.peer_left.connect(_on_peer_left)
+	Net.replay_world_state()
+	# Кто уже в мире (поздний вход): появляем их персонажей.
+	for peer_id: int in Net.players.keys():
+		if peer_id != Net.local_peer_id and Net._peer_in_world(peer_id):
+			_on_peer_joined_world(peer_id, str(Net.players[peer_id]["name"]))
+
+
+func _on_peer_joined_world(peer_id: int, player_name: String) -> void:
+	if peer_id == Net.local_peer_id or _remotes.has(peer_id):
+		return
+	var remote := RemotePlayer.new()
+	remote.setup(peer_id, player_name)
+	add_child(remote)
+	_remotes[peer_id] = remote
+	Log.info("Игрок «%s» (peer %d) появился в мире" % [player_name, peer_id], "World")
+
+
+func _on_peer_snapshot(peer_id: int, snap: Dictionary, recv_msec: int) -> void:
+	var remote: RemotePlayer = _remotes.get(peer_id)
+	if remote == null:
+		return
+	remote.apply_snapshot(snap, recv_msec)
+
+
+func _on_peer_left(peer_id: int, _player_name: String) -> void:
+	var remote: RemotePlayer = _remotes.get(peer_id)
+	if remote == null:
+		return
+	remote.queue_free()
+	_remotes.erase(peer_id)
+	Log.info("Персонаж игрока %d исчез" % peer_id, "World")
+
+
+## Секунда рядом (раздел 13): очки по всем ремоутам в радиусе proximity_m.
+func _proximity_tick(delta: float) -> void:
+	_proximity_accum += delta
+	if _proximity_accum < PROXIMITY_TICK:
+		return
+	_proximity_accum = 0.0
+	for peer_id: int in _remotes:
+		var remote: RemotePlayer = _remotes[peer_id]
+		if remote.last_position().distance_to(_player.global_position) <= B.proximity_m:
+			Interactions.add_points(
+				peer_id, Interactions.KIND_PROXIMITY, B.pts_proximity, Session.world_time
+			)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -74,6 +136,7 @@ func _exit_to_menu() -> void:
 		return
 	_leaving = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	Net.left_world()
 	Session.leave_world()
 	get_tree().call_deferred("change_scene_to_file", MENU_SCENE)
 
@@ -87,6 +150,15 @@ func _spawn_player() -> void:
 	_player = PLAYER_SCENE.instantiate() as Player
 	_player.position = _island.spawn_point(Session.spawn_zone)
 	add_child(_player)
+	# Точки интереса бота (раздел 18): зоны появления и Камни духа.
+	if Session.bot:
+		var targets: Array[Vector3] = []
+		for zone_point: Vector3 in _island.spawn_zones.values():
+			targets.append(zone_point)
+		for node in get_tree().get_nodes_in_group(RespawnStone.GROUP):
+			if node is Node3D:
+				targets.append((node as Node3D).global_position)
+		_player.set_bot_targets(targets)
 
 
 ## «Простая графика» (раздел 15): без теней, туман плотнее (DayCycle), камера

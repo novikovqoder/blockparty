@@ -18,6 +18,10 @@ func _apply_motion(world_time: float) -> void:
 		_wings[side].rotation.z = (-1.0 if side == 0 else 1.0) * flap
 
 
+func position_at(world_time: float) -> Vector3:
+	return MobMotion.bird_position(motion, world_time)
+
+
 func reward() -> int:
 	return B.bird_reward
 

@@ -150,7 +150,10 @@ func test_player_attack_kills_bird() -> void:
 	await get_tree().physics_frame
 	var coins_before: int = Session.world_coins
 	var killed: Array[int] = []
-	EventBus.mob_killed.connect(func(id: int): killed.append(id), CONNECT_ONE_SHOT)
+	EventBus.mob_killed.connect(
+		func(id: int, _killer: int, _respawn: float) -> void: killed.append(id),
+		CONNECT_ONE_SHOT,
+	)
 	player._try_attack()
 	for i: int in range(30):
 		await get_tree().physics_frame

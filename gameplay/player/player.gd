@@ -29,6 +29,9 @@ const STEP_PROBE: float = 0.35
 ## Публичное состояние для снапшотов П3.
 var _anim: int = Protocol.AnimState.IDLE
 
+## Бот --bot заменяет ввод (раздел 18: бродит между POI, прыгает, бьёт мобов).
+var _bot: BotController = null
+
 var _coyote: float = 0.0
 var _jump_buffer: float = 0.0
 var _jump_cut_done: bool = false
@@ -51,6 +54,13 @@ func _ready() -> void:
 	# Собственная голова не должна ловить собственную капсулу.
 	$HeadTop.add_collision_exception_with(self)
 	floor_snap_length = 0.2
+	# Player — всегда локальный игрок (RemotePlayer отдельно): с него Net
+	# берёт снапшоты и позицию для проверок хоста (раздел 10).
+	Net.register_local_player(self)
+	if Session.bot:
+		_bot = BotController.new()
+		_bot.setup(self)
+		add_child(_bot)
 
 
 func _physics_process(delta: float) -> void:
@@ -74,22 +84,44 @@ func _physics_process(delta: float) -> void:
 		_try_step_up(wish)
 	_update_animation(wish)
 	_turn_model(wish, delta)
-	if Input.is_action_just_pressed("attack"):
+	if _attack_pressed():
 		_try_attack()
 
 
 # --- Движение ---
 
 ## Направление ввода в мире: относительно камеры, в плоскости земли.
+## Бот (--bot) задаёт направление сам — куда идти.
 func _wish_direction() -> Vector3:
+	if _bot != null:
+		return _bot.wish_direction()
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var forward := camera.forward_flat()
 	var right := Vector3(-forward.z, 0.0, forward.x)
 	return (forward * -input.y + right * input.x)
 
 
+## Однократный ввод прыжка/удара: клавиатура или бот.
+func _jump_pressed() -> bool:
+	if _bot != null:
+		return _bot.consume_jump()
+	return Input.is_action_just_pressed("jump")
+
+
+func _jump_held() -> bool:
+	if _bot != null:
+		return _bot.jump_held()
+	return Input.is_action_pressed("jump")
+
+
+func _attack_pressed() -> bool:
+	if _bot != null:
+		return _bot.consume_attack()
+	return Input.is_action_just_pressed("attack")
+
+
 func _move_horizontally(wish: Vector3, delta: float) -> void:
-	var walking: bool = Input.is_action_pressed("walk")
+	var walking: bool = Input.is_action_pressed("walk") if _bot == null else false
 	var speed: float = B.walk_speed if walking else B.run_speed
 	if _in_water:
 		speed = minf(speed, B.swim_speed)
@@ -120,7 +152,7 @@ func _update_jump(delta: float) -> void:
 		_coyote = B.coyote_time
 	else:
 		_coyote = maxf(_coyote - delta, 0.0)
-	if Input.is_action_just_pressed("jump"):
+	if _jump_pressed():
 		_jump_buffer = B.jump_buffer_time
 	else:
 		_jump_buffer = maxf(_jump_buffer - delta, 0.0)
@@ -134,7 +166,7 @@ func _update_jump(delta: float) -> void:
 		_coyote = 0.0
 		_jump_cut_done = false
 	# Переменная высота: отпускание режет вертикальную скорость (один раз).
-	if not Input.is_action_pressed("jump") and not _jump_cut_done:
+	if not _jump_held() and not _jump_cut_done:
 		velocity.y = JumpMath.jump_cut(velocity.y, B)
 		_jump_cut_done = true
 
@@ -321,3 +353,9 @@ func snapshot_flags() -> int:
 	if _hanging:
 		flags |= Protocol.FLAG_HANGING
 	return flags
+
+
+## Точки интереса для бота (задаёт сцена мира: зоны, камни духа).
+func set_bot_targets(points: Array) -> void:
+	if _bot != null:
+		_bot.set_targets(points)
