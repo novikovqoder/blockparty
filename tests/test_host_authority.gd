@@ -53,7 +53,7 @@ func test_attack_cooldown_rate_limits() -> void:
 		"следующий удар того же игрока слишком рано — отклонён")
 	assert_ne(_kill(authority, 2, 3, 100.1, Vector3.ZERO, Vector3(0, 0, 1)), {},
 		"другой игрок — можно")
-	assert_ne(_kill(authority, 2, 2, 100.0 + B.attack_cooldown + 0.01, Vector3.ZERO, Vector3(0, 0, 1)), {},
+	assert_ne(_kill(authority, 4, 2, 100.0 + B.attack_cooldown + 0.01, Vector3.ZERO, Vector3(0, 0, 1)), {},
 		"после перезарядки — можно")
 
 
