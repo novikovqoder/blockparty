@@ -44,6 +44,7 @@ var _aoi := AoiFilter.new()
 var _peer_pos: Dictionary = {}
 var _traffic_accum: float = 0.0
 var _traffic_sent_prev: int = 0
+var _traffic_log_accum: int = 0
 var _traffic_received_prev: int = 0
 var _net_log: bool = false
 var _ping_accum: float = 0.0
@@ -498,6 +499,10 @@ func _broadcast_mob_killed(spawn_id: int, killer_peer: int, coins: int, respawn_
 
 
 func _broadcast_coin_taken(spawn_id: int, collector_peer: int, coins: int, respawn_at: float) -> void:
+	Log.info(
+		"Монета %d собрана (peer %d, +%d, возрождение %.0f с)"
+		% [spawn_id, collector_peer, coins, respawn_at], "Net"
+	)
 	if is_networked():
 		_send(
 			func() -> void: rpc_coin_taken.rpc(spawn_id, collector_peer, coins, respawn_at), false
@@ -548,8 +553,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if multiplayer.is_server():
 		players.erase(peer_id)
 		_broadcast_roster()
-	else:
+	elif peer_id == 1:
 		# Клиенты соединены звездой с хостом: потеря хоста = мир закрылся.
+		# Отключение чужого клиента релеем не считается — ростер обновит хост.
 		_on_host_lost("Пир %d покинул игру" % peer_id)
 
 
@@ -649,6 +655,14 @@ func _update_traffic(delta: float) -> void:
 	snapshot_in_bps = snapshot_bytes_received - _traffic_received_prev
 	_traffic_sent_prev = snapshot_bytes_sent
 	_traffic_received_prev = snapshot_bytes_received
+	# Раз в 10 с хост напоминает про бюджет (раздел 10: 200/40 КБ/с).
+	_traffic_log_accum += 1
+	if is_networked() and _traffic_log_accum >= 10:
+		_traffic_log_accum = 0
+		Log.info(
+			"Трафик снапшотов: ↑%.1f ↓%.1f КБ/с (бюджет 200/40)"
+			% [snapshot_out_bps / 1024.0, snapshot_in_bps / 1024.0], "Net"
+		)
 
 
 func _roster_entries() -> Array:

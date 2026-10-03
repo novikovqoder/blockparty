@@ -97,8 +97,8 @@ func _build() -> void:
 	_toast.position = Vector2(540, 46)
 	_toast.size = Vector2(200, 26)
 	_toast.add_theme_font_size_override("font_size", 17)
-	_toast.add_theme_font_color_override("font_color", Color(0.85, 0.92, 1.0))
-	_toast.add_theme_font_color_override("font_outline_color", Color(0, 0, 0))
+	_toast.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
+	_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_toast.add_theme_constant_override("outline_size", 4)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.hide()
