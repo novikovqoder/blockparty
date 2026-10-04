@@ -68,6 +68,12 @@ func level() -> float:
 func _on_body_entered(body: Node3D) -> void:
 	if body is Player:
 		(body as Player).enter_water(water_level)
+		# Круги на воде при входе в неё (раздел 16).
+		var pos: Vector3 = (body as Node3D).global_position
+		Fx.water_ring(
+			get_parent(), Vector3(pos.x, water_level + 0.02, pos.z),
+			PAL.water.lightened(0.35),
+		)
 
 
 func _on_body_exited(body: Node3D) -> void:

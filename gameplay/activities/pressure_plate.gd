@@ -45,9 +45,9 @@ func _update_pressed(_body_node: Node3D) -> void:
 
 func _make_material() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_color = PAL.ruin_brick_dark
+	material.albedo_color = PAL.ruin_dark
 	material.roughness = 1.0
 	material.emission_enabled = true
-	material.emission = PAL.firefly
+	material.emission = PAL.beacon_glow
 	material.emission_energy_multiplier = 0.0
 	return material

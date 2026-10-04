@@ -75,6 +75,7 @@ func _on_mob_killed(killed_id: int, _killer_peer: int, respawn_at: float) -> voi
 	if killed_id != spawn_id:
 		return
 	_respawn_at = respawn_at
+	Fx.puff(get_parent(), global_position, poof_color())
 	hide()
 
 
@@ -94,6 +95,11 @@ func _revive() -> void:
 ## Светлячок неуязвим в одиночку (нужны два игрока рядом — раздел 8, П5).
 func is_killable() -> bool:
 	return true
+
+
+## Цвет «пуфа» частиц при смерти (переопределяют подвиды).
+func poof_color() -> Color:
+	return Color.WHITE
 
 
 func reward() -> int:
@@ -124,6 +130,42 @@ func _box(
 	var box := BoxMesh.new()
 	box.size = size
 	mesh.mesh = box
+	mesh.material_override = _standard(color, glow)
+	mesh.position = position
+	parent.add_child(mesh)
+	return mesh
+
+
+## Огранённый примитив моба (раздел 16: птица — «огранённое тело-призма»)
+## с общим шейдером lowpoly; цвет однотонный.
+func _lowpoly(
+	prim: PrimitiveMesh, position: Vector3, color: Color, parent: Node3D,
+	rotation: Vector3 = Vector3.ZERO,
+) -> MeshInstance3D:
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = prim
+	mesh.material_override = LowPolyMat.flat_or_mat(color)
+	mesh.position = position
+	mesh.rotation = rotation
+	parent.add_child(mesh)
+	return mesh
+
+
+## Сглаженный примитив (округлые зверьки, как персонажи-«мармеладки»).
+func _smooth(
+	prim: PrimitiveMesh, position: Vector3, color: Color, parent: Node3D,
+	rotation: Vector3 = Vector3.ZERO,
+) -> MeshInstance3D:
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = prim
+	mesh.material_override = _standard(color, 0.0)
+	mesh.position = position
+	mesh.rotation = rotation
+	parent.add_child(mesh)
+	return mesh
+
+
+func _standard(color: Color, glow: float) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.roughness = 1.0
@@ -131,7 +173,4 @@ func _box(
 		material.emission_enabled = true
 		material.emission = color
 		material.emission_energy_multiplier = glow
-	mesh.material_override = material
-	mesh.position = position
-	parent.add_child(mesh)
-	return mesh
+	return material

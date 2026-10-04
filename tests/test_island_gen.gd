@@ -1,8 +1,9 @@
-# Тесты генератора острова (раздел 6, этап П2): детерминизм — критерий этапа
-# («тест на хеш GridMap»), ровно 60 статичных монет (раздел 8), достижимость
-# всех зон пешком с площади и недостижимость смотровых без подсадки (9.3),
-# точки появления на суше, HangPoint на кромке расщелины, параметры мобов из
-# таблицы раздела 8. IslandGen — чистые данные, нод не нужно.
+# Тесты генератора острова (раздел 6, этап П2; П4.5 — рельеф вместо GridMap):
+# детерминизм — критерий этапа («тест на хеш данных острова»), ровно 60
+# статичных монет (раздел 8), достижимость всех зон пешком с площади
+# и недостижимость смотровых без подсадки (9.3), точки появления на суше,
+# HangPoint на кромке расщелины, параметры мобов из таблицы раздела 8.
+# IslandGen — чистые данные, нод не нужно.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -19,19 +20,29 @@ func _island_data() -> Dictionary:
 
 
 func test_generation_is_deterministic() -> void:
-	# Критерий этапа П2: повторная генерация даёт тот же остров.
+	# Критерий этапа: повторная генерация даёт тот же остров.
 	var first: Dictionary = IslandGen.generate()
 	var second: Dictionary = IslandGen.generate()
-	var first_hash: int = IslandGen.block_hash(first)
-	var second_hash: int = IslandGen.block_hash(second)
-	assert_eq(first_hash, second_hash, "хеш блоков двух генераций совпадает")
+	var first_hash: int = IslandGen.island_hash(first)
+	var second_hash: int = IslandGen.island_hash(second)
+	assert_eq(first_hash, second_hash, "хеш данных двух генераций совпадает")
 	assert_eq(
-		IslandGen.cells(first).size(), IslandGen.cells(second).size(),
-		"число клеток совпадает",
+		(first["props"] as Array).size(), (second["props"] as Array).size(),
+		"число предметов совпадает",
 	)
 	# Хеш закреплён: непреднамеренное изменение генератора уронит этот тест
 	# (намеренное — требует обновить константу и перегенерировать остров).
-	assert_eq(first_hash, 3000607596, "хеш острова совпадает с сгенерированной сценей")
+	assert_eq(first_hash, 92124058, "хеш острова совпадает с сгенерированной сценой")
+
+
+func test_heightmap_fully_covered() -> void:
+	# Карта высот — сплошная сетка 257 × 257 на 256 × 256 м (П4.5:
+	# из неё строится и меш, и HeightMapShape3D).
+	var data: Dictionary = _island_data()
+	var heights: PackedFloat32Array = data["heights"]
+	assert_eq(heights.size(), IslandGen.POINTS * IslandGen.POINTS, "точек в карте")
+	for height: float in heights:
+		assert_false(is_nan(height), "карта без дыр (NaN)")
 
 
 func test_exactly_60_static_coins() -> void:
@@ -51,8 +62,8 @@ func test_all_zones_reachable_on_foot() -> void:
 
 
 func test_lookouts_not_reachable_without_help() -> void:
-	# Критерий этапа: уступы холмов недостижимы без подсадки — площадка 3 × 3
-	# на k 20 над базисом k 14 (уступ ровно 3 м); при этом базис-поляна вокруг
+	# Критерий этапа: уступы холмов недостижимы без подсадки — площадка 2 × 2
+	# на 10 м над базисом 7 м (уступ 3 м); при этом базис-поляна вокруг
 	# каждой смотровой достижим (к площадке вообще есть подход).
 	var data: Dictionary = _island_data()
 	var reach: Dictionary = IslandGen.walkable_reach(data)
@@ -84,10 +95,10 @@ func test_crevasse_hang_points_on_rim() -> void:
 	var hang: Dictionary = data["hang"]
 	var points: Array = hang["points"]
 	assert_gt(points.size(), 0, "точки зацепа есть")
-	var rim_y: float = IslandGen.CREVASSE_RIM_K * 0.5
-	var floor_y: float = IslandGen.CREVASSE_FLOOR_K * 0.5
+	var rim_y: float = IslandGen.CREVASSE_RIM_H
+	var floor_y: float = IslandGen.CREVASSE_FLOOR_H
 	for point: Vector3 in points:
-		assert_almost_eq(point.y, rim_y, 0.15, "точка на высоте кромки")
+		assert_almost_eq(point.y, rim_y + 0.1, 0.15, "точка на высоте кромки")
 		assert_gt(point.y - floor_y, 3.0, "точка далеко над дном расщелины")
 		var in_canyon: bool = point.x >= IslandGen.CREVASSE_X0 and point.x <= IslandGen.CREVASSE_X1 \
 			and point.z >= IslandGen.CREVASSE_Z0 and point.z <= IslandGen.CREVASSE_Z1

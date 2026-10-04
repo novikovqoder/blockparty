@@ -1,7 +1,8 @@
-# Интеграционные тесты сцены острова (этап П2): island.tscn соответствует
-# данным IslandGen (тот же GridMap), в сцене 60 монет и все мобы, персонаж
-# стоит на земле во всех зонах (--dev-spawn), монета подбирается касанием,
-# удар игрока убивает моба. Сцена коммитится — по сети не передаётся.
+# Интеграционные тесты сцены острова (этапы П2/П4.5): island.tscn
+# соответствует данным IslandGen — рельеф и предметы из запечённого
+# island_art.res (IslandView), в сцене 60 монет и все мобы, персонаж стоит
+# на земле во всех зонах (--dev-spawn), монета подбирается касанием, удар
+# игрока убивает моба. Сцена коммитится — по сети не передаётся.
 extends GutTest
 
 const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
@@ -18,13 +19,35 @@ func _island_data() -> Dictionary:
 	return _gen_cache
 
 
-func test_gridmap_matches_generator() -> void:
+func test_baked_art_matches_generator() -> void:
+	# П4.5: сцена строится из запечённого island_art.res — карта высот
+	# и предметы совпадают с данными генератора, остров не перегенерирован
+	# молча (IslandView._ready уже построил рельеф и коллизии из ресурса).
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
-	var grid := island.get_node("GridMap") as GridMap
-	var cells: Array = grid.get_used_cells()
-	assert_eq(cells.size(), IslandGen.cells(_island_data()).size(), "клеток как в генераторе")
-	assert_eq(cells.size(), 80682, "остров не перегенерирован молча")
+	var view := island.get_node("IslandView") as IslandView
+	assert_not_null(view, "в сцене есть IslandView")
+	var data: Dictionary = _island_data()
+	var heights: PackedFloat32Array = view.art.heights
+	assert_eq(
+		heights.size(), IslandGen.POINTS * IslandGen.POINTS, "карта высот 257 × 257",
+	)
+	assert_eq(heights, data["heights"], "высоты совпадают с генератором")
+	assert_eq(
+		view.art.chunks.size(),
+		TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE,
+		"8 × 8 чанков рельефа",
+	)
+	var instanced := 0
+	for key: String in view.art.prop_multimeshes:
+		instanced += (view.art.prop_multimeshes[key] as MultiMesh).instance_count
+	assert_eq(instanced, (data["props"] as Array).size(), "все предметы в MultiMesh")
+	assert_not_null(view.get_node_or_null("Terrain"), "рельеф построен в _ready")
+	assert_not_null(view.get_node_or_null("PropsCollision"), "коллизии предметов построены")
+	var terrain := view.get_node("Terrain") as StaticBody3D
+	var shape := (terrain.get_child(0) as CollisionShape3D).shape as HeightMapShape3D
+	assert_eq(shape.map_width, IslandGen.POINTS, "коллизия рельефа — карта высот")
+	assert_eq(shape.map_data, data["heights"], "коллизия из той же карты")
 
 
 func test_scene_contents() -> void:
@@ -78,7 +101,8 @@ func test_water_surfaces_configured() -> void:
 
 
 func test_player_stands_in_every_spawn_zone() -> void:
-	# Коллизия GridMap работает: персонаж не проваливается ни в одной зоне.
+	# Коллизия рельефа (HeightMapShape3D) работает: персонаж не проваливается
+	# ни в одной зоне.
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	var player := PLAYER.instantiate() as Player
@@ -94,9 +118,11 @@ func test_player_stands_in_every_spawn_zone() -> void:
 				settled = true
 				break
 		assert_true(settled, "в зоне %s персонаж встал на землю" % zone)
+		# Допуск 0.6: на крутом склоне (кромка расщелины) капсула сползает
+		# на пару десятков сантиметров к подножию — это не провал под землю.
 		assert_almost_eq(
 			player.global_position.y,
-			spawn.y, 0.4,
+			spawn.y, 0.6,
 			"в зоне %s стоит на поверхности, а не падает" % zone,
 		)
 	player.queue_free()
