@@ -1,19 +1,20 @@
 # Одноразовая генерация острова (раздел 6 SPEC): godot --headless --script
 # tools/generate_island.gd --path . — собирает из детерминированных данных
-# IslandGen три артефакта, которые коммитятся:
-#   gameplay/world/block_library.tres — MeshLibrary из 13 блоков (BlockLibrary);
-#   gameplay/world/island.tscn        — остров целиком: GridMap рельефа,
-#     вода (море и озеро), расщелина с HangPoint, камни духа, костёр,
-#     60 статичных монет, мобы (птицы, зверьки, светлячки), ограждения края;
-#   assets/island_map.png             — вид сверху для карты (M).
+# IslandGen два артефакта, которые коммитятся:
+#   gameplay/world/island_art.res — запечённый визуал (IslandArt): карта
+#     высот, меши чанков рельефа, MultiMesh предметов, боксы коллизий;
+#   gameplay/world/island.tscn    — остров целиком: IslandView (визуал из
+#     island_art.res), вода (море и озеро), расщелина с HangPoint, камни
+#     духа, костёр, 60 статичных монет, мобы, ограждения края;
+#   assets/island_map.png         — вид сверху для карты (M).
 # По сети мир не передаётся: сцена одинакова у всех. Повторный запуск даёт
-# тот же результат (тест — на хеш блоков IslandGen.block_hash).
+# тот же результат (тест — на хеш высот и предметов IslandGen.island_hash).
 # Скрипты нод (мобы, монеты, вода) подключаются load()-ом во время работы,
 # а не на этапе разбора: они ссылаются на автолоады (Session, EventBus),
 # которые в режиме «--script» регистрируются позже загрузки этого файла.
 extends SceneTree
 
-const LIBRARY_PATH: String = "res://gameplay/world/block_library.tres"
+const ART_PATH: String = "res://gameplay/world/island_art.res"
 const SCENE_PATH: String = "res://gameplay/world/island.tscn"
 const MAP_PATH: String = "res://assets/island_map.png"
 
@@ -40,17 +41,17 @@ func _init() -> void:
 func _generate() -> void:
 	var started := Time.get_ticks_msec()
 	var data: Dictionary = IslandGen.generate()
-	var hash_value: int = IslandGen.block_hash(data)
+	var hash_value: int = IslandGen.island_hash(data)
 
-	# MeshLibrary сохраняем до сцены: GridMap ссылается на файл на диске
+	# Визуал запекаем до сцены: IslandView ссылается на файл на диске
 	# (ext_resource), а не на объект в памяти (иначе он запечётся внутрь tscn).
-	var library := BlockLibrary.build()
-	var library_error: int = ResourceSaver.save(library, LIBRARY_PATH)
-	if library_error != OK:
-		push_error("Не удалось сохранить %s (код %d)" % [LIBRARY_PATH, library_error])
+	var art := IslandArt.build(data)
+	var art_error: int = ResourceSaver.save(art, ART_PATH)
+	if art_error != OK:
+		push_error("Не удалось сохранить %s (код %d)" % [ART_PATH, art_error])
 		return
 
-	var root := _build_scene(data, load(LIBRARY_PATH) as MeshLibrary)
+	var root := _build_scene(data, load(ART_PATH) as IslandArt)
 	var packed := PackedScene.new()
 	var pack_error: int = packed.pack(root)
 	root.free()  # не тащить узлы к выходу процесса (чистый лог)
@@ -63,34 +64,30 @@ func _generate() -> void:
 		return
 
 	_render_map(data)
-	print("Остров: %d клеток GridMap, хеш %d, монет %d, мобов %d, %.1f с" % [
-		IslandGen.cells(data).size(),
-		hash_value,
+	print("Остров: предметов %d, монет %d, мобов %d, хеш %d, %.1f с" % [
+		(data["props"] as Array).size(),
 		(data["coins"] as Array).size(),
 		(data["mobs"] as Array).size(),
+		hash_value,
 		(Time.get_ticks_msec() - started) / 1000.0,
 	])
-	print("Готово: %s, %s, %s" % [SCENE_PATH, LIBRARY_PATH, MAP_PATH])
+	print("Готово: %s, %s, %s" % [SCENE_PATH, ART_PATH, MAP_PATH])
 
 
 ## Собрать дерево острова (без входа в SceneTree — _ready нод не выполняется,
 ## визуал мобов/монет/камней строится в игре, в сцену попадает статика).
 @warning_ignore("unsafe_method_access")
-func _build_scene(data: Dictionary, library: MeshLibrary) -> Island:
+func _build_scene(data: Dictionary, art: IslandArt) -> Island:
 	var root := Island.new()
 	root.name = "Island"
 	root.zones = IslandGen.ZONES
 	root.spawn_zones = data["spawn_zones"]
 	root.world_bounds = data["bounds"]
 
-	var grid := GridMap.new()
-	grid.name = "GridMap"
-	grid.cell_size = Vector3.ONE
-	grid.cell_octant_size = 16  # SPEC 16: производительность
-	grid.mesh_library = library
-	root.add_child(grid)
-	for entry: Dictionary in IslandGen.cells(data):
-		grid.set_cell_item(entry["cell"], entry["block"])
+	var view := IslandView.new()
+	view.name = "IslandView"
+	view.art = art
+	root.add_child(view)
 
 	# Вода: море вокруг и озеро (surface_gap 0 — кромка вплотную к воде).
 	for water_key: String in ["sea", "lake"]:
@@ -208,27 +205,23 @@ func _own(root: Island, node: Node) -> void:
 		_own(root, child)
 
 
-## Вид сверху (карта по M): цвет верхней поверхности клетки, море и озеро —
-## вода (клетки дна ниже нуля не рисуем), высоты — лёгкое высветление, чтобы
-## холмы читались. Чистая функция данных — детерминирована.
+## Вид сверху (карта по M): цвет грани рельефа из TerrainBuilder.point_color
+## (пиксель = квадрат сетки), всё ниже уровня воды — море/озеро. Высоты
+## уже учтены в цвете (лёгкое высветление холмов). Чистая функция данных.
 func _render_map(data: Dictionary) -> void:
+	var heights: PackedFloat32Array = data["heights"]
+	var tint: Dictionary = data["tint"]
 	var image := Image.create(IslandGen.HALF * 2, IslandGen.HALF * 2, false, Image.FORMAT_RGB8)
-	var blocks: Dictionary = {}
-	var top: Dictionary = {}
-	for entry: Dictionary in IslandGen.cells(data):
-		var cell: Vector3i = entry["cell"]
-		blocks[cell] = entry["block"]
-		var key := Vector2i(cell.x, cell.z)
-		if not top.has(key) or cell.y > (top[key] as Vector3i).y:
-			top[key] = cell
 	image.fill(PAL.water)
-	for key: Vector2i in top:
-		var cell: Vector3i = top[key]
-		if cell.y < 0:
-			continue
-		var color := BlockLibrary.block_color(blocks[cell])
-		color = color.lerp(Color.WHITE, clampf(cell.y / 24.0, 0.0, 1.0) * 0.25)
-		image.set_pixel(key.x + IslandGen.HALF, key.y + IslandGen.HALF, color)
+	for z: int in range(-IslandGen.HALF, IslandGen.HALF):
+		for x: int in range(-IslandGen.HALF, IslandGen.HALF):
+			var h: float = heights[(z + IslandGen.HALF) * IslandGen.POINTS + x + IslandGen.HALF]
+			if h <= IslandGen.SEA_LEVEL:
+				continue  # под водой — заливка морем/озером
+			image.set_pixel(
+				x + IslandGen.HALF, z + IslandGen.HALF,
+				TerrainBuilder.point_color(heights, tint, x, z)
+			)
 	var save_error: int = image.save_png(MAP_PATH)
 	if save_error != OK:
 		push_error("Не удалось сохранить %s (код %d)" % [MAP_PATH, save_error])
