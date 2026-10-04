@@ -14,11 +14,11 @@ const PLAYER_SCENE: PackedScene = preload("res://gameplay/player/player.tscn")
 const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")
 const B: Balance = preload("res://gameplay/balance.tres")
 
-## Зоны фототура --shot-dir=PATH (критерий П2: 6 скриншотов зон) плюс ночь
-## на площади — проверка «мягкой светлой ночи» (раздел 7).
+## Зоны фототура --shot-dir=PATH (критерий П4.5: 6 скриншотов зон) плюс закат
+## на площади — проверка тёплого вечернего света (раздел 7).
 const SHOT_ZONES: PackedStringArray = ["plaza", "forest", "ruins", "hills", "crevasse", "lake"]
-## Сдвиг часов для ночного снимка: 0.7 суток — глубокая ночь (день 0.6).
-const NIGHT_TIME_SEC: float = 840.0
+## Сдвиг часов для снимка на закате: 0.6 суток = конец дня (раздел 7).
+const SUNSET_TIME_SEC: float = 720.0
 ## Пауза тика проксимити Interactions (раздел 13: «секунда рядом»), с.
 const PROXIMITY_TICK: float = 1.0
 
@@ -69,6 +69,8 @@ func _process(delta: float) -> void:
 	if zone != _zone_now:
 		_zone_now = zone
 		_hud.show_zone(zone)
+	# Туман по зонам (раздел 16): цвет подмешивается там, где стоит игрок.
+	_day_cycle.set_fog_focus(_player.global_position)
 	_proximity_tick(delta)
 
 
@@ -166,12 +168,13 @@ func _spawn_player() -> void:
 		_player.set_bot_targets(targets)
 
 
-## «Простая графика» (раздел 15): без теней, туман плотнее (DayCycle), камера
-## видит на 70 м вместо 160 — слабые встроенные GPU не тянут весь остров.
+## «Простая графика» (раздел 15): без теней и SSAO, туман плотнее (DayCycle),
+## камера видит на 70 м вместо 160 — слабые встроенные GPU не тянут весь остров.
 func _apply_simple_graphics() -> void:
 	_day_cycle.simple = Settings.simple_graphics
 	if Settings.simple_graphics:
 		$Sun.shadow_enabled = false
+		($WorldEnvironment.environment as Environment).ssao_enabled = false
 		_player.camera.set_view_distance(B.view_distance_simple)
 
 
@@ -188,10 +191,10 @@ func _screenshot_tour() -> void:
 	get_tree().quit()
 
 
-func _shot_zone(camera: Camera3D, zone: String, night: bool) -> void:
-	# Ночь: сдвигаем эпоху мира назад — world_time = теперь + NIGHT_TIME_SEC.
-	if night:
-		Net.world_epoch_msec -= int(NIGHT_TIME_SEC * 1000.0)
+func _shot_zone(camera: Camera3D, zone: String, sunset: bool) -> void:
+	# Закат: сдвигаем эпоху мира назад — world_time = теперь + SUNSET_TIME_SEC.
+	if sunset:
+		Net.world_epoch_msec -= int(SUNSET_TIME_SEC * 1000.0)
 		await get_tree().create_timer(0.3).timeout
 	var target := _island.spawn_point(zone)
 	var cam_pos := target + Vector3(14.0, 12.0, 18.0)
@@ -211,7 +214,7 @@ func _shot_zone(camera: Camera3D, zone: String, night: bool) -> void:
 	camera.look_at(target + Vector3(0.0, 1.0, 0.0))
 	await get_tree().create_timer(0.3).timeout
 	var image := get_viewport().get_texture().get_image()
-	var name := ("p2_night.png" if night else "p2_%s.png" % zone)
+	var name := ("p45_sunset.png" if sunset else "p45_%s.png" % zone)
 	var path: String = Dev.shot_dir.path_join(name)
 	image.save_png(path)
 	Log.info("Скриншот сохранён: " + path, "World")
