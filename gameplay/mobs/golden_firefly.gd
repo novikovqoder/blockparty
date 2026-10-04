@@ -1,21 +1,24 @@
 # Золотой светлячок (раздел 8 SPEC): парит в чаще леса с мягкими вспышками.
 # Уязвим только когда рядом двое игроков (раздел 8) — кооп-механика П5,
 # поэтому take_hit здесь ничего не делает. Возрождение 300 с наступит в П5.
+# Модель (раздел 16): светящаяся сфера с роем частиц и glow (Environment).
 class_name GoldenFirefly
 extends Mob
 
 @export var motion: Dictionary = {}
 
 var _core: MeshInstance3D
+var _core_material: StandardMaterial3D
 var _light: OmniLight3D
 
 
 func _apply_motion(world_time: float) -> void:
 	position = MobMotion.firefly_position(motion, world_time)
 	var glow: float = MobMotion.firefly_glow(motion, world_time)
-	_light.light_energy = 0.15 + 0.5 * glow
-	var material := _core.material_override as StandardMaterial3D
-	material.emission_energy_multiplier = 0.8 + 1.2 * glow
+	if _light != null:
+		_light.light_energy = 0.15 + 0.5 * glow
+	if _core_material != null:
+		_core_material.emission_energy_multiplier = 0.8 + 1.6 * glow
 
 
 func position_at(world_time: float) -> Vector3:
@@ -30,8 +33,53 @@ func hitbox_size() -> Vector3:
 	return Vector3(0.5, 0.5, 0.5)
 
 
+func poof_color() -> Color:
+	return PAL.firefly
+
+
 func _build() -> void:
-	_core = _box(Vector3(0.24, 0.24, 0.24), Vector3.ZERO, PAL.firefly, self, 1.0)
+	_core = MeshInstance3D.new()
+	_core.name = "Core"
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.14
+	sphere.height = 0.28
+	_core.mesh = sphere
+	_core_material = StandardMaterial3D.new()
+	_core_material.albedo_color = PAL.firefly
+	_core_material.emission_enabled = true
+	_core_material.emission = PAL.firefly
+	_core_material.emission_energy_multiplier = 1.2
+	_core.material_override = _core_material
+	add_child(_core)
+	# Рой золотых искр вокруг (мигает вместе с ядром).
+	var sparkles := GPUParticles3D.new()
+	sparkles.name = "Sparkles"
+	sparkles.amount = 16
+	sparkles.lifetime = 1.1
+	sparkles.emitting = true
+	sparkles.explosiveness = 0.0
+	sparkles.visibility_range_end = 60.0
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3(0, 1, 0)
+	process.spread = 180.0
+	process.initial_velocity_min = 0.1
+	process.initial_velocity_max = 0.35
+	process.gravity = Vector3.ZERO
+	process.scale_min = 0.4
+	process.scale_max = 0.9
+	sparkles.process_material = process
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.06, 0.06)
+	var quad_material := StandardMaterial3D.new()
+	quad_material.albedo_color = PAL.firefly
+	quad_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	quad_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	quad_material.emission_enabled = true
+	quad_material.emission = PAL.firefly
+	quad_material.emission_energy_multiplier = 2.0
+	quad.material = quad_material
+	sparkles.draw_pass_1 = quad
+	add_child(sparkles)
 	_light = OmniLight3D.new()
 	_light.light_color = PAL.firefly
 	_light.omni_range = 6.0

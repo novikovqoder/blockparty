@@ -49,6 +49,7 @@ func _on_coin_collected(taken_id: int, _collector_peer: int, respawn_at: float) 
 	if taken_id != spawn_id:
 		return
 	_respawn_at = respawn_at
+	Fx.sparkle(get_parent(), global_position, PAL.coin)
 	hide()
 	set_deferred("monitoring", false)
 

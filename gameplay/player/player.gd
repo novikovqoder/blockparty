@@ -307,6 +307,9 @@ func in_water() -> bool:
 func _update_animation(wish: Vector3) -> void:
 	if not _was_on_floor and is_on_floor():
 		visual.play_one_shot(Protocol.AnimState.LAND, 0.25)
+		# Облачко пыли при приземлении (раздел 16); частицы в мировых
+		# координатах — эмиттер едет вместе с игроком, пыль остаётся на месте.
+		Fx.puff(self, Vector3(0.0, 0.06, 0.0), Color(0.86, 0.8, 0.7), 10, 0.12, 1.1)
 	var moving := Vector2(velocity.x, velocity.z).length() > 0.3
 	if _in_water:
 		_set_anim(Protocol.AnimState.WALK if moving else Protocol.AnimState.IDLE)
