@@ -17,8 +17,11 @@ const B: Balance = preload("res://gameplay/balance.tres")
 ## Зоны фототура --shot-dir=PATH (критерий П4.5: 6 скриншотов зон) плюс закат
 ## на площади — проверка тёплого вечернего света (раздел 7).
 const SHOT_ZONES: PackedStringArray = ["plaza", "forest", "ruins", "hills", "crevasse", "lake"]
-## Сдвиг часов для снимка на закате: 0.6 суток = конец дня (раздел 7).
-const SUNSET_TIME_SEC: float = 720.0
+## Сдвиг часов для снимков: полдень (0.3 суток) для обычных ракурсов — иначе
+## тур попадает в рассветные сумерки входа в мир; 0.58 суток (696 с) —
+## золотой час заката (тёплый горизонт, низкое солнце, раздел 7).
+const SHOT_DAY_FRACTION: float = 0.3
+const SHOT_SUNSET_FRACTION: float = 0.58
 ## Пауза тика проксимити Interactions (раздел 13: «секунда рядом»), с.
 const PROXIMITY_TICK: float = 1.0
 
@@ -178,23 +181,103 @@ func _apply_simple_graphics() -> void:
 		_player.camera.set_view_distance(B.view_distance_simple)
 
 
-## Фототур: временная камера обходит зоны острова и сохраняет PNG в
-## Dev.shot_dir (создаётся), после чего закрывает игру. Только для проверок.
+## Фототур (шаг 2 П4.5, «Самопроверка картинки»): временная камера снимает
+## спавн с высоты глаз, вид под ноги, персонажа крупно спереди и сбоку,
+## все 6 зон общим планом и закат — PNG в Dev.shot_dir (создаётся),
+## после чего закрывает игру. Только для проверок (tools/screenshots.sh).
 func _screenshot_tour() -> void:
 	var camera := Camera3D.new()
 	add_child(camera)
 	camera.current = true
 	DirAccess.make_dir_recursive_absolute(Dev.shot_dir)
+	# Диагностика «молочного кадра» (шаг 2 П4.5): переменные окружения
+	# отключают части картинки по одной — виновник ищется без правки кода.
+	# SHOT_NOWATER=1 скрыть воду, SHOT_NOFOG=1 выключить туман,
+	# SHOT_ONLY=eye — только ракурсы у игрока (быстрый прогон).
+	if OS.get_environment("SHOT_NOWATER") == "1":
+		for water: WaterArea in _island.find_children("*", "WaterArea"):
+			water.visible = false
+	_set_day_fraction(SHOT_DAY_FRACTION)
+	if OS.get_environment("SHOT_NOFOG") == "1":
+		($WorldEnvironment.environment as Environment).fog_enabled = false
+	# SHOT_LAB=1 — лаборатория света в контексте мира: DayCycle выключен,
+	# параметры берутся из SHOT_SUN / SHOT_AMB (поиск причины белого рельефа).
+	if OS.get_environment("SHOT_LAB") == "1":
+		_day_cycle.set_process(false)
+		var env := $WorldEnvironment.environment as Environment
+		$Sun.light_energy = OS.get_environment("SHOT_SUN").to_float()
+		$Sun.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
+		env.ambient_light_energy = OS.get_environment("SHOT_AMB").to_float()
+		if not OS.get_environment("SHOT_DENSITY").is_empty():
+			env.fog_density = OS.get_environment("SHOT_DENSITY").to_float()
+		if OS.get_environment("SHOT_AERIAL") == "0":
+			env.fog_aerial_perspective = 0.0
+	await _shot_player_views(camera)
+	if OS.get_environment("SHOT_ONLY") == "eye":
+		get_tree().quit()
+		return
 	for zone: String in SHOT_ZONES:
 		await _shot_zone(camera, zone, false)
 	await _shot_zone(camera, "plaza", true)
 	get_tree().quit()
 
 
+## Часы мира на нужную долю суток (0 — рассвет): снимки делаются днём,
+## иначе тур попадает в сумерки сразу после входа в мир. Сдвигаем offset,
+## не эпоху: часы процесса насчитывают секунды, вычитание суток из эпохи
+## дало бы отрицательное значение — гвард «мир не создан» занулял время.
+func _set_day_fraction(fraction: float) -> void:
+	var elapsed := maxf(0.0, float(Net.host_time_now_msec() - Net.world_epoch_msec) / 1000.0)
+	Net.world_time_offset_sec = fraction * B.day_cycle_sec - elapsed
+
+
+## Ракурсы персонажа: высота глаз 1.5 м, взгляд вперёд (модель игрока
+## в покое смотрит в −Z), «под ноги» — та же точка с наклоном вниз,
+## «крупно» — камера в 2.8 м перед лицом и сбоку.
+func _shot_player_views(camera: Camera3D) -> void:
+	await get_tree().create_timer(0.2).timeout
+	var feet: Vector3 = _player.global_position
+	var eye: Vector3 = feet + Vector3.UP * 1.5
+	var forward := Vector3.BACK  # −Z: куда смотрит модель в покое.
+	camera.global_position = eye + forward * 0.4  # не из-за головы модели
+	camera.look_at(eye + forward * 10.0 + Vector3.DOWN * 1.5)
+	await _snap(camera, "eye_plaza.png")
+	camera.global_position = eye
+	camera.look_at(feet + forward * 0.8)
+	await _snap(camera, "feet_plaza.png")
+	camera.global_position = feet + forward * 2.8 + Vector3.UP * 1.1
+	camera.look_at(feet + Vector3.UP * 0.9)
+	await _snap(camera, "char_front.png")
+	camera.global_position = feet + Vector3(2.8, 1.1, 0.0)
+	camera.look_at(feet + Vector3.UP * 0.9)
+	await _snap(camera, "char_side.png")
+
+
+## Пауза на кадр рендера и сохранение снимка.
+func _snap(camera: Camera3D, file_name: String) -> void:
+	await get_tree().create_timer(0.3).timeout
+	Log.info("Тур: %s primitives=%d draw_calls=%d"
+		% [
+			file_name,
+			get_viewport().get_render_info(
+				Viewport.RENDER_INFO_TYPE_VISIBLE,
+				Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME,
+			),
+			get_viewport().get_render_info(
+				Viewport.RENDER_INFO_TYPE_VISIBLE,
+				Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME,
+			),
+		], "World")
+	var image := get_viewport().get_texture().get_image()
+	var path: String = Dev.shot_dir.path_join(file_name)
+	image.save_png(path)
+	Log.info("Скриншот сохранён: " + path, "World")
+
+
 func _shot_zone(camera: Camera3D, zone: String, sunset: bool) -> void:
-	# Закат: сдвигаем эпоху мира назад — world_time = теперь + SUNSET_TIME_SEC.
+	# Закат: ставим часы мира на конец дня (0.6 суток, раздел 7).
 	if sunset:
-		Net.world_epoch_msec -= int(SUNSET_TIME_SEC * 1000.0)
+		_set_day_fraction(SHOT_SUNSET_FRACTION)
 		await get_tree().create_timer(0.3).timeout
 	var target := _island.spawn_point(zone)
 	var cam_pos := target + Vector3(14.0, 12.0, 18.0)
@@ -212,9 +295,4 @@ func _shot_zone(camera: Camera3D, zone: String, sunset: bool) -> void:
 		cam_pos.y = maxf(cam_pos.y, (hit.position as Vector3).y + 2.0)
 	camera.global_position = cam_pos
 	camera.look_at(target + Vector3(0.0, 1.0, 0.0))
-	await get_tree().create_timer(0.3).timeout
-	var image := get_viewport().get_texture().get_image()
-	var name := ("p45_sunset.png" if sunset else "p45_%s.png" % zone)
-	var path: String = Dev.shot_dir.path_join(name)
-	image.save_png(path)
-	Log.info("Скриншот сохранён: " + path, "World")
+	await _snap(camera, "sunset.png" if sunset else "zone_%s.png" % zone)
