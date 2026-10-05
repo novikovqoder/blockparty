@@ -8,11 +8,13 @@ extends GutTest
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Все типы предметов генератора (порядок — как в PropMeshes.mesh).
+## Все типы предметов генератора (порядок — как в PropMeshes.mesh;
+## CC0-модели kenney.nl — через Cc0Meshes, см. assets/third_party/LICENSES.md).
 const PROP_TYPES: PackedStringArray = [
 	"tree_leafy", "tree_spruce", "bush", "boulder", "rock_pillar", "rock_wall",
-	"pebble", "grass_tuft", "flower", "ruin_block", "ruin_tower", "ruin_gate",
-	"ruin_column", "bench", "board", "beacon", "pier_post", "plank_deck", "boat",
+	"pebble", "grass_tuft", "flower", "reed", "ruin_block", "ruin_tower",
+	"ruin_gate", "ruin_arch", "ruin_column", "bench", "board", "beacon",
+	"pier_post", "plank_deck", "boat",
 ]
 
 ## Кэш данных генератора между тестами (generate() дорогой, ~10 с).
@@ -136,17 +138,55 @@ func test_terrain_colors_follow_height() -> void:
 
 
 func test_art_groups_all_props() -> void:
-	# Каждый предмет попадает ровно в один MultiMesh «тип:вариант».
+	# Каждый предмет попадает ровно в одну группу «тип:вариант» с мешем,
+	# трансформом и тоном; трансформ невырожденный (масштаб > 0).
 	var data: Dictionary = _island_data()
 	var art := IslandArt.build(data)
 	var instanced := 0
-	for key: String in art.prop_multimeshes:
+	for key: String in art.prop_groups:
 		assert_true(key.contains(":"), "ключ группы «тип:вариант»: %s" % key)
-		var multimesh: MultiMesh = art.prop_multimeshes[key]
-		assert_gt(multimesh.instance_count, 0, "группа %s не пустая" % key)
-		assert_eq(multimesh.mesh.get_surface_count(), 1, "группа %s с мешем" % key)
-		instanced += multimesh.instance_count
+		var group: PropGroup = art.prop_groups[key]
+		assert_gt(group.transforms.size(), 0, "группа %s не пустая" % key)
+		assert_eq(group.colors.size(), group.transforms.size(), "тон каждому предмету %s" % key)
+		assert_eq(group.mesh.get_surface_count(), 1, "группа %s с мешем" % key)
+		for i: int in group.transforms.size():
+			var xf: Transform3D = group.transforms[i]
+			assert_gt(xf.basis.x.length(), 0.01, "%s[%d]: масштаб не нулевой" % [key, i])
+			assert_gt(xf.origin.length(), 1.0, "%s[%d]: не в мировом origin" % [key, i])
+		instanced += group.transforms.size()
 	assert_eq(instanced, (data["props"] as Array).size(), "все предметы в группах")
+
+
+func test_art_prop_data_survives_save_load() -> void:
+	# Регрессия П4.5: раньше в ресурс хранился MultiMesh, но при запекании
+	# headless-скриптом set_instance_transform уходил в пустой RenderingServer,
+	# buffer не заполнялся — после загрузки все предметы получали нулевой
+	# трансформ и становились невидимыми (лес на скриншотах был пуст).
+	# Теперь группы — чистые массивы: они обязаны переживать save/load.
+	var art := IslandArt.build(_island_data())
+	var path := "user://test_art_roundtrip.res"
+	assert_eq(ResourceSaver.save(art, path), OK, "ресурс сохранился")
+	var loaded := load(path) as IslandArt
+	assert_not_null(loaded, "ресурс загрузился как IslandArt")
+	assert_eq(loaded.prop_groups.size(), art.prop_groups.size(), "групп столько же")
+	var trees := 0
+	var in_forest := 0
+	for key: String in loaded.prop_groups:
+		var group: PropGroup = loaded.prop_groups[key]
+		assert_eq(
+			group.transforms.size(), (art.prop_groups[key] as PropGroup).transforms.size(),
+			"трансформы группы %s пережили save/load" % key,
+		)
+		assert_eq(group.colors.size(), group.transforms.size(), "тоны %s пережили save/load" % key)
+		assert_not_null(group.mesh, "меш группы %s на месте" % key)
+		if String(key).begins_with("tree"):
+			for xf: Transform3D in group.transforms:
+				trees += 1
+				if Vector2(xf.origin.x, xf.origin.z).distance_to(Vector2(-52, -52)) < 40.0:
+					in_forest += 1
+	assert_gt(trees, 150, "деревьев в ресурсе больше 150 (факт %d)" % trees)
+	assert_gt(in_forest, 100, "лес не пуст после загрузки (в круге %d)" % in_forest)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func test_art_colliders_only_solid_types() -> void:
