@@ -11,7 +11,8 @@ func test_roundtrip_full_state() -> void:
 		"world_epoch_msec": 172_500_000,
 		"players": [
 			{"peer_id": 1, "name": "Host", "in_world": true},
-			{"peer_id": 234567890, "name": "Длинное имя игрока", "in_world": false},
+			{"peer_id": 234567890, "name": "Длинное имя игрока", "in_world": false,
+				"character": 2},
 		],
 		"dead_mobs": [
 			{"spawn_id": 3, "respawn_at": 185.5},
@@ -31,8 +32,10 @@ func test_roundtrip_full_state() -> void:
 	assert_eq(int(first["peer_id"]), 1)
 	assert_eq(str(first["name"]), "Host")
 	assert_true(bool(first["in_world"]))
+	assert_eq(int(first.get("character", -1)), 0, "без поля персонаж — 0 (дефолт)")
 	assert_eq(int(second["peer_id"]), 234567890)
 	assert_false(bool(second["in_world"]))
+	assert_eq(int(second["character"]), 2, "номер персонажа проходит пакет")
 	assert_eq((parsed["dead_mobs"] as Array).size(), 2)
 	assert_eq(int(parsed["dead_mobs"][0]["spawn_id"]), 3)
 	assert_almost_eq(float(parsed["dead_mobs"][0]["respawn_at"]), 185.5, EPS)
@@ -79,7 +82,12 @@ func test_full_island_fits() -> void:
 		taken.append({"spawn_id": i, "respawn_at": 300.0})
 	var players: Array = []
 	for i: int in range(Protocol.MAX_PLAYERS):
-		players.append({"peer_id": i + 1, "name": "P%d" % (i + 1), "in_world": true})
+		players.append({
+			"peer_id": i + 1,
+			"name": "P%d" % (i + 1),
+			"in_world": true,
+			"character": i % 3,
+		})
 	var state := {
 		"world_epoch_msec": 42,
 		"players": players,
@@ -89,6 +97,7 @@ func test_full_island_fits() -> void:
 	var data := WorldState.pack(state)
 	var parsed := WorldState.unpack(data)
 	assert_eq((parsed["players"] as Array).size(), Protocol.MAX_PLAYERS)
+	assert_eq(int(parsed["players"][2]["character"]), 2, "персонаж полного роста")
 	assert_eq((parsed["dead_mobs"] as Array).size(), 17)
 	assert_eq((parsed["taken_coins"] as Array).size(), 60)
 	assert_eq(int(parsed["taken_coins"][59]["spawn_id"]), 59)
