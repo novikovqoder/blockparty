@@ -2,6 +2,7 @@
 	{
 		"id": 0,
 		"name": { "ru": "Финн", "en": "Finn" },
+		"stats": { "strength": 2, "speed": 5, "jump": 2 },
 		"motto": {
 			"ru": "Лучшая тропа — та, по которой идут вдвоём.",
 			"en": "The best trail is the one you walk together."
@@ -18,6 +19,7 @@
 	{
 		"id": 1,
 		"name": { "ru": "Луми", "en": "Lumi" },
+		"stats": { "strength": 3, "speed": 1, "jump": 5 },
 		"motto": {
 			"ru": "Маяки не спорят, кто ярче, — просто светят.",
 			"en": "Lighthouses do not argue about who shines brighter — they just shine."
@@ -34,6 +36,7 @@
 	{
 		"id": 2,
 		"name": { "ru": "Тимьян", "en": "Thyme" },
+		"stats": { "strength": 4, "speed": 3, "jump": 2 },
 		"motto": {
 			"ru": "От чая с мятой ещё никто не отказывался.",
 			"en": "Nobody has ever said no to mint tea."

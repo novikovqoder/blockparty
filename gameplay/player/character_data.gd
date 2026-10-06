@@ -45,6 +45,17 @@ static func pick_text(field: Dictionary) -> String:
 	return String(field.get(locale, ""))
 
 
+## Характеристики персонажа (раздел 16): сила/скорость/прыжок, значения 1–5,
+## сумма 9, каждый лучший ровно в одной. Ключи: "strength", "speed", "jump".
+## Значения вне 1–5 заменяются серединой (3) — файл правится руками, без кода.
+static func stats(index: int) -> Dictionary:
+	var raw: Dictionary = get_character(index).get("stats", {})
+	var result := {}
+	for key: String in ["strength", "speed", "jump"]:
+		result[key] = clampi(int(raw.get(key, 3)), 1, 5)
+	return result
+
+
 static func _load() -> void:
 	var text := FileAccess.get_file_as_string(PATH)
 	if text.is_empty():

@@ -43,6 +43,10 @@ var _hang_left: float = 0.0
 var _in_water: bool = false
 var _water_level: float = 0.0
 var _head_below: bool = false
+## Множители выбранного персонажа (раздел 16, «Характеристики»): бег и высота
+## прыжка. Скорость прыжка умножается на корень высотного множителя.
+var _run_multiplier: float = 1.0
+var _jump_height_multiplier: float = 1.0
 
 
 func _ready() -> void:
@@ -92,6 +96,24 @@ func _physics_process(delta: float) -> void:
 
 # --- Движение ---
 
+## Характеристики выбранного персонажа (раздел 16): множители бега и высоты
+## прыжка из characters.json по номеру модели; сила пока хранится и
+## показывается — применение в П5. По сети числа не ходят: каждый клиент
+## берёт их из своего файла данных.
+func apply_stats(character: int) -> void:
+	var stats := CharacterData.stats(character)
+	_run_multiplier = B.stat_multipliers[stats["speed"] as int - 1]
+	_jump_height_multiplier = B.stat_multipliers[stats["jump"] as int - 1]
+
+
+func run_multiplier() -> float:
+	return _run_multiplier
+
+
+func jump_height_multiplier() -> float:
+	return _jump_height_multiplier
+
+
 ## Направление ввода в мире: относительно камеры, в плоскости земли.
 ## Бот (--bot) задаёт направление сам — куда идти.
 func _wish_direction() -> Vector3:
@@ -132,7 +154,10 @@ func _move_horizontally(wish: Vector3, delta: float) -> void:
 	var walking: bool = Input.is_action_pressed("walk") if _bot == null else false
 	var speed: float = B.walk_speed if walking else B.run_speed
 	if _in_water:
+		# Множитель персонажа — про бег по земле (раздел 16), плавание не трогаем.
 		speed = minf(speed, B.swim_speed)
+	else:
+		speed *= _run_multiplier
 	var target := wish.limit_length(1.0) * speed
 	var accel: float = B.deceleration if target == Vector3.ZERO else B.acceleration
 	if not is_on_floor() and not _in_water:
@@ -169,7 +194,8 @@ func _update_jump(delta: float) -> void:
 		if is_on_floor() and _head_below:
 			# Прыжок с головы другого игрока усилен (раздел 5).
 			speed = JumpMath.boosted_jump_speed(B)
-		velocity.y = speed
+		# Множитель высоты прыжка персонажа: v = √(2·g·h) — скорость из корня.
+		velocity.y = speed * sqrt(_jump_height_multiplier)
 		_jump_buffer = 0.0
 		_coyote = 0.0
 		_jump_cut_done = false

@@ -168,10 +168,12 @@ func _spawn_player() -> void:
 	# в ENet и без сети — peer id. Хэш локальный, по сети не передаётся.
 	var own_id: int = SteamService.steam_id if SteamService.steam_id != 0 \
 		else Net.local_peer_id
-	_player.visual.setup(0)
+	var character := 0
+	_player.visual.setup(character)
+	_player.apply_stats(character)
 	_player.visual.setup_palette(own_id)
 	Log.info(
-		"Персонаж 0, цвет %d (id=%d)" % [CharacterModel.palette_index(own_id), own_id],
+		"Персонаж %d, цвет %d (id=%d)" % [character, CharacterModel.palette_index(own_id), own_id],
 		"World",
 	)
 	# Точки интереса бота (раздел 18): зоны появления и Камни духа.
