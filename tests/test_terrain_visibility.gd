@@ -1,16 +1,16 @@
 # Тесты «земля видна» (шаг 1 П4.5): регресс на класс бага «пропавшая земля»
 # — рельеф под ногами стал прозрачным. Проверяется не картинка, а её причины
-# из чек-листа шага: обход треугольников и нормали (грань видна сверху),
-# непрозрачность материала рельефа, видимость узла и попадание визуального
-# слоя в cull_mask игровой камеры. Высоты меша и коллизии совпадают —
-# отдельным тестом в test_island_scene (map_data == heights генератора).
+# из чек-листа шага: обход треугольников (грань лицевая сверху — по конвенции
+# движка, эталон берём у PlaneMesh), непрозрачность материала рельефа,
+# видимость узла и попадание визуального слоя в cull_mask игровой камеры.
+# Высоты меша и коллизии совпадают — отдельным тестом в test_island_scene
+# (map_data == heights генератора).
 extends GutTest
 
 const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
 const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
 
-## Нормаль вверх: средняя по граням зоны должна смотреть в небо (y > 0.5),
-## даже с крутыми склонами и стеной каньона.
+## Насколько вверх должна смотреть средняя нормаль зоны (доля единицы).
 const UP_Y: float = 0.5
 
 
@@ -23,11 +23,33 @@ func _terrain_meshes(island: Island) -> Array[MeshInstance3D]:
 	return meshes
 
 
+## Знак «правовинтовой» нормали видимой сверху грани движка (PlaneMesh):
+## Godot считает лицевой грань, намотанную по часовой стрелке при взгляде
+## со стороны зрителя, — у верхней грани PlaneMesh такая нормаль смотрит
+## вниз (−1). Рельеф обязан наматывать треугольники тем же знаком: грань
+## с противоположным обходом отсекается как задняя сторона (баг «пропавшая
+## земля» П4.5). Эталон из движка, а не константа — переживёт смену конвенции.
+static func _engine_up_sign() -> float:
+	var arrays: Array = PlaneMesh.new().surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for t: int in range(0, indices.size(), 3):
+		var a: Vector3 = verts[indices[t]]
+		var b: Vector3 = verts[indices[t + 1]]
+		var c: Vector3 = verts[indices[t + 2]]
+		var normal: Vector3 = (b - a).cross(c - a)
+		if absf(normal.y) > 0.9:
+			return signf(normal.normalized().y)
+	return 0.0
+
+
 func test_terrain_faces_point_up_in_every_zone() -> void:
 	# Нормали в меше рельефа не пишутся (их считает шейдер по производным) —
-	# геометрическую нормаль считаем из обхода треугольника: если порядок
-	# вершин перевернётся (грань видна только снизу), средняя нормаль зоны
-	# уйдёт в минус и тест поймает это.
+	# геометрическую ориентацию считаем из обхода треугольника и сравниваем
+	# с конвенцией движка: если порядок вершин перевернётся (грань видна
+	# только снизу — баг П4.5), знак уйдёт в противоположный.
+	var up_sign := _engine_up_sign()
+	assert_ne(up_sign, 0.0, "эталон обхода PlaneMesh найден")
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	for zone: Dictionary in island.zones:
@@ -51,8 +73,8 @@ func test_terrain_faces_point_up_in_every_zone() -> void:
 		assert_gt(faces, 100, "в зоне %s хватает граней для проверки" % zone["name"])
 		var mean := sum / float(faces)
 		assert_gt(
-			mean.normalized().y, UP_Y,
-			"зона %s: средняя нормаль рельефа смотрит вверх (y=%.2f)"
+			mean.normalized().y * up_sign, UP_Y,
+			"зона %s: обход граней совпадает с конвенцией движка (грань видна сверху, y=%.2f)"
 			% [zone["name"], mean.normalized().y],
 		)
 

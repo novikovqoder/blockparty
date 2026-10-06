@@ -61,6 +61,8 @@ func _ready() -> void:
 	add_child(_debug)
 	_debug.watch_player(_player)
 	_debug.watch_island(_island)
+	if Dev.debug_collisions:
+		_draw_debug_collisions(_island)
 	_wire_network()
 	Session.enter_world()
 	Net.entered_world()
@@ -211,6 +213,35 @@ func _spawn_player() -> void:
 		_player.set_bot_targets(targets)
 
 
+## Отладка коллизий (--debug-collisions): поверх картинки рисуются
+## полупрозрачные оранжевые формы статичных тел острова — видно, где рельеф
+## и предметы с коллизией и совпадает ли она с видимым мешем (чек-лист
+## шага 1 П4.5). Динамичные триггеры (монеты, мобы, вода, расщелина)
+## не рисуются — важны именно статичные поверхности.
+func _draw_debug_collisions(root: Node) -> void:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_color = Color(1.0, 0.55, 0.15, 0.35)
+	var drawn := 0
+	for body: Node in root.find_children("*", "StaticBody3D", true, false):
+		for child: Node in body.get_children():
+			if child is not CollisionShape3D:
+				continue
+			var shape := child as CollisionShape3D
+			if shape.shape == null:
+				continue
+			var mesh := MeshInstance3D.new()
+			mesh.name = "DebugCollision"
+			mesh.mesh = shape.shape.get_debug_mesh()
+			mesh.material_override = material
+			mesh.transform = shape.transform
+			shape.get_parent().add_child(mesh)
+			drawn += 1
+	Log.info("Отладка коллизий: нарисовано форм — %d" % drawn, "World")
+
+
 ## Качество картинки (разделы 15–16): «Простая графика» — без теней и
 ## пост-эффектов, туман плотнее (DayCycle), камера видит на 70 м вместо 160
 ## (слабые встроенные GPU); «Высокое качество» — плюс объёмный туман
@@ -293,7 +324,12 @@ func _shot_player_views(camera: Camera3D) -> void:
 	camera.look_at(eye + forward * 10.0 + Vector3.DOWN * 1.5)
 	await _snap(camera, "eye_plaza.png")
 	camera.global_position = eye
-	camera.look_at(feet + forward * 0.8)
+	# SHOT_PITCH — диагностика «земли нет под ногами»: наклон кадра вниз,
+	# градусы (по умолчанию 62 — взгляд на точку в 0.8 м перед ногами).
+	var feet_pitch: float = OS.get_environment("SHOT_PITCH").to_float()
+	if feet_pitch <= 0.0:
+		feet_pitch = rad_to_deg(atan(1.5 / 0.8))
+	camera.look_at(feet + forward * (1.5 / tan(deg_to_rad(feet_pitch))))
 	await _snap(camera, "feet_plaza.png")
 	camera.global_position = feet + forward * 2.8 + Vector3.UP * 1.1
 	camera.look_at(feet + Vector3.UP * 0.9)

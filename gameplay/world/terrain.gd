@@ -119,8 +119,11 @@ static func _chunk_mesh(
 	for z: int in range(z_begin, z_begin + CHUNK):
 		for x: int in range(x_begin, x_begin + CHUNK):
 			var color: Color = face_colors[(z + half) * FACES + (x + half)]
-			# v0 (x,z), v1 (x,z+1), v2 (x+1,z+1), v3 (x+1,z) — против часовой
-			# стрелки при взгляде сверху (нормаль +Y).
+			# v0 (x,z), v1 (x,z+1), v2 (x+1,z+1), v3 (x+1,z). Godot считает
+			# лицевой грань, намотанную ПО часовой стрелке при взгляде со
+			# стороны зрителя: у видимых сверху граней движка (PlaneMesh,
+			# BoxMesh) «правовинтовая» нормаль смотрит вниз — индексы идут
+			# (v0, v2, v1) и (v0, v3, v2), см. tools/winding_probe.gd.
 			verts[vi] = Vector3(x, heights[_idx(x, z)], z)
 			verts[vi + 1] = Vector3(x, heights[_idx(x, z + 1)], z + 1)
 			verts[vi + 2] = Vector3(x + 1, heights[_idx(x + 1, z + 1)], z + 1)
@@ -130,11 +133,11 @@ static func _chunk_mesh(
 			colors[vi + 2] = color
 			colors[vi + 3] = color
 			indices[ii] = vi
-			indices[ii + 1] = vi + 1
-			indices[ii + 2] = vi + 2
+			indices[ii + 1] = vi + 2
+			indices[ii + 2] = vi + 1
 			indices[ii + 3] = vi
-			indices[ii + 4] = vi + 2
-			indices[ii + 5] = vi + 3
+			indices[ii + 4] = vi + 3
+			indices[ii + 5] = vi + 2
 			vi += 4
 			ii += 6
 	var arrays: Array = []

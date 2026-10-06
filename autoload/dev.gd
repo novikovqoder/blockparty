@@ -1,6 +1,7 @@
 # Разбор аргументов командной строки для локальных тестов (раздел 4 SPEC):
 # --dev-host, --dev-join=IP, --dev-name, --dev-spawn=ZONE, --bot, --net-lag,
-# --net-loss, --log-net, --shot-dir, --simple-graphics, --high-quality.
+# --net-loss, --log-net, --shot-dir, --simple-graphics, --high-quality,
+# --debug-collisions (полупрозрачные формы коллизий мира поверх картинки).
 # Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
@@ -24,6 +25,7 @@ var log_net: bool = false        # --log-net: подробный лог сете
 var shot_dir: String = ""        # --shot-dir=PATH: скриншоты площадок и выход
 var simple_graphics: bool = false  # --simple-graphics: «Простая графика» (раздел 15)
 var high_quality: bool = false   # --high-quality: тяжёлые эффекты, шаг 4 П4.5
+var debug_collisions: bool = false  # --debug-collisions: показать формы коллизий
 
 
 func _init() -> void:
@@ -39,6 +41,7 @@ func _init() -> void:
 	shot_dir = parsed["shot_dir"]
 	simple_graphics = parsed["simple_graphics"]
 	high_quality = parsed["high_quality"]
+	debug_collisions = parsed["debug_collisions"]
 
 
 func _ready() -> void:
@@ -64,6 +67,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"shot_dir": "",
 		"simple_graphics": false,
 		"high_quality": false,
+		"debug_collisions": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -91,6 +95,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["simple_graphics"] = true
 		elif arg == "--high-quality":
 			result["high_quality"] = true
+		elif arg == "--debug-collisions":
+			result["debug_collisions"] = true
 	return result
 
 
