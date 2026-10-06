@@ -163,12 +163,13 @@ func _spawn_player() -> void:
 	_player = PLAYER_SCENE.instantiate() as Player
 	_player.position = _island.spawn_point(Session.spawn_zone)
 	add_child(_player)
-	# Персонаж локального игрока — пока первый (выбор в меню и номер по сети
-	# — шаги 7–8). Цвет тела по хэшу id (раздел 16): в Steam-режиме — Steam id,
-	# в ENet и без сети — peer id. Хэш локальный, по сети не передаётся.
+	# Персонаж локального игрока — выбранный на экране «Персонаж» (раздел 15;
+	# сохранение в user://, дефолт — первый; номер по сети — шаг 8). Цвет тела
+	# по хэшу id (раздел 16): в Steam-режиме — Steam id, в ENet и без сети —
+	# peer id. Хэш локальный, по сети не передаётся.
 	var own_id: int = SteamService.steam_id if SteamService.steam_id != 0 \
 		else Net.local_peer_id
-	var character := 0
+	var character := Save.load_character()
 	_player.visual.setup(character)
 	_player.apply_stats(character)
 	_player.visual.setup_palette(own_id)

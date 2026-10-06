@@ -65,6 +65,13 @@ func _on_friends_world_pressed() -> void:
 	SteamService.create_world(SteamService.LOBBY_MODE_FRIENDS)
 
 
+## «Персонаж» (раздел 15): экран выбора персонажа (шаг 7 П4.6).
+func _on_character_pressed() -> void:
+	Log.info("MainMenu: «Персонаж»", "Menu")
+	get_tree().call_deferred("change_scene_to_file",
+		"res://scenes/character_select.tscn")
+
+
 # --- Steam-поток входа (раздел 11) ---
 
 ## Лобби достигнуто: хосту мир уже готов (steam_world_ready придёт сразу),

@@ -7,6 +7,14 @@ OFFLINE_PLAY,Играть офлайн (режим разработки),Play of
 OFFLINE_QUIT,Выход,Quit
 MENU_ENTER_WORLD,В мир,Enter world
 MENU_FRIENDS_WORLD,Мир для друзей,World for friends
+MENU_CHARACTER,Персонаж,Character
+CHARACTER_TITLE,Персонаж,Character
+CHARACTER_STRENGTH,Сила,Strength
+CHARACTER_SPEED,Скорость,Speed
+CHARACTER_JUMP,Прыжок,Jump
+CHARACTER_LOVES,Любит: %s,Loves: %s
+CHARACTER_SELECT,Выбрать,Select
+CHARACTER_BACK,Назад,Back
 MENU_MEETINGS,Встречи,Meetings
 MENU_WARDROBE,Гардероб,Wardrobe
 MENU_SETTINGS,Настройки,Settings
