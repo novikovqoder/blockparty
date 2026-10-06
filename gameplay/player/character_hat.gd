@@ -45,6 +45,9 @@ static func _part(parent: Node3D, part_name: String, mesh: Mesh, color: Color,
 	material.albedo_color = color
 	material.roughness = 0.65
 	part.material_override = material
+	# Метка «часть убора»: цвет игрока (CharacterModel.setup_palette) убор
+	# не тонирует — убор отличает персонажа, цвет — игрока.
+	part.set_meta("hat_part", true)
 	part.position = pos
 	part.rotation_degrees = rot_deg
 	parent.add_child(part)

@@ -3,7 +3,7 @@
 # fog — оттенок тумана), цвета рельефа и предметов смешиваются по границам
 # зон (веса в terrain.gd). Базовые материалы рельефа (песок у воды, трава,
 # камень на склонах, снег на вершинах) — общие, зонный тон подмешивается.
-# Персонажи-«мармеладки»: 8 цветов тела и 4 цвета плаща (гардероб — П8).
+# Персонажи-«мармеладки»: цвет игрока — один из 6 ярких вариантов по хэшу id.
 # Экземпляр: assets/palette.tres; доступ — `const PAL: Palette = preload(...)`.
 # Порядок зон — IslandGen.ZONES: plaza, forest, ruins, hills, crevasse, lake.
 class_name Palette
@@ -51,15 +51,13 @@ extends Resource
 	Color("ff8fa3"), Color("ffd166"), Color("c3f584"), Color("bda7ff"),
 ]
 
-@export_group("Персонажи-«мармеладки» (раздел 16)")
-## 8 цветов тела (гардероб — П8; первый — бесплатный).
-@export var body_colors: PackedColorArray = [
-	Color("f4f1ea"), Color("ffd6a5"), Color("ffc9de"), Color("cdb4ff"),
-	Color("b8e0ff"), Color("b8f0d8"), Color("fff3b0"), Color("d0a98f"),
-]
-## 4 цвета плаща.
-@export var cape_colors: PackedColorArray = [
-	Color("e0525f"), Color("4a7fae"), Color("2a9d8f"), Color("eda45b"),
+@export_group("Цвета игроков (раздел 16)")
+## 6 ярких цветовых вариантов персонажа: тонировка текстуры KayKit
+## (albedo_color материала), один и тот же набор для всех трёх персонажей.
+## Вариант выдаётся по хэшу id — см. CharacterModel.palette_index.
+@export var player_colors: PackedColorArray = [
+	Color("ff5a5f"), Color("ffd23f"), Color("8ee04a"),
+	Color("2ec4b6"), Color("6a5df0"), Color("f15bb5"),
 ]
 @export var eye: Color = Color("2b2b33")
 

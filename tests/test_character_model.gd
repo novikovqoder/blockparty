@@ -116,3 +116,35 @@ func test_character_out_of_range_gives_first() -> void:
 	assert_eq(CharacterModel.valid_index(1), 1, "валидный проходит как есть")
 	var model := _make(42)
 	assert_eq(model.character, 0, "setup с неверным номером строит первого")
+
+
+func test_setup_palette_tints_body_not_hat_or_outline() -> void:
+	# Раздел 16 «Цвета»: все меши glb тонируются цветом варианта по хэшу id,
+	# фирменный убор и контурный близнец цвет игрока не получают.
+	const PAL: Palette = preload("res://assets/palette.tres")
+	for character: int in CharacterModel.count():
+		var model := _make(character)
+		var id := 7654321
+		model.setup_palette(id)
+		var expected: Color = PAL.player_colors[CharacterModel.palette_index(id)]
+		var tinted := 0
+		for node in model.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			if mi.has_meta("hat_part"):
+				assert_false(
+					mi.material_override.albedo_color.is_equal_approx(expected),
+					"персонаж %d: убор не тонируется цветом игрока" % character,
+				)
+				continue
+			if (mi.name as String).ends_with("Outline"):
+				continue
+			assert_true(
+				mi.material_override is StandardMaterial3D,
+				"персонаж %d: меш %s получил материал" % [character, mi.name],
+			)
+			assert_true(
+				(mi.material_override as StandardMaterial3D).albedo_color.is_equal_approx(expected),
+				"персонаж %d: меш %s тонирован цветом варианта" % [character, mi.name],
+			)
+			tinted += 1
+		assert_gt(tinted, 5, "персонаж %d: тонировано несколько мешей" % character)

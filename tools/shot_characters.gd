@@ -63,6 +63,25 @@ func _init() -> void:
 			await _snap(out_dir.path_join(
 				"char_%s_%s.png" % [NAMES[i], view]
 			))
+		models[i].visible = false
+
+	# Все 6 цветов игрока рядом для каждого персонажа (шаги 3 и 10):
+	# id 0…5 покрывают все варианты palette_index.
+	for i: int in NAMES.size():
+		var row: Array[CharacterModel] = []
+		for id: int in 6:
+			var colored := MODEL_SCENE.instantiate() as CharacterModel
+			world.add_child(colored)
+			colored.setup(i)
+			colored.setup_palette(id)
+			colored.position = Vector3((id - 2.5) * 1.7, 0.0, 0.0)
+			row.append(colored)
+		await _warmup()
+		camera.global_position = Vector3(0.0, 1.15, 8.4)
+		camera.look_at(Vector3(0.0, 0.95, 0.0))
+		await _snap(out_dir.path_join("char_%s_colors.png" % NAMES[i]))
+		for colored in row:
+			colored.queue_free()
 	quit(0)
 
 

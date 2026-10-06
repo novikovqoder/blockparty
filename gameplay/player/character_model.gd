@@ -9,8 +9,8 @@
 #   близнец-меш расширяется вдоль нормалей и рисуется задними гранями,
 #   без прозрачности — assets/shaders/outline.gdshader);
 # - к кости head крепит фирменный процедурный головной убор (CharacterHat).
-# Цвет тела по хэшу id (шаг 3) и скелетные анимации KayKit (шаг 4) —
-# следующие шаги; интерфейс setup_palette/set_state/play_one_shot уже здесь,
+# Цвет тела по хэшу id выдаёт setup_palette (шаг 3); скелетные анимации
+# KayKit подключает set_state/play_one_shot (шаг 4) — интерфейсы уже здесь,
 # чтобы player.gd и remote_player.gd не переключали класс второй раз.
 class_name CharacterModel
 extends Node3D
@@ -39,6 +39,7 @@ const HEAD_BONE: String = "head"
 const PALETTES: int = 6
 
 const OUTLINE_SHADER: Shader = preload("res://assets/shaders/outline.gdshader")
+const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Номер персонажа (0…GLBS.size()−1), фиксируется в setup.
 var character: int = 0
@@ -82,10 +83,33 @@ func setup(p_character: int) -> void:
 	_attach_hat()
 
 
-## Цвет тела по хэшу id (шаг 3: перекраска текстуры/материалов). До шага 3
-## модель носит родные цвета KayKit.
-func setup_palette(_id: int) -> void:
-	pass
+## Цвет тела по хэшу id: все меши glb тонируются одним из 6 ярких цветов
+## (PAL.player_colors, раздел 16) — albedo_color умножается на текстуру
+## KayKit, детали одежды сохраняются. Контур и фирменный убор не тонируются:
+## контур остаётся чёрным, убор отличает персонажа, цвет — игрока.
+func setup_palette(id: int) -> void:
+	if _glb_root == null:
+		return
+	var color: Color = PAL.player_colors[palette_index(id)]
+	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if _is_outline(mi) or mi.has_meta("hat_part"):
+			continue
+		var base := _surface_material(mi)
+		if base == null:
+			continue
+		# Материал glb — общий ресурс всех инстансов сцены, поэтому каждому
+		# экземпляру кладём раскрашенный дубликат через material_override.
+		var mat := base.duplicate() as StandardMaterial3D
+		mat.albedo_color = color
+		mi.material_override = mat
+
+
+## Материал первого surface меша (у моделей KayKit один surface на меш).
+func _surface_material(mi: MeshInstance3D) -> StandardMaterial3D:
+	if mi.mesh == null or mi.mesh.get_surface_count() == 0:
+		return null
+	return mi.mesh.surface_get_material(0) as StandardMaterial3D
 
 
 ## Сетевое состояние анимации (Protocol.AnimState) — скелетные клипы KayKit
