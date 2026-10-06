@@ -1,0 +1,50 @@
+[
+	{
+		"id": 0,
+		"name": { "ru": "Финн", "en": "Finn" },
+		"motto": {
+			"ru": "Лучшая тропа — та, по которой идут вдвоём.",
+			"en": "The best trail is the one you walk together."
+		},
+		"description": {
+			"ru": "Финн обошёл остров вдоль и поперёк и нарисовал карту, где честно подписал все ямки. Круглые ушки на шлеме — не украшение: ими он слышит, как перешёптываются тропы. Заблудились? Не волнуйтесь: Финн уже идёт вам навстречу.",
+			"en": "Finn has crossed this island every way possible and drew a map with every little dip honestly labelled. The round ears on his helmet are not for looks: that is how he hears the trails chatting to each other. Lost? No worry — Finn is already walking your way."
+		},
+		"loves": {
+			"ru": "водить друзей короткой тропой к старым руинам",
+			"en": "leading friends down a shortcut to the old ruins"
+		}
+	},
+	{
+		"id": 1,
+		"name": { "ru": "Луми", "en": "Lumi" },
+		"motto": {
+			"ru": "Маяки не спорят, кто ярче, — просто светят.",
+			"en": "Lighthouses do not argue about who shines brighter — they just shine."
+		},
+		"description": {
+			"ru": "Луми следит, чтобы маяки острова зажигались дружно и вовремя. Ракушка на шляпе гудит морем за час до тумана — точнее любого прогноза. Вечером она у самого высокого маяка: считает звёзды, пока не собьётся.",
+			"en": "Lumi makes sure the island's lighthouses light up together and right on time. The shell on her hat hums with the sea an hour before the fog — more reliable than any forecast. In the evening she is at the tallest lighthouse, counting stars until she loses track."
+		},
+		"loves": {
+			"ru": "зажигать маяки всей компанией",
+			"en": "lighting the lighthouses with the whole company"
+		}
+	},
+	{
+		"id": 2,
+		"name": { "ru": "Тимьян", "en": "Thyme" },
+		"motto": {
+			"ru": "От чая с мятой ещё никто не отказывался.",
+			"en": "Nobody has ever said no to mint tea."
+		},
+		"description": {
+			"ru": "Тимьян собирает мяту, ромашку и ещё травы, названий которых никто не помнит. Росток на голове — индикатор: листики весёлые — значит, день удался. Его чайные пробы не прошёл только один чайник, и то потому что был пустой.",
+			"en": "Thyme gathers mint, chamomile and a few more herbs nobody remembers the names of. The sprout on his head is an indicator: cheerful leaves mean a good day. Only one teapot has skipped his tasting rounds, and only because it was empty."
+		},
+		"loves": {
+			"ru": "вечерний чай у костра, когда кружат светлячки",
+			"en": "evening tea by the campfire while fireflies drift by"
+		}
+	}
+]
