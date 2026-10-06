@@ -148,3 +148,102 @@ func test_setup_palette_tints_body_not_hat_or_outline() -> void:
 			)
 			tinted += 1
 		assert_gt(tinted, 5, "персонаж %d: тонировано несколько мешей" % character)
+
+
+# --- Анимации (шаг 4, раздел 16: клипы KayKit Character Animations) ---
+
+func test_every_anim_state_maps_to_existing_clip() -> void:
+	# Каждое состояние аниматора (раздел 5) играет клип KayKit — включая
+	# состояния без своего клипа в наборе (ближайший по смыслу).
+	var lib := CharacterAnims.library()
+	for state: int in Protocol.AnimState.values():
+		var clip: StringName = CharacterAnims.clip_for_state(state)
+		assert_ne(clip, &"", "состояние %d: назначен клип" % state)
+		assert_true(
+			lib.has_animation(clip),
+			"состояние %d: клип %s есть в библиотеке" % [state, clip],
+		)
+	# Циклические состояния зациклены (KayKit экспортирует всё one-shot),
+	# разовые — нет.
+	for clip: String in ["Idle_A", "Walking_A", "Running_A", "Jump_Idle", "Sit_Chair_Idle"]:
+		assert_eq(
+			(lib.get_animation(clip) as Animation).loop_mode, Animation.LOOP_LINEAR,
+			"клип %s зациклен" % clip,
+		)
+	assert_ne(
+		(lib.get_animation("Waving") as Animation).loop_mode, Animation.LOOP_LINEAR,
+		"взмах — разовый клип",
+	)
+	assert_true(CharacterAnims.is_loop(Protocol.AnimState.IDLE), "покой цикличен")
+	assert_false(CharacterAnims.is_loop(Protocol.AnimState.WAVE), "взмах разовый")
+
+
+func test_set_state_plays_matching_clip() -> void:
+	# Покой/ходьба/бег/фазы прыжка/сесть — свой клип; переходы через blend
+	# не мешают сразу читать current_animation.
+	var model := _make(0)
+	var player := _anim_player(model)
+	var cases := {
+		Protocol.AnimState.IDLE: "kaykit/Idle_A",
+		Protocol.AnimState.WALK: "kaykit/Walking_A",
+		Protocol.AnimState.RUN: "kaykit/Running_A",
+		Protocol.AnimState.JUMP: "kaykit/Jump_Start",
+		Protocol.AnimState.FALL: "kaykit/Jump_Idle",
+		Protocol.AnimState.LAND: "kaykit/Jump_Land",
+		Protocol.AnimState.SIT: "kaykit/Sit_Chair_Idle",
+		Protocol.AnimState.WAVE: "kaykit/Waving",
+	}
+	for state: int in cases.keys():
+		model.set_state(state)
+		assert_eq(
+			player.current_animation, cases[state],
+			"состояние %d играет %s" % [state, cases[state]],
+		)
+	# Тот же клип не перезапускается (взмах не сбивается кадром «всё ещё
+	# бег»): позиция не сбрасывается в начало ни set_state, ни play_one_shot.
+	model.set_state(Protocol.AnimState.WAVE)
+	player.seek(1.0)
+	model.set_state(Protocol.AnimState.WAVE)
+	assert_almost_eq(
+		player.current_animation_position, 1.0, 0.02,
+		"повторный set_state не перезапускает клип",
+	)
+	model.play_one_shot(Protocol.AnimState.WAVE, 2.0)
+	assert_almost_eq(
+		player.current_animation_position, 1.0, 0.02,
+		"play_one_shot поверх того же клипа продолжает его",
+	)
+
+
+func test_play_one_shot_speeds_up_and_returns() -> void:
+	# Разовая анимация подгоняется под длительность и возвращает состояние.
+	var model := _make(1)
+	var player := _anim_player(model)
+	model.set_state(Protocol.AnimState.SIT)
+	model.play_one_shot(Protocol.AnimState.WAVE, 0.3)
+	assert_eq(player.current_animation, "kaykit/Waving", "играет взмах")
+	assert_gt(player.speed_scale, 1.0, "короткий вызов ускоряет клип")
+	# Фактическая длительность взмаха при клампе скорости ~0.7 с.
+	await get_tree().create_timer(1.2).timeout
+	assert_eq(player.current_animation, "kaykit/Sit_Chair_Idle", "вернулись к состоянию")
+	assert_eq(player.speed_scale, 1.0, "скорость восстановлена")
+
+
+func test_animations_attach_on_all_characters() -> void:
+	# Плеер один, лежит в корне glb (пути треков KayKit относительны него)
+	# и клипы играют на всех трёх ригах.
+	for character: int in CharacterModel.count():
+		var model := _make(character)
+		var players := model.find_children("*", "AnimationPlayer", true, false)
+		assert_eq(players.size(), 1, "персонаж %d: один AnimationPlayer" % character)
+		model.set_state(Protocol.AnimState.RUN)
+		assert_eq(
+			(players[0] as AnimationPlayer).current_animation, "kaykit/Running_A",
+			"персонаж %d: клипы на его риге" % character,
+		)
+
+
+func _anim_player(model: CharacterModel) -> AnimationPlayer:
+	var players := model.find_children("*", "AnimationPlayer", true, false)
+	assert_eq(players.size(), 1, "в модели один AnimationPlayer")
+	return players[0] as AnimationPlayer

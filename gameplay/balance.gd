@@ -70,6 +70,8 @@ extends Resource
 @export var attack_cooldown: float = 0.35
 ## Длительность реакции «тычок» у получившего удар игрока, с.
 @export var bonk_time: float = 0.4
+## Длительность взмаха «Привет!» (клавиша 1; клип KayKit Waving ≈2.1 с), с.
+@export var wave_time: float = 2.0
 
 @export_group("Вода (раздел 6)")
 ## Скорость движения в воде — шаг (раздел 6), м/с.

@@ -84,6 +84,8 @@ func _physics_process(delta: float) -> void:
 		_try_step_up(wish)
 	_update_animation(wish)
 	_turn_model(wish, delta)
+	if _wave_pressed():
+		visual.play_one_shot(Protocol.AnimState.WAVE, B.wave_time)
 	if _attack_pressed():
 		_try_attack()
 
@@ -118,6 +120,12 @@ func _attack_pressed() -> bool:
 	if _bot != null:
 		return _bot.consume_attack()
 	return Input.is_action_just_pressed("attack")
+
+
+## «Помахать» (клавиша 1, действие emote_1): временная проверка эмоций
+## до П5 (раздел 16); бот не машет.
+func _wave_pressed() -> bool:
+	return _bot == null and Input.is_action_just_pressed("emote_1")
 
 
 func _move_horizontally(wish: Vector3, delta: float) -> void:

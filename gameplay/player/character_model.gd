@@ -33,6 +33,8 @@ const HATS: Array[int] = [
 const HEAD_TOP_Y: float = 1.65
 ## Толщина чёрного контура в метрах (после масштаба модели).
 const OUTLINE_WIDTH: float = 0.022
+## Плавный переход между клипами, с.
+const ANIM_BLEND: float = 0.15
 ## Кость крепления убора (риг KayKit Rig_Medium, имена в нижнем регистре).
 const HEAD_BONE: String = "head"
 ## Число цветовых вариантов тела (шаг 3: выдаётся по хэшу id).
@@ -46,8 +48,12 @@ var character: int = 0
 
 var _glb_root: Node3D = null
 var _skeleton: Skeleton3D = null
+var _player: AnimationPlayer = null
 var _scale: float = 1.0
 var _outline: ShaderMaterial = null
+var _state: int = Protocol.AnimState.IDLE
+## Сколько ещё играть разовый клип (play_one_shot), с; < 0 — не играет.
+var _one_shot_left: float = -1.0
 
 
 ## Номер персонажа по хэшу id: один id — всегда один цвет и один ремоут-вариант.
@@ -81,6 +87,7 @@ func setup(p_character: int) -> void:
 	_apply_fit_scale()
 	_outline_pass(_glb_root)
 	_attach_hat()
+	_setup_animations()
 
 
 ## Цвет тела по хэшу id: все меши glb тонируются одним из 6 ярких цветов
@@ -112,15 +119,67 @@ func _surface_material(mi: MeshInstance3D) -> StandardMaterial3D:
 	return mi.mesh.surface_get_material(0) as StandardMaterial3D
 
 
-## Сетевое состояние анимации (Protocol.AnimState) — скелетные клипы KayKit
-## подключаются шагом 4; до него модель в позе glb.
-func set_state(_state: int) -> void:
-	pass
+## Сетевое состояние анимации (Protocol.AnimState): покой/ходьба/бег/фазы
+## прыжка выбираются локально по скорости и касанию земли (player.gd),
+## ремоуты получают то же состояние в снапшоте. Один и тот же клип не
+## перезапускается (взмах не сбивается кадром «всё ещё бег»).
+func set_state(state: int) -> void:
+	_state = state
+	_one_shot_left = -1.0
+	if _player == null:
+		return
+	var clip := CharacterAnims.clip_for_state(state)
+	if clip == &"" or _playing_clip() == clip:
+		return
+	_play_clip(clip, 1.0)
 
 
-## Разовая анимация (взмах и т.п.) — шаг 4.
-func play_one_shot(_state: int, _duration: float) -> void:
-	pass
+## Разовая анимация (взмах «Привет!», «тычок», приземление): клип играет
+## целиком и возвращает состояние; скорость подгоняется под duration,
+## но не быстрее/медленнее разумных пределов.
+func play_one_shot(state: int, duration: float) -> void:
+	if _player == null:
+		return
+	var clip := CharacterAnims.clip_for_state(state)
+	if clip == &"":
+		return
+	var length: float = (_player.get_animation(
+		"%s/%s" % [CharacterAnims.LIB_NAME, clip]) as Animation).length
+	var speed: float = clampf(length / maxf(duration, 0.05), 0.6, 3.0)
+	_one_shot_left = length / speed
+	_play_clip(clip, speed)
+
+
+func _process(delta: float) -> void:
+	# Разовый клип закончился — вернуться к состоянию (сетевому/локальному).
+	if _one_shot_left > 0.0:
+		_one_shot_left -= delta
+		if _one_shot_left <= 0.0:
+			set_state(_state)
+
+
+## Клип, играющий сейчас (без имени библиотеки).
+func _playing_clip() -> StringName:
+	if _player == null or _player.current_animation.is_empty():
+		return &""
+	var full := _player.current_animation.split("/")
+	return StringName(full[full.size() - 1])
+
+
+func _play_clip(clip: StringName, speed: float) -> void:
+	_player.speed_scale = speed
+	_player.play("%s/%s" % [CharacterAnims.LIB_NAME, clip], ANIM_BLEND)
+
+
+func _setup_animations() -> void:
+	# Плеер — ребёнок корня glb: корневой путь «..» указывает на Knight/
+	# Mage/Ranger, пути треков KayKit «Rig_Medium/Skeleton3D:<кость>»
+	# совпадают с деревом персонажа (см. CharacterAnims).
+	_player = AnimationPlayer.new()
+	_player.name = "CharacterAnims"
+	_glb_root.add_child(_player)
+	_player.add_animation_library(CharacterAnims.LIB_NAME, CharacterAnims.library())
+	set_state(Protocol.AnimState.IDLE)
 
 
 ## Макушка головы с учётом масштаба, м (только исходные меши, без контура).

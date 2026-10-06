@@ -17,6 +17,18 @@ const VIEWS: Dictionary = {
 	"side": Vector3(3.4, 1.05, 0.0),
 	"back": Vector3(0.0, 1.05, -3.4),
 }
+## Анимационные кадры: имя → [состояние Protocol.AnimState, пауза до
+## снимка в середине клипа, с].
+const ANIM_SHOTS: Array = [
+	["idle", Protocol.AnimState.IDLE, 0.6],
+	["walk", Protocol.AnimState.WALK, 0.55],
+	["run", Protocol.AnimState.RUN, 0.4],
+	["jump", Protocol.AnimState.JUMP, 0.25],
+	["fall", Protocol.AnimState.FALL, 0.5],
+	["land", Protocol.AnimState.LAND, 0.2],
+	["wave", Protocol.AnimState.WAVE, 1.0],
+	["sit", Protocol.AnimState.SIT, 1.6],
+]
 const OUT_PREFIX: String = "--out="
 
 
@@ -82,6 +94,26 @@ func _init() -> void:
 		await _snap(out_dir.path_join("char_%s_colors.png" % NAMES[i]))
 		for colored in row:
 			colored.queue_free()
+
+	# Анимации KayKit (шаг 4): knight — все состояния из ТЗ (покой, ходьба,
+	# бег, прыжок взлёт/полёт/приземление, помахать, сесть), mage/ranger —
+	# ходьба и взмах (клипы на всех трёх ригах). Кадр в середине клипа.
+	for i: int in models.size():
+		var model := models[i]
+		for j: int in models.size():
+			models[j].visible = j == i
+		model.position = Vector3.ZERO
+		camera.global_position = VIEWS["front"]
+		camera.look_at(Vector3(0.0, 0.95, 0.0))
+		for shot: Array in ANIM_SHOTS:
+			if i != 0 and not ["walk", "wave"].has(shot[0]):
+				continue  # полный набор — только для knight
+			model.set_state(shot[1])
+			await create_timer(shot[2]).timeout
+			await _snap(out_dir.path_join(
+				"char_%s_anim_%s.png" % [NAMES[i], shot[0]]
+			))
+		model.visible = false
 	quit(0)
 
 
