@@ -90,17 +90,22 @@ func _wire_network() -> void:
 	# Кто уже в мире (поздний вход): появляем их персонажей.
 	for peer_id: int in Net.players.keys():
 		if peer_id != Net.local_peer_id and Net._peer_in_world(peer_id):
-			_on_peer_joined_world(peer_id, str(Net.players[peer_id]["name"]))
+			_on_peer_joined_world(
+				peer_id, str(Net.players[peer_id]["name"]), Net.peer_character(peer_id)
+			)
 
 
-func _on_peer_joined_world(peer_id: int, player_name: String) -> void:
+func _on_peer_joined_world(peer_id: int, player_name: String, character: int) -> void:
 	if peer_id == Net.local_peer_id or _remotes.has(peer_id):
 		return
 	var remote := RemotePlayer.new()
-	remote.setup(peer_id, player_name)
+	remote.setup(peer_id, player_name, character)
 	add_child(remote)
 	_remotes[peer_id] = remote
-	Log.info("Игрок «%s» (peer %d) появился в мире" % [player_name, peer_id], "World")
+	Log.info(
+		"Игрок «%s» (peer %d, персонаж %d) появился в мире"
+		% [player_name, peer_id, character], "World"
+	)
 
 
 func _on_peer_snapshot(peer_id: int, snap: Dictionary, recv_msec: int) -> void:

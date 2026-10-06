@@ -18,6 +18,9 @@ const NAME_LABEL_Y: float = 2.15
 
 var peer_id: int = 0
 var player_name: String = ""
+## Номер персонажа из раздела 16 (пришёл с rpc_player_joined, хост уже
+## проверил диапазон; клампимся ещё раз на случай мусора в ростере).
+var character: int = 0
 
 var _model: Node3D
 var _visual: CharacterModel
@@ -25,9 +28,10 @@ var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
 
 
-func setup(p_peer_id: int, p_name: String) -> void:
+func setup(p_peer_id: int, p_name: String, p_character: int = 0) -> void:
 	peer_id = p_peer_id
 	player_name = p_name
+	character = p_character
 
 
 func _ready() -> void:
@@ -36,10 +40,9 @@ func _ready() -> void:
 	add_child(_model)
 	_visual = VISUAL.instantiate() as CharacterModel
 	_model.add_child(_visual)
-	# Временно (до выбора персонажа по сети, шаг 8): ремоуты различаются
-	# хэшем peer id — в dev-прогоне рядом видны все три модели. Цвет тела
-	# по тому же хэшу — шаг 3.
-	_visual.setup(absi(peer_id) % CharacterModel.count())
+	# Персонаж игрока — выбранный им на экране «Персонаж» (раздел 16),
+	# пришёл с rpc_player_joined. Цвет тела — по хэшу id того же игрока.
+	_visual.setup(clampi(character, 0, CharacterModel.count() - 1))
 	_visual.setup_palette(peer_id)
 
 	# Ник над головой (раздел 6: в радиусе 40 м), к игроку лицом.

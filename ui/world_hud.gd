@@ -139,7 +139,7 @@ func _show_toast(text: String) -> void:
 	_toast_left = ZONE_HINT_TIME
 
 
-func _on_peer_joined(_peer_id: int, player_name: String) -> void:
+func _on_peer_joined(_peer_id: int, player_name: String, _character: int) -> void:
 	_show_toast(tr("HUD_PLAYER_JOIN") % player_name)
 
 

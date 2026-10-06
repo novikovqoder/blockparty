@@ -95,7 +95,7 @@ func _ready() -> void:
 				Log.info("Клиент ENet: подключение к %s:%d" % [Dev.join_address, Dev.DEV_PORT], "Net")
 
 	local_peer_id = multiplayer.get_unique_id()
-	players[local_peer_id] = _new_slot(_display_name())
+	players[local_peer_id] = _new_local_slot()
 	if mode == "none":
 		Log.info("Сеть не запущена: локальный мир (Steam-режим — кнопки меню, раздел 11)", "Net")
 
@@ -184,13 +184,15 @@ func register_local_player(player: Player) -> void:
 ## Клиент сообщает хосту (rpc_client_ready), хост объявляет всех.
 func entered_world() -> void:
 	if not players.has(local_peer_id):
-		players[local_peer_id] = _new_slot(_display_name())
+		players[local_peer_id] = _new_local_slot()
 	players[local_peer_id]["in_world"] = true
 	if is_networked():
 		if multiplayer.is_server():
 			_send(
 				func() -> void: rpc_player_joined.rpc(
-					local_peer_id, str(players[local_peer_id]["name"])
+					local_peer_id,
+					str(players[local_peer_id]["name"]),
+					int(players[local_peer_id]["character"]),
 				), false
 			)
 		else:
@@ -273,8 +275,10 @@ func ping_msec() -> int:
 
 ## Клиент представляется хосту после подключения: мир открыт, добавляем
 ## и сразу высылаем полное состояние (раздел 10: вход в любой момент).
+## character — выбранный на экране «Персонаж» номер (раздел 16): хост
+## проверяет его и вне диапазона ставит 0 — клиенту не доверяем.
 @rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hello(player_name: String) -> void:
+func rpc_hello(player_name: String, character: int) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
@@ -282,8 +286,11 @@ func rpc_hello(player_name: String) -> void:
 		Log.warn("Пир %d отключён: мир заполнен" % sender, "Net")
 		_kick(sender)
 		return
-	players[sender] = _new_slot(player_name.left(20))  # раздел 14: ник до 20 символов
-	Log.info("Игрок подключился: %d «%s» (всего %d)" % [sender, player_name, players.size()], "Net")
+	if character < 0 or character >= CharacterModel.count():
+		Log.warn("Пир %d прислал персонажа %d — вне диапазона, ставлю 0" % [sender, character], "Net")
+		character = 0
+	players[sender] = _new_slot(player_name.left(20), character)  # раздел 14: ник до 20 символов
+	Log.info("Игрок подключился: %d «%s», персонаж %d (всего %d)" % [sender, player_name, character, players.size()], "Net")
 	_broadcast_roster()
 	# Полное состояние мира одним пакетом: часы, ростер с флагами «в мире»,
 	# мёртвые мобы и собранные монеты с временем возрождения (раздел 10).
@@ -303,7 +310,7 @@ func rpc_hello(player_name: String) -> void:
 func rpc_roster_update(entries: Array) -> void:
 	var fresh: Dictionary = {}
 	for entry: Dictionary in entries:
-		var slot := _new_slot(str(entry["name"]))
+		var slot := _new_slot(str(entry["name"]), int(entry.get("character", 0)))
 		slot["in_world"] = bool(entry.get("in_world", false))
 		fresh[int(entry["peer_id"])] = slot
 	# Кого не стало или кто вышел из мира — сообщить сценам (персонаж
@@ -334,7 +341,7 @@ func rpc_world_state(data: PackedByteArray) -> void:
 	last_world_state = state
 	var fresh: Dictionary = {}
 	for entry: Dictionary in state["players"]:
-		var slot := _new_slot(str(entry["name"]))
+		var slot := _new_slot(str(entry["name"]), int(entry.get("character", 0)))
 		slot["in_world"] = bool(entry["in_world"])
 		fresh[int(entry["peer_id"])] = slot
 	players = fresh
@@ -368,19 +375,22 @@ func rpc_client_ready() -> void:
 	players[sender]["in_world"] = true
 	Log.info("Игрок %d «%s» в мире" % [sender, players[sender]["name"]], "Net")
 	_send(
-		func() -> void: rpc_player_joined.rpc(sender, str(players[sender]["name"])),
+		func() -> void: rpc_player_joined.rpc(
+			sender, str(players[sender]["name"]), int(players[sender]["character"])
+		),
 		false,
 	)
 
 
 ## Игрок вошёл в мир: у всех появляется его персонаж (rpc_client_ready
-## или вход самого хоста).
+## или вход самого хоста). character — номер персонажа из раздела 16,
+## проверенный хостом на входе (rpc_hello).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_player_joined(peer_id: int, player_name: String) -> void:
+func rpc_player_joined(peer_id: int, player_name: String, character: int) -> void:
 	if peer_id != local_peer_id and players.has(peer_id):
 		players[peer_id]["in_world"] = true
 	if peer_id != local_peer_id:
-		EventBus.peer_joined_world.emit(peer_id, player_name)
+		EventBus.peer_joined_world.emit(peer_id, player_name, character)
 
 
 ## Клиент вышел из мира (в меню), оставшись на связи: персонаж исчезает
@@ -608,8 +618,8 @@ func _on_connected_to_server() -> void:
 	Log.info("Подключение к хосту установлено, peer id %d" % multiplayer.get_unique_id(), "Net")
 	local_peer_id = multiplayer.get_unique_id()
 	if not players.has(local_peer_id):
-		players[local_peer_id] = _new_slot(_display_name())
-	_send(func() -> void: rpc_hello.rpc(_display_name()), false)
+		players[local_peer_id] = _new_local_slot()
+	_send(func() -> void: rpc_hello.rpc(_display_name(), Save.load_character()), false)
 	if mode == "steam":
 		# Лобби подключено и хост ответил — можно загружать остров (раздел 11).
 		EventBus.steam_world_ready.emit()
@@ -663,7 +673,7 @@ func _teardown_network() -> void:
 	# Без пира get_unique_id() ошибается; офлайн-режим — всегда id 1.
 	local_peer_id = 1
 	players.clear()
-	players[local_peer_id] = _new_slot(_display_name())
+	players[local_peer_id] = _new_local_slot()
 	world_epoch_msec = 0
 	clock.clear()
 	_peer_pos.clear()
@@ -687,8 +697,22 @@ func _kick(peer_id: int) -> void:
 const _POS_UNKNOWN := Vector3(INF, INF, INF)
 
 
-func _new_slot(player_name: String) -> Dictionary:
-	return {"name": player_name, "in_world": false}
+func _new_slot(player_name: String, character: int = 0) -> Dictionary:
+	return {"name": player_name, "in_world": false, "character": character}
+
+
+## Слот локального игрока: персонаж — выбранный на экране «Персонаж»
+## (раздел 16, сохранение в user://, дефолт — первый).
+func _new_local_slot() -> Dictionary:
+	return _new_slot(_display_name(), Save.load_character())
+
+
+## Номер персонажа игрока в ростере (раздел 16): им сцены ставят модель.
+func peer_character(peer_id: int) -> int:
+	var slot: Variant = players.get(peer_id)
+	if slot == null:
+		return 0
+	return int(slot.get("character", 0))
 
 
 func _peer_in_world(peer_id: int) -> bool:
@@ -752,6 +776,7 @@ func _roster_entries() -> Array:
 			"peer_id": peer_id,
 			"name": players[peer_id]["name"],
 			"in_world": bool(players[peer_id].get("in_world", false)),
+			"character": int(players[peer_id].get("character", 0)),
 		})
 	return entries
 
