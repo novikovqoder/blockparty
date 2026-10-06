@@ -1,7 +1,7 @@
 # Разбор аргументов командной строки для локальных тестов (раздел 4 SPEC):
 # --dev-host, --dev-join=IP, --dev-name, --dev-spawn=ZONE, --bot, --net-lag,
-# --net-loss, --log-net, --shot-dir, --simple-graphics. Аргументы передаются
-# Godot после «--» и читаются через OS.get_cmdline_user_args().
+# --net-loss, --log-net, --shot-dir, --simple-graphics, --high-quality.
+# Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
 
@@ -23,6 +23,7 @@ var net_loss_percent: int = 0    # --net-loss: эмуляция потери п�
 var log_net: bool = false        # --log-net: подробный лог сетевых RPC
 var shot_dir: String = ""        # --shot-dir=PATH: скриншоты площадок и выход
 var simple_graphics: bool = false  # --simple-graphics: «Простая графика» (раздел 15)
+var high_quality: bool = false   # --high-quality: тяжёлые эффекты, шаг 4 П4.5
 
 
 func _init() -> void:
@@ -37,12 +38,15 @@ func _init() -> void:
 	log_net = parsed["log_net"]
 	shot_dir = parsed["shot_dir"]
 	simple_graphics = parsed["simple_graphics"]
+	high_quality = parsed["high_quality"]
 
 
 func _ready() -> void:
 	# Settings в порядке автолоадов раньше Dev — флаг применяем здесь.
 	if simple_graphics:
 		Settings.simple_graphics = true
+	if high_quality:
+		Settings.high_quality = true
 
 
 ## Разбор списка аргументов в словарь с полями-константами этого автолоада.
@@ -59,6 +63,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"log_net": false,
 		"shot_dir": "",
 		"simple_graphics": false,
+		"high_quality": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -84,6 +89,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["shot_dir"] = arg.get_slice("=", 1)
 		elif arg == "--simple-graphics":
 			result["simple_graphics"] = true
+		elif arg == "--high-quality":
+			result["high_quality"] = true
 	return result
 
 

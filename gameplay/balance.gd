@@ -109,6 +109,10 @@ extends Resource
 ## читается у горизонта, земля под ногами чистая.
 @export var fog_density: float = 0.0025
 @export var fog_density_simple: float = 0.008
+## Дымка по высоте (раздел 16: «низины и расщелина в дымке»): базовая
+## высота тумана, м, и плотность высотного тумана (0 — ровный туман).
+@export var fog_height_m: float = 0.6
+@export var fog_height_density: float = 0.05
 
 @export_group("Сеть: авторитет хоста (разделы 8, 10)")
 ## Дистанция удара по мобу, которую проверяет хост, м (раздел 8).

@@ -13,6 +13,7 @@ const MENU_SCENE: String = "res://scenes/main_menu.tscn"
 const PLAYER_SCENE: PackedScene = preload("res://gameplay/player/player.tscn")
 const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")
 const B: Balance = preload("res://gameplay/balance.tres")
+const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Зоны фототура --shot-dir=PATH (критерий П4.5: 6 скриншотов зон) плюс закат
 ## на площади — проверка тёплого вечернего света (раздел 7).
@@ -44,7 +45,7 @@ func _ready() -> void:
 	add_child(_day_cycle)
 	_day_cycle.setup($Sun, $WorldEnvironment)
 	_spawn_player()
-	_apply_simple_graphics()
+	_apply_graphics_quality()
 	_hud = WorldHud.new()
 	add_child(_hud)
 	var map := IslandMap.new()
@@ -171,14 +172,24 @@ func _spawn_player() -> void:
 		_player.set_bot_targets(targets)
 
 
-## «Простая графика» (раздел 15): без теней и SSAO, туман плотнее (DayCycle),
-## камера видит на 70 м вместо 160 — слабые встроенные GPU не тянут весь остров.
-func _apply_simple_graphics() -> void:
-	_day_cycle.simple = Settings.simple_graphics
-	if Settings.simple_graphics:
-		$Sun.shadow_enabled = false
-		($WorldEnvironment.environment as Environment).ssao_enabled = false
+## Качество картинки (разделы 15–16): «Простая графика» — без теней и
+## пост-эффектов, туман плотнее (DayCycle), камера видит на 70 м вместо 160
+## (слабые встроенные GPU); «Высокое качество» — плюс объёмный туман
+## с дымкой в Лесу и у Озера (шаг 4 П4.5; на compatibility-рендерере
+## серверных скриншотов объёмный туман недоступен — проверяет владелец).
+func _apply_graphics_quality() -> void:
+	var tier := GraphicsQuality.tier_from_settings()
+	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
+	GraphicsQuality.apply($WorldEnvironment.environment, $Sun, tier)
+	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
+	if tier == GraphicsQuality.Tier.HIGH:
+		for zone: String in ["forest", "lake"]:
+			var center := _island.spawn_point(zone)
+			var color := IslandGen.zone_blend(
+				Vector2(center.x, center.z), PAL.zone_fog
+			)
+			add_child(GraphicsQuality.make_zone_fog(center, color))
 
 
 ## Фототур (шаг 2 П4.5, «Самопроверка картинки»): временная камера снимает
