@@ -1,8 +1,9 @@
 # Запечённый визуал острова (Resource, коммитится как island_art.res):
-# карта высот, меши чанков рельефа, MultiMesh предметов (трансформы и
-# instance-цвета готовы) и боксы коллизий. По сети не передаётся — файл
-# одинаков у всех. Собирает tools/generate_island.gd через build();
-# в сцену ставит island_view.gd: ресурс — чистые данные, нод в нём нет.
+# карта высот, меши чанков рельефа, группы предметов PropGroup (трансформы
+# и тона — чистые массивы, MultiMesh собирает island_view в рантайме)
+# и боксы коллизий. По сети не передаётся — файл одинаков у всех.
+# Собирает tools/generate_island.gd через build(); в сцену ставит
+# island_view.gd: ресурс — чистые данные, нод в нём нет.
 class_name IslandArt
 extends Resource
 
@@ -10,8 +11,9 @@ extends Resource
 @export var heights: PackedFloat32Array = PackedFloat32Array()
 ## Меши чанков рельефа 32 × 32 м (TerrainBuilder), вершины с цветом грани.
 @export var chunks: Array[Mesh] = []
-## MultiMesh по ключу "type:variant" — предмет уже с трансформой и тоном.
-@export var prop_multimeshes: Dictionary = {}
+## Группы предметов по ключу "type:variant" — трансформы и тоны
+## (PropGroup); MultiMesh собирается в рантайме (PropGroup.to_multimesh).
+@export var prop_groups: Dictionary = {}
 ## Коллизии предметов: {"pos": Vector3, "yaw": float, "size": Vector3} —
 ## бокс с нижней гранью в pos (модели стоят «ногами» в начале координат).
 @export var colliders: Array[Dictionary] = []
@@ -35,20 +37,14 @@ static func build(data: Dictionary) -> IslandArt:
 		groups[key]["props"].append(prop)
 	for key: String in groups:
 		var group: Dictionary = groups[key]
-		var mesh := PropMeshes.mesh(group["type"], group["variant"])
-		var props: Array = group["props"]
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.mesh = mesh
-		mm.instance_count = props.size()
-		for i: int in props.size():
-			var prop: Dictionary = props[i]
+		var baked := PropGroup.new()
+		baked.mesh = PropMeshes.mesh(group["type"], group["variant"])
+		for prop: Dictionary in group["props"]:
 			var scale: Vector3 = prop["scale"]
 			var basis := Basis(Vector3.UP, float(prop["yaw"])) * Basis().scaled(scale)
-			mm.set_instance_transform(i, Transform3D(basis, prop["pos"]))
-			mm.set_instance_color(i, prop["tint"])
-		art.prop_multimeshes[key] = mm
+			baked.transforms.append(Transform3D(basis, prop["pos"]))
+			baked.colors.append(prop["tint"])
+		art.prop_groups[key] = baked
 
 	for prop: Dictionary in data["props"]:
 		var type := StringName(prop["type"])

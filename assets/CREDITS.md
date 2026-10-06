@@ -6,3 +6,4 @@
 | Файл | Источник | Лицензия |
 | --- | --- | --- |
 | `icon.svg` | сделано для проекта | MIT (как и весь код проекта) |
+| `assets/third_party/kenney.nl/` (Nature Kit, Castle Kit) | kenney.nl | CC0 — детали в `assets/third_party/LICENSES.md` |

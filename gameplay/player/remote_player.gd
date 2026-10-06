@@ -36,6 +36,9 @@ func _ready() -> void:
 	add_child(_model)
 	_visual = VISUAL.instantiate() as PlayerVisual
 	_model.add_child(_visual)
+	# Палитра «Фонарщика» по peer id (раздел 16): без сети — хэш id у всех
+	# одинаковый, у одного игрока всегда одна палитра.
+	_visual.setup_palette(peer_id)
 
 	# Ник над головой (раздел 6: в радиусе 40 м), к игроку лицом.
 	var label := Label3D.new()
@@ -89,3 +92,9 @@ func _process(_delta: float) -> void:
 ## Последняя известная позиция (карта, проверки).
 func last_position() -> Vector3:
 	return global_position
+
+
+## Визуал «Фонарщика»: сцене мира нужен set_glow_level (фонарик ярче,
+## когда рядом другой игрок) — свечением решает мир, у всех одинаково.
+func visual() -> PlayerVisual:
+	return _visual

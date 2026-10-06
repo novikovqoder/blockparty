@@ -13,7 +13,7 @@ const SKY_TOP_DAY := Color(0.44, 0.64, 0.85)
 const SKY_TOP_NIGHT := Color(0.07, 0.11, 0.21)
 const HORIZON_DAY := Color(0.74, 0.83, 0.9)
 const HORIZON_NIGHT := Color(0.22, 0.27, 0.38)
-const HORIZON_WARM := Color(0.98, 0.76, 0.6)
+const HORIZON_WARM := Color(1.0, 0.62, 0.38)
 
 
 ## Доля суток [0, 1): 0 — рассвет, day_share — закат, далее ночь.
@@ -85,7 +85,7 @@ static func sky_top_color(world_time: float) -> Color:
 
 static func horizon_color(world_time: float) -> Color:
 	var base: Color = HORIZON_NIGHT.lerp(HORIZON_DAY, dayness(world_time))
-	return base.lerp(HORIZON_WARM, warmth(world_time) * 0.75)
+	return base.lerp(HORIZON_WARM, warmth(world_time) * 0.85)
 
 
 ## Энергия ambient-освещения (небо): ночь мягкая и светлая — не ниже 0.16.

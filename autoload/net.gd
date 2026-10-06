@@ -25,6 +25,10 @@ var players: Dictionary = {}
 ## Эпоха мира по часам хоста, мс (0 — мир ещё не создан).
 ## world_time = host_time − эпоха; хост создаёт мир вместе с сервером.
 var world_epoch_msec: int = 0
+## Сдвиг часов мира, с: мир начинается утром (day_start_sec, раздел 7),
+## а не на тёмном рассвете — иначе первые минуты земля едва видна.
+## Передаётся в world_state: у гостей часы те же.
+var world_time_offset_sec: float = 0.0
 
 ## Авторитет хоста: мёртвые мобы и собранные монеты с временем возрождения.
 var authority := HostAuthority.new()
@@ -76,7 +80,7 @@ func _ready() -> void:
 			if err == OK:
 				multiplayer.multiplayer_peer = transport.peer
 				# Мир создан вместе с сервером: часы мира пошли (раздел 7).
-				world_epoch_msec = Time.get_ticks_msec()
+				_start_world_clock()
 				authority.clear()
 				_aoi.clear()
 				_peer_pos.clear()
@@ -135,7 +139,7 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 	if as_owner:
 		local_peer_id = multiplayer.get_unique_id()
 		# Мир создан вместе с хостом: часы мира пошли (раздел 7), как в dev-host.
-		world_epoch_msec = Time.get_ticks_msec()
+		_start_world_clock()
 		authority.clear()
 		_aoi.clear()
 		_peer_pos.clear()
@@ -231,17 +235,24 @@ func _display_name() -> String:
 	return "Player%d" % local_peer_id
 
 
-## Время мира, с (раздел 7): по часам хоста от эпохи мира.
+## Время мира, с (раздел 7): по часам хоста от эпохи мира плюс сдвиг утра.
 func world_time_sec() -> float:
 	if world_epoch_msec <= 0:
 		return 0.0
-	return maxf(0.0, float(host_time_now_msec() - world_epoch_msec) / 1000.0)
+	return maxf(0.0, float(host_time_now_msec() - world_epoch_msec) / 1000.0) \
+		+ world_time_offset_sec
 
 
 ## Локальный мир без сети: запустить часы мира сейчас (вызывает Session).
 func begin_world_clock() -> void:
 	if not is_networked() and world_epoch_msec <= 0:
-		world_epoch_msec = Time.get_ticks_msec()
+		_start_world_clock()
+
+
+## Часы мира пошли: эпоха сейчас, старт со светлого утра (раздел 7).
+func _start_world_clock() -> void:
+	world_epoch_msec = Time.get_ticks_msec()
+	world_time_offset_sec = B.day_start_sec
 
 
 ## Время хоста в мс: локальные часы плюс сглаженное смещение.
@@ -279,6 +290,7 @@ func rpc_hello(player_name: String) -> void:
 	authority.prune(world_time_sec())
 	var state := {
 		"world_epoch_msec": world_epoch_msec,
+		"world_time_offset_sec": world_time_offset_sec,
 		"players": _roster_entries(),
 		"dead_mobs": authority.dead_mob_entries(),
 		"taken_coins": authority.taken_coin_entries(),
@@ -317,6 +329,8 @@ func rpc_world_state(data: PackedByteArray) -> void:
 		return
 	var state := WorldState.unpack(data)
 	world_epoch_msec = int(state["world_epoch_msec"])
+	# Пакеты без поля (старые прогоны тестов) — без сдвига.
+	world_time_offset_sec = float(state.get("world_time_offset_sec", 0.0))
 	last_world_state = state
 	var fresh: Dictionary = {}
 	for entry: Dictionary in state["players"]:

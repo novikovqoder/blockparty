@@ -44,14 +44,17 @@ func _build_terrain() -> void:
 	add_child(body)
 
 
-## Предметы: MultiMesh из ресурса, дальность видимости — по типу.
+## Предметы: MultiMesh собирается в рантайме из групп ресурса (инстанс-данные
+## MultiMesh не сериализуются при headless-запекании — PropGroup), дальность
+## видимости — по типу.
 func _build_props() -> void:
 	var material := LowPolyMat.flat_or_vertex()
-	for key: String in art.prop_multimeshes:
+	for key: String in art.prop_groups:
 		var type := String(key.split(":")[0])
+		var group: PropGroup = art.prop_groups[key]
 		var instance := MultiMeshInstance3D.new()
 		instance.name = "Props_" + key.replace(":", "_")
-		instance.multimesh = art.prop_multimeshes[key]
+		instance.multimesh = group.to_multimesh()
 		instance.material_override = material
 		var range: float = PropMeshes.visibility_range(StringName(type))
 		if range > 0.0:

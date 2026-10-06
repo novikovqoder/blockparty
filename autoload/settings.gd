@@ -15,3 +15,6 @@ var camera_invert_y: bool = false
 ## В dev-прогонах включается флагом --simple-graphics (применяет Dev — он
 ## в порядке автолоадов позже); экран настроек — П8.
 var simple_graphics: bool = false
+## «Высокое качество» (шаг 4 П4.5, раздел 16): тяжёлые эффекты — объёмный
+## туман в Лесу и у Озера. В dev-прогонах включается флагом --high-quality.
+var high_quality: bool = false

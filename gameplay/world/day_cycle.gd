@@ -11,6 +11,15 @@ const PAL: Palette = preload("res://assets/palette.tres")
 ## Доля зонного цвета в тумане (раздел 16: «туман по зонам»): 0.45 — оттенок
 ## зоны читается, но время суток остаётся главным.
 const ZONE_FOG_MIX: float = 0.45
+## Цвет солнца: нейтрально-тёплый днём и оранжевый у горизонта (раздел 16:
+## «цвет солнца тёплый утром и вечером»).
+const SUN_NOON := Color(1.0, 0.97, 0.92)
+const SUN_WARM := Color(1.0, 0.68, 0.45)
+## Ambient (заполняющий свет неба): холодноватая ночь и тёплый нейтральный
+## день — «тональная коррекция в тёплую сторону» (шаг 4 П4.5) сделана самим
+## светом, без LUT-текстуры цветокоррекции.
+const AMBIENT_NIGHT := Color(0.50, 0.58, 0.72)
+const AMBIENT_DAY := Color(0.82, 0.80, 0.76)
 
 var _sun: DirectionalLight3D
 var _environment: Environment
@@ -44,6 +53,7 @@ func _process(_delta: float) -> void:
 	var to_sun := DayMath.sun_direction(world_time)
 	_sun.basis = Basis.looking_at(-to_sun, Vector3.UP)
 	_sun.light_energy = DayMath.sun_energy(world_time)
+	_sun.light_color = SUN_NOON.lerp(SUN_WARM, DayMath.warmth(world_time))
 	var horizon := DayMath.horizon_color(world_time)
 	var top := DayMath.sky_top_color(world_time)
 	_sky.sky_top_color = top
@@ -51,6 +61,9 @@ func _process(_delta: float) -> void:
 	_sky.ground_horizon_color = horizon
 	_sky.ground_bottom_color = top.darkened(0.3)
 	_environment.ambient_light_energy = DayMath.ambient_energy(world_time)
+	_environment.ambient_light_color = AMBIENT_NIGHT.lerp(
+		AMBIENT_DAY, DayMath.dayness(world_time)
+	)
 	_environment.fog_light_color = horizon
 	if _fog_focus_set:
 		# Туман по зонам (раздел 16): цвет зоны игрока поверх цвета горизонта.
@@ -59,3 +72,6 @@ func _process(_delta: float) -> void:
 		)
 		_environment.fog_light_color = horizon.lerp(zone_fog, ZONE_FOG_MIX)
 	_environment.fog_density = B.fog_density_simple if simple else B.fog_density
+	# Дымка по высоте (раздел 16): низины и вода — в лёгкой дымке.
+	_environment.fog_height = B.fog_height_m
+	_environment.fog_height_density = B.fog_height_density

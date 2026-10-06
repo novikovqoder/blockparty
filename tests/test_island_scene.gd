@@ -39,9 +39,9 @@ func test_baked_art_matches_generator() -> void:
 		"8 × 8 чанков рельефа",
 	)
 	var instanced := 0
-	for key: String in view.art.prop_multimeshes:
-		instanced += (view.art.prop_multimeshes[key] as MultiMesh).instance_count
-	assert_eq(instanced, (data["props"] as Array).size(), "все предметы в MultiMesh")
+	for key: String in view.art.prop_groups:
+		instanced += (view.art.prop_groups[key] as PropGroup).transforms.size()
+	assert_eq(instanced, (data["props"] as Array).size(), "все предметы в группах ресурса")
 	assert_not_null(view.get_node_or_null("Terrain"), "рельеф построен в _ready")
 	assert_not_null(view.get_node_or_null("PropsCollision"), "коллизии предметов построены")
 	var terrain := view.get_node("Terrain") as StaticBody3D

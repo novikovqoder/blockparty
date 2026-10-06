@@ -82,7 +82,7 @@ const LOOKOUT_TOP_H: float = 10.0
 ## Типы предметов с коллизией (рецепт формы — в prop_meshes.gd).
 const SOLID_TYPES: PackedStringArray = [
 	"tree_leafy", "tree_spruce", "boulder", "rock_pillar", "rock_wall",
-	"ruin_block", "ruin_tower", "ruin_gate", "ruin_column", "bench",
+	"ruin_block", "ruin_tower", "ruin_gate", "ruin_arch", "ruin_column", "bench",
 	"board", "beacon", "pier_post", "plank_deck", "boat",
 ]
 
@@ -538,15 +538,16 @@ static func _trees_and_rocks(
 			var grassy: bool = h > 0.9 and h < 16.0
 			var d_forest: float = Vector2(x, z).distance_to(forest)
 			var in_hills: bool = Vector2(x + 58.0, z - 42.0).length() < 42.0
-			# Лес: деревья с отступом 2 м, ели вперемежку (примерно каждая пятая).
+			# Лес: деревья с отступом 2 м, ели вперемежку (примерно каждая
+			# пятая). Лиственных — 5 CC0-вариантов (шаг 3 П4.5: лес гуще).
 			if d_forest < 40.0 and grassy:
-				if rng.randf() < 0.05 and _no_trees_near(trees, x, z, 2):
+				if rng.randf() < 0.07 and _no_trees_near(trees, x, z, 2):
 					trees[cell] = true
 					var spruce: bool = rng.randf() < 0.22
 					_prop(props, rng, cell, h,
-						"tree_spruce" if spruce else "tree_leafy",
-						"leaf" if not spruce else "leaf")
-				elif rng.randf() < 0.012:
+						"tree_spruce" if spruce else "tree_leafy", "leaf",
+						3 if spruce else 5)
+				elif rng.randf() < 0.022:
 					_prop(props, rng, cell, h, "bush", "leaf")
 			# Редкие деревья вокруг леса (не на площади).
 			elif d_forest < 56.0 and Vector2(x, z - 4.0).length() > 20.0 and grassy:
@@ -583,6 +584,30 @@ static func _trees_and_rocks(
 				_prop(props, rng, cell, h, "grass_tuft", "grass")
 			elif rng.randf() < 0.025:
 				_prop(props, rng, cell, h, "flower", "flower")
+	# Камыши по кромке озера (шаг 3 П4.5): полоса берега шириной ~0.5 м
+	# над уровнем воды; камыш проходим, виден с 40 м как трава.
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			var cell := Vector2i(x, z)
+			if reserved.has(cell):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= SEA_LEVEL or h > SEA_LEVEL + 0.55:
+				continue
+			if Vector2(x - 6.0, z - 82.0).length() > 18.0:
+				continue
+			if rng.randf() < 0.3:
+				_prop(props, rng, cell, h, "reed", "grass", 2)
+	# Немного цветов по кромке площади (шаг 3 П4.5): кольцо радиуса 13–16 м,
+	# не задевающее костёр (4.5 м), лавки и вымощенный центр.
+	for i: int in 10:
+		var angle: float = TAU * i / 10.0 + rng.randf_range(-0.15, 0.15)
+		var ring := Vector2(0, 4) + Vector2(cos(angle), sin(angle)) \
+			* rng.randf_range(13.0, 16.5)
+		var cell := Vector2i(roundi(ring.x), roundi(ring.y))
+		if reserved.has(cell):
+			continue
+		_prop(props, rng, cell, PLAZA_H, "flower", "flower")
 
 
 static func _no_trees_near(trees: Dictionary, x: int, z: int, radius: int) -> bool:
@@ -598,14 +623,14 @@ static func _no_trees_near(trees: Dictionary, x: int, z: int, radius: int) -> bo
 ## зоны (instance-цвет MultiMesh смешивается с вершинными цветами меша).
 static func _prop(
 	props: Array, rng: RandomNumberGenerator, cell: Vector2i, h: float,
-	type: String, kind: String,
+	type: String, kind: String, variants: int = 3,
 ) -> void:
 	var scale: float = rng.randf_range(0.85, 1.25)
 	var pos := Vector3(
 		cell.x + rng.randf_range(-0.3, 0.3), h, cell.y + rng.randf_range(-0.3, 0.3)
 	)
 	_add_prop(props, rng, StringName(type), pos, rng.randf_range(0.0, TAU),
-		Vector3(scale, scale * rng.randf_range(0.9, 1.15), scale), kind)
+		Vector3(scale, scale * rng.randf_range(0.9, 1.15), scale), kind, variants)
 
 
 ## Добавить предмет с явной геометрией (стены, постройки, мостки).
@@ -772,6 +797,12 @@ static func _ruins(
 		_add_prop(props, rng, &"ruin_column",
 			Vector3(rx + 0.5, RUINS_H, rz + 0.5), rng.randf_range(0.0, TAU),
 			Vector3.ONE * rng.randf_range(0.8, 1.2), "plain", 1)
+	# Две арки во дворе (шаг 3 П4.5, CC0 castle-kit): не на линии ворот —
+	# проход к сундуку остаётся свободным.
+	for arch: Vector2i in [Vector2i(51, -45), Vector2i(65, -53)]:
+		_add_prop(props, rng, &"ruin_arch",
+			Vector3(arch.x, RUINS_H, arch.y), rng.randf_range(0.0, TAU),
+			Vector3.ONE, "plain", 1)
 	return {
 		"center": Vector3(58, RUINS_H, -48),
 		"gate_center": Vector3(58, RUINS_H, float(z1)),
