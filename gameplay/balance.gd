@@ -114,6 +114,14 @@ extends Resource
 @export var fog_height_m: float = 0.6
 @export var fog_height_density: float = 0.05
 
+@export_group("Фонарщик (раздел 16, П4.5)")
+## Радиус света фонарика на груди, м.
+@export var lantern_light_radius: float = 3.0
+## Радиус «рядом другой игрок»: фонарик загорается ярче, м.
+@export var lantern_friend_radius: float = 4.0
+## Плавное нарастание и затухание яркости фонарика, с.
+@export var lantern_glow_ramp_sec: float = 1.0
+
 @export_group("Сеть: авторитет хоста (разделы 8, 10)")
 ## Дистанция удара по мобу, которую проверяет хост, м (раздел 8).
 @export var mob_hit_distance: float = 2.5
