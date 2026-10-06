@@ -13,3 +13,6 @@ config.cfg
 # ОС
 .DS_Store
 Thumbs.db
+
+# Архивы ресурсов до разбора (не в git)
+assets/incoming/

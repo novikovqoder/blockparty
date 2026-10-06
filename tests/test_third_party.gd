@@ -7,6 +7,8 @@ extends GutTest
 
 const ROOT: String = "res://assets/third_party"
 const LICENSES: String = "res://assets/third_party/LICENSES.md"
+## Префиксы каталогов наборов в колонке «Файлы» LICENSES.md.
+const VENDOR_PREFIXES: PackedStringArray = ["kenney.nl/", "kaykit/"]
 ## Допустимые форматы (CLAUDE.md, «Скачивание ресурсов»).
 const FORMATS: PackedStringArray = [
 	".glb", ".gltf", ".obj", ".png", ".jpg", ".webp", ".hdr", ".exr",
@@ -20,6 +22,11 @@ func _files_under(path: String) -> PackedStringArray:
 	var found := PackedStringArray()
 	for file: String in DirAccess.get_files_at(path):
 		if file == ".gdignore" or file == "LICENSES.md":
+			continue
+		# .import/.uid — служебные файлы Godot рядом с ресурсом (наборы
+		# KayKit импортируются движком, в отличие от закрытых .gdignore
+		# наборов Kenney): генерируются автоматически, не скачиваются.
+		if file.ends_with(".import") or file.ends_with(".uid"):
 			continue
 		found.append(path.path_join(file))
 	for dir: String in DirAccess.get_directories_at(path):
@@ -45,7 +52,11 @@ func test_licenses_have_no_stale_entries() -> void:
 		if not line.begins_with("|") or "CC0" not in line:
 			continue
 		for token: String in line.split("`"):
-			if not token.begins_with("kenney.nl/"):
+			var from_set := false
+			for prefix: String in VENDOR_PREFIXES:
+				if token.begins_with(prefix):
+					from_set = true
+			if not from_set:
 				continue
 			var looks_like_file := false
 			for ext: String in FORMATS:
