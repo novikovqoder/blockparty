@@ -63,26 +63,6 @@ extends Resource
 ]
 @export var eye: Color = Color("2b2b33")
 
-@export_group("Фонарщик (раздел 16, П4.5)")
-## Шесть палитр «Фонарщика» по хэшу id игрока (Steam id / peer id):
-## тело / капюшон и накидка / фонарик. Порядок: Персик, Мята, Слива,
-## Лимон, Голубика, Карамель.
-@export var lantern_body: PackedColorArray = [
-	Color("f4a987"), Color("8fd6c0"), Color("b48acf"), Color("f3dc6b"),
-	Color("7fa8e8"), Color("d9a066"),
-]
-@export var lantern_hood: PackedColorArray = [
-	Color("6b4e9b"), Color("2f5d73"), Color("f2c14e"), Color("3f7f5a"),
-	Color("e86f6f"), Color("2e3a59"),
-]
-@export var lantern_light: PackedColorArray = [
-	Color("ffd27a"), Color("ffe9a8"), Color("fff1c2"), Color("ffb86b"),
-	Color("ffe3a3"), Color("ffd9a0"),
-]
-@export var lantern_names: PackedStringArray = [
-	"Персик", "Мята", "Слива", "Лимон", "Голубика", "Карамель",
-]
-
 @export_group("Мобы и огонь (раздел 8)")
 @export var bird: Color = Color("6a7fcb")
 @export var critter: Color = Color("e8955c")

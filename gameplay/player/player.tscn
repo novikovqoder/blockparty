@@ -1,7 +1,7 @@
 [gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://gameplay/player/player.gd" id="1_player"]
-[ext_resource type="PackedScene" path="res://gameplay/player/player_visual.tscn" id="2_visual"]
+[ext_resource type="PackedScene" path="res://gameplay/player/character_model.tscn" id="2_model"]
 [ext_resource type="Script" path="res://gameplay/player/player_camera.gd" id="3_camera"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
@@ -26,7 +26,7 @@ shape = SubResource("CapsuleShape3D_body")
 
 [node name="Model" type="Node3D" parent="."]
 
-[node name="PlayerVisual" parent="Model" instance=ExtResource("2_visual")]
+[node name="CharacterModel" parent="Model" instance=ExtResource("2_model")]
 
 [node name="HeadTop" type="AnimatableBody3D" parent="."]
 collision_layer = 4

@@ -9,7 +9,7 @@
 class_name RemotePlayer
 extends Node3D
 
-const VISUAL: PackedScene = preload("res://gameplay/player/player_visual.tscn")
+const VISUAL: PackedScene = preload("res://gameplay/player/character_model.tscn")
 const B: Balance = preload("res://gameplay/balance.tres")
 
 ## Высота коллайдера головы над ступнями и метки ника, м (как player.tscn).
@@ -20,7 +20,7 @@ var peer_id: int = 0
 var player_name: String = ""
 
 var _model: Node3D
-var _visual: PlayerVisual
+var _visual: CharacterModel
 var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
 
@@ -34,10 +34,12 @@ func _ready() -> void:
 	_model = Node3D.new()
 	_model.name = "Model"
 	add_child(_model)
-	_visual = VISUAL.instantiate() as PlayerVisual
+	_visual = VISUAL.instantiate() as CharacterModel
 	_model.add_child(_visual)
-	# Палитра «Фонарщика» по peer id (раздел 16): без сети — хэш id у всех
-	# одинаковый, у одного игрока всегда одна палитра.
+	# Временно (до выбора персонажа по сети, шаг 8): ремоуты различаются
+	# хэшем peer id — в dev-прогоне рядом видны все три модели. Цвет тела
+	# по тому же хэшу — шаг 3.
+	_visual.setup(absi(peer_id) % CharacterModel.count())
 	_visual.setup_palette(peer_id)
 
 	# Ник над головой (раздел 6: в радиусе 40 м), к игроку лицом.
@@ -92,9 +94,3 @@ func _process(_delta: float) -> void:
 ## Последняя известная позиция (карта, проверки).
 func last_position() -> Vector3:
 	return global_position
-
-
-## Визуал «Фонарщика»: сцене мира нужен set_glow_level (фонарик ярче,
-## когда рядом другой игрок) — свечением решает мир, у всех одинаково.
-func visual() -> PlayerVisual:
-	return _visual

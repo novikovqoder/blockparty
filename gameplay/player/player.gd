@@ -22,7 +22,7 @@ const HEAD_BELOW_EPS: float = 0.15
 const STEP_PROBE: float = 0.35
 
 @onready var model: Node3D = $Model
-@onready var visual: PlayerVisual = $Model/PlayerVisual
+@onready var visual: CharacterModel = $Model/CharacterModel
 @onready var camera: PlayerCamera = $CameraRig
 @onready var attack_area: Area3D = $AttackArea
 

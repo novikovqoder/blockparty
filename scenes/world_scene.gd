@@ -25,8 +25,6 @@ const SHOT_DAY_FRACTION: float = 0.3
 const SHOT_SUNSET_FRACTION: float = 0.58
 ## Пауза тика проксимити Interactions (раздел 13: «секунда рядом»), с.
 const PROXIMITY_TICK: float = 1.0
-## Пауза тика свечения фонариков (раздел 16: «рядом другой игрок»), с.
-const LANTERN_TICK: float = 0.2
 
 var _debug: DebugPanel
 var _esc_menu: EscMenu
@@ -38,7 +36,6 @@ var _leaving: bool = false
 var _zone_now: String = ""
 var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
 var _proximity_accum: float = 0.0
-var _lantern_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -81,7 +78,6 @@ func _process(delta: float) -> void:
 	# Туман по зонам (раздел 16): цвет подмешивается там, где стоит игрок.
 	_day_cycle.set_fog_focus(_player.global_position)
 	_proximity_tick(delta)
-	_lantern_glow_tick(delta)
 
 
 ## Подключение к сети (раздел 10): события чужих игроков, применение
@@ -137,31 +133,6 @@ func _proximity_tick(delta: float) -> void:
 			)
 
 
-## Фонарик ярче, когда рядом другой игрок (раздел 16, шаг 5 П4.5): считаем
-## локально по уже синхронизированным позициям (свой игрок и интерполяция
-## снапшотов ремоутов) — нового сетевого трафика нет. Плавное нарастание
-## фонарик делает сам (lantern_glow_ramp_sec).
-func _lantern_glow_tick(delta: float) -> void:
-	_lantern_accum += delta
-	if _lantern_accum < LANTERN_TICK:
-		return
-	_lantern_accum = 0.0
-	var positions: Array[Vector3] = [_player.global_position]
-	var visuals: Array[PlayerVisual] = [_player.visual]
-	for peer_id: int in _remotes:
-		var remote: RemotePlayer = _remotes[peer_id]
-		positions.append(remote.last_position())
-		visuals.append(remote.visual())
-	for i: int in visuals.size():
-		var near := false
-		for j: int in positions.size():
-			if i != j \
-					and positions[i].distance_to(positions[j]) <= B.lantern_friend_radius:
-				near = true
-				break
-		visuals[i].set_glow_level(1.0 if near else 0.0)
-
-
 func _unhandled_input(event: InputEvent) -> void:
 	# Esc — меню (освобождает курсор, раздел 5); мир не на паузе (раздел 15).
 	if event.is_action_pressed("pause"):
@@ -192,14 +163,15 @@ func _spawn_player() -> void:
 	_player = PLAYER_SCENE.instantiate() as Player
 	_player.position = _island.spawn_point(Session.spawn_zone)
 	add_child(_player)
-	# Палитра «Фонарщика» (раздел 16): в Steam-режиме — по Steam id, в ENet
-	# и без сети — по peer id. Хэш локальный, по сети ничего не передаётся.
+	# Персонаж локального игрока — пока первый (выбор в меню и номер по сети
+	# — шаги 7–8). Цвет тела по хэшу id (раздел 16): в Steam-режиме — Steam id,
+	# в ENet и без сети — peer id. Хэш локальный, по сети не передаётся.
 	var own_id: int = SteamService.steam_id if SteamService.steam_id != 0 \
 		else Net.local_peer_id
+	_player.visual.setup(0)
 	_player.visual.setup_palette(own_id)
-	var palette_i: int = PlayerVisual.palette_index(own_id)
 	Log.info(
-		"Фонарщик: палитра %s (id=%d)" % [PAL.lantern_names[palette_i], own_id],
+		"Персонаж 0, цвет %d (id=%d)" % [CharacterModel.palette_index(own_id), own_id],
 		"World",
 	)
 	# Точки интереса бота (раздел 18): зоны появления и Камни духа.
