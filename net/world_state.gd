@@ -40,6 +40,12 @@ static func pack(state: Dictionary) -> PackedByteArray:
 	for entry: Dictionary in taken_coins:
 		buffer.put_u16(int(entry["spawn_id"]) & 0xFFFF)
 		buffer.put_float(float(entry["respawn_at"]))
+	# Активности П5 (разделы 7, 9: ворота руин; дальше — маяки и костёр):
+	# произвольный словарь в конце пакета, старые клиенты его игнорируют.
+	var activities: Dictionary = state.get("activities", {})
+	buffer.put_u8(1 if not activities.is_empty() else 0)
+	if not activities.is_empty():
+		buffer.put_var(activities)
 	return buffer.data_array
 
 
@@ -78,4 +84,9 @@ static func unpack(data: PackedByteArray) -> Dictionary:
 			"spawn_id": buffer.get_u16(),
 			"respawn_at": buffer.get_float(),
 		})
+	# Активности — в конце пакета: пакет от хоста без блока (старый формат)
+	# оставляет словарь пустым.
+	if buffer.get_position() < data.size():
+		if buffer.get_u8() != 0:
+			state["activities"] = buffer.get_var() as Dictionary
 	return state

@@ -21,6 +21,9 @@ const MAP_PATH: String = "res://assets/island_map.png"
 const WATER_SCRIPT: String = "res://gameplay/world/water_area.gd"
 const HANG_SCRIPT: String = "res://gameplay/activities/hang_area.gd"
 const HANG_POINT_SCRIPT: String = "res://gameplay/activities/hang_point.gd"
+const GATE_SCRIPT: String = "res://gameplay/activities/ruin_gate.gd"
+const PLATE_SCRIPT: String = "res://gameplay/activities/ruin_plate.gd"
+const CHEST_SCRIPT: String = "res://gameplay/activities/ruin_chest.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
 const COIN_SCRIPT: String = "res://gameplay/world/coin_pickup.gd"
@@ -114,6 +117,24 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Island:
 		hang_point.position = hang["points"][i] - crevasse.position
 		crevasse.add_child(hang_point)
 	root.add_child(crevasse)
+
+	# Руины: ворота-решётка в проёме рамы, три плиты перед ними, сундук
+	# внутри (состояниями управляет хост, раздел 9.2).
+	var ruins: Dictionary = data["poi"]["ruins"]
+	var gate: Node3D = load(GATE_SCRIPT).new()
+	gate.name = "RuinGate"
+	gate.position = ruins["gate_center"] + Vector3(0.0, 0.0, 0.5)
+	root.add_child(gate)
+	var chest: Node3D = load(CHEST_SCRIPT).new()
+	chest.name = "RuinChest"
+	chest.position = ruins["chest"]
+	root.add_child(chest)
+	var plates: Array = ruins["plates"]
+	for i: int in plates.size():
+		var plate: Node3D = load(PLATE_SCRIPT).new()
+		plate.name = "Plate%d" % (i + 1)
+		plate.position = plates[i]
+		root.add_child(plate)
 
 	# Камни духа (точки возрождения) и костёр на площади.
 	var stones: Array = data["stones"]

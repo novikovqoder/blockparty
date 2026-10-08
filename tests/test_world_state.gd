@@ -103,6 +103,32 @@ func test_full_island_fits() -> void:
 	assert_eq(int(parsed["taken_coins"][59]["spawn_id"]), 59)
 
 
+func test_activities_roundtrip() -> void:
+	# Активности П5 (разделы 9.2+): вошедший в любой момент видит открытые
+	# ворота руин и занятые плиты; блок в конце пакета опционален.
+	var state := {
+		"world_epoch_msec": 42,
+		"players": [{"peer_id": 1, "name": "Host", "in_world": true}],
+		"dead_mobs": [],
+		"taken_coins": [],
+		"activities": {"ruins": {"gate_open": true, "gate_opened_at": 123.5, "plates": [4, 0, 7]}},
+	}
+	var parsed := WorldState.unpack(WorldState.pack(state))
+	var ruins: Dictionary = (parsed["activities"] as Dictionary)["ruins"]
+	assert_true(bool(ruins["gate_open"]))
+	assert_almost_eq(float(ruins["gate_opened_at"]), 123.5, EPS)
+	assert_eq(int(ruins["plates"][0]), 4)
+	assert_eq(int(ruins["plates"][2]), 7)
+	# Без блока активностей (старый формат) — словарь остаётся пустым.
+	var bare := {
+		"world_epoch_msec": 42,
+		"players": [],
+		"dead_mobs": [],
+		"taken_coins": [],
+	}
+	assert_false(WorldState.unpack(WorldState.pack(bare)).has("activities"))
+
+
 func test_respawn_times_survive_fractional_seconds() -> void:
 	# respawn_at — float32: точность до ~0.001 с на масштабе часов мира.
 	var state := {

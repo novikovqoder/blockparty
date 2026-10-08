@@ -57,6 +57,8 @@ var _traffic_log_accum: int = 0
 var _traffic_received_prev: int = 0
 var _net_log: bool = false
 var _ping_accum: float = 0.0
+## Накопитель тика активностей хоста (плиты, зоны; разделы 9.2+).
+var _activity_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -86,6 +88,7 @@ func _ready() -> void:
 				# Мир создан вместе с сервером: часы мира пошли (раздел 7).
 				_start_world_clock()
 				authority.clear()
+				activity.clear()
 				_aoi.clear()
 				_peer_pos.clear()
 				_peer_flags.clear()
@@ -146,6 +149,7 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		# Мир создан вместе с хостом: часы мира пошли (раздел 7), как в dev-host.
 		_start_world_clock()
 		authority.clear()
+		activity.clear()
 		_aoi.clear()
 		_peer_pos.clear()
 		_peer_flags.clear()
@@ -176,6 +180,11 @@ func _process(delta: float) -> void:
 	if is_host():
 		# Возродившиеся выпадают из состояния — world_state остаётся компактным.
 		authority.prune(world_time_sec())
+		# Активности П5 (раздел 9): плиты и зоны — по снапшотам игроков.
+		_activity_accum += delta
+		if _activity_accum >= B.activity_tick:
+			_activity_accum = 0.0
+			_tick_activities()
 
 
 # --- Публичный интерфейс ---
@@ -307,6 +316,7 @@ func rpc_hello(player_name: String, character: int) -> void:
 		"players": _roster_entries(),
 		"dead_mobs": authority.dead_mob_entries(),
 		"taken_coins": authority.taken_coin_entries(),
+		"activities": {"ruins": activity.ruins_state()},
 	}
 	_send(func() -> void: rpc_id(sender, "rpc_world_state", WorldState.pack(state)), false)
 
@@ -359,6 +369,7 @@ func rpc_world_state(data: PackedByteArray) -> void:
 	)
 	if Session.in_world:
 		EventBus.world_state_applied.emit(dead, taken)
+		_apply_activities(state)
 
 
 ## Повторно применить последнее состояние мира (вызывает сцена мира в
@@ -367,6 +378,7 @@ func replay_world_state() -> void:
 	if last_world_state.is_empty():
 		return
 	EventBus.world_state_applied.emit(last_world_state["dead_mobs"], last_world_state["taken_coins"])
+	_apply_activities(last_world_state)
 
 
 ## Клиент загрузил остров и применил состояние — объявляем его всем
@@ -659,6 +671,146 @@ func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
 		rpc_pulled(helper_peer, target_peer)
 
 
+# --- Тик активностей хоста (раздел 9: плиты и зоны по снапшотам) ---
+
+## Периодическая проверка активностей хостом: кто стоит на плитах руин,
+## есть ли игрок у закрытых ворот (запасной путь, раздел 9.2). Узлы берёт
+## из групп — остров у всех одинаковый (раздел 6).
+func _tick_activities() -> void:
+	if not Session.in_world:
+		return
+	var entries := _world_player_entries()
+	var plates := _ruin_plates()
+	var plate_peers: Array[int] = []
+	for plate: RuinPlate in plates:
+		plate_peers.append(_peer_on_plate(plate, entries))
+	var gate := _first_node(RuinGate.GROUP)
+	var anyone_at_gate := false
+	if gate != null:
+		anyone_at_gate = _anyone_in_radius(entries, gate.global_position, B.gate_near_radius)
+	var event := activity.update_ruins_gate(
+		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B
+	)
+	if event.is_empty():
+		return
+	var openers: Array[int] = event.get("openers", [])
+	var reward_peers: Array[int] = []
+	if event.has("opened"):
+		# Награда сундука — в момент открытия ворот (раздел 8): каждому
+		# в радиусе 10 м от сундука.
+		var chest := _first_node(RuinChest.GROUP)
+		if chest != null:
+			reward_peers = ActivityAuthority.peers_in_radius(
+				entries, chest.global_position, B.chest_radius
+			)
+		Log.info(
+			"Ворота руин открыты (%s), сундук: награда %d игрокам"
+			% ["плиты" if not openers.is_empty() else "запасной путь", reward_peers.size()],
+			"Net",
+		)
+	elif event.has("closed"):
+		Log.info("Ворота руин закрылись (10 минут истекли), сундук сброшен", "Net")
+	var state := activity.ruins_state()
+	_broadcast_ruins(bool(state["gate_open"]), state["plates"], openers, reward_peers)
+
+
+## Все игроки в мире: {peer, pos, floor} — позиции и флаг «на земле»
+## (снапшот или свой персонаж).
+func _world_player_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	for peer_id: int in players.keys():
+		if not _peer_in_world(peer_id):
+			continue
+		var pos := _peer_position(peer_id)
+		if pos == _POS_UNKNOWN:
+			continue
+		var on_floor := false
+		if peer_id == local_peer_id:
+			on_floor = _local_player != null and _local_player.is_on_floor()
+		else:
+			on_floor = (int(_peer_flags.get(peer_id, 0)) & Protocol.FLAG_ON_FLOOR) != 0
+		entries.append({"peer": peer_id, "pos": pos, "floor": on_floor})
+	return entries
+
+
+## Peer игрока, стоящего на плите (раздел 9.2): в радиусе по горизонтали,
+## в окне высоты и на земле; 0 — плита свободна.
+func _peer_on_plate(plate: RuinPlate, entries: Array[Dictionary]) -> int:
+	for entry: Dictionary in entries:
+		if not bool(entry["floor"]):
+			continue
+		var pos: Vector3 = entry["pos"]
+		if absf(pos.y - plate.global_position.y) > B.plate_height_window:
+			continue
+		var flat := pos - plate.global_position
+		flat.y = 0.0
+		if flat.length() <= B.plate_radius:
+			return int(entry["peer"])
+	return 0
+
+
+func _anyone_in_radius(entries: Array[Dictionary], center: Vector3, radius: float) -> bool:
+	for entry: Dictionary in entries:
+		var flat: Vector3 = entry["pos"] - center
+		flat.y = 0.0
+		if flat.length() <= radius:
+			return true
+	return false
+
+
+## Плиты у ворот в порядке имени узла (Plate1..Plate3 генерирует остров).
+func _ruin_plates() -> Array[RuinPlate]:
+	var plates: Array[RuinPlate] = []
+	for node in get_tree().get_nodes_in_group(RuinPlate.GROUP):
+		if node is RuinPlate:
+			plates.append(node as RuinPlate)
+	plates.sort_custom(
+		func(a: RuinPlate, b: RuinPlate) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
+	)
+	return plates
+
+
+func _first_node(group: StringName) -> Node3D:
+	for node in get_tree().get_nodes_in_group(group):
+		if node is Node3D:
+			return node as Node3D
+	return null
+
+
+## Хост разослал состояние ворот руин (раздел 9.2): узлы рисуют плиту/плиты/
+## крышку сундука, очки Interactions — участникам плит, монеты — reward_peers.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_ruins(open: bool, plates: Array, openers: Array, reward_peers: Array) -> void:
+	EventBus.ruins_state.emit(open, plates, openers, reward_peers)
+	if reward_peers.has(local_peer_id):
+		Session.add_world_coins(B.chest_reward)
+
+
+func _broadcast_ruins(
+	open: bool, plates: Array, openers: Array, reward_peers: Array
+) -> void:
+	if is_networked():
+		_send(func() -> void: rpc_ruins.rpc(open, plates, openers, reward_peers), false)
+	else:
+		rpc_ruins(open, plates, openers, reward_peers)
+
+
+## Применить активности из world_state (вход в любой момент, раздел 10):
+## открытые ворота и сундук — без повторной награды и очков.
+func _apply_activities(state: Dictionary) -> void:
+	var activities: Dictionary = state.get("activities", {})
+	if activities.is_empty():
+		return
+	var ruins: Dictionary = activities.get("ruins", {})
+	if not ruins.is_empty():
+		EventBus.ruins_state.emit(
+			bool(ruins.get("gate_open", false)),
+			ruins.get("plates", []),
+			[],
+			[],
+		)
+
+
 ## Ping часов: клиент раз в секунду.
 @rpc("any_peer", "call_remote", "unreliable_ordered", Protocol.CHANNEL_SNAPSHOT)
 func rpc_ping(client_msec: int) -> void:
@@ -751,6 +903,8 @@ func _teardown_network() -> void:
 	_seq = 0
 	last_world_state = {}
 	authority.clear()
+	activity.clear()
+	_activity_accum = 0.0
 	if was_steam:
 		# Раздел 11: выход из мира — выход из лобби (Rich Presence очищается).
 		SteamService.leave_lobby()

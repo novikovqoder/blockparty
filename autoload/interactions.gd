@@ -30,6 +30,7 @@ var _events: Array[Dictionary] = []
 
 func _ready() -> void:
 	EventBus.player_pulled.connect(_on_player_pulled)
+	EventBus.ruins_state.connect(_on_ruins_state)
 	EventBus.world_entered.connect(reset)
 
 
@@ -40,6 +41,16 @@ func _on_player_pulled(helper_peer: int, target_peer: int) -> void:
 		add_points(target_peer, KIND_PULL_GAVE, B.pts_pull, Session.world_time)
 	if target_peer == Net.local_peer_id:
 		add_points(helper_peer, KIND_PULL_GOT, B.pts_pull, Session.world_time)
+
+
+## Ворота руин открыты плитами (раздел 9.2): очки каждому участнику за
+## каждого другого. Запасной путь одиночки очков не даёт (открывший один).
+func _on_ruins_state(open: bool, _plates: Array, openers: Array, _reward: Array) -> void:
+	if not open or not openers.has(Net.local_peer_id):
+		return
+	for opener: int in openers:
+		if opener != Net.local_peer_id:
+			add_points(opener, KIND_GATE_OPEN, B.pts_gate_open, Session.world_time)
 
 
 ## Записать событие взаимодействия с другим игроком (at_world_time — с).

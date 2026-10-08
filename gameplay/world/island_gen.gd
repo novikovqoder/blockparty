@@ -80,9 +80,10 @@ const LOOKOUT_BASE_H: float = 7.0
 const LOOKOUT_TOP_H: float = 10.0
 
 ## Типы предметов с коллизией (рецепт формы — в prop_meshes.gd).
+## ruin_gate — только рама: проём закрывает узел RuinGate (П5, раздел 9.2).
 const SOLID_TYPES: PackedStringArray = [
 	"tree_leafy", "tree_spruce", "boulder", "rock_pillar", "rock_wall",
-	"ruin_block", "ruin_tower", "ruin_gate", "ruin_arch", "ruin_column", "bench",
+	"ruin_block", "ruin_tower", "ruin_arch", "ruin_column", "bench",
 	"board", "beacon", "pier_post", "plank_deck", "boat",
 ]
 

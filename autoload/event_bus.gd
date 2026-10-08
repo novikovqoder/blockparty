@@ -29,6 +29,12 @@ signal player_respawned()
 ## Хост подтвердил вытягивание: helper вытащил target из расщелины (раздел 9.1).
 signal player_pulled(helper_peer: int, target_peer: int)
 
+## Состояние ворот руин (раздел 9.2): open — открыты, plates — peer на каждой
+## плите (0 — пусто), openers — кто открыл плитами (пусто при запасном пути),
+## reward_peers — получившие награду сундука (раздел 8), непусто только
+## в событии открытия. При закрытии — open=false, остальные списки пусты.
+signal ruins_state(open: bool, plates: Array, openers: Array, reward_peers: Array)
+
 # --- Взаимодействие E (раздел 9; П5) ---
 
 ## Подсказка у интерактивного объекта: ключ i18n действия («E — сесть»);
