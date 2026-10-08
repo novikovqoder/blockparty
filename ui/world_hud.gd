@@ -18,6 +18,8 @@ var _zone: Label
 var _zone_left: float = 0.0
 var _toast: Label
 var _toast_left: float = 0.0
+var _hint: Label
+var _hint_hold: ProgressBar
 
 
 func _ready() -> void:
@@ -30,6 +32,8 @@ func _ready() -> void:
 	EventBus.world_coins_changed.connect(_on_coins_changed)
 	EventBus.peer_joined_world.connect(_on_peer_joined)
 	EventBus.peer_left.connect(_on_peer_left)
+	EventBus.interaction_hint.connect(_on_interaction_hint)
+	EventBus.interaction_progress.connect(_on_interaction_progress)
 
 
 func _process(delta: float) -> void:
@@ -103,6 +107,47 @@ func _build() -> void:
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.hide()
 	root.add_child(_toast)
+	# Подсказка взаимодействия «E — …» (раздел 15) с прогрессом удержания.
+	_hint = Label.new()
+	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hint.position = Vector2(440, 600)
+	_hint.size = Vector2(400, 28)
+	_hint.add_theme_font_size_override("font_size", 20)
+	_hint.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
+	_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_hint.add_theme_constant_override("outline_size", 4)
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint.hide()
+	root.add_child(_hint)
+	_hint_hold = ProgressBar.new()
+	_hint_hold.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hint_hold.position = Vector2(540, 632)
+	_hint_hold.size = Vector2(200, 8)
+	_hint_hold.min_value = 0.0
+	_hint_hold.max_value = 1.0
+	_hint_hold.show_percentage = false
+	_hint_hold.modulate = PAL.coin
+	_hint_hold.hide()
+	root.add_child(_hint_hold)
+
+
+## Подсказка у интерактивного объекта: ключ действия или пусто (скрыть).
+## У объектов с удержанием добавляем «(удерживать)» — ключ знает hold только
+## игрок, поэтому формат выбираем по факту прогресса.
+func _on_interaction_hint(key: String) -> void:
+	if key.is_empty():
+		_hint.hide()
+		return
+	_hint.text = "%s — %s" % [tr("HUD_HINT_KEY"), tr(key)]
+	_hint.show()
+
+
+func _on_interaction_progress(fraction: float) -> void:
+	if fraction < 0.0:
+		_hint_hold.hide()
+		return
+	_hint_hold.value = fraction
+	_hint_hold.show()
 
 
 ## Показать название зоны (ключ ZONE_<ИМЯ>); пустая зона прячет подсказку.

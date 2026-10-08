@@ -43,6 +43,10 @@ var _hang_left: float = 0.0
 var _in_water: bool = false
 var _water_level: float = 0.0
 var _head_below: bool = false
+## Ближайший интерактивный объект (подсказка HUD, удержание E; П5).
+var _interactable: Interactable = null
+## Накопленное удержание E у объекта с hold_time > 0, с.
+var _hold_accum: float = 0.0
 ## Множители выбранного персонажа (раздел 16, «Характеристики»): бег и высота
 ## прыжка. Скорость прыжка умножается на корень высотного множителя.
 var _run_multiplier: float = 1.0
@@ -70,6 +74,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _hanging:
 		_process_hang(delta)
+		_update_interaction(delta)
 		return
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
 	if _attack_active > 0.0:
@@ -92,6 +97,63 @@ func _physics_process(delta: float) -> void:
 		visual.play_one_shot(Protocol.AnimState.WAVE, B.wave_time)
 	if _attack_pressed():
 		_try_attack()
+	_update_interaction(delta)
+
+
+# --- Взаимодействие E (раздел 9, П5) ---
+
+## Подсказка «E — …» и удержание: ищем ближайший доступный объект группы
+## Interactable.GROUP; короткое нажатие E или полное удержание вызывает use().
+func _update_interaction(delta: float) -> void:
+	var nearest: Interactable = null
+	if not _hanging:
+		nearest = _nearest_interactable()
+	if nearest != _interactable:
+		_interactable = nearest
+		_hold_accum = 0.0
+	if _interactable == null:
+		EventBus.interaction_hint.emit("")
+		EventBus.interaction_progress.emit(-1.0)
+		return
+	EventBus.interaction_hint.emit(_interactable.hint_key())
+	var hold: float = _interactable.hold_time(self)
+	var human: bool = _bot == null
+	if hold <= 0.0:
+		EventBus.interaction_progress.emit(-1.0)
+		if human and Input.is_action_just_pressed("interact"):
+			_interactable.use(self)
+		return
+	# Удержание: копим, пока E зажат; отпускание сбрасывает прогресс.
+	if human and Input.is_action_pressed("interact"):
+		_hold_accum += delta
+		EventBus.interaction_progress.emit(clampf(_hold_accum / hold, 0.0, 1.0))
+		if _hold_accum >= hold:
+			_hold_accum = 0.0
+			EventBus.interaction_progress.emit(-1.0)
+			_interactable.use(self)
+	else:
+		_hold_accum = 0.0
+		EventBus.interaction_progress.emit(-1.0)
+
+
+## Ближайший доступный объект в радиусе use_radius (от груди персонажа).
+func _nearest_interactable() -> Interactable:
+	var best: Interactable = null
+	var best_distance: float = 1e9
+	var chest := global_position + Vector3.UP * 0.8
+	for node in get_tree().get_nodes_in_group(Interactable.GROUP):
+		var interactable := node as Interactable
+		if interactable == null or not is_instance_valid(interactable):
+			continue
+		if interactable.hint_key().is_empty():
+			continue
+		var distance: float = interactable.global_position.distance_to(chest)
+		if distance > interactable.use_radius:
+			continue
+		if distance < best_distance:
+			best_distance = distance
+			best = interactable
+	return best
 
 
 # --- Движение ---
