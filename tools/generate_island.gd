@@ -27,6 +27,7 @@ const CHEST_SCRIPT: String = "res://gameplay/activities/ruin_chest.gd"
 const LADDER_SCRIPT: String = "res://gameplay/activities/lookout_ladder.gd"
 const BEACON_SCRIPT: String = "res://gameplay/activities/beacon.gd"
 const BOARD_SCRIPT: String = "res://gameplay/activities/beacon_board.gd"
+const SEAT_SCRIPT: String = "res://gameplay/activities/campfire_seat.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
 const STARFALL_SCRIPT: String = "res://gameplay/world/starfall.gd"
@@ -173,6 +174,17 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Island:
 	var campfire: Node3D = load(CAMPFIRE_SCRIPT).new()
 	campfire.position = data["poi"]["campfire"]["center"]
 	root.add_child(campfire)
+	# Места у костра (раздел 9.6): маркеры на лавках площади, порядок имён
+	# Seat1..Seat8 — как benches у IslandGen; сидящий смотрит на костёр.
+	var fire_center: Vector3 = data["poi"]["campfire"]["center"]
+	var benches: Array = data["poi"]["campfire"]["benches"]
+	for i: int in benches.size():
+		var seat: Node3D = load(SEAT_SCRIPT).new()
+		seat.name = "Seat%d" % (i + 1)
+		seat.position = benches[i]
+		seat.face_target = fire_center
+		seat.seat_index = i
+		root.add_child(seat)
 
 	# Статичные монеты (ровно 60) и мобы — траектории в параметрах.
 	var coins: Array = data["coins"]

@@ -58,6 +58,11 @@ var _invite_peer: int = 0
 var _invite_left: float = 0.0
 ## Прыгал ли ведущий в прошлом кадре (повтор прыжков, раздел 9.5).
 var _leader_was_jumping: bool = false
+## Сидение у костра (раздел 9.6): индекс места и ожидание подтверждения
+## вставания (движение уже послано хосту, новое событие ещё не пришло).
+var _sitting: bool = false
+var _seat_index: int = -1
+var _stand_sent: bool = false
 ## Множители выбранного персонажа (раздел 16, «Характеристики»): бег и высота
 ## прыжка. Скорость прыжка умножается на корень высотного множителя.
 var _run_multiplier: float = 1.0
@@ -83,6 +88,7 @@ func _ready() -> void:
 	Net.register_local_player(self)
 	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.hand_invite.connect(_on_hand_invite)
+	EventBus.campfire_seats.connect(_on_campfire_seats)
 	if Session.bot:
 		_bot = BotController.new()
 		_bot.setup(self)
@@ -91,6 +97,10 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_invite_timer(delta)
+	if _sitting:
+		if _stand_input():
+			stand_up_from_seat()
+		return
 	if _hanging:
 		_process_hang(delta)
 		_update_interaction(delta)
@@ -248,6 +258,81 @@ func _link_speed_multiplier() -> float:
 		var stats := CharacterData.stats(Net.peer_character(peer_id))
 		multiplier = minf(multiplier, B.stat_multipliers[(stats["speed"] as int) - 1])
 	return multiplier
+
+
+# --- Сидение у костра (раздел 9.6) ---
+
+## Занятость мест от хоста (раздел 9.6): моё имя появилось в массиве —
+## сажусь, пропало — встаю (шевельнулись сами или хост освободил место).
+func _on_campfire_seats(seats: Array) -> void:
+	var mine := -1
+	for i: int in seats.size():
+		if int(seats[i]) == Net.local_peer_id:
+			mine = i
+			break
+	if mine >= 0 and not _sitting and not _stand_sent:
+		_sit_at(mine)
+	elif mine < 0 and _sitting:
+		_leave_seat()
+
+
+## Поза KayKit «Sit_Chair_Idle» считается от пола: origin опускаем на землю
+## перед лавкой (вне её коллайдера), модель — лицом к костру. Физика сидя
+## заморожена (ранний выход в _physics_process), снапшоты идут как обычно.
+func _sit_at(seat_index: int) -> void:
+	var seat := _seat_node(seat_index)
+	if seat == null:
+		return
+	_sitting = true
+	_stand_sent = false
+	_seat_index = seat_index
+	velocity = Vector3.ZERO
+	var to_fire := seat.face_target - seat.global_position
+	to_fire.y = 0.0
+	var dir := to_fire.normalized()
+	global_position = seat.global_position + dir * 0.75 - Vector3(0.0, B.campfire_seat_floor, 0.0)
+	model.rotation.y = atan2(dir.x, dir.z)
+	_set_anim(Protocol.AnimState.SIT)
+	# Подсказку «E — сесть» гасим сами: _update_interaction сидя не работает.
+	EventBus.interaction_hint.emit("")
+	EventBus.interaction_progress.emit(-1.0)
+	Log.info("Сел у костра (место %d)" % (seat_index + 1), "Player")
+
+
+## Встать (раздел 9.6: любое движение). Локально — сразу, хост снимет
+## занятость подтверждением; пока его событие не пришло, не садимся снова.
+func stand_up_from_seat() -> void:
+	if not _sitting:
+		return
+	_stand_sent = true
+	_leave_seat()
+	Net.request_stand_up()
+
+
+func _leave_seat() -> void:
+	_sitting = false
+	_stand_sent = false
+	_seat_index = -1
+	_set_anim(Protocol.AnimState.IDLE)
+
+
+## Сидит ли у костра (флаг снапшота, раздел 10).
+func is_sitting() -> bool:
+	return _sitting
+
+
+## Любое движение, прыжок или удар — сигнал встать (раздел 9.6).
+func _stand_input() -> bool:
+	return _wish_direction().length() > 0.1 or _jump_pressed() or _attack_pressed()
+
+
+## Узел места по индексу (порядок имён Seat1..Seat8 — как benches IslandGen).
+func _seat_node(seat_index: int) -> CampfireSeat:
+	for node in get_tree().get_nodes_in_group(CampfireSeat.SEAT_GROUP):
+		var seat := node as CampfireSeat
+		if seat != null and seat.seat_index == seat_index:
+			return seat
+	return null
 
 
 # --- Взаимодействие E (раздел 9, П5) ---
@@ -656,6 +741,8 @@ func snapshot_flags() -> int:
 		flags |= Protocol.FLAG_ON_FLOOR
 	if _hanging:
 		flags |= Protocol.FLAG_HANGING
+	if _sitting:
+		flags |= Protocol.FLAG_SITTING
 	if _hand_follower_peer != 0:
 		flags |= Protocol.FLAG_HAND_HELD
 	if _hand_leader_peer != 0:

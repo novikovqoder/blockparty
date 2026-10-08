@@ -37,6 +37,10 @@ signal hand_link(leader_peer: int, follower_peer: int, on: bool)
 ## «F — принять» живёт hand_invite_time; согласие и отказ — hand_link/таймер.
 signal hand_invite(by_peer: int, by_name: String)
 
+## Занятость мест у костра (раздел 9.6): seats — массив peer по индексам мест
+## (0 — свободно). Один сигнал на все изменения: сел, встал, вышел из мира.
+signal campfire_seats(seats: Array)
+
 ## Состояние ворот руин (раздел 9.2): open — открыты, plates — peer на каждой
 ## плите (0 — пусто), openers — кто открыл плитами (пусто при запасном пути),
 ## reward_peers — получившие награду сундука (раздел 8), непусто только

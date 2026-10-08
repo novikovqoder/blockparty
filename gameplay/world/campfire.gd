@@ -1,15 +1,30 @@
 # Костёр на площади (раздел 6 SPEC): место сбора — каменное кольцо и лавки
 # расставлены генератором острова (предметы «boulder» и «bench»), здесь
 # только огонь: поленья, светящийся уголь, искры (раздел 16) и тёплый свет.
-# Сидение, очки «рядом с костром» и анимации участников — П5.
+# Сидение у костра — П5 (раздел 9.6): от campfire_company_size сидящих
+# огонь разгорается — свет и искры сильнее, один игрок оставляет его
+# спокойным.
 class_name Campfire
 extends Node3D
 
 const PAL: Palette = preload("res://assets/palette.tres")
+const B: Balance = preload("res://gameplay/balance.tres")
+
+## Параметры спокойного огня / разгоревшегося (раздел 9.6).
+const CALM_ENERGY: float = 0.55
+const CALM_RANGE: float = 9.0
+const CALM_SPARKS: int = 12
+const COMPANY_ENERGY: float = 1.0
+const COMPANY_RANGE: float = 13.0
+const COMPANY_SPARKS: int = 26
+
+var _light: OmniLight3D
+var _sparks: GPUParticles3D
 
 
 func _ready() -> void:
 	_build()
+	EventBus.campfire_seats.connect(_on_campfire_seats)
 
 
 func _build() -> void:
@@ -45,10 +60,26 @@ func _build() -> void:
 	ember.position = Vector3(0.0, 0.32, 0.0)
 	add_child(ember)
 	# Искры над углями (раздел 16: «искры костра»).
-	Fx.fire_sparks(self, Vector3(0.0, 0.5, 0.0), PAL.fire)
-	var light := OmniLight3D.new()
-	light.light_color = PAL.fire
-	light.omni_range = 9.0
-	light.light_energy = 0.55
-	light.position = Vector3(0.0, 0.6, 0.0)
-	add_child(light)
+	_sparks = Fx.fire_sparks(self, Vector3(0.0, 0.5, 0.0), PAL.fire)
+	_light = OmniLight3D.new()
+	_light.light_color = PAL.fire
+	_light.omni_range = CALM_RANGE
+	_light.light_energy = CALM_ENERGY
+	_light.position = Vector3(0.0, 0.6, 0.0)
+	add_child(_light)
+
+
+## Сколько сидящих сейчас (раздел 9.6): двое и больше — огонь сильнее.
+func _on_campfire_seats(seats: Array) -> void:
+	var seated := 0
+	for peer: int in seats:
+		if peer != 0:
+			seated += 1
+	if seated >= B.campfire_company_size:
+		_light.light_energy = COMPANY_ENERGY
+		_light.omni_range = COMPANY_RANGE
+		_sparks.amount = COMPANY_SPARKS
+	else:
+		_light.light_energy = CALM_ENERGY
+		_light.omni_range = CALM_RANGE
+		_sparks.amount = CALM_SPARKS

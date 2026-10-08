@@ -3,8 +3,8 @@
 # плиты и сундук (разделы 8, 9.2): N = min(3, игроков) ≥ 2, запасной путь
 # одиночки 60 с у ворот, сброс 10 минут; блок 5 — маяки и Звездопад
 # (раздел 7): пара в окне 3 с, соло-удержание, цикл гашения, звёзды;
-# блок 6 — «за руку» (раздел 9.5): роли, цепочки до 4, разрывы.
-# Костёр (блок 7) добавится здесь же.
+# блок 6 — «за руку» (раздел 9.5): роли, цепочки до 4, разрывы; блок 7 —
+# места у костра (раздел 9.6): занятость, вставание, выход из мира.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -500,3 +500,85 @@ func test_hand_state_reset_on_clear() -> void:
 		activity.try_hand_link(4, 7, 1.0, B).is_empty(),
 		"после clear связь снова возможна",
 	)
+
+
+# --- Места у костра (раздел 9.6) ---
+
+func test_sit_confirmed_when_close() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_seats(8)
+	var event := activity.try_sit(4, 2, 1.2, B)
+	assert_eq(int(event["seat"]), 2)
+	assert_eq(int(event["peer"]), 4)
+	assert_eq(int(activity.seats_state()[2]), 4, "место занято")
+
+
+func test_sit_rejected_if_taken_or_far_or_bad_index() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_seats(8)
+	assert_false(activity.try_sit(4, 2, 1.2, B).is_empty(), "первый садится")
+	assert_true(
+		activity.try_sit(7, 2, 1.2, B).is_empty(),
+		"занято второму отказ",
+	)
+	var limit: float = B.campfire_seat_radius + B.mob_hit_slack
+	# Ровно на границе — допустимо (допуск на пинг), чуть дальше — нет.
+	assert_false(activity.try_sit(7, 3, limit, B).is_empty())
+	assert_true(
+		activity.try_sit(7, 3, limit + 0.01, B).is_empty(),
+		"слишком далеко от лавки",
+	)
+	assert_true(activity.try_sit(7, 8, 1.0, B).is_empty(), "индекс вне мест")
+	assert_true(activity.try_sit(7, -1, 1.0, B).is_empty(), "отрицательный индекс")
+
+
+func test_sit_moves_player_from_old_seat() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_seats(8)
+	activity.try_sit(4, 2, 1.2, B)
+	# Переселение на соседнюю лавку освобождает прежнее место.
+	assert_false(activity.try_sit(4, 5, 1.2, B).is_empty())
+	assert_eq(int(activity.seats_state()[2]), 0, "старое место свободно")
+	assert_eq(int(activity.seats_state()[5]), 4)
+
+
+func test_stand_up_frees_seat() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_seats(8)
+	activity.try_sit(4, 2, 1.2, B)
+	var event := activity.stand_up(4)
+	assert_eq(int(event["seat"]), 2)
+	assert_eq(int(activity.seats_state()[2]), 0)
+	assert_true(activity.stand_up(4).is_empty(), "уже не сидит")
+	# Освободившееся место доступно другому.
+	assert_false(activity.try_sit(7, 2, 1.2, B).is_empty())
+
+
+func test_seat_freed_when_player_leaves_world() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_seats(8)
+	activity.try_sit(4, 2, 1.2, B)
+	activity.try_sit(7, 5, 1.2, B)
+	# Оба в мире — ничего не меняется.
+	var both: Array[Dictionary] = [
+		{"peer": 4, "pos": Vector3.ZERO, "floor": true},
+		{"peer": 7, "pos": Vector3.ZERO, "floor": true},
+	]
+	assert_true(activity.update_seats(both).is_empty(), "оба в мире — сидят")
+	var event := activity.update_seats([{"peer": 7, "pos": Vector3.ZERO, "floor": true}])
+	assert_eq(int(event["seat"]), 2, "вышедший из мира потерял место")
+	assert_eq(int(event["peer"]), 4)
+	assert_eq(int(activity.seats_state()[2]), 0)
+	assert_eq(int(activity.seats_state()[5]), 7, "второй продолжает сидеть")
+
+
+func test_seats_state_reset_on_clear() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_seats(8)
+	activity.try_sit(4, 2, 1.2, B)
+	activity.clear()
+	assert_true(activity.seats_state().is_empty())
+	# После clear места инициализируются заново и свободны.
+	activity.setup_seats(8)
+	assert_false(activity.try_sit(4, 2, 1.2, B).is_empty(), "место свободно после clear")
+	assert_false(activity.stand_up(4).is_empty(), "место снова занято")

@@ -30,6 +30,10 @@ var _events: Array[Dictionary] = []
 ## очки «каждые 30 с», пока пара идёт вместе).
 var _hand_partner: int = 0
 var _hand_seconds: float = 0.0
+## Кто сейчас сидит у костра (раздел 9.6) и сколько секунд сижу с кем-то
+## из них — очки «сидели рядом у костра» каждые 30 с (раздел 13).
+var _seated_peers: Array[int] = []
+var _campfire_seconds: float = 0.0
 
 
 func _ready() -> void:
@@ -39,20 +43,51 @@ func _ready() -> void:
 	EventBus.player_boosted.connect(_on_player_boosted)
 	EventBus.beacons_state.connect(_on_beacons_state)
 	EventBus.hand_link.connect(_on_hand_link)
+	EventBus.campfire_seats.connect(_on_campfire_seats)
 	EventBus.world_entered.connect(reset)
 
 
-## Секунды текущей связи идут в очки каждые hand_held_tick (раздел 13).
+## Секунды вместе идут в очки каждые 30 с (раздел 13: «за руку» и «у костра»).
 const HAND_TICK: float = 30.0
+const CAMPFIRE_TICK: float = 30.0
 
 
 func _process(delta: float) -> void:
-	if _hand_partner == 0:
+	if _hand_partner != 0:
+		_hand_seconds += delta
+		if _hand_seconds >= HAND_TICK:
+			_hand_seconds -= HAND_TICK
+			add_points(_hand_partner, KIND_HAND_HELD, B.pts_hand_held, Session.world_time)
+	var others := _seated_others()
+	if others.is_empty():
+		_campfire_seconds = 0.0
 		return
-	_hand_seconds += delta
-	if _hand_seconds >= HAND_TICK:
-		_hand_seconds -= HAND_TICK
-		add_points(_hand_partner, KIND_HAND_HELD, B.pts_hand_held, Session.world_time)
+	_campfire_seconds += delta
+	if _campfire_seconds >= CAMPFIRE_TICK:
+		_campfire_seconds -= CAMPFIRE_TICK
+		for peer: int in others:
+			add_points(peer, KIND_CAMPFIRE, B.pts_campfire, Session.world_time)
+
+
+## Занятость мест у костра (раздел 9.6): запоминаем сидящих — пока я сижу
+## с кем-то ещё, копим 30-секундные интервалы (раздел 13).
+func _on_campfire_seats(seats: Array) -> void:
+	_seated_peers.clear()
+	for peer: int in seats:
+		if peer != 0:
+			_seated_peers.append(peer)
+	_campfire_seconds = 0.0
+
+
+## Сидящие у костра кроме меня (пусто — очки не копятся).
+func _seated_others() -> Array[int]:
+	if not _seated_peers.has(Net.local_peer_id):
+		return []
+	var others: Array[int] = []
+	for peer: int in _seated_peers:
+		if peer != Net.local_peer_id:
+			others.append(peer)
+	return others
 
 
 ## Связь «за руку» (раздел 9.5): включилась — копим секунды с партнёром,
@@ -146,3 +181,5 @@ func reset() -> void:
 	_events.clear()
 	_hand_partner = 0
 	_hand_seconds = 0.0
+	_seated_peers.clear()
+	_campfire_seconds = 0.0

@@ -16,6 +16,66 @@ var _hand_leader: Dictionary = {}
 var _hand_follower: Dictionary = {}
 
 
+# --- Места у костра (раздел 9.6) ---
+
+## Занятость мест: индекс -> peer сидящего (0 — свободно). Места ставит
+## генератор острова (8 лавок на площади), индекс — порядок имён узлов.
+var _seats: Array[int] = []
+
+
+## Число мест (вызывается каждый тик хоста; повторный вызов с тем же числом
+## ничего не меняет — занятость живёт).
+func setup_seats(count: int) -> void:
+	if _seats.size() == count:
+		return
+	_seats.resize(count)
+	_seats.fill(0)
+
+
+## Сесть на место (раздел 9.6): индекс существует, место свободно,
+## расстояние до лавки в норме (с допуском на пинг — позиции из снапшотов).
+## Один игрок занимает одно место: прежнее место освобождается.
+func try_sit(peer: int, seat_index: int, distance: float, b: Balance) -> Dictionary:
+	if seat_index < 0 or seat_index >= _seats.size():
+		return {}
+	if distance > b.campfire_seat_radius + b.mob_hit_slack:
+		return {}
+	if _seats[seat_index] != 0:
+		return {}  # занято
+	stand_up(peer)
+	_seats[seat_index] = peer
+	return {"seat": seat_index, "peer": peer}
+
+
+## Встать с места (раздел 9.6: любое движение). Возвращает {"seat", "peer"}
+## освободившегося места или {} — игрок не сидел.
+func stand_up(peer: int) -> Dictionary:
+	for i: int in _seats.size():
+		if _seats[i] == peer:
+			_seats[i] = 0
+			return {"seat": i, "peer": peer}
+	return {}
+
+
+## Тик мест (хост, activity_tick): игрок вышел из мира — место свободно
+## (entries — {peer, pos, floor} всех игроков в мире). Одно событие за тик.
+func update_seats(entries: Array[Dictionary]) -> Dictionary:
+	var present := {}
+	for entry: Dictionary in entries:
+		present[int(entry["peer"])] = true
+	for i: int in _seats.size():
+		if _seats[i] != 0 and not present.has(_seats[i]):
+			var peer := _seats[i]
+			_seats[i] = 0
+			return {"seat": i, "peer": peer}
+	return {}
+
+
+## Занятость мест для world_state (раздел 10): массив peer по индексам.
+func seats_state() -> Array[int]:
+	return _seats.duplicate()
+
+
 ## Согласие на связь (раздел 9.5): leader (инициатор, ведёт) берёт за руку
 ## follower (согласился, ведомый). Отклоняется: сам с собой, дальше
 ## hand_link_radius (с допуском на пинг — позиции из снапшотов), уже есть
@@ -420,6 +480,7 @@ func _empty_plates(count: int) -> Array[int]:
 func clear() -> void:
 	_hand_leader.clear()
 	_hand_follower.clear()
+	_seats = []
 	_gate_opened_at = -1.0
 	_gate_wait_started_at = -1.0
 	_plates = []

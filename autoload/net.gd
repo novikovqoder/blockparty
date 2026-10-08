@@ -326,6 +326,7 @@ func rpc_hello(player_name: String, character: int) -> void:
 			"ladders": activity.ladders_state(),
 			"beacons": activity.beacons_state(),
 			"stars_taken": activity.stars_taken_state(),
+			"seats": activity.seats_state(),
 		},
 	}
 	_send(func() -> void: rpc_id(sender, "rpc_world_state", WorldState.pack(state)), false)
@@ -892,6 +893,93 @@ func hand_chain_below(peer_id: int) -> Array[int]:
 	return chain
 
 
+# --- Места у костра (раздел 9.6) ---
+
+## Нажали E у свободной лавки (раздел 9.6): просим хоста подтвердить место.
+func request_sit(seat_index: int) -> void:
+	if is_host():
+		_handle_sit(local_peer_id, seat_index)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_sit", seat_index), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_sit(seat_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_sit(multiplayer.get_remote_sender_id(), seat_index)
+
+
+## Проверка хоста (раздел 9.6): индекс места существует, игрок в радиусе
+## лавки (расстояние по горизонтали и окно высоты). Занятость решает
+## ActivityAuthority; подтверждение — всем одним состоянием.
+func _handle_sit(peer: int, seat_index: int) -> void:
+	var seats := _campfire_seats()
+	if seat_index < 0 or seat_index >= seats.size():
+		return
+	var peer_pos: Vector3 = _peer_position(peer)
+	if peer_pos == _POS_UNKNOWN:
+		return
+	var seat := seats[seat_index]
+	var flat := peer_pos - seat.global_position
+	flat.y = 0.0
+	if flat.length() > B.campfire_seat_radius + B.mob_hit_slack \
+			or absf(peer_pos.y - seat.global_position.y) > B.campfire_use_window:
+		return
+	if activity.try_sit(peer, seat_index, flat.length(), B).is_empty():
+		return
+	Log.info("Игрок %d сел у костра (место %d)" % [peer, seat_index + 1], "Net")
+	_broadcast_seats()
+
+
+## Игрок пошевелился сидя (раздел 9.6: любое движение — встать).
+func request_stand_up() -> void:
+	if is_host():
+		_handle_stand_up(local_peer_id)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_stand_up"), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_stand_up() -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_stand_up(multiplayer.get_remote_sender_id())
+
+
+func _handle_stand_up(peer: int) -> void:
+	if activity.stand_up(peer).is_empty():
+		return
+	_broadcast_seats()
+
+
+## Хост разослал занятость мест (раздел 9.6): узлы молчат у занятых лавок,
+## игроки садятся/встают, костёр видит компанию.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_campfire_seats(seats: Array) -> void:
+	EventBus.campfire_seats.emit(seats)
+
+
+func _broadcast_seats() -> void:
+	var state := activity.seats_state()
+	if is_networked():
+		_send(func() -> void: rpc_campfire_seats.rpc(state), false)
+	else:
+		rpc_campfire_seats(state)
+
+
+## Места у костра в порядке имени узла (Seat1..Seat8 — как benches IslandGen).
+func _campfire_seats() -> Array[CampfireSeat]:
+	var seats: Array[CampfireSeat] = []
+	for node in get_tree().get_nodes_in_group(CampfireSeat.SEAT_GROUP):
+		if node is CampfireSeat:
+			seats.append(node as CampfireSeat)
+	seats.sort_custom(
+		func(a: CampfireSeat, b: CampfireSeat) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
+	)
+	return seats
+
+
 # --- Лестницы смотровых (раздел 9.3) ---
 
 ## Поднявшийся жмёт E у края смотровой (раздел 9.3): просим хост
@@ -1091,6 +1179,15 @@ func _tick_activities() -> void:
 			% [int(hand_event["leader"]), int(hand_event["follower"])], "Net"
 		)
 		_broadcast_hand_link(int(hand_event["leader"]), int(hand_event["follower"]), false)
+	# Места у костра (раздел 9.6): вышедший из мира освобождает лавку.
+	activity.setup_seats(_campfire_seats().size())
+	var seat_event := activity.update_seats(entries)
+	if not seat_event.is_empty():
+		Log.info(
+			"Игрок %d вышел из мира — место %d у костра свободно"
+			% [int(seat_event["peer"]), int(seat_event["seat"]) + 1], "Net"
+		)
+		_broadcast_seats()
 	# Лестницы смотровых (раздел 9.3): считаем один раз за тик, скрытие —
 	# событием всем (узлы убирают лестницу, сброс возможен снова).
 	activity.setup_ladders(_lookout_ladders().size())
@@ -1265,6 +1362,9 @@ func _apply_activities(state: Dictionary) -> void:
 		)
 	for index: int in activities.get("stars_taken", []):
 		EventBus.star_taken.emit(index, 0)
+	var seats: Array = activities.get("seats", [])
+	if not seats.is_empty():
+		EventBus.campfire_seats.emit(seats)
 
 
 ## Ping часов: клиент раз в секунду.

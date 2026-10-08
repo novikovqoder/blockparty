@@ -50,6 +50,7 @@ HUD_HAND_INVITE,"%s хочет взять тебя за руку — F, чтоб
 HINT_PULL,Вытянуть,Pull up
 HINT_LADDER,Сбросить лестницу,Drop the ladder
 HINT_BEACON,Зажечь маяк,Light the beacon
+HINT_SIT,Сесть,Sit
 TOAST_NEED_SECOND,Нужен второй игрок,Need a second player
 TOAST_STARFALL,Звездопад!,Starfall!
 BOARD_BEACONS,Маяки: %d / %d,Beacons: %d / %d
