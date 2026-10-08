@@ -980,6 +980,51 @@ func _campfire_seats() -> Array[CampfireSeat]:
 	return seats
 
 
+# --- Эмоции (раздел 9.7; хост фильтрует по расстоянию) ---
+
+## Показать эмоцию (раздел 9.7: колесо Q или клавиши 1–6): marker — точка
+## маркера «Сюда!» (куда смотрит камера; INF — эмоция без маркера).
+func request_emote(emote: int, marker: Vector3) -> void:
+	if is_host():
+		_handle_emote(local_peer_id, emote, marker)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_emote", emote, marker), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_emote(emote: int, marker: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_emote(multiplayer.get_remote_sender_id(), emote, marker)
+
+
+## Проверка хоста: перезарядка 1 с (ActivityAuthority). Пересылка — только
+## тем, кто рядом: пузырь в emote_bubble_range, «Помогите!» (стрелка на
+## упавшего, раздел 9.1) — в emote_help_range. Хосту событие — сразу себе.
+func _handle_emote(peer: int, emote: int, marker: Vector3) -> void:
+	if activity.try_emote(peer, emote, world_time_sec(), B).is_empty():
+		return
+	EventBus.player_emoted.emit(peer, emote, marker)
+	if not is_networked():
+		return
+	var from_pos: Vector3 = _peer_position(peer)
+	var range_m: float = B.emote_help_range if emote == Protocol.Emote.HELP \
+		else B.emote_bubble_range
+	for peer_id: int in multiplayer.get_peers():
+		if peer_id == peer or not _peer_in_world(peer_id):
+			continue
+		if from_pos != _POS_UNKNOWN and _peer_pos.has(peer_id) \
+				and from_pos.distance_to(_peer_pos[peer_id]) > range_m:
+			continue
+		_send(func() -> void: rpc_id(peer_id, "rpc_emoted", peer, emote, marker), false)
+
+
+## Хост переслал эмоцию (раздел 9.7): пузырь и жест — у игроков рядом.
+@rpc("authority", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_emoted(peer: int, emote: int, marker: Vector3) -> void:
+	EventBus.player_emoted.emit(peer, emote, marker)
+
+
 # --- Лестницы смотровых (раздел 9.3) ---
 
 ## Поднявшийся жмёт E у края смотровой (раздел 9.3): просим хост

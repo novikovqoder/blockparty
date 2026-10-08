@@ -60,6 +60,13 @@ func _ready() -> void:
 	label.outline_size = 12
 	label.visibility_range_end = 40.0
 	add_child(label)
+	# Пузырь эмоций над ником (раздел 9.7) и жест по событию хоста.
+	var bubble := EmoteBubble.new()
+	bubble.name = "EmoteBubble"
+	bubble.position = Vector3(0.0, 2.6, 0.0)
+	bubble.peer_id = peer_id
+	add_child(bubble)
+	EventBus.player_emoted.connect(_on_player_emoted)
 
 	# Голова — плоский бокс на макушке, слой голов (подсадка, раздел 5).
 	var head := AnimatableBody3D.new()
@@ -85,6 +92,12 @@ func apply_snapshot(snap: Dictionary, recv_msec: int) -> void:
 ## Висит ли игрок у края расщелины сейчас (флаг снапшота, раздел 10).
 func is_hanging() -> bool:
 	return (_flags & Protocol.FLAG_HANGING) != 0
+
+
+## Игрок показал эмоцию (раздел 9.7): жест; пузырь рисует EmoteBubble.
+func _on_player_emoted(peer: int, emote: int, _marker: Vector3) -> void:
+	if peer == peer_id:
+		_visual.play_one_shot(Protocol.EMOTE_ANIMS[emote], B.emote_bubble_time)
 
 
 ## Поворот модели из последнего снапшота (следование «за руку», раздел 9.5).

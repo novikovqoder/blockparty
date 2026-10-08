@@ -104,6 +104,19 @@ extends Resource
 ## Скольких сидящих огонь принимает за «компанию» (разгорается), раздел 9.6.
 @export var campfire_company_size: int = 2
 
+@export_group("Эмоции (раздел 9.7)")
+## Пузырь фразы над головой, с.
+@export var emote_bubble_time: float = 2.5
+## Перезарядка между эмоциями, с.
+@export var emote_cooldown: float = 1.0
+## Маркер «Сюда!» и стрелка «Помогите!», с.
+@export var emote_marker_time: float = 5.0
+## «Сюда!» ставит маркер в точку, куда смотрит камера (луч до этой длины), м.
+@export var emote_marker_range: float = 30.0
+## Пузырь виден в этом радиусе, м («Помогите!» дальше — стрелка, раздел 9.1).
+@export var emote_bubble_range: float = 40.0
+@export var emote_help_range: float = 60.0
+
 @export_group("Ворота руин и сундук (разделы 8, 9.2)")
 ## Радиус нажимной плиты: игрок «стоит на плите» в нём по горизонтали, м.
 @export var plate_radius: float = 0.9

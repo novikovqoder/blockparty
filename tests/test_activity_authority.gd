@@ -4,7 +4,8 @@
 # одиночки 60 с у ворот, сброс 10 минут; блок 5 — маяки и Звездопад
 # (раздел 7): пара в окне 3 с, соло-удержание, цикл гашения, звёзды;
 # блок 6 — «за руку» (раздел 9.5): роли, цепочки до 4, разрывы; блок 7 —
-# места у костра (раздел 9.6): занятость, вставание, выход из мира.
+# места у костра (раздел 9.6): занятость, вставание, выход из мира;
+# блок 8 — эмоции (раздел 9.7): перезарядка 1 с.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -582,3 +583,36 @@ func test_seats_state_reset_on_clear() -> void:
 	activity.setup_seats(8)
 	assert_false(activity.try_sit(4, 2, 1.2, B).is_empty(), "место свободно после clear")
 	assert_false(activity.stand_up(4).is_empty(), "место снова занято")
+
+
+# --- Эмоции (раздел 9.7) ---
+
+func test_emote_confirmed_then_cooldown() -> void:
+	var activity := ActivityAuthority.new()
+	var event := activity.try_emote(4, 0, 100.0, B)
+	assert_eq(int(event["emote"]), 0)
+	# Перезарядка 1 с: подряд — отказ, после паузы — снова можно.
+	assert_true(
+		activity.try_emote(4, 1, 100.5, B).is_empty(),
+		"перезарядка не прошла",
+	)
+	var edge: float = 100.0 + B.emote_cooldown
+	assert_false(activity.try_emote(4, 1, edge, B).is_empty())
+	# Кулдаун у каждого свой.
+	assert_false(activity.try_emote(7, 2, 100.5, B).is_empty(), "другой игрок без паузы")
+
+
+func test_emote_rejected_bad_index_and_clear() -> void:
+	var activity := ActivityAuthority.new()
+	assert_true(activity.try_emote(4, -1, 100.0, B).is_empty(), "отрицательный индекс")
+	assert_true(
+		activity.try_emote(4, Protocol.EMOTE_KEYS.size(), 100.0, B).is_empty(),
+		"индекс за пределами колеса",
+	)
+	activity.try_emote(4, 0, 100.0, B)
+	assert_true(activity.try_emote(4, 1, 100.5, B).is_empty(), "кулдаун держится")
+	activity.clear()
+	assert_false(
+		activity.try_emote(4, 1, 100.5, B).is_empty(),
+		"после clear кулдаун сброшен",
+	)

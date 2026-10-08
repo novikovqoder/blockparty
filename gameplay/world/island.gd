@@ -8,6 +8,8 @@
 class_name Island
 extends Node3D
 
+const B: Balance = preload("res://gameplay/balance.tres")
+
 ## Зоны острова: {name: String, center: Vector2, radius: float} — для карты,
 ## названий мест и проверки «внутри зоны» (радиус круга).
 @export var zones: Array[Dictionary] = []
@@ -15,6 +17,42 @@ extends Node3D
 @export var spawn_zones: Dictionary = {}
 ## Граница мира, м (невидимые ограждения по периметру).
 @export var world_bounds: float = 127.5
+
+
+func _ready() -> void:
+	EventBus.player_emoted.connect(_on_player_emoted)
+
+
+## Маркеры эмоций (разделы 9.1, 9.7): «Сюда!» — светящийся столбик в точку,
+## куда смотрела камера отправителя; «Помогите!» — стрелка над самим игроком
+## (видна дальше пузыря). Остальные эмоции — только пузырь над головой.
+func _on_player_emoted(peer: int, emote: int, marker: Vector3) -> void:
+	match emote:
+		Protocol.Emote.HERE:
+			_spawn_marker(marker)
+		Protocol.Emote.HELP:
+			var node := _peer_node(peer)
+			if node != null:
+				_spawn_marker(node.global_position)
+
+
+func _spawn_marker(at: Vector3) -> void:
+	var node := EmoteMarker.new()
+	add_child(node)
+	node.global_position = at
+	node.show_for(B.emote_marker_time)
+
+
+## Узел игрока по peer (свой — группа player, чужие — remote_player).
+func _peer_node(peer: int) -> Node3D:
+	if peer == Net.local_peer_id:
+		var own := get_tree().get_first_node_in_group(Player.GROUP)
+		return own as Node3D
+	for node in get_tree().get_nodes_in_group(RemotePlayer.GROUP):
+		var remote := node as RemotePlayer
+		if remote != null and remote.peer_id == peer:
+			return remote
+	return null
 
 ## Позиция появления в зоне (неизвестная зона — Площадь).
 func spawn_point(zone_name: String) -> Vector3:

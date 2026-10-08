@@ -41,6 +41,11 @@ signal hand_invite(by_peer: int, by_name: String)
 ## (0 — свободно). Один сигнал на все изменения: сел, встал, вышел из мира.
 signal campfire_seats(seats: Array)
 
+## Игрок показал эмоцию (раздел 9.7): peer — кто, emote — индекс из
+## Protocol.Emote, marker — точка маркера «Сюда!» (куда смотрела камера
+## отправителя; INF — эмоция без маркера).
+signal player_emoted(peer: int, emote: int, marker: Vector3)
+
 ## Состояние ворот руин (раздел 9.2): open — открыты, plates — peer на каждой
 ## плите (0 — пусто), openers — кто открыл плитами (пусто при запасном пути),
 ## reward_peers — получившие награду сундука (раздел 8), непусто только

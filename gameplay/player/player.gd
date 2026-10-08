@@ -89,6 +89,12 @@ func _ready() -> void:
 	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.hand_invite.connect(_on_hand_invite)
 	EventBus.campfire_seats.connect(_on_campfire_seats)
+	EventBus.player_emoted.connect(_on_player_emoted)
+	var bubble := EmoteBubble.new()
+	bubble.name = "EmoteBubble"
+	bubble.position = Vector3(0.0, 2.6, 0.0)
+	bubble.peer_id = Net.local_peer_id
+	add_child(bubble)
 	if Session.bot:
 		_bot = BotController.new()
 		_bot.setup(self)
@@ -127,8 +133,6 @@ func _physics_process(delta: float) -> void:
 		_try_step_up(wish)
 	_update_animation(wish)
 	_turn_model(wish, delta)
-	if _wave_pressed():
-		visual.play_one_shot(Protocol.AnimState.WAVE, B.wave_time)
 	if _attack_pressed():
 		_try_attack()
 	if _hand_pressed():
@@ -258,6 +262,15 @@ func _link_speed_multiplier() -> float:
 		var stats := CharacterData.stats(Net.peer_character(peer_id))
 		multiplier = minf(multiplier, B.stat_multipliers[(stats["speed"] as int) - 1])
 	return multiplier
+
+
+# --- Эмоции (раздел 9.7: ввод — колесо Q и клавиши 1–6, EmoteWheel) ---
+
+## Хост подтвердил мою эмоцию (раздел 9.7): жест, пузырь рисует EmoteBubble.
+func _on_player_emoted(peer: int, emote: int, _marker: Vector3) -> void:
+	if peer != Net.local_peer_id:
+		return
+	visual.play_one_shot(Protocol.EMOTE_ANIMS[emote], B.emote_bubble_time)
 
 
 # --- Сидение у костра (раздел 9.6) ---
@@ -451,12 +464,6 @@ func _attack_pressed() -> bool:
 	if _bot != null:
 		return _bot.consume_attack()
 	return Input.is_action_just_pressed("attack")
-
-
-## «Помахать» (клавиша 1, действие emote_1): временная проверка эмоций
-## до П5 (раздел 16); бот не машет.
-func _wave_pressed() -> bool:
-	return _bot == null and Input.is_action_just_pressed("emote_1")
 
 
 ## F — «взять за руку / отпустить» (раздел 9.5); бот за руку не берётся.

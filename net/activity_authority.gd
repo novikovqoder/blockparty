@@ -23,6 +23,24 @@ var _hand_follower: Dictionary = {}
 var _seats: Array[int] = []
 
 
+# --- Эмоции (раздел 9.7) ---
+
+## Когда игрок последний раз показывал эмоцию (кулдаун emote_cooldown).
+var _emote_at: Dictionary = {}
+
+
+## Показать эмоцию (раздел 9.7): не чаще emote_cooldown. Возвращает
+## {"peer", "emote"} или {} — перезарядка ещё не прошла.
+func try_emote(peer: int, emote: int, world_time: float, b: Balance) -> Dictionary:
+	if emote < 0 or emote >= Protocol.EMOTE_KEYS.size():
+		return {}
+	var last: float = float(_emote_at.get(peer, -1e9))
+	if world_time - last < b.emote_cooldown:
+		return {}
+	_emote_at[peer] = world_time
+	return {"peer": peer, "emote": emote}
+
+
 ## Число мест (вызывается каждый тик хоста; повторный вызов с тем же числом
 ## ничего не меняет — занятость живёт).
 func setup_seats(count: int) -> void:
@@ -481,6 +499,7 @@ func clear() -> void:
 	_hand_leader.clear()
 	_hand_follower.clear()
 	_seats = []
+	_emote_at.clear()
 	_gate_opened_at = -1.0
 	_gate_wait_started_at = -1.0
 	_plates = []

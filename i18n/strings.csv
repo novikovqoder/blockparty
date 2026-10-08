@@ -51,6 +51,12 @@ HINT_PULL,Вытянуть,Pull up
 HINT_LADDER,Сбросить лестницу,Drop the ladder
 HINT_BEACON,Зажечь маяк,Light the beacon
 HINT_SIT,Сесть,Sit
+EMOTE_HELLO,Привет!,Hello!
+EMOTE_THANKS,Спасибо!,Thanks!
+EMOTE_HERE,Сюда!,Over here!
+EMOTE_WAIT,Подожди!,Wait!
+EMOTE_HAHA,Ха-ха,Ha-ha
+EMOTE_HELP,Помогите!,Help!
 TOAST_NEED_SECOND,Нужен второй игрок,Need a second player
 TOAST_STARFALL,Звездопад!,Starfall!
 BOARD_BEACONS,Маяки: %d / %d,Beacons: %d / %d
