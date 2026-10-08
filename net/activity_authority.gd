@@ -333,14 +333,19 @@ var _firefly_pair: Dictionary = {}
 ## игроков в пределах firefly_window. Первый удар открывает окно
 ## ({"weakened": peer, "until": t}), удар другого в окне убивает
 ## ({"killed": [первый, второй], "respawn_at": t}); тот же игрок снова —
-## окно обновляется без события, за окном — новое окно.
+## окно обновляется без события, за окном — новое окно. Запасной путь
+## одиночки (раздел 9.4): когда игрок в мире один (solo), удар сразу убивает.
 func try_firefly_hit(
 	spawn_id: int,
 	peer: int,
 	world_time: float,
 	respawn_sec: float,
 	b: Balance,
+	solo: bool = false,
 ) -> Dictionary:
+	if solo:
+		_firefly_pair.erase(spawn_id)
+		return {"killed": [peer], "respawn_at": world_time + respawn_sec}
 	var pair: Dictionary = _firefly_pair.get(spawn_id, {})
 	if not pair.is_empty() and world_time - float(pair["at"]) <= b.firefly_window:
 		if int(pair["peer"]) != peer:

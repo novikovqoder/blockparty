@@ -5,7 +5,8 @@
 # (раздел 7): пара в окне 3 с, соло-удержание, цикл гашения, звёзды;
 # блок 6 — «за руку» (раздел 9.5): роли, цепочки до 4, разрывы; блок 7 —
 # места у костра (раздел 9.6): занятость, вставание, выход из мира;
-# блок 8 — эмоции (раздел 9.7): перезарядка 1 с.
+# блок 8 — эмоции (раздел 9.7): перезарядка 1 с; блок 9 — запасной путь
+# одиночки у светлячка (раздел 9.4).
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -273,6 +274,16 @@ func test_firefly_state_reset_on_clear() -> void:
 	# После сброса первый удар — снова окно, не убийство.
 	var event := activity.try_firefly_hit(13, 7, 100.5, B.firefly_respawn_sec, B)
 	assert_eq(int(event["weakened"]), 7)
+
+
+func test_firefly_solo_killed_by_single_hit() -> void:
+	var activity := ActivityAuthority.new()
+	# Запасной путь одиночки (раздел 9.4): игрок в мире один — один удар убивает.
+	var kill := activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B, true)
+	var killers: Array = kill["killed"]
+	assert_eq(killers.size(), 1, "соло-удар убивает без пары")
+	assert_eq(int(killers[0]), 4)
+	assert_almost_eq(float(kill["respawn_at"]), 100.0 + B.firefly_respawn_sec, EPS)
 
 
 # --- Маяки и Звездопад (раздел 7) ---

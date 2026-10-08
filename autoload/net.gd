@@ -563,7 +563,8 @@ func _handle_mob_hit(killer_peer: int, spawn_id: int, client_world_time: float) 
 ## Удар по золотому светлячку (раздел 8): дистанцию и перезарядку проверяет
 ## authority.hit_allowed, пару ударов — activity.try_firefly_hit. Первый
 ## удар открывает окно (событие ослабления), второй от другого игрока
-## в окне убивает: 8 монет каждому из двоих.
+## в окне убивает: 8 монет каждому из двоих. Одиночка в мире (раздел 9.4,
+## запасной путь) убивает светлячка одним ударом.
 func _handle_firefly_hit(
 	killer_peer: int, mob: GoldenFirefly, world_time: float, killer_pos: Vector3
 ) -> void:
@@ -572,7 +573,8 @@ func _handle_firefly_hit(
 	):
 		return
 	var event := activity.try_firefly_hit(
-		mob.spawn_id, killer_peer, world_time, mob.respawn_sec(), B
+		mob.spawn_id, killer_peer, world_time, mob.respawn_sec(), B,
+		in_world_count() <= 1,
 	)
 	if event.is_empty():
 		return
@@ -581,9 +583,13 @@ func _handle_firefly_hit(
 		var respawn_at: float = float(event["respawn_at"])
 		authority.mark_mob_dead(mob.spawn_id, respawn_at)
 		Log.info(
-			"Светлячок %d убит парой (%d и %d), по %d монет, возрождение %.0f с"
-			% [mob.spawn_id, int(killers[0]), int(killers[1]), B.firefly_reward,
-				respawn_at - world_time], "Net"
+			"Светлячок %d убит (%s), по %d монет, возрождение %.0f с"
+			% [
+				mob.spawn_id,
+				", ".join(killers.map(func(p: int) -> String: return str(p))),
+				B.firefly_reward,
+				respawn_at - world_time,
+			], "Net"
 		)
 		_broadcast_mob_killed(mob.spawn_id, killers, B.firefly_reward, respawn_at)
 		return
