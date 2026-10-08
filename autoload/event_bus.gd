@@ -39,6 +39,19 @@ signal ruins_state(open: bool, plates: Array, openers: Array, reward_peers: Arra
 ## active — висит ли, expires_at — время скрытия по world_time (−1 — не висит).
 signal ladder_state(index: int, active: bool, expires_at: float)
 
+## Состояние маяков (раздел 7): lit — индексы горящих, lighters — зажёгшие
+## последний (для очков и монет; пусто при восстановлении из world_state),
+## starfall_started_at — старт идущего Звездопада (−1 — не идёт).
+signal beacons_state(lit: Array, lighters: Array, starfall_started_at: float)
+
+## Хост подтвердил подбор звезды Звездопада (раздел 7): index — какая,
+## collector_peer — кому монета (0 — восстановление из world_state).
+signal star_taken(index: int, collector_peer: int)
+
+## Показать короткое сообщение поверх HUD: ключ i18n («Нужен второй
+## игрок» — попытка зажечь маяк в одиночку, раздел 7).
+signal toast_requested(key: String)
+
 # --- Взаимодействие E (раздел 9; П5) ---
 
 ## Подсказка у интерактивного объекта: ключ i18n действия («E — сесть»);

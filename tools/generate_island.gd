@@ -25,8 +25,11 @@ const GATE_SCRIPT: String = "res://gameplay/activities/ruin_gate.gd"
 const PLATE_SCRIPT: String = "res://gameplay/activities/ruin_plate.gd"
 const CHEST_SCRIPT: String = "res://gameplay/activities/ruin_chest.gd"
 const LADDER_SCRIPT: String = "res://gameplay/activities/lookout_ladder.gd"
+const BEACON_SCRIPT: String = "res://gameplay/activities/beacon.gd"
+const BOARD_SCRIPT: String = "res://gameplay/activities/beacon_board.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
+const STARFALL_SCRIPT: String = "res://gameplay/world/starfall.gd"
 const COIN_SCRIPT: String = "res://gameplay/world/coin_pickup.gd"
 const BIRD_SCRIPT: String = "res://gameplay/mobs/bird.gd"
 const CRITTER_SCRIPT: String = "res://gameplay/mobs/critter.gd"
@@ -145,6 +148,22 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Island:
 		ladder.name = "LookoutLadder%d" % (i + 1)
 		ladder.position = (data["poi"]["lookouts"] as Array)[i]["center"]
 		root.add_child(ladder)
+	# Маяки мирового события (раздел 7): узлы у башен-предметов «beacon»,
+	# порядок имён Beacon1..5 — как _beacons у IslandGen. Доска прогресса —
+	# на площади, Звездопад — менеджер звёзд.
+	for i: int in (data["beacons"] as Array).size():
+		var beacon: Node3D = load(BEACON_SCRIPT).new()
+		beacon.name = "Beacon%d" % (i + 1)
+		beacon.position = (data["beacons"] as Array)[i]
+		root.add_child(beacon)
+	var board: Label3D = load(BOARD_SCRIPT).new()
+	board.name = "BeaconBoard"
+	board.position = (data["poi"]["campfire"] as Dictionary)["board"] \
+		+ Vector3(0.0, 0.0, 0.05)
+	root.add_child(board)
+	var starfall: Node3D = load(STARFALL_SCRIPT).new()
+	starfall.name = "Starfall"
+	root.add_child(starfall)
 	var stones: Array = data["stones"]
 	for i: int in stones.size():
 		var stone: Node3D = load(STONE_SCRIPT).new()

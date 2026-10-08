@@ -77,3 +77,15 @@ func test_boost_scores_both_sides() -> void:
 	EventBus.player_boosted.emit(1, 5)  # пятый спрыгнул с моей головы
 	assert_almost_eq(Interactions.score(5), B.pts_boost, 0.001)
 	assert_almost_eq(Interactions.score(4), 0.0, 0.001)
+
+
+func test_beacon_pair_scores_both_lighters() -> void:
+	# Раздел 13: вместе зажгли маяк — очки каждому из пары; соло-зажигание
+	# (запасной путь) и чужие пары очков не дают.
+	Interactions.reset()
+	EventBus.beacons_state.emit([0, 1], [1, 7], -1.0)  # мы с 7-м зажгли
+	assert_almost_eq(Interactions.score(7), B.pts_beacon_lit, 0.001)
+	EventBus.beacons_state.emit([2], [7, 9], -1.0)  # чужая пара без меня
+	assert_almost_eq(Interactions.score(9), 0.0, 0.001)
+	EventBus.beacons_state.emit([3], [1], -1.0)  # я один (соло-путь)
+	assert_almost_eq(Interactions.score(1), 0.0, 0.001)

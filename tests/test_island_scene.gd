@@ -60,6 +60,9 @@ func test_scene_contents() -> void:
 	var fireflies := 0
 	var water := 0
 	var markers := 0
+	var beacons := 0
+	var starfall := 0
+	var board := 0
 	for child: Node in island.get_children():
 		if child is CoinPickup:
 			coins += 1
@@ -74,6 +77,12 @@ func test_scene_contents() -> void:
 			water += 1
 		elif child is HangArea:
 			markers = (child as HangArea).point_positions().size()
+		elif child is Beacon:
+			beacons += 1
+		elif child is Starfall:
+			starfall += 1
+		elif child is BeaconBoard:
+			board += 1
 	assert_eq(coins, B.static_coins, "ровно 60 статичных монет")
 	assert_eq(coin_ids.size(), coins, "spawn_id монет уникальны")
 	assert_eq(birds, 8, "птиц")
@@ -81,6 +90,14 @@ func test_scene_contents() -> void:
 	assert_eq(fireflies, 3, "светлячков")
 	assert_eq(water, 2, "море и озеро")
 	assert_gt(markers, 0, "в расщелине есть HangPoint")
+	assert_eq(beacons, 5, "пять маяков (раздел 7)")
+	assert_eq(starfall, 1, "менеджер Звездопада")
+	assert_eq(board, 1, "доска прогресса маяков")
+	assert_eq(
+		(island.get_node("BeaconBoard") as BeaconBoard).text,
+		tr("BOARD_BEACONS") % [0, 5],
+		"доска показывает 0 / 5",
+	)
 	assert_eq(island.zones.size(), 6, "шесть зон")
 	assert_eq(
 		island.spawn_zones.size(), 6,

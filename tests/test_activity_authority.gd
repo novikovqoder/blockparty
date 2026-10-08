@@ -1,8 +1,9 @@
 # Обязательные тесты раздела 18 (П5): чистая логика хоста активностей.
 # Блок 1 — вытягивание из расщелины (раздел 9.1); блок 2 — ворота руин,
 # плиты и сундук (разделы 8, 9.2): N = min(3, игроков) ≥ 2, запасной путь
-# одиночки 60 с у ворот, сброс 10 минут. Блоки 5+ (маяки, костёр, «за
-# руку») добавятся здесь же.
+# одиночки 60 с у ворот, сброс 10 минут; блок 5 — маяки и Звездопад
+# (раздел 7): пара в окне 3 с, соло-удержание, цикл гашения, звёзды.
+# Костёр и «за руку» (блоки 6–7) добавятся здесь же.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -270,3 +271,134 @@ func test_firefly_state_reset_on_clear() -> void:
 	# После сброса первый удар — снова окно, не убийство.
 	var event := activity.try_firefly_hit(13, 7, 100.5, B.firefly_respawn_sec, B)
 	assert_eq(int(event["weakened"]), 7)
+
+
+# --- Маяки и Звездопад (раздел 7) ---
+
+
+## Первый E при двух+ игроках окна не зажигает — ждём второго.
+func test_beacon_first_press_opens_window() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	assert_true(
+		activity.try_beacon_light(2, 4, 100.0, 2, B).is_empty(),
+		"один игрок маяк не зажигает",
+	)
+
+
+func test_beacon_pair_lights_within_window() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	activity.try_beacon_light(2, 4, 100.0, 2, B)
+	var event := activity.try_beacon_light(2, 7, 100.0 + B.beacon_pair_window - 0.5, 2, B)
+	var lighters: Array = event["lighters"]
+	assert_eq(lighters.size(), 2)
+	assert_true(lighters.has(4) and lighters.has(7))
+	assert_false(event.has("starfall_started_at"), "не последний маяк — без Звездопада")
+
+
+func test_beacon_same_player_twice_does_not_light() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	activity.try_beacon_light(2, 4, 100.0, 2, B)
+	assert_true(
+		activity.try_beacon_light(2, 4, 101.0, 2, B).is_empty(),
+		"тот же игрок — окно лишь продлевается",
+	)
+
+
+func test_beacon_window_expires() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	activity.try_beacon_light(2, 4, 100.0, 2, B)
+	# Поздний E другого игрока открывает новое окно вместо зажигания.
+	var late: float = 100.0 + B.beacon_pair_window + 0.5
+	assert_true(activity.try_beacon_light(2, 7, late, 2, B).is_empty())
+	var event := activity.try_beacon_light(
+		2, 4, late + B.beacon_pair_window - 0.1, 2, B
+	)
+	assert_eq((event["lighters"] as Array).size(), 2, "пара в новом окне зажигает")
+
+
+func test_beacon_solo_lights_immediately() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	# Запасной путь (раздел 7): один игрок в мире, E удержано 8 с.
+	var event := activity.try_beacon_light(1, 9, 200.0, 1, B)
+	assert_eq(int(event["lighters"][0]), 9)
+	# Горящий маяк повторно не зажечь.
+	assert_true(activity.try_beacon_light(1, 9, 201.0, 1, B).is_empty())
+	assert_true(activity.try_beacon_light(1, 8, 201.0, 2, B).is_empty())
+
+
+func test_starfall_starts_on_fifth_beacon() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	for i: int in 4:
+		assert_false(
+			activity.try_beacon_light(i, 20 + i, 300.0, 1, B).has("starfall_started_at"),
+			"маяк %d — не последний" % i,
+		)
+	var event := activity.try_beacon_light(4, 4, 400.0, 2, B)
+	assert_true(event.is_empty(), "первый из пары — окно")
+	event = activity.try_beacon_light(4, 7, 401.0, 2, B)
+	assert_almost_eq(float(event["starfall_started_at"]), 401.0, EPS)
+	var state := activity.beacons_state()
+	assert_eq((state["lit"] as Array).size(), 5, "все пять горят")
+	assert_almost_eq(float(state["starfall_started_at"]), 401.0, EPS)
+
+
+func test_starfall_ends_then_beacons_reset_cycle_repeats() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	for i: int in 5:
+		activity.try_beacon_light(i, 20 + i, 100.0, 1, B)
+	assert_true(activity.update_beacons(100.0 + B.starfall_duration - 0.1, B).is_empty())
+	# Конец Звездопада — один раз; маяки ещё горят.
+	assert_true(activity.update_beacons(100.0 + B.starfall_duration, B).has("starfall_ended"))
+	assert_true(activity.update_beacons(100.0 + B.starfall_duration + 1.0, B).is_empty())
+	# Гашение — через beacon_reset_sec после конца.
+	var reset_at: float = 100.0 + B.starfall_duration + B.beacon_reset_sec
+	assert_true(activity.update_beacons(reset_at - 0.1, B).is_empty())
+	assert_true(activity.update_beacons(reset_at, B).has("beacons_reset"))
+	var state := activity.beacons_state()
+	assert_eq((state["lit"] as Array).size(), 0, "все погасли")
+	assert_almost_eq(float(state["starfall_started_at"]), -1.0, EPS)
+	# Цикл заново: маяк снова зажигается.
+	assert_eq(
+		int(activity.try_beacon_light(0, 30, reset_at + 5.0, 1, B)["lighters"][0]), 30
+	)
+
+
+func test_star_first_take_wins() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	assert_true(
+		activity.try_take_star(3, 7, 50.0, B).is_empty(),
+		"до Звездопада звёзд нет",
+	)
+	for i: int in 5:
+		activity.try_beacon_light(i, 20 + i, 100.0, 1, B)
+	var event := activity.try_take_star(3, 7, 101.0, B)
+	assert_eq(int(event["collector"]), 7)
+	assert_true(
+		activity.try_take_star(3, 8, 102.0, B).is_empty(),
+		"вторая попытка на ту же звезду отклонена",
+	)
+	# Упавшая до конца звезда доживает star_lifetime — окно сбора.
+	var edge: float = 100.0 + B.starfall_duration + B.star_lifetime
+	assert_false(activity.try_take_star(4, 8, edge - 0.1, B).is_empty())
+	assert_true(activity.try_take_star(5, 8, edge + 0.1, B).is_empty())
+	assert_eq(activity.stars_taken_state().size(), 2)
+
+
+func test_beacons_state_reset_on_clear() -> void:
+	var activity := ActivityAuthority.new()
+	activity.setup_beacons(5)
+	for i: int in 5:
+		activity.try_beacon_light(i, 20 + i, 100.0, 1, B)
+	activity.clear()
+	assert_eq((activity.beacons_state()["lit"] as Array).size(), 0)
+	assert_eq(activity.stars_taken_state().size(), 0)
+	activity.setup_beacons(5)
+	assert_false(activity.try_beacon_light(0, 9, 100.0, 1, B).is_empty())

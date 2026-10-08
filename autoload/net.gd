@@ -319,6 +319,8 @@ func rpc_hello(player_name: String, character: int) -> void:
 		"activities": {
 			"ruins": activity.ruins_state(),
 			"ladders": activity.ladders_state(),
+			"beacons": activity.beacons_state(),
+			"stars_taken": activity.stars_taken_state(),
 		},
 	}
 	_send(func() -> void: rpc_id(sender, "rpc_world_state", WorldState.pack(state)), false)
@@ -814,6 +816,118 @@ func _broadcast_ladder(index: int, active: bool, expires_at: float) -> void:
 		rpc_ladder(index, active, expires_at)
 
 
+# --- Маяки и Звездопад (раздел 7) ---
+
+## Нажатие E у маяка (раздел 7): пара зажигает в пределах 3 с, одиночке
+## (один в мире) хватает удержания 8 с — клиент уже держал E.
+func request_beacon_light(index: int) -> void:
+	if is_host():
+		_handle_beacon_light(local_peer_id, index)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_beacon_light", index), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_beacon_light(index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_beacon_light(multiplayer.get_remote_sender_id(), index)
+
+
+## Проверка хоста (раздел 7): просящий стоит у этого маяка (радиус узла
+## и окно высоты). Зажигание — событие всем; очки и монеты — на клиентах.
+func _handle_beacon_light(peer: int, index: int) -> void:
+	var beacons := _beacon_nodes()
+	if index < 0 or index >= beacons.size():
+		return
+	var peer_pos: Vector3 = _peer_position(peer)
+	var beacon := beacons[index]
+	if peer_pos != _POS_UNKNOWN:
+		var flat := peer_pos - beacon.global_position
+		flat.y = 0.0
+		var near := flat.length() <= beacon.use_radius + B.mob_hit_slack \
+			and absf(peer_pos.y - beacon.global_position.y) <= B.beacon_use_window
+		if not near:
+			return
+	var event := activity.try_beacon_light(index, peer, world_time_sec(), in_world_count(), B)
+	if event.is_empty():
+		return
+	var lighters: Array[int] = event["lighters"]
+	Log.info(
+		"Маяк %d зажжён (peer %s)%s"
+		% [
+			index + 1,
+			", ".join(lighters.map(func(p: int) -> String: return str(p))),
+			" — Звездопад!" if event.has("starfall_started_at") else "",
+		],
+		"Net",
+	)
+	_broadcast_beacons(lighters, float(event.get("starfall_started_at", -1.0)))
+
+
+## Хост разослал состояние маяков (раздел 7): узлы рисуют лучи, доска —
+## прогресс, монеты и очки — зажёгшим последний (Interactions).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_beacons(lit: Array, lighters: Array, starfall_started_at: float) -> void:
+	EventBus.beacons_state.emit(lit, lighters, starfall_started_at)
+	if starfall_started_at >= 0.0:
+		EventBus.toast_requested.emit("TOAST_STARFALL")
+	if lighters.has(local_peer_id):
+		Session.add_world_coins(B.beacon_reward)
+
+
+func _broadcast_beacons(lighters: Array, starfall_started_at: float) -> void:
+	var state := activity.beacons_state()
+	if starfall_started_at >= 0.0:
+		state["starfall_started_at"] = starfall_started_at
+	var lit: Array = state["lit"]
+	if is_networked():
+		_send(
+			func() -> void: rpc_beacons.rpc(lit, lighters, float(state["starfall_started_at"])),
+			false,
+		)
+	else:
+		rpc_beacons(lit, lighters, float(state["starfall_started_at"]))
+
+
+## Касание звезды Звездопада (раздел 7): «кто первый» — решает хост.
+func request_star_collect(index: int) -> void:
+	if is_host():
+		_handle_star_collect(local_peer_id, index)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_collect_star", index), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_collect_star(index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_star_collect(multiplayer.get_remote_sender_id(), index)
+
+
+func _handle_star_collect(peer: int, index: int) -> void:
+	var event := activity.try_take_star(index, peer, world_time_sec(), B)
+	if event.is_empty():
+		return
+	Log.info("Звезда %d подобрана (peer %d)" % [index, peer], "Net")
+	_broadcast_star_taken(index, peer)
+
+
+## Хост подтвердил подбор звезды: звезда исчезает у всех, монета — собравшему.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_star_taken(index: int, collector_peer: int) -> void:
+	EventBus.star_taken.emit(index, collector_peer)
+	if collector_peer == local_peer_id:
+		Session.add_world_coins(B.star_reward)
+
+
+func _broadcast_star_taken(index: int, collector_peer: int) -> void:
+	if is_networked():
+		_send(func() -> void: rpc_star_taken.rpc(index, collector_peer), false)
+	else:
+		rpc_star_taken(index, collector_peer)
+
+
 # --- Тик активностей хоста (раздел 9: плиты и зоны по снапшотам) ---
 
 ## Периодическая проверка активностей хостом: кто стоит на плитах руин,
@@ -844,6 +958,16 @@ func _tick_activities() -> void:
 	if not ladder_event.is_empty():
 		Log.info("Лестница смотровой %d скрылась (60 с истекли)" % [int(ladder_event["index"]) + 1], "Net")
 		_broadcast_ladder(int(ladder_event["index"]), false, -1.0)
+	# Цикл маяков (раздел 7): конец Звездопада и гашение через 15 минут —
+	# маяки тухнут всем, цикл можно начинать снова.
+	activity.setup_beacons(_beacon_nodes().size())
+	var beacon_event := activity.update_beacons(world_time_sec(), B)
+	if not beacon_event.is_empty():
+		if beacon_event.has("starfall_ended"):
+			Log.info("Звездопад закончился (маяки погаснут через %d с)" % int(B.beacon_reset_sec), "Net")
+		else:
+			Log.info("Маяки погасли (15 минут после Звездопада) — цикл заново", "Net")
+			_broadcast_beacons([], -1.0)
 
 
 ## Событие ворот руин от authority: лог, награда сундука в момент открытия
@@ -938,6 +1062,18 @@ func _lookout_ladders() -> Array[LookoutLadder]:
 	return ladders
 
 
+## Маяки в порядке имени узла (Beacon1..5 — как _beacons у IslandGen).
+func _beacon_nodes() -> Array[Beacon]:
+	var beacons: Array[Beacon] = []
+	for node in get_tree().get_nodes_in_group(Beacon.BEACON_GROUP):
+		if node is Beacon:
+			beacons.append(node as Beacon)
+	beacons.sort_custom(
+		func(a: Beacon, b: Beacon) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
+	)
+	return beacons
+
+
 func _first_node(group: StringName) -> Node3D:
 	for node in get_tree().get_nodes_in_group(group):
 		if node is Node3D:
@@ -982,6 +1118,13 @@ func _apply_activities(state: Dictionary) -> void:
 		EventBus.ladder_state.emit(
 			int(ladder.get("index", -1)), true, float(ladder.get("until", -1.0))
 		)
+	var beacons: Dictionary = activities.get("beacons", {})
+	if not beacons.is_empty():
+		EventBus.beacons_state.emit(
+			beacons.get("lit", []), [], float(beacons.get("starfall_started_at", -1.0))
+		)
+	for index: int in activities.get("stars_taken", []):
+		EventBus.star_taken.emit(index, 0)
 
 
 ## Ping часов: клиент раз в секунду.

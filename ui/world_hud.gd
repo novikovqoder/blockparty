@@ -34,6 +34,7 @@ func _ready() -> void:
 	EventBus.peer_left.connect(_on_peer_left)
 	EventBus.interaction_hint.connect(_on_interaction_hint)
 	EventBus.interaction_progress.connect(_on_interaction_progress)
+	EventBus.toast_requested.connect(_on_toast_requested)
 
 
 func _process(delta: float) -> void:
@@ -148,6 +149,12 @@ func _on_interaction_progress(fraction: float) -> void:
 		return
 	_hint_hold.value = fraction
 	_hint_hold.show()
+
+
+## Короткое сообщение от механик («Нужен второй игрок», раздел 7) —
+## ключ i18n, как у подсказок.
+func _on_toast_requested(key: String) -> void:
+	_show_toast(tr(key))
 
 
 ## Показать название зоны (ключ ZONE_<ИМЯ>); пустая зона прячет подсказку.

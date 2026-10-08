@@ -188,6 +188,130 @@ func try_firefly_hit(
 	return {"weakened": peer, "until": world_time + b.firefly_window}
 
 
+# --- Маяки и Звездопад (раздел 7) ---
+
+## Момент зажигания каждого маяка по часам мира (−1 — не горит).
+var _beacons: Array[float] = []
+## Первый E по незажжённому маяку: index -> {peer, at} — окно
+## beacon_pair_window, в которое E второго игрока зажигает маяк.
+var _beacon_press: Dictionary = {}
+## Старт текущего Звездопада по часам мира (−1 — не идёт и не был).
+var _starfall_started_at: float = -1.0
+## Звездопад уже закончился (событие отправлено; звёзды доживают и
+## собираются до старта + duration + lifetime).
+var _starfall_ended: bool = false
+## Когда маяки гаснут после Звездопада (конец + beacon_reset_sec; −1 — нет).
+var _beacons_reset_at: float = -1.0
+## Подобранные звёзды текущего Звездопада: index -> peer.
+var _stars_taken: Dictionary = {}
+
+
+## Число маяков (сколько на острове) — вызывает хост при старте мира;
+## пустой массив до этого игнорирует любые индексы.
+func setup_beacons(count: int) -> void:
+	if _beacons.size() == count:
+		return
+	_beacons = []
+	for i: int in count:
+		_beacons.append(-1.0)
+
+
+## Нажатие E у маяка (раздел 7): зажигается от двух РАЗНЫХ игроков
+## в пределах beacon_pair_window; при одном игроке в мире — сразу
+## (клиент уже удержал beacon_solo_hold). Возвращает {"lighters": [int]}
+## при зажигании (и "starfall_started_at" — если этим зажжён последний),
+## {} — иначе. Повторное зажигание горящего игнорируется.
+func try_beacon_light(
+	index: int, peer: int, world_time: float, player_count: int, b: Balance
+) -> Dictionary:
+	if index < 0 or index >= _beacons.size() or _beacons[index] >= 0.0:
+		return {}
+	# Запасной путь при малом онлайне: одиночка удержал E — зажигаем.
+	if player_count <= 1:
+		return _light_beacon(index, [peer], world_time, b)
+	var press: Dictionary = _beacon_press.get(index, {})
+	if not press.is_empty() and world_time - float(press["at"]) <= b.beacon_pair_window:
+		if int(press["peer"]) == peer:
+			_beacon_press[index] = {"peer": peer, "at": world_time}
+			return {}
+		_beacon_press.erase(index)
+		return _light_beacon(index, [int(press["peer"]), peer], world_time, b)
+	_beacon_press[index] = {"peer": peer, "at": world_time}
+	return {}
+
+
+## Тик цикла (раздел 7): конец Звездопада (новые звёзды не рождаются,
+## упавшие доживают star_lifetime), затем гашение маяков через
+## beacon_reset_sec после конца — цикл начинается снова.
+## Возвращает {"starfall_ended": true} / {"beacons_reset": true} / {}.
+func update_beacons(world_time: float, b: Balance) -> Dictionary:
+	if _starfall_started_at >= 0.0 and not _starfall_ended \
+			and world_time >= _starfall_started_at + b.starfall_duration:
+		_starfall_ended = true
+		return {"starfall_ended": true}
+	if _beacons_reset_at >= 0.0 and world_time >= _beacons_reset_at:
+		var count := _beacons.size()
+		_beacons = []
+		for i: int in count:
+			_beacons.append(-1.0)
+		_beacon_press.clear()
+		_stars_taken.clear()
+		_starfall_started_at = -1.0
+		_starfall_ended = false
+		_beacons_reset_at = -1.0
+		return {"beacons_reset": true}
+	return {}
+
+
+## Подбор звезды Звездопада (раздел 7): только пока звезда жива (окно
+## сбора — star_lifetime после конца), каждая — одному игроку («кто
+## первый»), до следующего цикла.
+func try_take_star(index: int, peer: int, world_time: float, b: Balance) -> Dictionary:
+	if _starfall_started_at < 0.0 or world_time \
+			>= _starfall_started_at + b.starfall_duration + b.star_lifetime:
+		return {}
+	if _stars_taken.has(index):
+		return {}
+	_stars_taken[index] = peer
+	return {"index": index, "collector": peer}
+
+
+## Состояние маяков для world_state (раздел 10: вошедший в любой момент
+## видит горящие маяки и идущий Звездопад).
+func beacons_state() -> Dictionary:
+	var lit: Array[int] = []
+	for i: int in _beacons.size():
+		if _beacons[i] >= 0.0:
+			lit.append(i)
+	return {"lit": lit, "starfall_started_at": _starfall_started_at}
+
+
+## Подобранные звёзды для world_state: индексы (без игрока — награды уже
+## выданы, поздно вошедшему монеты не начисляются).
+func stars_taken_state() -> Array[int]:
+	var taken: Array[int] = []
+	for index: int in _stars_taken:
+		taken.append(index)
+	return taken
+
+
+## Зажечь маяк; последним — старт Звездопада (раздел 7).
+func _light_beacon(
+	index: int, lighters: Array[int], world_time: float, b: Balance
+) -> Dictionary:
+	_beacons[index] = world_time
+	var event := {"lighters": lighters}
+	for lit_at: float in _beacons:
+		if lit_at < 0.0:
+			return event
+	_starfall_started_at = world_time
+	_starfall_ended = false
+	_beacons_reset_at = world_time + b.starfall_duration + b.beacon_reset_sec
+	_stars_taken.clear()
+	event["starfall_started_at"] = world_time
+	return event
+
+
 func _distinct_peers(plate_peers: Array[int]) -> Array[int]:
 	var peers: Array[int] = []
 	for peer: int in plate_peers:
@@ -210,3 +334,9 @@ func clear() -> void:
 	_plates = []
 	_ladders = []
 	_firefly_pair.clear()
+	_beacons = []
+	_beacon_press.clear()
+	_starfall_started_at = -1.0
+	_starfall_ended = false
+	_beacons_reset_at = -1.0
+	_stars_taken.clear()

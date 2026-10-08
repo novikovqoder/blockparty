@@ -33,6 +33,7 @@ func _ready() -> void:
 	EventBus.ruins_state.connect(_on_ruins_state)
 	EventBus.mob_killed.connect(_on_mob_killed)
 	EventBus.player_boosted.connect(_on_player_boosted)
+	EventBus.beacons_state.connect(_on_beacons_state)
 	EventBus.world_entered.connect(reset)
 
 
@@ -72,6 +73,16 @@ func _on_player_boosted(base_peer: int, jumper_peer: int) -> void:
 		add_points(base_peer, KIND_BOOST_GOT, B.pts_boost, Session.world_time)
 	if base_peer == Net.local_peer_id:
 		add_points(jumper_peer, KIND_BOOST_GAVE, B.pts_boost, Session.world_time)
+
+
+## Маяк зажжён парой (раздел 7): очки каждому участнику за другого.
+## Соло-зажигание (запасной путь) lighters из одного — очков не даёт.
+func _on_beacons_state(_lit: Array, lighters: Array, _starfall_started_at: float) -> void:
+	if not lighters.has(Net.local_peer_id) or lighters.size() < 2:
+		return
+	for lighter: int in lighters:
+		if lighter != Net.local_peer_id:
+			add_points(lighter, KIND_BEACON_LIT, B.pts_beacon_lit, Session.world_time)
 
 
 ## Записать событие взаимодействия с другим игроком (at_world_time — с).
