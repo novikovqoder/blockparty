@@ -179,6 +179,11 @@ extends Resource
 ## Монет за птицу / зверька (по одному удару).
 @export var bird_reward: int = 1
 @export var critter_reward: int = 1
+## Золотой светлячок «на двоих» (раздел 8): окно между ударами двух
+## разных игроков, с.
+@export var firefly_window: float = 3.0
+## Монет каждому из двоих, убивших светлячка.
+@export var firefly_reward: int = 8
 
 @export_group("Монеты острова (раздел 8)")
 ## Статичных монет на острове (SPEC: ровно 60 — тест).

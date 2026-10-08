@@ -43,6 +43,8 @@ var _hang_left: float = 0.0
 var _in_water: bool = false
 var _water_level: float = 0.0
 var _head_below: bool = false
+## Чью голову нашли под ногами (meta узла HeadTop; 0 — своя/чужая без meta).
+var _head_peer: int = 0
 ## Ближайший интерактивный объект (подсказка HUD, удержание E; П5).
 var _interactable: Interactable = null
 ## Накопленное удержание E у объекта с hold_time > 0, с.
@@ -272,8 +274,11 @@ func _update_jump(delta: float) -> void:
 		var speed := B.jump_speed
 		if is_on_floor() and _head_below:
 			# Прыжок с головы другого игрока усилен (раздел 5); Сила прыгуна
-			# добавляет чуть больше высоты (раздел 17, П5).
+			# добавляет чуть больше высоты (раздел 17, П5). Факт подсадки —
+			# хост рассылает всем для очков «Встреч» (раздел 13).
 			speed = JumpMath.boosted_jump_speed(B) * strength_head_boost()
+			if _head_peer != 0:
+				Net.request_boost(_head_peer)
 		# Множитель высоты прыжка персонажа: v = √(2·g·h) — скорость из корня.
 		velocity.y = speed * sqrt(_jump_height_multiplier)
 		_jump_buffer = 0.0
@@ -307,6 +312,7 @@ func _try_step_up(wish: Vector3) -> void:
 ## под ногами (чуть больше шага кадра при максимальной скорости падения).
 func _update_head_collision() -> void:
 	_head_below = false
+	_head_peer = 0
 	var allow := false
 	if velocity.y <= 0.0:
 		var from := global_position + Vector3.UP * 0.6
@@ -318,6 +324,10 @@ func _update_head_collision() -> void:
 			var feet_y: float = global_position.y
 			allow = HeadStand.can_stand(feet_y, head_top_y, velocity.y, B.head_stand_epsilon)
 			_head_below = allow and feet_y - head_top_y < HEAD_BELOW_EPS
+			if _head_below:
+				# Чья это голова (RemotePlayer пишет peer_id в meta) — событие
+				# подсадки для «Встреч» (раздел 13).
+				_head_peer = int((hit["collider"] as Node).get_meta("peer_id", 0))
 	set_collision_mask_value(HeadStand.LAYER_HEAD, allow)
 
 

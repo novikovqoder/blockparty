@@ -103,3 +103,35 @@ func test_clear_resets_world() -> void:
 	authority.clear()
 	assert_eq(authority.dead_mobs.size(), 0)
 	assert_eq(authority.taken_coins.size(), 0)
+
+
+func test_hit_allowed_checks_and_records_cooldown() -> void:
+	# Раздел 8, П5: общая проверка удара — дистанция, перезарядка, жив ли —
+	# используется и светлячком «на двоих» (пара — ActivityAuthority).
+	var authority := HostAuthority.new()
+	var mob_pos := Vector3.ZERO
+	var near := Vector3(0.0, 0.0, 1.0)
+	assert_true(authority.hit_allowed(13, 4, 100.0, mob_pos, near, B))
+	assert_false(
+		authority.hit_allowed(13, 4, 100.05, mob_pos, near, B),
+		"перезарядка того же игрока ещё не прошла",
+	)
+	assert_true(
+		authority.hit_allowed(13, 7, 100.05, mob_pos, near, B),
+		"у другого игрока своя перезарядка",
+	)
+	assert_false(
+		authority.hit_allowed(13, 7, 101.0, mob_pos, Vector3(0, 0, 30), B),
+		"далеко — отказ",
+	)
+
+
+func test_mark_mob_dead_feeds_world_state() -> void:
+	# Светлячок умирает парой ударов без try_kill_mob — расписание ведёт
+	# mark_mob_dead (в world_state попадает одинаково).
+	var authority := HostAuthority.new()
+	authority.mark_mob_dead(13, 400.0)
+	assert_false(authority.is_mob_alive(13, 350.0))
+	assert_true(authority.is_mob_alive(13, 400.0))
+	var dead: Array = authority.dead_mob_entries()
+	assert_eq(int(dead[0]["spawn_id"]), 13)

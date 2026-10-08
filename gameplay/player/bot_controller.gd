@@ -109,7 +109,7 @@ func _nearest_mob() -> Mob:
 	var best_distance: float = B.bot_attack_radius
 	for node: Node in get_tree().get_nodes_in_group(Mob.GROUP):
 		var mob := node as Mob
-		if mob == null or not mob.is_alive() or not mob.is_killable():
+		if mob == null or not mob.is_alive():
 			continue
 		var distance: float = mob.global_position.distance_to(_player.global_position)
 		if distance < best_distance:

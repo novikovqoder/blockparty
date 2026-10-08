@@ -140,3 +140,28 @@ func test_pulled_up_returns_to_edge() -> void:
 	# Повторное подтверждение (поздний пакет) — не телепортирует.
 	player.pulled_up()
 	assert_almost_eq(player.global_position.x, edge.x, EPS)
+
+
+## Сила помощника ускоряет вытягивание (раздел 17): удержание E делится
+## на множитель Силы — сильный тянет быстрее, но вытянуть может любой.
+func test_pull_hold_time_scales_with_strength() -> void:
+	var point := HangPoint.new()
+	add_child_autofree(point)
+	var player := PLAYER.instantiate() as Player
+	add_child(player)
+	await get_tree().physics_frame
+	var seen: Array[int] = []
+	for character: int in CharacterModel.count():
+		player.apply_stats(character)
+		var strength: int = player.strength()
+		assert_between(strength, 1, 5)
+		assert_almost_eq(
+			point.hold_time(player),
+			B.pull_hold_time / B.strength_multipliers[strength - 1],
+			0.001,
+			"удержание идёт множителем Силы персонажа %d" % character,
+		)
+		if not seen.has(strength):
+			seen.append(strength)
+	assert_gt(seen.size(), 1, "персонажи различаются по Силе — тест содержателен")
+	player.queue_free()

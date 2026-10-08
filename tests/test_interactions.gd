@@ -52,3 +52,28 @@ func test_top_peers_sorted_by_score() -> void:
 	assert_eq(top.size(), 2)
 	assert_eq(top[0], 3, "10 очков выше 7")
 	assert_eq(top[1], 2)
+
+
+func test_firefly_pair_scores_both_killers() -> void:
+	# Раздел 13: вместе поймали золотого светлячка — очки каждому из двоих.
+	Interactions.reset()
+	# Локальный игрок — peer 1, напарник — 7: убили вдвоём.
+	EventBus.mob_killed.emit(13, [1, 7], 500.0)
+	assert_almost_eq(Interactions.score(7), B.pts_firefly, 0.001)
+	# Чужая пара без меня очков не даёт.
+	EventBus.mob_killed.emit(14, [8, 9], 600.0)
+	assert_almost_eq(Interactions.score(9), 0.0, 0.001)
+	# Одинокий убийца (птица) — тоже не «вместе».
+	EventBus.mob_killed.emit(15, [1], 700.0)
+	assert_almost_eq(Interactions.score(1), 0.0, 0.001)
+
+
+func test_boost_scores_both_sides() -> void:
+	# Раздел 13: base подсадил jumper — «он подсадил меня» прыгнувшему,
+	# «я подсадил его» базе.
+	Interactions.reset()
+	EventBus.player_boosted.emit(7, 1)  # я (1) спрыгнул с головы 7-го
+	assert_almost_eq(Interactions.score(7), B.pts_boost, 0.001)
+	EventBus.player_boosted.emit(1, 5)  # пятый спрыгнул с моей головы
+	assert_almost_eq(Interactions.score(5), B.pts_boost, 0.001)
+	assert_almost_eq(Interactions.score(4), 0.0, 0.001)

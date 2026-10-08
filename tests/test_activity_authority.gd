@@ -216,3 +216,57 @@ func test_ladder_state_roundtrip_and_clear() -> void:
 	activity.clear()
 	activity.setup_ladders(3)
 	assert_eq(activity.ladders_state().size(), 0)
+
+
+# --- Золотой светлячок «на двоих» (раздел 8) ---
+
+
+func test_firefly_first_hit_opens_window() -> void:
+	var activity := ActivityAuthority.new()
+	var event := activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
+	assert_eq(int(event["weakened"]), 4)
+	assert_almost_eq(float(event["until"]), 100.0 + B.firefly_window, EPS)
+
+
+func test_firefly_killed_by_two_different_players() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
+	var event := activity.try_firefly_hit(13, 7, 102.5, B.firefly_respawn_sec, B)
+	var killers: Array = event["killed"]
+	assert_eq(killers.size(), 2)
+	assert_true(killers.has(4) and killers.has(7), "оба участника в награде")
+	assert_almost_eq(
+		float(event["respawn_at"]), 102.5 + B.firefly_respawn_sec, EPS
+	)
+
+
+func test_firefly_same_player_twice_does_not_kill() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
+	assert_true(
+		activity.try_firefly_hit(13, 4, 102.0, B.firefly_respawn_sec, B).is_empty(),
+		"тот же игрок — окна мало",
+	)
+
+
+func test_firefly_window_expires() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
+	# За пределами окна удар другого игрока не убивает — открывает новое окно.
+	var second_at: float = 100.0 + B.firefly_window + 0.5
+	var late := activity.try_firefly_hit(13, 7, second_at, B.firefly_respawn_sec, B)
+	assert_eq(int(late["weakened"]), 7, "новое окно вместо убийства")
+	# Теперь первый успевает в окно — пара убивает.
+	var pair := activity.try_firefly_hit(
+		13, 4, second_at + B.firefly_window - 0.1, B.firefly_respawn_sec, B
+	)
+	assert_eq((pair["killed"] as Array).size(), 2)
+
+
+func test_firefly_state_reset_on_clear() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
+	activity.clear()
+	# После сброса первый удар — снова окно, не убийство.
+	var event := activity.try_firefly_hit(13, 7, 100.5, B.firefly_respawn_sec, B)
+	assert_eq(int(event["weakened"]), 7)

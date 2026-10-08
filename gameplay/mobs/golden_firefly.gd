@@ -1,7 +1,8 @@
 # Золотой светлячок (раздел 8 SPEC): парит в чаще леса с мягкими вспышками.
-# Уязвим только когда рядом двое игроков (раздел 8) — кооп-механика П5,
-# поэтому take_hit здесь ничего не делает. Возрождение 300 с наступит в П5.
-# Модель (раздел 16): светящаяся сфера с роем частиц и glow (Environment).
+# Уязвим только от ударов двух разных игроков в пределах 3 с — окно и пару
+# решает хост (ActivityAuthority.try_firefly_hit, П5), узел мигает ярче,
+# пока окно открыто. Возрождение — 300 с. Модель (раздел 16): светящаяся
+# сфера с роем частиц и glow (Environment).
 class_name GoldenFirefly
 extends Mob
 
@@ -10,11 +11,27 @@ extends Mob
 var _core: MeshInstance3D
 var _core_material: StandardMaterial3D
 var _light: OmniLight3D
+## Конец окна уязвимости по world_time (после первого удара, ≤ 0 — закрыто).
+var _weaken_until: float = -1.0
+
+
+func _ready() -> void:
+	super()
+	EventBus.firefly_weakened.connect(_on_firefly_weakened)
+
+
+func _on_firefly_weakened(weakened_id: int, _peer: int, until: float) -> void:
+	if weakened_id == spawn_id:
+		_weaken_until = until
 
 
 func _apply_motion(world_time: float) -> void:
 	position = MobMotion.firefly_position(motion, world_time)
 	var glow: float = MobMotion.firefly_glow(motion, world_time)
+	# Окно уязвимости: светлячок вспыхивает — второй игрок видит, что
+	# добивающий удар сейчас засчитается (раздел 8).
+	if world_time < _weaken_until:
+		glow = maxf(glow, 0.9)
 	if _light != null:
 		_light.light_energy = 0.15 + 0.5 * glow
 	if _core_material != null:
@@ -25,8 +42,12 @@ func position_at(world_time: float) -> Vector3:
 	return MobMotion.firefly_position(motion, world_time)
 
 
-func is_killable() -> bool:
-	return false
+func reward() -> int:
+	return B.firefly_reward
+
+
+func respawn_sec() -> float:
+	return B.firefly_respawn_sec
 
 
 func hitbox_size() -> Vector3:

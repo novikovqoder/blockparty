@@ -155,6 +155,39 @@ func ladders_state() -> Array[Dictionary]:
 	return state
 
 
+# --- Золотой светлячок «на двоих» (раздел 8) ---
+
+## Первый удар по светлячку: spawn_id -> {peer, at} — окно firefly_window,
+## в которое удар второго игрока убивает.
+var _firefly_pair: Dictionary = {}
+
+
+## Удар по светлячку (раздел 8): уязвим только от ударов двух РАЗНЫХ
+## игроков в пределах firefly_window. Первый удар открывает окно
+## ({"weakened": peer, "until": t}), удар другого в окне убивает
+## ({"killed": [первый, второй], "respawn_at": t}); тот же игрок снова —
+## окно обновляется без события, за окном — новое окно.
+func try_firefly_hit(
+	spawn_id: int,
+	peer: int,
+	world_time: float,
+	respawn_sec: float,
+	b: Balance,
+) -> Dictionary:
+	var pair: Dictionary = _firefly_pair.get(spawn_id, {})
+	if not pair.is_empty() and world_time - float(pair["at"]) <= b.firefly_window:
+		if int(pair["peer"]) != peer:
+			_firefly_pair.erase(spawn_id)
+			return {
+				"killed": [int(pair["peer"]), peer],
+				"respawn_at": world_time + respawn_sec,
+			}
+		_firefly_pair[spawn_id] = {"peer": peer, "at": world_time}
+		return {}
+	_firefly_pair[spawn_id] = {"peer": peer, "at": world_time}
+	return {"weakened": peer, "until": world_time + b.firefly_window}
+
+
 func _distinct_peers(plate_peers: Array[int]) -> Array[int]:
 	var peers: Array[int] = []
 	for peer: int in plate_peers:
@@ -176,3 +209,4 @@ func clear() -> void:
 	_gate_wait_started_at = -1.0
 	_plates = []
 	_ladders = []
+	_firefly_pair.clear()

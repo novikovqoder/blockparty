@@ -52,9 +52,15 @@ signal interaction_progress(fraction: float)
 ## Хост подтвердил подбор монеты: spawn_id — какая, collector_peer — кому
 ## монеты, respawn_at — время возрождения по world_time.
 signal coin_collected(spawn_id: int, collector_peer: int, respawn_at: float)
-## Хост подтвердил убийство моба: killer_peer — кому награда, respawn_at —
-## время возрождения по world_time (клиенты оживляют моба сами).
-signal mob_killed(spawn_id: int, killer_peer: int, respawn_at: float)
+## Хост подтвердил убийство моба: killers — кому награда (светлячка убивают
+## двое), respawn_at — время возрождения по world_time (клиенты оживляют
+## моба сами).
+signal mob_killed(spawn_id: int, killers: Array, respawn_at: float)
+## Хост разослал ослабление светлячка (раздел 8): peer ударил первым,
+## until — конец окна уязвимости по world_time.
+signal firefly_weakened(spawn_id: int, peer: int, until: float)
+## Хост разослал факт подсадки (раздел 13): jumper прыгнул с головы base.
+signal player_boosted(base_peer: int, jumper_peer: int)
 ## Хост прислал полное состояние мира (вход в идущий мир, раздел 10):
 ## dead_mobs и taken_coins — массивы {spawn_id, respawn_at}.
 signal world_state_applied(dead_mobs: Array, taken_coins: Array)

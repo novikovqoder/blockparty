@@ -531,11 +531,13 @@ func _handle_mob_hit(killer_peer: int, spawn_id: int, client_world_time: float) 
 	if mob == null:
 		Log.warn("Удар по неизвестному мобу %d отклонён" % spawn_id, "Net")
 		return
-	if not mob.is_killable():
-		return  # светлячок «на двоих» — П5
 	var killer_pos: Vector3 = _peer_position(killer_peer)
 	if killer_pos == _POS_UNKNOWN:
 		Log.warn("Удар по мобу %d отклонён: нет позиции игрока %d" % [spawn_id, killer_peer], "Net")
+		return
+	# Светлячок «на двоих» (раздел 8): окно двух разных игроков — отдельно.
+	if mob is GoldenFirefly:
+		_handle_firefly_hit(killer_peer, mob as GoldenFirefly, client_world_time, killer_pos)
 		return
 	var event := authority.try_kill_mob(
 		spawn_id, killer_peer, client_world_time,
@@ -547,15 +549,49 @@ func _handle_mob_hit(killer_peer: int, spawn_id: int, client_world_time: float) 
 		"Моб %d убит игроком %d, возрождение %.0f с"
 		% [spawn_id, killer_peer, float(event["respawn_at"]) - client_world_time], "Net"
 	)
-	_broadcast_mob_killed(spawn_id, killer_peer, mob.reward(), float(event["respawn_at"]))
+	_broadcast_mob_killed(spawn_id, [killer_peer], mob.reward(), float(event["respawn_at"]))
 
 
-## Хост подтвердил убийство моба всем (раздел 8): killers/coins расширятся
-## на светлячка на П5.
+## Удар по золотому светлячку (раздел 8): дистанцию и перезарядку проверяет
+## authority.hit_allowed, пару ударов — activity.try_firefly_hit. Первый
+## удар открывает окно (событие ослабления), второй от другого игрока
+## в окне убивает: 8 монет каждому из двоих.
+func _handle_firefly_hit(
+	killer_peer: int, mob: GoldenFirefly, world_time: float, killer_pos: Vector3
+) -> void:
+	if not authority.hit_allowed(
+		mob.spawn_id, killer_peer, world_time, mob.position_at(world_time), killer_pos, B
+	):
+		return
+	var event := activity.try_firefly_hit(
+		mob.spawn_id, killer_peer, world_time, mob.respawn_sec(), B
+	)
+	if event.is_empty():
+		return
+	if event.has("killed"):
+		var killers: Array = event["killed"]
+		var respawn_at: float = float(event["respawn_at"])
+		authority.mark_mob_dead(mob.spawn_id, respawn_at)
+		Log.info(
+			"Светлячок %d убит парой (%d и %d), по %d монет, возрождение %.0f с"
+			% [mob.spawn_id, int(killers[0]), int(killers[1]), B.firefly_reward,
+				respawn_at - world_time], "Net"
+		)
+		_broadcast_mob_killed(mob.spawn_id, killers, B.firefly_reward, respawn_at)
+		return
+	Log.info(
+		"Светлячок %d ослаблен игроком %d на %.0f с" % [mob.spawn_id, killer_peer, B.firefly_window],
+		"Net",
+	)
+	_broadcast_firefly_weakened(mob.spawn_id, int(event["weakened"]), float(event["until"]))
+
+
+## Хост подтвердил убийство моба всем (раздел 8): killers — кому награда
+## (светлячка убивают двое), монеты — каждому из списка.
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_mob_killed(spawn_id: int, killer_peer: int, coins: int, respawn_at: float) -> void:
-	EventBus.mob_killed.emit(spawn_id, killer_peer, respawn_at)
-	if killer_peer == local_peer_id:
+func rpc_mob_killed(spawn_id: int, killers: Array, coins: int, respawn_at: float) -> void:
+	EventBus.mob_killed.emit(spawn_id, killers, respawn_at)
+	if killers.has(local_peer_id):
 		Session.add_world_coins(coins)
 
 
@@ -591,13 +627,62 @@ func rpc_coin_taken(spawn_id: int, collector_peer: int, coins: int, respawn_at: 
 		Session.add_world_coins(coins)
 
 
-func _broadcast_mob_killed(spawn_id: int, killer_peer: int, coins: int, respawn_at: float) -> void:
+func _broadcast_mob_killed(spawn_id: int, killers: Array, coins: int, respawn_at: float) -> void:
 	if is_networked():
 		_send(
-			func() -> void: rpc_mob_killed.rpc(spawn_id, killer_peer, coins, respawn_at), false
+			func() -> void: rpc_mob_killed.rpc(spawn_id, killers, coins, respawn_at), false
 		)
 	else:
-		rpc_mob_killed(spawn_id, killer_peer, coins, respawn_at)
+		rpc_mob_killed(spawn_id, killers, coins, respawn_at)
+
+
+## Хост разослал ослабление светлячка (раздел 8): узел мигает ярче,
+## второй игрок видит, что окно открыто.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_firefly_weakened(spawn_id: int, peer: int, until: float) -> void:
+	EventBus.firefly_weakened.emit(spawn_id, peer, until)
+
+
+func _broadcast_firefly_weakened(spawn_id: int, peer: int, until: float) -> void:
+	if is_networked():
+		_send(func() -> void: rpc_firefly_weakened.rpc(spawn_id, peer, until), false)
+	else:
+		rpc_firefly_weakened(spawn_id, peer, until)
+
+
+# --- Подсадка на голову: событие для «Встреч» (разделы 5, 13) ---
+
+## Прыжок с головы другого игрока (раздел 5): прыгнувший клиент сообщает
+## хосту, с чьей головы прыгнул (meta узла HeadTop) — хост рассылает факт
+## всем, очки «подсадил меня / я подсадил его» считает каждый клиент
+## (Interactions, раздел 13). Хост проверяет только, что оба в мире.
+func request_boost(base_peer: int) -> void:
+	if is_host():
+		_broadcast_boosted(local_peer_id, base_peer)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_boost", base_peer), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_boost(base_peer: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_broadcast_boosted(multiplayer.get_remote_sender_id(), base_peer)
+
+
+func _broadcast_boosted(jumper_peer: int, base_peer: int) -> void:
+	if base_peer == jumper_peer or not _peer_in_world(jumper_peer) or not _peer_in_world(base_peer):
+		return
+	if is_networked():
+		_send(func() -> void: rpc_boosted.rpc(jumper_peer, base_peer), false)
+	else:
+		rpc_boosted(jumper_peer, base_peer)
+
+
+## Хост разослал факт подсадки (раздел 13): jumper прыгнул с головы base.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_boosted(jumper_peer: int, base_peer: int) -> void:
+	EventBus.player_boosted.emit(base_peer, jumper_peer)
 
 
 func _broadcast_coin_taken(spawn_id: int, collector_peer: int, coins: int, respawn_at: float) -> void:

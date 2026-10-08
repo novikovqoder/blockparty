@@ -31,6 +31,8 @@ var _events: Array[Dictionary] = []
 func _ready() -> void:
 	EventBus.player_pulled.connect(_on_player_pulled)
 	EventBus.ruins_state.connect(_on_ruins_state)
+	EventBus.mob_killed.connect(_on_mob_killed)
+	EventBus.player_boosted.connect(_on_player_boosted)
 	EventBus.world_entered.connect(reset)
 
 
@@ -51,6 +53,25 @@ func _on_ruins_state(open: bool, _plates: Array, openers: Array, _reward: Array)
 	for opener: int in openers:
 		if opener != Net.local_peer_id:
 			add_points(opener, KIND_GATE_OPEN, B.pts_gate_open, Session.world_time)
+
+
+## Золотой светлячок убит парой (раздел 8): каждому из двоих — очки друг
+## за друга (список killers длиннее одного только у светлячка).
+func _on_mob_killed(_spawn_id: int, killers: Array, _respawn_at: float) -> void:
+	if not killers.has(Net.local_peer_id) or killers.size() < 2:
+		return
+	for killer: int in killers:
+		if killer != Net.local_peer_id:
+			add_points(killer, KIND_FIREFLY, B.pts_firefly, Session.world_time)
+
+
+## Подсадка на голову (разделы 5, 13): base подсадил jumper — очки
+## «я подсадил его» базе и «он подсадил меня» прыгнувшему.
+func _on_player_boosted(base_peer: int, jumper_peer: int) -> void:
+	if jumper_peer == Net.local_peer_id:
+		add_points(base_peer, KIND_BOOST_GOT, B.pts_boost, Session.world_time)
+	if base_peer == Net.local_peer_id:
+		add_points(jumper_peer, KIND_BOOST_GAVE, B.pts_boost, Session.world_time)
 
 
 ## Записать событие взаимодействия с другим игроком (at_world_time — с).

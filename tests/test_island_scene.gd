@@ -177,7 +177,7 @@ func test_player_attack_kills_bird() -> void:
 	var coins_before: int = Session.world_coins
 	var killed: Array[int] = []
 	EventBus.mob_killed.connect(
-		func(id: int, _killer: int, _respawn: float) -> void: killed.append(id),
+		func(id: int, _killers: Array, _respawn: float) -> void: killed.append(id),
 		CONNECT_ONE_SHOT,
 	)
 	player._try_attack()

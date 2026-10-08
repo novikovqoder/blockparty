@@ -19,6 +19,34 @@ var taken_coins: Dictionary = {}
 var _last_hits: Dictionary = {}
 
 
+## Общая проверка удара по мобу (раздел 8): моб жив, перезарядка убийцы
+## прошла, дистанция в норме (с допуском на пинг). Прошедший удар
+## записывается в перезарядку. Используют одиночные мобы (try_kill_mob)
+## и светлячок «на двоих» (П5, раздел 8).
+func hit_allowed(
+	spawn_id: int,
+	killer_peer: int,
+	world_time: float,
+	mob_pos: Vector3,
+	killer_pos: Vector3,
+	b: Balance,
+) -> bool:
+	if dead_mobs.has(spawn_id):
+		return false
+	if world_time - float(_last_hits.get(killer_peer, -1.0e9)) < b.attack_cooldown:
+		return false
+	if mob_pos.distance_to(killer_pos) > b.mob_hit_distance + b.mob_hit_slack:
+		return false
+	_last_hits[killer_peer] = world_time
+	return true
+
+
+## Записать смерть моба без проверок удара (светлячок умирает парой
+## ударов — ActivityAuthority, а расписание возрождения ведёт хост).
+func mark_mob_dead(spawn_id: int, respawn_at: float) -> void:
+	dead_mobs[spawn_id] = respawn_at
+
+
 ## Попытка убийства моба (раздел 8: хост проверяет дистанцию до 2.5 м
 ## с допуском на пинг, перезарядку и что моб жив). Возвращает словарь
 ## события {spawn_id, respawn_at} или пустой словарь, если отказано.
@@ -34,14 +62,8 @@ func try_kill_mob(
 	respawn_sec: float,
 	b: Balance,
 ) -> Dictionary:
-	if dead_mobs.has(spawn_id):
+	if not hit_allowed(spawn_id, killer_peer, world_time, mob_pos, killer_pos, b):
 		return {}
-	if world_time - float(_last_hits.get(killer_peer, -1.0e9)) < b.attack_cooldown:
-		return {}
-	var allowed: float = b.mob_hit_distance + b.mob_hit_slack
-	if mob_pos.distance_to(killer_pos) > allowed:
-		return {}
-	_last_hits[killer_peer] = world_time
 	var respawn_at: float = world_time + respawn_sec
 	dead_mobs[spawn_id] = respawn_at
 	return {"spawn_id": spawn_id, "respawn_at": respawn_at}

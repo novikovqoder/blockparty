@@ -64,14 +64,15 @@ func position_at(_world_time: float) -> Vector3:
 	return global_position
 
 
-## Удар игрока (раздел 8: попадание видит клиент, убийство решает хост).
+## Удар игрока (раздел 8: попадание видит клиент, убийство решает хост —
+## светлячка добивает только второй игрок в окне, хост это знает).
 func take_hit() -> void:
-	if is_alive() and is_killable():
+	if is_alive():
 		Net.request_mob_hit(spawn_id, Net.world_time_sec())
 
 
 ## Хост подтвердил убийство (раздел 10): прячем до respawn_at.
-func _on_mob_killed(killed_id: int, _killer_peer: int, respawn_at: float) -> void:
+func _on_mob_killed(killed_id: int, _killers: Array, respawn_at: float) -> void:
 	if killed_id != spawn_id:
 		return
 	_respawn_at = respawn_at
@@ -90,11 +91,6 @@ func _on_world_state(dead_mobs: Array, _taken_coins: Array) -> void:
 func _revive() -> void:
 	_respawn_at = -1.0
 	show()
-
-
-## Светлячок неуязвим в одиночку (нужны два игрока рядом — раздел 8, П5).
-func is_killable() -> bool:
-	return true
 
 
 ## Цвет «пуфа» частиц при смерти (переопределяют подвиды).
