@@ -8,6 +8,95 @@
 class_name ActivityAuthority
 extends RefCounted
 
+# --- «За руку» (раздел 9.5) ---
+
+## Активные связи: follower -> leader и leader -> follower. У каждого игрока
+## не больше одной роли каждого вида — цепочки до hand_chain_max человек.
+var _hand_leader: Dictionary = {}
+var _hand_follower: Dictionary = {}
+
+
+## Согласие на связь (раздел 9.5): leader (инициатор, ведёт) берёт за руку
+## follower (согласился, ведомый). Отклоняется: сам с собой, дальше
+## hand_link_radius (с допуском на пинг — позиции из снапшотов), уже есть
+## такая роль, цепочка длиннее hand_chain_max. Движение — забота клиента
+## ведомого, хост рассылает только факт связи.
+func try_hand_link(
+	leader: int,
+	follower: int,
+	distance: float,
+	b: Balance,
+) -> Dictionary:
+	if leader == follower or _hand_leader.has(follower) or _hand_follower.has(leader):
+		return {}
+	if distance > b.hand_link_radius + b.mob_hit_slack:
+		return {}
+	if _chain_length(leader, follower) > b.hand_chain_max:
+		return {}
+	_hand_leader[follower] = leader
+	_hand_follower[leader] = follower
+	return {"leader": leader, "follower": follower}
+
+
+## Разрыв по F (раздел 9.5): отпустить может любой из двоих. Возвращает
+## {"leader", "follower"} оборванной связи или {} — связи с игроком нет.
+func try_hand_release(peer: int) -> Dictionary:
+	if _hand_leader.has(peer):
+		var leader := int(_hand_leader[peer])
+		_hand_leader.erase(peer)
+		_hand_follower.erase(leader)
+		return {"leader": leader, "follower": peer}
+	if _hand_follower.has(peer):
+		var follower := int(_hand_follower[peer])
+		_hand_follower.erase(peer)
+		_hand_leader.erase(follower)
+		return {"leader": peer, "follower": follower}
+	return {}
+
+
+## Тик связей (хост, activity_tick): разрыв при расстоянии больше
+## hand_break_distance (с допуском на пинг) и когда кто-то из пары вышел
+## из мира (entries — {peer, pos, floor} всех игроков в мире). Возвращает
+## первое оборвавшееся событие {"leader", "follower"} или {} — по одному
+## за тик, как у лестниц.
+func update_hand_links(entries: Array[Dictionary], b: Balance) -> Dictionary:
+	var positions := {}
+	for entry: Dictionary in entries:
+		positions[int(entry["peer"])] = entry["pos"]
+	for follower: int in _hand_leader.keys():
+		var leader := int(_hand_leader[follower])
+		if not positions.has(leader) or not positions.has(follower):
+			return try_hand_release(follower)
+		if (positions[leader] as Vector3).distance_to(
+				positions[follower] as Vector3) > b.hand_break_distance + b.mob_hit_slack:
+			return try_hand_release(follower)
+	return {}
+
+
+## Сколько людей окажется в цепочке с новой связью leader → follower:
+## сама пара плюс предки ведущего (кто ведёт его) и потомки ведомого
+## (кого ведёт он).
+func _chain_length(leader: int, follower: int) -> int:
+	var count := 2
+	var up := leader
+	while _hand_leader.has(up) and count < Protocol.MAX_PLAYERS_HARD:
+		up = int(_hand_leader[up])
+		count += 1
+	var down := follower
+	while _hand_follower.has(down) and count < Protocol.MAX_PLAYERS_HARD:
+		down = int(_hand_follower[down])
+		count += 1
+	return count
+
+
+## Активные связи для world_state (раздел 10): [{leader, follower}].
+func hand_links_state() -> Array[Dictionary]:
+	var links: Array[Dictionary] = []
+	for follower: int in _hand_leader:
+		links.append({"leader": int(_hand_leader[follower]), "follower": follower})
+	return links
+
+
 # --- Вытягивание из расщелины (раздел 9.1) ---
 
 ## Проверка вытягивания из расщелины (раздел 9.1): helper удержал E у точки,
@@ -329,6 +418,8 @@ func _empty_plates(count: int) -> Array[int]:
 
 ## Полный сброс (новый мир): вызывается вместе с authority.clear().
 func clear() -> void:
+	_hand_leader.clear()
+	_hand_follower.clear()
 	_gate_opened_at = -1.0
 	_gate_wait_started_at = -1.0
 	_plates = []

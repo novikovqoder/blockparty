@@ -77,6 +77,22 @@ extends Resource
 ## подсадки» (раздел 17), чем сильнее прыгающий, тем выше подъём.
 @export var strength_head_boost: PackedFloat32Array = [0.95, 0.975, 1.0, 1.03, 1.06]
 
+@export_group("За руку (раздел 9.5)")
+## Радиус, в котором F берёт ближайшего игрока за руку, м.
+@export var hand_link_radius: float = 2.0
+## Сколько секунд у приглашённого действует подсказка «F — принять», с.
+@export var hand_invite_time: float = 5.0
+## Связь рвётся сама при большем расстоянии между парой, м.
+@export var hand_break_distance: float = 4.0
+## Ведомый держится на этом расстоянии позади-сбоку ведущего, м.
+@export var hand_follow_distance: float = 1.0
+## Жёсткость следования ведомого (скорость = отклонение × жёсткость).
+@export var hand_follow_gain: float = 10.0
+## Предел скорости следования ведомого, м/с.
+@export var hand_follow_speed: float = 7.0
+## Максимум людей в цепочке («C держит B, B держит A», раздел 9.5).
+@export var hand_chain_max: int = 4
+
 @export_group("Ворота руин и сундук (разделы 8, 9.2)")
 ## Радиус нажимной плиты: игрок «стоит на плите» в нём по горизонтали, м.
 @export var plate_radius: float = 0.9

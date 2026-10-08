@@ -2,8 +2,9 @@
 # Блок 1 — вытягивание из расщелины (раздел 9.1); блок 2 — ворота руин,
 # плиты и сундук (разделы 8, 9.2): N = min(3, игроков) ≥ 2, запасной путь
 # одиночки 60 с у ворот, сброс 10 минут; блок 5 — маяки и Звездопад
-# (раздел 7): пара в окне 3 с, соло-удержание, цикл гашения, звёзды.
-# Костёр и «за руку» (блоки 6–7) добавятся здесь же.
+# (раздел 7): пара в окне 3 с, соло-удержание, цикл гашения, звёзды;
+# блок 6 — «за руку» (раздел 9.5): роли, цепочки до 4, разрывы.
+# Костёр (блок 7) добавится здесь же.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -402,3 +403,100 @@ func test_beacons_state_reset_on_clear() -> void:
 	assert_eq(activity.stars_taken_state().size(), 0)
 	activity.setup_beacons(5)
 	assert_false(activity.try_beacon_light(0, 9, 100.0, 1, B).is_empty())
+
+
+# --- «За руку» (раздел 9.5) ---
+
+func test_hand_link_confirmed_when_close() -> void:
+	var activity := ActivityAuthority.new()
+	var event := activity.try_hand_link(4, 7, 1.5, B)
+	assert_eq(int(event["leader"]), 4, "инициатор ведёт")
+	assert_eq(int(event["follower"]), 7)
+	assert_eq(activity.hand_links_state().size(), 1)
+
+
+func test_hand_link_rejected_self_or_far() -> void:
+	var activity := ActivityAuthority.new()
+	assert_true(
+		activity.try_hand_link(4, 4, 0.0, B).is_empty(),
+		"сам с собой не связывается",
+	)
+	var limit: float = B.hand_link_radius + B.mob_hit_slack
+	# Ровно на границе — допустимо (допуск на пинг), чуть дальше — нет.
+	assert_false(activity.try_hand_link(4, 7, limit, B).is_empty())
+	assert_true(
+		activity.try_hand_link(9, 8, limit + 0.01, B).is_empty(),
+		"слишком далеко для нового приглашения",
+	)
+
+
+func test_hand_link_roles_taken() -> void:
+	var activity := ActivityAuthority.new()
+	assert_false(activity.try_hand_link(4, 7, 1.0, B).is_empty(), "связь установлена")
+	assert_true(activity.try_hand_link(4, 8, 1.0, B).is_empty(), "у 4 уже есть ведомый")
+	assert_true(activity.try_hand_link(8, 7, 1.0, B).is_empty(), "у 7 уже есть ведущий")
+	# Из свободных игроков новая пара — можно.
+	assert_false(activity.try_hand_link(8, 9, 1.0, B).is_empty())
+
+
+func test_hand_chain_limited_to_four() -> void:
+	var activity := ActivityAuthority.new()
+	# Цепочка D → C → B → A (раздел 9.5: «C держит B, B держит A», до 4).
+	assert_false(activity.try_hand_link(2, 1, 1.0, B).is_empty(), "B ведёт A")
+	assert_false(activity.try_hand_link(3, 2, 1.0, B).is_empty(), "C ведёт B")
+	assert_false(activity.try_hand_link(4, 3, 1.0, B).is_empty(), "D ведёт C — цепочка из 4")
+	assert_true(
+		activity.try_hand_link(5, 4, 1.0, B).is_empty(),
+		"пятый в цепочку не встаёт",
+	)
+	assert_eq(activity.hand_links_state().size(), 3)
+
+
+func test_hand_release_by_either_side() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_hand_link(4, 7, 1.0, B)
+	var event := activity.try_hand_release(7)
+	assert_eq(int(event["leader"]), 4, "отпустил ведомый")
+	assert_eq(int(event["follower"]), 7)
+	assert_true(activity.hand_links_state().is_empty())
+	activity.try_hand_link(4, 7, 1.0, B)
+	event = activity.try_hand_release(4)
+	assert_eq(int(event["leader"]), 4, "отпустил ведущий")
+	assert_true(
+		activity.try_hand_release(9).is_empty(),
+		"не в связи — отпускать нечего",
+	)
+
+
+func test_hand_links_broken_by_distance_or_leaving() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_hand_link(4, 7, 1.0, B)
+	var entries: Array[Dictionary] = [
+		{"peer": 4, "pos": Vector3.ZERO, "floor": true},
+		{"peer": 7, "pos": Vector3(B.hand_break_distance + B.mob_hit_slack + 0.01, 0.0, 0.0), "floor": true},
+	]
+	var event := activity.update_hand_links(entries, B)
+	assert_eq(int(event["follower"]), 7, "разрыв по расстоянию")
+	assert_true(activity.hand_links_state().is_empty())
+	# Выход из мира рвёт связь, даже если расстояние нормальное.
+	activity.try_hand_link(4, 7, 1.0, B)
+	event = activity.update_hand_links([{"peer": 4, "pos": Vector3.ZERO, "floor": true}], B)
+	assert_eq(int(event["leader"]), 4, "разрыв: ведомый вышел из мира")
+	# Оба рядом и в мире — связь живёт.
+	activity.try_hand_link(4, 7, 1.0, B)
+	entries = [
+		{"peer": 4, "pos": Vector3.ZERO, "floor": true},
+		{"peer": 7, "pos": Vector3(2.0, 0.0, 0.0), "floor": true},
+	]
+	assert_true(activity.update_hand_links(entries, B).is_empty())
+
+
+func test_hand_state_reset_on_clear() -> void:
+	var activity := ActivityAuthority.new()
+	activity.try_hand_link(4, 7, 1.0, B)
+	activity.clear()
+	assert_true(activity.hand_links_state().is_empty())
+	assert_false(
+		activity.try_hand_link(4, 7, 1.0, B).is_empty(),
+		"после clear связь снова возможна",
+	)

@@ -34,6 +34,9 @@ var world_time_offset_sec: float = 0.0
 var authority := HostAuthority.new()
 ## Авторитет хоста: активности и социальные механики П5 (разделы 7, 9).
 var activity := ActivityAuthority.new()
+## Связи «за руку» (раздел 9.5): leader → follower; заполняется rpc_hand_link
+## у всех одинаково — для скорости цепочки (раздел 17) и HUD.
+var hand_links: Dictionary = {}
 ## Последнее состояние мира от хоста (клиент; применяется сценой мира).
 var last_world_state: Dictionary = {}
 
@@ -89,6 +92,7 @@ func _ready() -> void:
 				_start_world_clock()
 				authority.clear()
 				activity.clear()
+				hand_links.clear()
 				_aoi.clear()
 				_peer_pos.clear()
 				_peer_flags.clear()
@@ -150,6 +154,7 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		_start_world_clock()
 		authority.clear()
 		activity.clear()
+		hand_links.clear()
 		_aoi.clear()
 		_peer_pos.clear()
 		_peer_flags.clear()
@@ -761,6 +766,132 @@ func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
 		rpc_pulled(helper_peer, target_peer)
 
 
+# --- «За руку» (раздел 9.5; хост рассылает факт, движение — клиент ведомого) ---
+
+## Игрок нажал F рядом с другим (раздел 9.5): просим хост переслать
+## приглашение («F — принять» на 5 с).
+func request_hand_link(target_peer: int) -> void:
+	if is_host():
+		_handle_hand_invite(local_peer_id, target_peer)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_hand_invite", target_peer), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_hand_invite(target_peer: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_hand_invite(multiplayer.get_remote_sender_id(), target_peer)
+
+
+## Релей приглашения: имя инициатора знает ростер хоста. Дистанцию и прочее
+## проверит логика при согласии — приглашение просто доходит.
+func _handle_hand_invite(from_peer: int, target_peer: int) -> void:
+	if from_peer == target_peer \
+			or not _peer_in_world(from_peer) or not _peer_in_world(target_peer):
+		return
+	var from_name := str(players[from_peer]["name"])
+	if is_networked() and target_peer != local_peer_id:
+		_send(func() -> void: rpc_id(target_peer, "rpc_hand_invited", from_peer, from_name), false)
+	else:
+		rpc_hand_invited(from_peer, from_name)
+
+
+## Приглашение дошло до адресата: подсказка «F — принять» (HUD, раздел 9.5).
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_hand_invited(from_peer: int, from_name: String) -> void:
+	EventBus.hand_invite.emit(from_peer, from_name)
+
+
+## Приглашённый согласился (F в ответ, раздел 9.5).
+func accept_hand_invite(from_peer: int) -> void:
+	if is_host():
+		_handle_hand_accept(local_peer_id, from_peer)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_hand_accept", from_peer), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_hand_accept(from_peer: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_hand_accept(multiplayer.get_remote_sender_id(), from_peer)
+
+
+## Проверка хоста: инициатор ведёт (leader), согласившийся ведомый (follower);
+## дистанция с допуском на пинг, роли и длина цепочки — в ActivityAuthority.
+func _handle_hand_accept(follower_peer: int, leader_peer: int) -> void:
+	var leader_pos := _peer_position(leader_peer)
+	var follower_pos := _peer_position(follower_peer)
+	if leader_pos == _POS_UNKNOWN or follower_pos == _POS_UNKNOWN:
+		return
+	var event := activity.try_hand_link(
+		leader_peer, follower_peer, leader_pos.distance_to(follower_pos), B
+	)
+	if event.is_empty():
+		return
+	Log.info(
+		"За руку: %d ведёт %d" % [int(event["leader"]), int(event["follower"])], "Net"
+	)
+	_broadcast_hand_link(int(event["leader"]), int(event["follower"]), true)
+
+
+## Отпустить (F любого из двоих, раздел 9.5).
+func request_hand_release() -> void:
+	if is_host():
+		_handle_hand_release(local_peer_id)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_hand_release"), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_hand_release() -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_hand_release(multiplayer.get_remote_sender_id())
+
+
+func _handle_hand_release(peer: int) -> void:
+	var event := activity.try_hand_release(peer)
+	if event.is_empty():
+		return
+	Log.info(
+		"За руку: %d и %d расцепились" % [int(event["leader"]), int(event["follower"])], "Net"
+	)
+	_broadcast_hand_link(int(event["leader"]), int(event["follower"]), false)
+
+
+## Хост разослал факт связи (раздел 9.5): клиент ведомого начинает следование,
+## оба игрока — анимации и скорость более медленного из цепочки (раздел 17).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_hand_link(leader_peer: int, follower_peer: int, on: bool) -> void:
+	if on:
+		hand_links[leader_peer] = follower_peer
+	else:
+		hand_links.erase(leader_peer)
+	EventBus.hand_link.emit(leader_peer, follower_peer, on)
+
+
+func _broadcast_hand_link(leader: int, follower: int, on: bool) -> void:
+	if is_networked():
+		_send(func() -> void: rpc_hand_link.rpc(leader, follower, on), false)
+	else:
+		rpc_hand_link(leader, follower, on)
+
+
+## Цепочка связей вниз от игрока (сам + ведомые; раздел 9.5: цепочки до 4):
+## ведущий сбавляет бег до более медленного из всей цепочки (раздел 17).
+func hand_chain_below(peer_id: int) -> Array[int]:
+	var chain: Array[int] = [peer_id]
+	var current := peer_id
+	while hand_links.has(current) and chain.size() < Protocol.MAX_PLAYERS_HARD:
+		current = int(hand_links[current])
+		if chain.has(current):
+			break  # страховка от цикла в испорченном состоянии
+		chain.append(current)
+	return chain
+
+
 # --- Лестницы смотровых (раздел 9.3) ---
 
 ## Поднявшийся жмёт E у края смотровой (раздел 9.3): просим хост
@@ -951,6 +1082,15 @@ func _tick_activities() -> void:
 	)
 	if not event.is_empty():
 		_open_ruins_event(event, entries)
+	# «За руку» (раздел 9.5): связь рвётся при расстоянии больше 4 м и когда
+	# кто-то из пары вышел из мира (событие — всем, как разрыв по F).
+	var hand_event := activity.update_hand_links(entries, B)
+	if not hand_event.is_empty():
+		Log.info(
+			"За руку: %d и %d расцепились (расстояние/выход из мира)"
+			% [int(hand_event["leader"]), int(hand_event["follower"])], "Net"
+		)
+		_broadcast_hand_link(int(hand_event["leader"]), int(hand_event["follower"]), false)
 	# Лестницы смотровых (раздел 9.3): считаем один раз за тик, скрытие —
 	# событием всем (узлы убирают лестницу, сброс возможен снова).
 	activity.setup_ladders(_lookout_ladders().size())
@@ -1218,6 +1358,7 @@ func _teardown_network() -> void:
 	_aoi.clear()
 	_seq = 0
 	last_world_state = {}
+	hand_links.clear()
 	authority.clear()
 	activity.clear()
 	_activity_accum = 0.0

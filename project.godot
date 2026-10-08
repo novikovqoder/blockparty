@@ -39,8 +39,7 @@ locale/fallback="en"
 [input]
 
 ; Бинды по таблице раздела 5 SPEC; physical_keycode не зависит от раскладки.
-; Геймпад и остальные действия (взять за руку, карта и др.) — с появлением
-; персонажа и UI (этапы П1, П5, П8).
+; Геймпад и колёсико камеры — П8 (раздел 15: все бинды переназначаемые).
 move_left={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventKey,"physical_keycode":4194319)]
@@ -76,6 +75,10 @@ attack={
 interact={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":69)]
+}
+hand_hold={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":70)]
 }
 push_to_talk={
 "deadzone": 0.5,

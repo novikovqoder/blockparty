@@ -26,6 +26,10 @@ const KIND_EMOTE_REPLY: String = "emote_reply"  # ответная эмоция 
 var _scores: Dictionary = {}
 ## Журнал событий: {peer_id, kind, points, time}.
 var _events: Array[Dictionary] = []
+## Партнёр по связи «за руку» и сколько секунд она уже длится (раздел 9.5:
+## очки «каждые 30 с», пока пара идёт вместе).
+var _hand_partner: int = 0
+var _hand_seconds: float = 0.0
 
 
 func _ready() -> void:
@@ -34,7 +38,33 @@ func _ready() -> void:
 	EventBus.mob_killed.connect(_on_mob_killed)
 	EventBus.player_boosted.connect(_on_player_boosted)
 	EventBus.beacons_state.connect(_on_beacons_state)
+	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.world_entered.connect(reset)
+
+
+## Секунды текущей связи идут в очки каждые hand_held_tick (раздел 13).
+const HAND_TICK: float = 30.0
+
+
+func _process(delta: float) -> void:
+	if _hand_partner == 0:
+		return
+	_hand_seconds += delta
+	if _hand_seconds >= HAND_TICK:
+		_hand_seconds -= HAND_TICK
+		add_points(_hand_partner, KIND_HAND_HELD, B.pts_hand_held, Session.world_time)
+
+
+## Связь «за руку» (раздел 9.5): включилась — копим секунды с партнёром,
+## оборвалась — сброс (следующая связь считает заново).
+func _on_hand_link(leader_peer: int, follower_peer: int, on: bool) -> void:
+	var local := Net.local_peer_id
+	if on and (leader_peer == local or follower_peer == local):
+		_hand_partner = follower_peer if leader_peer == local else leader_peer
+		_hand_seconds = 0.0
+	elif not on and (leader_peer == local or follower_peer == local):
+		_hand_partner = 0
+		_hand_seconds = 0.0
 
 
 ## Вытягивание из расщелины (раздел 9.1): очки обоим — я вытянул его,
@@ -114,3 +144,5 @@ func top_peers(limit: int) -> Array[int]:
 func reset() -> void:
 	_scores.clear()
 	_events.clear()
+	_hand_partner = 0
+	_hand_seconds = 0.0

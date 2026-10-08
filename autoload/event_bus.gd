@@ -29,6 +29,14 @@ signal player_respawned()
 ## Хост подтвердил вытягивание: helper вытащил target из расщелины (раздел 9.1).
 signal player_pulled(helper_peer: int, target_peer: int)
 
+## «За руку» (раздел 9.5): связь leader ↔ follower включилась или оборвалась
+## (F любого из двоих, расстояние больше hand_break_distance, выход из мира).
+signal hand_link(leader_peer: int, follower_peer: int, on: bool)
+
+## Игрок предлагает локальному взять его за руку (раздел 9.5): подсказка
+## «F — принять» живёт hand_invite_time; согласие и отказ — hand_link/таймер.
+signal hand_invite(by_peer: int, by_name: String)
+
 ## Состояние ворот руин (раздел 9.2): open — открыты, plates — peer на каждой
 ## плите (0 — пусто), openers — кто открыл плитами (пусто при запасном пути),
 ## reward_peers — получившие награду сундука (раздел 8), непусто только
