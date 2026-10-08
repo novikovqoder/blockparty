@@ -32,7 +32,7 @@ func test_generation_is_deterministic() -> void:
 	)
 	# Хеш закреплён: непреднамеренное изменение генератора уронит этот тест
 	# (намеренное — требует обновить константу и перегенерировать остров).
-	assert_eq(first_hash, 764980097, "хеш острова совпадает с сгенерированной сценой")
+	assert_eq(first_hash, 112334720, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_heightmap_fully_covered() -> void:
@@ -62,13 +62,13 @@ func test_all_zones_reachable_on_foot() -> void:
 
 
 func test_lookouts_not_reachable_without_help() -> void:
-	# Критерий этапа: уступы холмов недостижимы без подсадки — площадка 2 × 2
-	# на 10 м над базисом 7 м (уступ 3 м); при этом базис-поляна вокруг
+	# Раздел 9.3: по рельефу уступ в 3 м не взять — площадка недостижима без
+	# подсадки (terrain_only исключает настилы); при этом базис-поляна вокруг
 	# каждой смотровой достижим (к площадке вообще есть подход).
 	var data: Dictionary = _island_data()
-	var reach: Dictionary = IslandGen.walkable_reach(data)
+	var reach: Dictionary = IslandGen.walkable_reach(data, true)
 	for lookout: Vector2i in IslandGen.LOOKOUTS:
-		assert_false(reach.has(lookout), "смотровая %s не достижима пешком" % lookout)
+		assert_false(reach.has(lookout), "смотровая %s не достижима по рельефу" % lookout)
 		var base_reachable := false
 		for dx: int in range(-7, 8):
 			for dz: int in range(-7, 8):
@@ -77,6 +77,15 @@ func test_lookouts_not_reachable_without_help() -> void:
 				if reach.has(lookout + Vector2i(dx, dz)):
 					base_reachable = true
 		assert_true(base_reachable, "базис смотровой %s достижим" % lookout)
+
+
+func test_lookouts_reachable_by_solo_trail() -> void:
+	# Раздел 9.3, запасной путь: обходная тропа из досок ведёт на площадку —
+	# одиночка поднимается без подсадки (настилы входят в поверхность).
+	var data: Dictionary = _island_data()
+	var reach: Dictionary = IslandGen.walkable_reach(data)
+	for lookout: Vector2i in IslandGen.LOOKOUTS:
+		assert_true(reach.has(lookout), "тропа ведёт на смотровую %s" % lookout)
 
 
 func test_spawn_points_on_land() -> void:

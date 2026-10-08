@@ -47,3 +47,4 @@ HUD_PLAYER_JOIN,"%s вошёл(ла) в мир","%s entered the world"
 HUD_PLAYER_LEAVE,"%s покинул(а) мир","%s left the world"
 HUD_HINT_KEY,E,E
 HINT_PULL,Вытянуть,Pull up
+HINT_LADDER,Сбросить лестницу,Drop the ladder

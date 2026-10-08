@@ -129,17 +129,23 @@ static func generate() -> Dictionary:
 	_trees_and_rocks(heights, props, rng, reserved)
 	_crevasse_walls(props, rng)
 	_lookout_walls(props, rng)
+	_lookout_trails(props, rng)
 	_bridges(props, rng)
 	var ruins: Dictionary = _ruins(heights, props, rng)
 	var pier: Dictionary = _pier_and_boats(heights, props)
 	var fire: Dictionary = _campfire_and_board(heights, props)
+	var lookouts: Array = []
+	for center: Vector2i in LOOKOUTS:
+		lookouts.append({
+			"center": Vector3(float(center.x), LOOKOUT_TOP_H, float(center.y)),
+		})
 	data["stones"] = stones
 	data["spawn_zones"] = spawns
 	data["beacons"] = beacons
 	data["coins"] = _coins(heights, props, ruins, pier, rng)
 	data["mobs"] = _mobs(heights, rng)
 	data["hang"] = _hang()
-	data["poi"] = {"ruins": ruins, "pier": pier, "campfire": fire}
+	data["poi"] = {"ruins": ruins, "pier": pier, "campfire": fire, "lookouts": lookouts}
 	data["bounds"] = HALF - 0.5
 	props.sort_custom(_prop_less)
 	return data
@@ -169,8 +175,8 @@ static func island_hash(data: Dictionary) -> int:
 #  — проверяется сухопутная связность; подсадка на голову требует второго
 #  игрока и в заливку не входит. Проходимые постройки (мостки, пирс, плоты)
 #  добавляют свою поверхность.
-static func walkable_reach(data: Dictionary) -> Dictionary:
-	var heights := _surface_heights(data)
+static func walkable_reach(data: Dictionary, terrain_only: bool = false) -> Dictionary:
+	var heights := _surface_heights(data, terrain_only)
 	var start := Vector2i(0, 10)  # спавн площади
 	var visited: Dictionary = {}
 	var queue: Array[Vector2i] = [start]
@@ -711,11 +717,14 @@ static func _crevasse_walls(props: Array, rng: RandomNumberGenerator) -> void:
 
 
 ## Кольцо скальных призм вокруг каждой смотровой площадки (уступ 3 м):
-## грань рельефа проходит на 1.5 м от центра площадки 2 × 2 м.
+## грань рельефа проходит на 1.5 м от центра площадки 2 × 2 м. Север открыт —
+## туда входит обходная тропа (раздел 9.3, запасной путь одиночки).
 static func _lookout_walls(props: Array, rng: RandomNumberGenerator) -> void:
 	var wall_h: float = LOOKOUT_TOP_H - LOOKOUT_BASE_H + 0.4
 	for center: Vector2i in LOOKOUTS:
 		for side: int in range(4):
+			if side == 2:
+				continue  # северная стена — разрыв под тропу
 			var along_x: bool = side % 2 == 0
 			var sign: float = 1.0 if side < 2 else -1.0
 			var pos := Vector3(
@@ -731,6 +740,32 @@ static func _lookout_walls(props: Array, rng: RandomNumberGenerator) -> void:
 		for i: int in range(3):
 			_prop(props, rng, center + Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1)),
 				LOOKOUT_TOP_H, "pebble", "stone")
+
+
+## Обходная тропа на смотровую (раздел 9.3, запасной путь одиночки):
+## дуга деревянных ступеней вокруг скалы — с юга через восток к северному
+## разрыву стены. Каждая ступень выше предыдущей меньше автоподъёма —
+## тропа проходима без чужой помощи, но дольше, чем подсадка или лестница.
+static func _lookout_trails(props: Array, rng: RandomNumberGenerator) -> void:
+	var steps: int = 10
+	var radius: float = 2.9
+	for center: Vector2i in LOOKOUTS:
+		for i: int in steps:
+			var t: float = float(i) / float(steps - 1)
+			var angle: float = PI / 2.0 - t * PI
+			var pos := Vector3(
+				float(center.x) + radius * cos(angle),
+				7.05 + t * 2.7,
+				float(center.y) + radius * sin(angle),
+			)
+			# Ступень длинной стороной вдоль касательной дуги.
+			_add_prop(props, rng, &"plank_deck", pos,
+				atan2(sin(angle), -cos(angle)) + rng.randf_range(-0.03, 0.03),
+				Vector3(1.5, 0.12, 1.2), "plain", 1)
+		# Финальная ступень у северного разрыва — вход на площадку.
+		_add_prop(props, rng, &"plank_deck",
+			Vector3(float(center.x), 9.88, float(center.y) - 1.8), 0.0,
+			Vector3(1.5, 0.12, 1.6), "plain", 1)
 
 
 ## Мостки: две переправы из досок на кромке (walk — поверхность BFS) и
@@ -1078,7 +1113,7 @@ static func _hang() -> Dictionary:
 ## Верхние поверхности: суша из карты высот плюс проходимые постройки
 ## (мостки, пирс, плоты). Деревья, стены и декор не учитываются — игрок
 ## ходит по земле под ними, а не по верхушкам.
-static func _surface_heights(data: Dictionary) -> Dictionary:
+static func _surface_heights(data: Dictionary, terrain_only: bool = false) -> Dictionary:
 	var heights: Dictionary = {}
 	var map: PackedFloat32Array = data["heights"]
 	for z: int in range(-HALF, HALF + 1):
@@ -1086,6 +1121,8 @@ static func _surface_heights(data: Dictionary) -> Dictionary:
 			var h: float = map[_idx(x, z)]
 			if h > 0.05:
 				heights[Vector2i(x, z)] = h
+	if terrain_only:
+		return heights
 	for prop: Dictionary in data["props"]:
 		var type := String(prop["type"])
 		var walk: float = 0.0

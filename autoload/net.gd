@@ -316,7 +316,10 @@ func rpc_hello(player_name: String, character: int) -> void:
 		"players": _roster_entries(),
 		"dead_mobs": authority.dead_mob_entries(),
 		"taken_coins": authority.taken_coin_entries(),
-		"activities": {"ruins": activity.ruins_state()},
+		"activities": {
+			"ruins": activity.ruins_state(),
+			"ladders": activity.ladders_state(),
+		},
 	}
 	_send(func() -> void: rpc_id(sender, "rpc_world_state", WorldState.pack(state)), false)
 
@@ -671,11 +674,67 @@ func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
 		rpc_pulled(helper_peer, target_peer)
 
 
+# --- Лестницы смотровых (раздел 9.3) ---
+
+## Поднявшийся жмёт E у края смотровой (раздел 9.3): просим хост
+## подтвердить сброс лестницы.
+func request_drop_ladder(index: int) -> void:
+	if is_host():
+		_handle_drop_ladder(local_peer_id, index)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_request_ladder", index), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_request_ladder(index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_drop_ladder(multiplayer.get_remote_sender_id(), index)
+
+
+## Проверка хоста (раздел 9.3): просящий стоит на площадке этой смотровой
+## (окно высоты и радиус — от узла лестницы). Подтверждение — всем.
+func _handle_drop_ladder(peer: int, index: int) -> void:
+	var ladders := _lookout_ladders()
+	if index < 0 or index >= ladders.size():
+		return
+	var peer_pos: Vector3 = _peer_position(peer)
+	var ladder := ladders[index]
+	if peer_pos != _POS_UNKNOWN:
+		var flat := peer_pos - ladder.global_position
+		flat.y = 0.0
+		var on_top := flat.length() <= B.ladder_top_radius \
+			and absf(peer_pos.y - ladder.global_position.y) <= B.ladder_top_window
+		var event := activity.try_drop_ladder(index, world_time_sec(), on_top, B)
+		if event.is_empty():
+			return
+		Log.info(
+			"Лестница смотровой %d сброшена (peer %d, до %.0f с)"
+			% [index + 1, peer, float(event["until"])], "Net"
+		)
+		_broadcast_ladder(index, true, float(event["until"]))
+
+
+## Хост разослал состояние лестницы (раздел 9.3): узел рисует её
+## или убирает; expires_at — время скрытия по world_time (−1 — не висит).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_ladder(index: int, active: bool, expires_at: float) -> void:
+	EventBus.ladder_state.emit(index, active, expires_at)
+
+
+func _broadcast_ladder(index: int, active: bool, expires_at: float) -> void:
+	if is_networked():
+		_send(func() -> void: rpc_ladder.rpc(index, active, expires_at), false)
+	else:
+		rpc_ladder(index, active, expires_at)
+
+
 # --- Тик активностей хоста (раздел 9: плиты и зоны по снапшотам) ---
 
 ## Периодическая проверка активностей хостом: кто стоит на плитах руин,
-## есть ли игрок у закрытых ворот (запасной путь, раздел 9.2). Узлы берёт
-## из групп — остров у всех одинаковый (раздел 6).
+## есть ли игрок у закрытых ворот (запасной путь, раздел 9.2), истекли ли
+## лестницы смотровых (раздел 9.3). Узлы берёт из групп — остров у всех
+## одинаковый (раздел 6).
 func _tick_activities() -> void:
 	if not Session.in_world:
 		return
@@ -691,8 +750,20 @@ func _tick_activities() -> void:
 	var event := activity.update_ruins_gate(
 		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B
 	)
-	if event.is_empty():
-		return
+	if not event.is_empty():
+		_open_ruins_event(event, entries)
+	# Лестницы смотровых (раздел 9.3): считаем один раз за тик, скрытие —
+	# событием всем (узлы убирают лестницу, сброс возможен снова).
+	activity.setup_ladders(_lookout_ladders().size())
+	var ladder_event := activity.update_ladders(world_time_sec())
+	if not ladder_event.is_empty():
+		Log.info("Лестница смотровой %d скрылась (60 с истекли)" % [int(ladder_event["index"]) + 1], "Net")
+		_broadcast_ladder(int(ladder_event["index"]), false, -1.0)
+
+
+## Событие ворот руин от authority: лог, награда сундука в момент открытия
+## и рассылка состояния всем.
+func _open_ruins_event(event: Dictionary, entries: Array[Dictionary]) -> void:
 	var openers: Array[int] = event.get("openers", [])
 	var reward_peers: Array[int] = []
 	if event.has("opened"):
@@ -770,6 +841,18 @@ func _ruin_plates() -> Array[RuinPlate]:
 	return plates
 
 
+## Лестницы смотровых в порядке имени узла (LookoutLadder1..4 — как LOOKOUTS).
+func _lookout_ladders() -> Array[LookoutLadder]:
+	var ladders: Array[LookoutLadder] = []
+	for node in get_tree().get_nodes_in_group(LookoutLadder.LADDER_GROUP):
+		if node is LookoutLadder:
+			ladders.append(node as LookoutLadder)
+	ladders.sort_custom(
+		func(a: LookoutLadder, b: LookoutLadder) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
+	)
+	return ladders
+
+
 func _first_node(group: StringName) -> Node3D:
 	for node in get_tree().get_nodes_in_group(group):
 		if node is Node3D:
@@ -796,7 +879,8 @@ func _broadcast_ruins(
 
 
 ## Применить активности из world_state (вход в любой момент, раздел 10):
-## открытые ворота и сундук — без повторной награды и очков.
+## открытые ворота и сундук — без повторной награды и очков, висящие
+## лестницы — узлы рисуют сразу.
 func _apply_activities(state: Dictionary) -> void:
 	var activities: Dictionary = state.get("activities", {})
 	if activities.is_empty():
@@ -808,6 +892,10 @@ func _apply_activities(state: Dictionary) -> void:
 			ruins.get("plates", []),
 			[],
 			[],
+		)
+	for ladder: Dictionary in activities.get("ladders", []):
+		EventBus.ladder_state.emit(
+			int(ladder.get("index", -1)), true, float(ladder.get("until", -1.0))
 		)
 
 

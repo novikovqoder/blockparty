@@ -24,6 +24,7 @@ const HANG_POINT_SCRIPT: String = "res://gameplay/activities/hang_point.gd"
 const GATE_SCRIPT: String = "res://gameplay/activities/ruin_gate.gd"
 const PLATE_SCRIPT: String = "res://gameplay/activities/ruin_plate.gd"
 const CHEST_SCRIPT: String = "res://gameplay/activities/ruin_chest.gd"
+const LADDER_SCRIPT: String = "res://gameplay/activities/lookout_ladder.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
 const COIN_SCRIPT: String = "res://gameplay/world/coin_pickup.gd"
@@ -137,6 +138,13 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Island:
 		root.add_child(plate)
 
 	# Камни духа (точки возрождения) и костёр на площади.
+	# Перед ними — лестницы смотровых (раздел 9.3): узел в центре площадки,
+	# порядок имён LookoutLadder1..4 — как LOOKOUTS у IslandGen.
+	for i: int in (data["poi"]["lookouts"] as Array).size():
+		var ladder: Node3D = load(LADDER_SCRIPT).new()
+		ladder.name = "LookoutLadder%d" % (i + 1)
+		ladder.position = (data["poi"]["lookouts"] as Array)[i]["center"]
+		root.add_child(ladder)
 	var stones: Array = data["stones"]
 	for i: int in stones.size():
 		var stone: Node3D = load(STONE_SCRIPT).new()

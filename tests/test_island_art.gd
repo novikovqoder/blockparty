@@ -216,6 +216,7 @@ func test_crevasse_walls_and_bridges_are_props() -> void:
 	var lookout_walls := 0
 	var decks := 0
 	var posts := 0
+	var trail_steps := 0
 	for prop: Dictionary in data["props"]:
 		var pos: Vector3 = prop["pos"]
 		match String(prop["type"]):
@@ -238,13 +239,21 @@ func test_crevasse_walls_and_bridges_are_props() -> void:
 					and pos.z >= IslandGen.CREVASSE_Z0 - 3.0 \
 					and pos.z <= IslandGen.CREVASSE_Z1 + 3.0:
 					decks += 1
+				else:
+					for lookout: Vector2i in IslandGen.LOOKOUTS:
+						if Vector2(pos.x, pos.z).distance_to(lookout) <= 4.0:
+							trail_steps += 1
 			"pier_post":
 				if pos.z >= IslandGen.CREVASSE_Z0 and pos.z <= IslandGen.CREVASSE_Z1:
 					posts += 1
 	assert_gt(walls, 30, "стены расщелины — предметы rock_wall")
 	assert_eq(
-		lookout_walls, IslandGen.LOOKOUTS.size() * 4,
-		"по четыре стены-кольца на смотровой",
+		lookout_walls, IslandGen.LOOKOUTS.size() * 3,
+		"по три стены на смотровой (север — разрыв под тропу, раздел 9.3)",
 	)
 	assert_between(decks, 10, 24, "настилы двух мостков через каньон")
+	assert_eq(
+		trail_steps, IslandGen.LOOKOUTS.size() * 11,
+		"тропа на смотровую: 10 ступеней дуги и входная (раздел 9.3)",
+	)
 	assert_between(posts, 4, 8, "опоры мостков под настилом")

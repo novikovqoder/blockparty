@@ -35,6 +35,10 @@ signal player_pulled(helper_peer: int, target_peer: int)
 ## в событии открытия. При закрытии — open=false, остальные списки пусты.
 signal ruins_state(open: bool, plates: Array, openers: Array, reward_peers: Array)
 
+## Состояние лестницы смотровой (раздел 9.3): index — номер смотровой,
+## active — висит ли, expires_at — время скрытия по world_time (−1 — не висит).
+signal ladder_state(index: int, active: bool, expires_at: float)
+
 # --- Взаимодействие E (раздел 9; П5) ---
 
 ## Подсказка у интерактивного объекта: ключ i18n действия («E — сесть»);
