@@ -28,6 +28,20 @@ var _scores: Dictionary = {}
 var _events: Array[Dictionary] = []
 
 
+func _ready() -> void:
+	EventBus.player_pulled.connect(_on_player_pulled)
+	EventBus.world_entered.connect(reset)
+
+
+## Вытягивание из расщелины (раздел 9.1): очки обоим — я вытянул его,
+## меня вытянул он.
+func _on_player_pulled(helper_peer: int, target_peer: int) -> void:
+	if helper_peer == Net.local_peer_id:
+		add_points(target_peer, KIND_PULL_GAVE, B.pts_pull, Session.world_time)
+	if target_peer == Net.local_peer_id:
+		add_points(helper_peer, KIND_PULL_GOT, B.pts_pull, Session.world_time)
+
+
 ## Записать событие взаимодействия с другим игроком (at_world_time — с).
 func add_points(peer_id: int, kind: String, points: float, at_world_time: float) -> void:
 	_scores[peer_id] = score(peer_id) + points

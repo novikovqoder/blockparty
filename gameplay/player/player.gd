@@ -51,6 +51,11 @@ var _hold_accum: float = 0.0
 ## прыжка. Скорость прыжка умножается на корень высотного множителя.
 var _run_multiplier: float = 1.0
 var _jump_height_multiplier: float = 1.0
+## Сила 1–5 (раздел 17): ускоряет вытягивание и даёт чуть больше высоты
+## прыжка с головы; хранится индексом массива множителей в balance.
+var _strength: int = 3
+## Точка, за которую висим (куда поднимет вытягивание; раздел 9.1).
+var _hang_point: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
@@ -159,13 +164,14 @@ func _nearest_interactable() -> Interactable:
 # --- Движение ---
 
 ## Характеристики выбранного персонажа (раздел 16): множители бега и высоты
-## прыжка из characters.json по номеру модели; сила пока хранится и
-## показывается — применение в П5. По сети числа не ходят: каждый клиент
-## берёт их из своего файла данных.
+## прыжка из characters.json по номеру модели; Сила с П5 ускоряет
+## вытягивание и прибавляет высоту прыжка с головы (раздел 17).
+## По сети числа не ходят: каждый клиент берёт их из своего файла данных.
 func apply_stats(character: int) -> void:
 	var stats := CharacterData.stats(character)
 	_run_multiplier = B.stat_multipliers[stats["speed"] as int - 1]
 	_jump_height_multiplier = B.stat_multipliers[stats["jump"] as int - 1]
+	_strength = stats["strength"] as int
 
 
 func run_multiplier() -> float:
@@ -174,6 +180,17 @@ func run_multiplier() -> float:
 
 func jump_height_multiplier() -> float:
 	return _jump_height_multiplier
+
+
+## Сила персонажа 1–5 (кооп-действия П5; множители — в balance).
+func strength() -> int:
+	return _strength
+
+
+## Множитель усиления прыжка с головы от Силы прыгуна (раздел 17: «чуть
+## больше высоты подсадки» у сильных) — вызывается при прыжке с головы.
+func strength_head_boost() -> float:
+	return B.strength_head_boost[clampi(_strength, 1, 5) - 1]
 
 
 ## Направление ввода в мире: относительно камеры, в плоскости земли.
@@ -254,8 +271,9 @@ func _update_jump(delta: float) -> void:
 	if _jump_buffer > 0.0 and (_coyote > 0.0 or _in_water):
 		var speed := B.jump_speed
 		if is_on_floor() and _head_below:
-			# Прыжок с головы другого игрока усилен (раздел 5).
-			speed = JumpMath.boosted_jump_speed(B)
+			# Прыжок с головы другого игрока усилен (раздел 5); Сила прыгуна
+			# добавляет чуть больше высоты (раздел 17, П5).
+			speed = JumpMath.boosted_jump_speed(B) * strength_head_boost()
 		# Множитель высоты прыжка персонажа: v = √(2·g·h) — скорость из корня.
 		velocity.y = speed * sqrt(_jump_height_multiplier)
 		_jump_buffer = 0.0
@@ -343,11 +361,36 @@ func start_hang(point: Vector3) -> void:
 		return
 	_hanging = true
 	_hang_left = B.hang_time
+	_hang_point = point
 	velocity = Vector3.ZERO
 	global_position = point + Vector3(0.0, -HANG_BODY_DROP, 0.0)
 	_set_anim(Protocol.AnimState.HANG)
 	EventBus.player_hang_started.emit(B.hang_time)
 	Log.info("Висит у края (%.1f с)" % B.hang_time, "Player")
+
+
+## Помощник тянет: хост подтвердил rpc_pulled (раздел 9.1). Игрок
+## поднимается на кромку в точку цепляния — без штрафа и Камня духа.
+func pulled_up() -> void:
+	if not _hanging:
+		return
+	_hanging = false
+	velocity = Vector3.ZERO
+	global_position = _hang_point + Vector3(0.0, 0.05, 0.0)
+	_set_anim(Protocol.AnimState.IDLE)
+	visual.play_one_shot(Protocol.AnimState.PULLED_UP, 0.5)
+	EventBus.player_hang_ended.emit()
+	Log.info("Вытянут из расщелины", "Player")
+
+
+## Помощник начал тянуть: короткая анимация «помогает» (раздел 5).
+func helper_pull() -> void:
+	visual.play_one_shot(Protocol.AnimState.HELP_PULL, 0.6)
+
+
+## Висит ли у края расщелины (проверка хоста для вытягивания, раздел 9.1).
+func is_hanging() -> bool:
+	return _hanging
 
 
 func _process_hang(delta: float) -> void:

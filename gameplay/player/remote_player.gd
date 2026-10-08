@@ -15,6 +15,8 @@ const B: Balance = preload("res://gameplay/balance.tres")
 ## Высота коллайдера головы над ступнями и метки ника, м (как player.tscn).
 const HEAD_TOP_Y: float = 1.65
 const NAME_LABEL_Y: float = 2.15
+## Группа узлов чужих игроков (HangPoint ищет висящих, П5).
+const GROUP: StringName = &"remote_player"
 
 var peer_id: int = 0
 var player_name: String = ""
@@ -26,6 +28,8 @@ var _model: Node3D
 var _visual: CharacterModel
 var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
+## Флаги последнего снапшота (висит, сидит, за руку — раздел 10).
+var _flags: int = 0
 
 
 func setup(p_peer_id: int, p_name: String, p_character: int = 0) -> void:
@@ -35,6 +39,7 @@ func setup(p_peer_id: int, p_name: String, p_character: int = 0) -> void:
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	_model = Node3D.new()
 	_model.name = "Model"
 	add_child(_model)
@@ -73,7 +78,13 @@ func _ready() -> void:
 
 ## Снапшот чужого игрока (переслал хост после AOI-фильтра).
 func apply_snapshot(snap: Dictionary, recv_msec: int) -> void:
+	_flags = int(snap["flags"])
 	_buffer.push(snap, recv_msec)
+
+
+## Висит ли игрок у края расщелины сейчас (флаг снапшота, раздел 10).
+func is_hanging() -> bool:
+	return (_flags & Protocol.FLAG_HANGING) != 0
 
 
 ## Отрисовать интерполированное состояние на момент now_msec (обычно «сейчас

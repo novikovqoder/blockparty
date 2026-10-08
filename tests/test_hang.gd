@@ -75,9 +75,9 @@ func test_fall_into_crevasse_hangs_then_respawns() -> void:
 	shape.shape = box
 	area.add_child(shape)
 	for point: Vector3 in [Vector3(0, 2.0, -1.8), Vector3(0, 2.0, 1.8)]:
-		var marker := Marker3D.new()
-		marker.position = point
-		area.add_child(marker)
+		var hang_point := HangPoint.new()
+		hang_point.position = point
+		area.add_child(hang_point)
 	world.add_child(area)
 	area.global_position = Vector3(0, -2.0, 0)
 	var stone := RespawnStone.new()
@@ -117,3 +117,26 @@ func test_fall_into_crevasse_hangs_then_respawns() -> void:
 	assert_true(respawned[0], "через hang_time — перенос")
 	assert_almost_eq(player.global_position.x, 6.0, 0.15, "у Камня духа")
 	assert_almost_eq(player.global_position.z, 4.0, 0.15)
+
+
+# --- Вытягивание (раздел 9.1, П5) ---
+
+## Вытянутый поднимается на кромку в точку цепляния и больше не висит:
+## сам переносит тело, хост только подтвердил событие (rpc_pulled).
+func test_pulled_up_returns_to_edge() -> void:
+	var world := Node3D.new()
+	add_child_autofree(world)
+	var player := PLAYER.instantiate() as Player
+	world.add_child(player)
+	await get_tree().physics_frame
+	var edge := Vector3(5.0, 0.0, 5.0)
+	player.start_hang(edge)
+	assert_true(player.is_hanging())
+	player.pulled_up()
+	assert_false(player.is_hanging())
+	assert_almost_eq(player.global_position.x, edge.x, EPS, "вернулся на кромку")
+	assert_almost_eq(player.global_position.y, edge.y + 0.05, EPS)
+	assert_almost_eq(player.global_position.z, edge.z, EPS)
+	# Повторное подтверждение (поздний пакет) — не телепортирует.
+	player.pulled_up()
+	assert_almost_eq(player.global_position.x, edge.x, EPS)

@@ -32,6 +32,8 @@ var world_time_offset_sec: float = 0.0
 
 ## Авторитет хоста: мёртвые мобы и собранные монеты с временем возрождения.
 var authority := HostAuthority.new()
+## Авторитет хоста: активности и социальные механики П5 (разделы 7, 9).
+var activity := ActivityAuthority.new()
 ## Последнее состояние мира от хоста (клиент; применяется сценой мира).
 var last_world_state: Dictionary = {}
 
@@ -47,6 +49,8 @@ var _snap_accum: float = 0.0
 var _aoi := AoiFilter.new()
 ## peer_id -> последняя позиция из снапшота (AOI на хосте, проверки ударов).
 var _peer_pos: Dictionary = {}
+## peer_id -> флаги последнего снапшота (висит/сидит/за руку — проверки хоста П5).
+var _peer_flags: Dictionary = {}
 var _traffic_accum: float = 0.0
 var _traffic_sent_prev: int = 0
 var _traffic_log_accum: int = 0
@@ -84,6 +88,7 @@ func _ready() -> void:
 				authority.clear()
 				_aoi.clear()
 				_peer_pos.clear()
+				_peer_flags.clear()
 				Log.info(
 					"Хост ENet на порту %d, мир создан (эмуляция: лаг %d мс, потеря %d%%)"
 					% [Dev.DEV_PORT, Dev.net_lag_ms, Dev.net_loss_percent], "Net"
@@ -143,6 +148,7 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		authority.clear()
 		_aoi.clear()
 		_peer_pos.clear()
+		_peer_flags.clear()
 		Log.info("Хост Steam-мира: лобби %d, мир создан" % lobby_id, "Net")
 		EventBus.steam_world_ready.emit()
 	else:
@@ -436,6 +442,7 @@ func _apply_peer_snapshot(peer_id: int, data: PackedByteArray) -> void:
 	snapshot_bytes_received += data.size()
 	var snap := Snapshot.unpack(data)
 	_peer_pos[peer_id] = Vector3(float(snap["x"]), float(snap["y"]), float(snap["z"]))
+	_peer_flags[peer_id] = int(snap["flags"])
 	if _net_log:
 		Log.debug("rpc_snapshot от %d: %d байт" % [peer_id, data.size()], "Net")
 	EventBus.peer_snapshot.emit(peer_id, snap, Time.get_ticks_msec())
@@ -591,6 +598,67 @@ func _broadcast_coin_taken(spawn_id: int, collector_peer: int, coins: int, respa
 		rpc_coin_taken(spawn_id, collector_peer, coins, respawn_at)
 
 
+# --- Кооп-механики П5 (раздел 9; исходы подтверждает хост) ---
+
+## Помощник удержал E у точки, где висит target (раздел 9.1): просим хост
+## подтвердить вытягивание.
+func request_pull(target_peer: int) -> void:
+	if is_host():
+		_handle_pull(local_peer_id, target_peer)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_request_pull", target_peer), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_request_pull(target_peer: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_pull(multiplayer.get_remote_sender_id(), target_peer)
+
+
+## Проверка хоста (раздел 9.1): target висит (флаг снапшота), helper рядом
+## (дистанция с допуском на пинг). Подтверждение — всем.
+func _handle_pull(helper_peer: int, target_peer: int) -> void:
+	var target_pos: Vector3 = _peer_position(target_peer)
+	var helper_pos: Vector3 = _peer_position(helper_peer)
+	if target_pos == _POS_UNKNOWN or helper_pos == _POS_UNKNOWN:
+		Log.warn("Вытягивание %d → %d отклонено: нет позиций" % [helper_peer, target_peer], "Net")
+		return
+	var target_hanging: bool = (
+		(int(_peer_flags.get(target_peer, 0)) & Protocol.FLAG_HANGING) != 0
+		if target_peer != local_peer_id
+		else (_local_player != null and _local_player.is_hanging())
+	)
+	var event := activity.try_pull(
+		target_peer, helper_peer, world_time_sec(), target_hanging,
+		target_pos.distance_to(helper_pos), B,
+	)
+	if event.is_empty():
+		return
+	Log.info(
+		"Вытягивание подтверждено: %d вытащил %d" % [helper_peer, target_peer], "Net"
+	)
+	_broadcast_pulled(helper_peer, target_peer)
+
+
+## Хост подтвердил вытягивание (раздел 9.1): анимации у обоих, монеты
+## помощнику, событие для Interactions (у каждого клиента свои очки).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_pulled(helper_peer: int, target_peer: int) -> void:
+	EventBus.player_pulled.emit(helper_peer, target_peer)
+	if target_peer == local_peer_id and _local_player != null:
+		_local_player.pulled_up()
+	if helper_peer == local_peer_id:
+		Session.add_world_coins(B.pull_reward)
+
+
+func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
+	if is_networked():
+		_send(func() -> void: rpc_pulled.rpc(helper_peer, target_peer), false)
+	else:
+		rpc_pulled(helper_peer, target_peer)
+
+
 ## Ping часов: клиент раз в секунду.
 @rpc("any_peer", "call_remote", "unreliable_ordered", Protocol.CHANNEL_SNAPSHOT)
 func rpc_ping(client_msec: int) -> void:
@@ -633,6 +701,7 @@ func _on_peer_connected(peer_id: int) -> void:
 func _on_peer_disconnected(peer_id: int) -> void:
 	Log.warn("Пир отключился: %d" % peer_id, "Net")
 	_peer_pos.erase(peer_id)
+	_peer_flags.erase(peer_id)
 	if multiplayer.is_server():
 		players.erase(peer_id)
 		_broadcast_roster()
@@ -677,6 +746,7 @@ func _teardown_network() -> void:
 	world_epoch_msec = 0
 	clock.clear()
 	_peer_pos.clear()
+	_peer_flags.clear()
 	_aoi.clear()
 	_seq = 0
 	last_world_state = {}

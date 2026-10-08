@@ -20,6 +20,7 @@ const MAP_PATH: String = "res://assets/island_map.png"
 
 const WATER_SCRIPT: String = "res://gameplay/world/water_area.gd"
 const HANG_SCRIPT: String = "res://gameplay/activities/hang_area.gd"
+const HANG_POINT_SCRIPT: String = "res://gameplay/activities/hang_point.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
 const COIN_SCRIPT: String = "res://gameplay/world/coin_pickup.gd"
@@ -107,10 +108,11 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Island:
 	box.size = hang["size"]
 	shape.shape = box
 	crevasse.add_child(shape)
-	for point: Vector3 in hang["points"]:
-		var marker := Marker3D.new()
-		marker.position = point - crevasse.position
-		crevasse.add_child(marker)
+	for i: int in hang["points"].size():
+		var hang_point: Node3D = load(HANG_POINT_SCRIPT).new()
+		hang_point.name = "HangPoint%d" % (i + 1)
+		hang_point.position = hang["points"][i] - crevasse.position
+		crevasse.add_child(hang_point)
 	root.add_child(crevasse)
 
 	# Камни духа (точки возрождения) и костёр на площади.
