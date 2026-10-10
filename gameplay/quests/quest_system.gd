@@ -12,6 +12,9 @@ const B: Balance = preload("res://gameplay/balance.tres")
 var _art: IslandArt
 ## Последнее состояние заданий (для эффектов финалов).
 var _state: Dictionary = {}
+## Старт настоящего Звездопада по часам мира (−1 — не идёт): мини-звездопад
+## финала Луми поверх настоящего — ярче.
+var _starfall_at: float = -1.0
 
 
 func _ready() -> void:
@@ -23,6 +26,7 @@ func _ready() -> void:
 	_spawn_all()
 	EventBus.quest_state.connect(_on_quest_state)
 	EventBus.quest_reward.connect(_on_quest_reward)
+	EventBus.beacons_state.connect(_on_beacons_state)
 	# Хост-офлайн применяет своё состояние сразу; клиент получит rpc/world_state.
 	_on_quest_state(Net.quests.state())
 
@@ -104,6 +108,17 @@ func _on_quest_state(state: Dictionary) -> void:
 	_state = state
 
 
+## Старт/конец настоящего Звездопада (раздел 7) — для «ярче» мини-звездопада.
+func _on_beacons_state(_lit: Array, _lighters: Array, starfall_started_at: float) -> void:
+	_starfall_at = starfall_started_at
+
+
+## Идёт ли сейчас настоящий Звездопад (звёзды ещё рождаются).
+func _real_starfall_active() -> bool:
+	return _starfall_at >= 0.0 \
+		and Session.world_time - _starfall_at < B.starfall_duration
+
+
 ## Финал задания: локальный счётчик в save.json (П7, «Встречи»), тост
 ## и эффект у места события (пар и светлячки у костра — Тимьян;
 ## мини-звездопад и тропа — Луми/Финн).
@@ -115,6 +130,8 @@ func _on_quest_reward(
 		TeaFx.spawn(
 			get_parent(), QuestLayout.CAMPFIRE, seated.size(), _is_evening()
 		)
+	elif quest_id == Protocol.QUEST_LUMI and bool(extra.get("mini_starfall", false)):
+		MiniStarfall.spawn(get_parent(), _real_starfall_active())
 	if peers.has(Net.local_peer_id):
 		Save.bump_quest_done(quest_id)
 		var mine := 0
