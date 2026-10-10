@@ -86,6 +86,13 @@ const SOLID_TYPES: PackedStringArray = [
 	"ruin_block", "ruin_tower", "ruin_arch", "ruin_column", "bench",
 	"board", "beacon", "pier_post", "plank_deck", "boat",
 ]
+## Предметы раскладки без коллизии (vfx-fix, баг 2): мелкая растительность
+## проходима, рама ruin_gate — по задумке (проём закрывает RuinGate).
+## Тест проверяет: каждый тип раскладки — либо SOLID (форма в prop_meshes),
+## либо здесь; ничего третьего не бывает.
+const PASS_THROUGH_TYPES: PackedStringArray = [
+	"grass_tuft", "reed", "flower", "pebble", "bush", "ruin_gate",
+]
 
 
 ## Полные данные острова (детерминированы): heights (карта высот, м),
@@ -471,7 +478,9 @@ static func _points_of_interest(
 		"plaza": Vector2i(0, 10),
 		"forest": Vector2i(-52, -40),
 		"ruins": Vector2i(58, -30),
-		"hills": Vector2i(-46, 32),
+		# Hills: соседняя клетка от камня духа (-46, 32) — у камня появилась
+		# коллизия (vfx-fix), спавн внутри него выталкивал игрока наверх.
+		"hills": Vector2i(-45, 33),
 		"crevasse": Vector2i(41, 46),
 		"lake": Vector2i(4, 64),
 	}

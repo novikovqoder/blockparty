@@ -10,6 +10,11 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Группа пучков мяты (хост валидирует дистанцию по узлам группы).
 const MINT_GROUP: StringName = &"quest_mint"
+## Коллизия пучка (баг vfx-fix): низкий цилиндр по габариту стеблей.
+const MINT_RADIUS: float = 0.28
+const MINT_HEIGHT: float = 0.5
+
+var _body: StaticBody3D
 
 ## Какому заданию принадлежит (id Protocol) и номер пучка (шаг задания).
 @export var quest_id: String = Protocol.QUEST_THYME
@@ -49,11 +54,18 @@ func _on_quest_state(state: Dictionary) -> void:
 
 func _apply_visibility() -> void:
 	visible = _active and not _taken
+	# Коллизия живёт вместе с видимостью: собранная/несуществующая мята
+	# не остаётся невидимым препятствием.
+	SolidBody.set_enabled(_body, visible)
 
 
 ## Три стебля с листовыми верхушками; верхушки со слабым свечением
 ## (мята «светится в тумане»). Модели — примитивы, заменить сценой позже.
 func _build_visual() -> void:
+	var solid := CylinderShape3D.new()
+	solid.radius = MINT_RADIUS
+	solid.height = MINT_HEIGHT
+	_body = SolidBody.add(self, solid, Vector3(0.0, MINT_HEIGHT * 0.5, 0.0))
 	var stem_color: Color = PAL.zone_leaf[1].darkened(0.2)
 	var leaf_color: Color = PAL.zone_leaf[1].lightened(0.25)
 	for i: int in 3:

@@ -11,6 +11,10 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Группа вех (хост валидирует дистанцию по узлам группы).
 const FLAG_GROUP: StringName = &"quest_flag"
+## Коллизия шеста (баг vfx-fix): тонкий цилиндр, кольцо на земле проходимо.
+const POLE_RADIUS: float = 0.07
+
+var _body: StaticBody3D
 
 ## Какому заданию принадлежит и номер вехи (шаг задания).
 @export var quest_id: String = Protocol.QUEST_FINN
@@ -60,12 +64,18 @@ func _apply_state() -> void:
 	visible = _active
 	_flag.visible = _planted
 	_pole.visible = _active
+	# Коллизия шеста — только пока веха существует (задание идёт).
+	SolidBody.set_enabled(_body, _active)
 	var ring_mat := _ring.material_override as StandardMaterial3D
 	ring_mat.emission_energy_multiplier = 1.2 if _planted else 0.7
 
 
 ## Кольцо-точка на земле, шест и флажок (появляется после установки).
 func _build_visual() -> void:
+	var solid := CylinderShape3D.new()
+	solid.radius = POLE_RADIUS
+	solid.height = 1.5
+	_body = SolidBody.add(self, solid, Vector3(0.0, 0.75, 0.0))
 	_ring = MeshInstance3D.new()
 	_ring.name = "Ring"
 	var torus := TorusMesh.new()

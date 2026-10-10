@@ -17,6 +17,11 @@ const CALM_SPARKS: int = 12
 const COMPANY_ENERGY: float = 1.0
 const COMPANY_RANGE: float = 13.0
 const COMPANY_SPARKS: int = 26
+## Коллизия очага (баг vfx-fix): цилиндр по габариту поленьев и угля —
+## игрок не проходит сквозь огонь. Каменное кольцо — предметы «boulder»,
+## у них своя коллизия в раскладке.
+const HEARTH_RADIUS: float = 0.55
+const HEARTH_HEIGHT: float = 0.55
 
 var _light: OmniLight3D
 var _sparks: GPUParticles3D
@@ -28,6 +33,11 @@ func _ready() -> void:
 
 
 func _build() -> void:
+	# Твёрдый очаг (баг vfx-fix): поленья и уголь — не призраки.
+	var hearth := CylinderShape3D.new()
+	hearth.radius = HEARTH_RADIUS
+	hearth.height = HEARTH_HEIGHT
+	SolidBody.add(self, hearth, Vector3(0.0, HEARTH_HEIGHT * 0.5, 0.0))
 	var cross := Node3D.new()
 	cross.name = "Logs"
 	add_child(cross)

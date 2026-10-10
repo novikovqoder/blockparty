@@ -104,7 +104,7 @@ func _nearest_player_distance() -> float:
 func _build_collision() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Body"
-	body.collision_layer = 1  # слой мира: маска игрока его чувствует
+	body.collision_layer = 1  # слой мира: коллизию чувствует маска игрока
 	body.collision_mask = 0
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()

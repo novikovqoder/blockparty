@@ -13,6 +13,11 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Группа квестовых маяков (хост валидирует дистанцию по узлам группы).
 const QBEACON_GROUP: StringName = &"quest_beacon"
+## Коллизия столба (баг vfx-fix): цилиндр по габариту шеста с лампой.
+const POLE_RADIUS: float = 0.14
+const POLE_HEIGHT: float = 1.3
+
+var _body: StaticBody3D
 
 ## Какому заданию принадлежит и номер маяка (шаг задания).
 @export var quest_id: String = Protocol.QUEST_LUMI
@@ -63,6 +68,8 @@ func _on_quest_state(state: Dictionary) -> void:
 func _apply_state() -> void:
 	visible = _active
 	_light.visible = _lit
+	# Коллизия столба — только пока маяк существует (задание идёт).
+	SolidBody.set_enabled(_body, _active)
 	var material := _lamp.material_override as StandardMaterial3D
 	material.emission_enabled = _lit
 	material.albedo_color = PAL.beacon_glow if _lit \
@@ -84,6 +91,10 @@ func _helper_near(player: Node3D) -> bool:
 
 ## Малый столб с лампой — у подножия большой башни или на площадке.
 func _build_visual() -> void:
+	var solid := CylinderShape3D.new()
+	solid.radius = POLE_RADIUS
+	solid.height = POLE_HEIGHT
+	_body = SolidBody.add(self, solid, Vector3(0.0, POLE_HEIGHT * 0.5, 0.0))
 	var pole := MeshInstance3D.new()
 	pole.name = "Pole"
 	var cyl := CylinderMesh.new()

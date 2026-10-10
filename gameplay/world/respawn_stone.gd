@@ -8,6 +8,8 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Группа, по которой Player ищет ближайший камень (на острове их несколько).
 const GROUP: StringName = &"respawn"
+## Габарит камня духа: постамент + светящийся куб (коллизия, баг vfx-fix), м.
+const SOLID_SIZE: Vector3 = Vector3(1.0, 0.9, 1.0)
 
 
 func _ready() -> void:
@@ -16,6 +18,9 @@ func _ready() -> void:
 
 
 func _build() -> void:
+	var solid := BoxShape3D.new()
+	solid.size = SOLID_SIZE
+	SolidBody.add(self, solid, Vector3(0.0, SOLID_SIZE.y * 0.5, 0.0))
 	_add_box(Vector3(1.0, 0.4, 1.0), Vector3(0.0, 0.2, 0.0), PAL.stone, 0.0)
 	_add_box(Vector3(0.5, 0.5, 0.5), Vector3(0.0, 0.65, 0.0), PAL.beacon_glow, 1.5)
 

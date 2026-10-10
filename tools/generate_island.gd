@@ -18,6 +18,8 @@ const ART_PATH: String = "res://gameplay/world/island_art.res"
 const SCENE_PATH: String = "res://gameplay/world/island.tscn"
 const MAP_PATH: String = "res://assets/island_map.png"
 
+const ISLAND_SCRIPT: String = "res://gameplay/world/island.gd"
+const ISLAND_VIEW_SCRIPT: String = "res://gameplay/world/island_view.gd"
 const WATER_SCRIPT: String = "res://gameplay/world/water_area.gd"
 const HANG_SCRIPT: String = "res://gameplay/activities/hang_area.gd"
 const HANG_POINT_SCRIPT: String = "res://gameplay/activities/hang_point.gd"
@@ -62,6 +64,9 @@ func _generate() -> void:
 
 	var root := _build_scene(data, load(ART_PATH) as IslandArt)
 	var packed := PackedScene.new()
+	# Island/IslandView грузятся load()-ом (не class_name): island.gd ссылается
+	# на автолоад EventBus, а при --script главный скрипт компилируется до
+	# инициализации автолоадов — прямая ссылка на класс ломала загрузку.
 	var pack_error: int = packed.pack(root)
 	root.free()  # не тащить узлы к выходу процесса (чистый лог)
 	if pack_error != OK:
@@ -86,14 +91,14 @@ func _generate() -> void:
 ## Собрать дерево острова (без входа в SceneTree — _ready нод не выполняется,
 ## визуал мобов/монет/камней строится в игре, в сцену попадает статика).
 @warning_ignore("unsafe_method_access")
-func _build_scene(data: Dictionary, art: IslandArt) -> Island:
-	var root := Island.new()
+func _build_scene(data: Dictionary, art: IslandArt) -> Node:
+	var root: Node = load(ISLAND_SCRIPT).new()
 	root.name = "Island"
 	root.zones = IslandGen.ZONES
 	root.spawn_zones = data["spawn_zones"]
 	root.world_bounds = data["bounds"]
 
-	var view := IslandView.new()
+	var view: Node = load(ISLAND_VIEW_SCRIPT).new()
 	view.name = "IslandView"
 	view.art = art
 	root.add_child(view)
@@ -256,12 +261,12 @@ func _mob_node(mob: Dictionary) -> Area3D:
 
 
 ## Владелец-корень для упаковки: без owner узел не попадёт в PackedScene.
-func _set_owners(root: Island) -> void:
+func _set_owners(root: Node) -> void:
 	for child: Node in root.get_children():
 		_own(root, child)
 
 
-func _own(root: Island, node: Node) -> void:
+func _own(root: Node, node: Node) -> void:
 	node.owner = root
 	for child: Node in node.get_children():
 		_own(root, child)

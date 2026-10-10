@@ -448,7 +448,7 @@ func test_townsfolk_has_capsule_collision() -> void:
 	folk.quest_id = Protocol.QUEST_THYME
 	folk.sitting = true
 	add_child_autofree(folk)
-	var bodies: Array = folk.find_children("Body", "StaticBody3D", false, false)
+	var bodies: Array = folk.find_children("*", "StaticBody3D", false, false)
 	assert_eq(bodies.size(), 1, "у жителя один StaticBody3D")
 	var shape := (bodies[0] as StaticBody3D).get_child(0) as CollisionShape3D
 	assert_not_null(shape.shape, "форма коллизии задана")

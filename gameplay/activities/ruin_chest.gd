@@ -13,6 +13,8 @@ const GROUP: StringName = &"ruin_chest"
 const BODY_SIZE: Vector3 = Vector3(0.95, 0.55, 0.6)
 ## Угол открытой крышки, рад.
 const OPEN_ANGLE: float = -1.9
+## Высота сундука с крышкой (коллизия, баг vfx-fix), м.
+const SOLID_HEIGHT: float = 0.77
 
 var _lid: Node3D
 var _open: bool = false
@@ -40,6 +42,10 @@ func set_open(open: bool) -> void:
 
 ## Корпус, светящееся нутро и крышка на задней кромке (петля).
 func _build_chest() -> void:
+	# Твёрдый сундук (баг vfx-fix): бокс по корпусу с крышкой.
+	var solid := BoxShape3D.new()
+	solid.size = Vector3(BODY_SIZE.x, SOLID_HEIGHT, BODY_SIZE.z)
+	SolidBody.add(self, solid, Vector3(0.0, SOLID_HEIGHT * 0.5, 0.0))
 	var body := MeshInstance3D.new()
 	body.name = "Body"
 	var body_mesh := BoxMesh.new()
