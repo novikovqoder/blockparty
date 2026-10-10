@@ -328,6 +328,8 @@ extends Resource
 @export var quest_firefly_per_seated: int = 4
 ## Мини-звездопад финала Луми, с.
 @export var quest_starfall_mini_duration: float = 20.0
+## Тропа финала Финна: сколько секунд лента «проступает», с.
+@export var quest_trail_fade_in: float = 1.5
 ## Ворота руин в день выполнения «Короткой тропы»: соло-таймер, с
 ## (обычный gate_open_wait — 60, в черновике ТЗ названо «45»).
 @export var quest_gate_open_wait: float = 20.0

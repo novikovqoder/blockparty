@@ -15,6 +15,9 @@ var _state: Dictionary = {}
 ## Старт настоящего Звездопада по часам мира (−1 — не идёт): мини-звездопад
 ## финала Луми поверх настоящего — ярче.
 var _starfall_at: float = -1.0
+## Тропа финала Финна уже проявлена в этой сессии: остаётся до конца
+## сессии, повторно не создаётся (в т.ч. на следующий игровой день).
+var _trail_shown: bool = false
 
 
 func _ready() -> void:
@@ -106,6 +109,11 @@ func _nearest_beacon_tower(target: Vector2) -> Beacon:
 ## Состояние заданий от хоста (включая свой офлайн-мир).
 func _on_quest_state(state: Dictionary) -> void:
 	_state = state
+	# Тропа Финна — часть мира до конца сессии: опоздавший или перезашедший
+	# видит её по state (reward-событие уже прошло), очевидцы — по reward.
+	var finn: Variant = state.get(Protocol.QUEST_FINN)
+	if finn is Dictionary and int(finn["stage"]) == QuestAuthority.DONE:
+		_show_trail()
 
 
 ## Старт/конец настоящего Звездопада (раздел 7) — для «ярче» мини-звездопада.
@@ -132,6 +140,8 @@ func _on_quest_reward(
 		)
 	elif quest_id == Protocol.QUEST_LUMI and bool(extra.get("mini_starfall", false)):
 		MiniStarfall.spawn(get_parent(), _real_starfall_active())
+	elif quest_id == Protocol.QUEST_FINN:
+		_show_trail()
 	if peers.has(Net.local_peer_id):
 		Save.bump_quest_done(quest_id)
 		var mine := 0
@@ -148,3 +158,12 @@ func _on_quest_reward(
 ## Сумерки или ночь по часам мира (масштаб финала Тимьяна ×2).
 func _is_evening() -> bool:
 	return not DayMath.is_day(Session.world_time)
+
+
+## Проявить тропу Финна (идемпотентно — состояние и reward приходят рядом).
+func _show_trail() -> void:
+	if _trail_shown:
+		return
+	_trail_shown = true
+	TrailFx.spawn(get_parent(), _art)
+	Log.info("Финал Финна: тропа к руинам проявлена", "Quest")
