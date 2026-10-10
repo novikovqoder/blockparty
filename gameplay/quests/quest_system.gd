@@ -104,9 +104,17 @@ func _on_quest_state(state: Dictionary) -> void:
 	_state = state
 
 
-## Финал задания: локальный счётчик в save.json (П7, «Встречи») и тост.
-## Эффекты финалов (пар и светлячки, мини-звездопад, тропа) — блоки 2–4.
-func _on_quest_reward(quest_id: String, peers: Array, coins: Array, _extra: Dictionary) -> void:
+## Финал задания: локальный счётчик в save.json (П7, «Встречи»), тост
+## и эффект у места события (пар и светлячки у костра — Тимьян;
+## мини-звездопад и тропа — Луми/Финн).
+func _on_quest_reward(
+	quest_id: String, peers: Array, coins: Array, extra: Dictionary
+) -> void:
+	if quest_id == Protocol.QUEST_THYME:
+		var seated: Array = extra.get("seated", [])
+		TeaFx.spawn(
+			get_parent(), QuestLayout.CAMPFIRE, seated.size(), _is_evening()
+		)
 	if peers.has(Net.local_peer_id):
 		Save.bump_quest_done(quest_id)
 		var mine := 0
@@ -118,3 +126,8 @@ func _on_quest_reward(quest_id: String, peers: Array, coins: Array, _extra: Dict
 			% [quest_id, mine, peers.size()], "Quest"
 		)
 		EventBus.toast_requested.emit("QUEST_TOAST_DONE")
+
+
+## Сумерки или ночь по часам мира (масштаб финала Тимьяна ×2).
+func _is_evening() -> bool:
+	return not DayMath.is_day(Session.world_time)
