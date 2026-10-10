@@ -19,6 +19,7 @@ var join_address: String = ""    # --dev-join=IP: подключиться кл�
 var player_name: String = ""     # --dev-name: имя игрока без Steam
 var spawn_zone: String = ""      # --dev-spawn=ZONE: появиться сразу в зоне
 var bot: bool = false            # --bot: бот для нагрузочных тестов (ходьба — П3)
+var quest_bot: bool = false      # --quest-bot: автопрогон задания жителя (П5.5)
 var net_lag_ms: int = 0          # --net-lag: эмуляция задержки сети, мс
 var net_loss_percent: int = 0    # --net-loss: эмуляция потери пакетов, %
 var log_net: bool = false        # --log-net: подробный лог сетевых RPC
@@ -35,6 +36,7 @@ func _init() -> void:
 	player_name = parsed["player_name"]
 	spawn_zone = parsed["spawn_zone"]
 	bot = parsed["bot"]
+	quest_bot = parsed["quest_bot"]
 	net_lag_ms = parsed["net_lag_ms"]
 	net_loss_percent = parsed["net_loss_percent"]
 	log_net = parsed["log_net"]
@@ -61,6 +63,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"player_name": "",
 		"spawn_zone": "",
 		"bot": false,
+		"quest_bot": false,
 		"net_lag_ms": 0,
 		"net_loss_percent": 0,
 		"log_net": false,
@@ -74,6 +77,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["host_mode"] = true
 		elif arg == "--bot":
 			result["bot"] = true
+		elif arg == "--quest-bot":
+			result["quest_bot"] = true
 		elif arg == "--log-net":
 			result["log_net"] = true
 		elif arg.begins_with("--dev-join="):

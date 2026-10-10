@@ -202,6 +202,12 @@ func _spawn_player() -> void:
 			if node is Node3D:
 				targets.append((node as Node3D).global_position)
 		_player.set_bot_targets(targets)
+	# Автопрогон задания жителя (П5.5): клиент проходит «Вечерний чай»,
+	# хост стоит у костра — e2e-сверка логов в tools/quest_e2e.sh.
+	if Session.quest_bot:
+		var quest_bot := QuestBot.new()
+		add_child(quest_bot)
+		quest_bot.setup(_player)
 
 
 ## Отладка коллизий (--debug-collisions): поверх картинки рисуются

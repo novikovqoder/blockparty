@@ -36,6 +36,9 @@ var authority := HostAuthority.new()
 var activity := ActivityAuthority.new()
 ## Авторитет хоста: задания жителей (П5.5).
 var quests := QuestAuthority.new()
+## Предыдущее состояние заданий для дельта-логов rpc_quest_state (пусто —
+## первый пакет ещё не приходил; сбрасывается вместе с quests.clear()).
+var _quests_logged: Dictionary = {}
 ## Связи «за руку» (раздел 9.5): leader → follower; заполняется rpc_hand_link
 ## у всех одинаково — для скорости цепочки (раздел 17) и HUD.
 var hand_links: Dictionary = {}
@@ -95,6 +98,7 @@ func _ready() -> void:
 				authority.clear()
 				activity.clear()
 				quests.clear()
+				_quests_logged.clear()
 				hand_links.clear()
 				_aoi.clear()
 				_peer_pos.clear()
@@ -158,6 +162,7 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		authority.clear()
 		activity.clear()
 		quests.clear()
+		_quests_logged.clear()
 		hand_links.clear()
 		_aoi.clear()
 		_peer_pos.clear()
@@ -1016,7 +1021,6 @@ func _handle_quest_take(peer: int, quest_id: String) -> void:
 	if not _near_townsfolk(peer, quest_id):
 		return
 	if quests.take(quest_id, peer, day_index()):
-		Log.info("Игрок %d взял задание «%s»" % [peer, quest_id], "Net")
 		_broadcast_quest_state()
 
 
@@ -1048,7 +1052,11 @@ func _handle_quest_action(peer: int, quest_id: String, kind: String, index: int)
 	if not quests.do_step(quest_id, index, peer):
 		return
 	Log.info("Задание «%s»: шаг %d выполнен (peer %d)" % [quest_id, index + 1, peer], "Net")
-	if quests.steps_done(quest_id):
+	# Последний шаг Луми и Финна завершает задание у узла. Тимьян — нет:
+	# собранная мята ждёт финала у костра (посадка, _try_finish_thyme),
+	# иначе задание закрылось бы у пучка в Лесу и компания у огня
+	# не получила бы награду.
+	if quest_id != Protocol.QUEST_THYME and quests.steps_done(quest_id):
 		_finish_quest(quest_id, node.global_position)
 	else:
 		_broadcast_quest_state()
@@ -1105,9 +1113,47 @@ func _try_finish_thyme(seat: CampfireSeat) -> void:
 
 ## Хост разослал состояние заданий (П5.5): значки жителей, мята, вехи,
 ## квестовые маяки, HUD-трекер и открытый диалог читают его одинаково.
+## Дельта с предыдущего пакета логируется — взятие (кем), прогресс шагов
+## и финал видны в логах ВСЕХ копий (e2e: tools/quest_e2e.sh).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
 func rpc_quest_state(state: Dictionary) -> void:
+	_log_quest_delta(state)
 	EventBus.quest_state.emit(state)
+
+
+## Журнал «задание изменилось» из разницы состояний: кем взято — новый
+## участник в peers. До первого пакета база — «всё доступно»: взятие видно
+## и у подключившегося раньше события, и в перезаходе (leave_world чистит
+## базу вместе с миром).
+func _log_quest_delta(state: Dictionary) -> void:
+	for id: String in Protocol.QUEST_IDS:
+		var fresh: Variant = state.get(id)
+		if fresh is not Dictionary:
+			continue
+		var quest: Dictionary = fresh
+		var old: Dictionary = _quests_logged.get(id, {})
+		var old_stage: int = int(old.get("stage", QuestAuthority.AVAILABLE))
+		var stage: int = int(quest["stage"])
+		var peers: Array = quest["peers"]
+		var old_peers: Array = old.get("peers", [])
+		if stage == QuestAuthority.ACTIVE and old_stage == QuestAuthority.AVAILABLE:
+			var taker: int = 0
+			for peer: int in peers:
+				if not old_peers.has(peer):
+					taker = peer
+			if taker != 0:
+				Log.info("Задание «%s» взято игроком %d" % [id, taker], "Net")
+			else:
+				Log.info("Задание «%s» взято" % id, "Net")
+		var steps: Array = quest["steps"]
+		if steps != old.get("steps", []) and stage == QuestAuthority.ACTIVE:
+			var done := 0
+			for value: int in steps:
+				done += value
+			Log.info("Задание «%s»: прогресс %d/%d" % [id, done, steps.size()], "Net")
+		if stage == QuestAuthority.DONE and old_stage != QuestAuthority.DONE:
+			Log.info("Задание «%s» выполнено" % id, "Net")
+		_quests_logged[id] = quest.duplicate(true)
 
 
 func _broadcast_quest_state() -> void:
@@ -1123,6 +1169,14 @@ func _broadcast_quest_state() -> void:
 ## финалов — QuestSystem (extra: мини-звездопад, сидящие у костра).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
 func rpc_quest_reward(quest_id: String, peers: Array, coins: Array, extra: Dictionary) -> void:
+	# Награда логируется на ВСЕХ копиях (e2e), не только у участников.
+	var parts: PackedStringArray = []
+	for i: int in peers.size():
+		parts.append("%d:+%d" % [int(peers[i]), int(coins[i]) if i < coins.size() else 0])
+	Log.info(
+		"Задание «%s»: награда каждому участнику — %s" % [quest_id, " ".join(parts)],
+		"Net"
+	)
 	EventBus.quest_reward.emit(quest_id, peers, coins, extra)
 	if peers.has(local_peer_id):
 		var mine := 0
@@ -1738,6 +1792,7 @@ func _teardown_network() -> void:
 	authority.clear()
 	activity.clear()
 	quests.clear()
+	_quests_logged.clear()
 	_activity_accum = 0.0
 	if was_steam:
 		# Раздел 11: выход из мира — выход из лобби (Rich Presence очищается).
