@@ -435,3 +435,34 @@ func test_townsfolk_hidden_for_same_character() -> void:
 	else:
 		file.store_string(backup)
 	file.close()
+
+
+# --- Физическая форма жителя (баг vfx-fix: сквозь NPC проходили) ---
+
+
+## У жителя есть StaticBody3D с капсулой по габариту модели: нижняя точка
+## у ступней (модели стоят «ногами» в origin), верх — на уровне макушки.
+func test_townsfolk_has_capsule_collision() -> void:
+	var folk := Townsfolk.new()
+	folk.character = 2
+	folk.quest_id = Protocol.QUEST_THYME
+	folk.sitting = true
+	add_child_autofree(folk)
+	var bodies: Array = folk.find_children("Body", "StaticBody3D", false, false)
+	assert_eq(bodies.size(), 1, "у жителя один StaticBody3D")
+	var shape := (bodies[0] as StaticBody3D).get_child(0) as CollisionShape3D
+	assert_not_null(shape.shape, "форма коллизии задана")
+	var capsule := shape.shape as CapsuleShape3D
+	assert_ne(capsule, null, "форма — капсула")
+	assert_almost_eq(
+		shape.position.y - capsule.height * 0.5, 0.0, EPS,
+		"нижняя точка капсулы у ступней",
+	)
+	assert_almost_eq(
+		shape.position.y + capsule.height * 0.5,
+		CharacterModel.HEAD_TOP_Y, EPS, "верх капсулы на уровне макушки",
+	)
+	# Слой 1 — маска игрока (collision_mask = 1): капсула реально блокирует.
+	var body := bodies[0] as StaticBody3D
+	assert_true(body.get_collision_layer_value(1), "тело жителя на слое 1 (мир)")
+	assert_almost_eq(capsule.radius, folk.COLLISION_RADIUS, EPS, "радиус капсулы")

@@ -21,6 +21,12 @@ const WAVE_COOLDOWN: float = 5.0
 ## Значки над головой: доступно / идёт.
 const BADGE_AVAILABLE: String = "!"
 const BADGE_ACTIVE: String = "…"
+## Радиус капсулы-коллизии жителя, м; высота — до макушки модели
+## (CharacterModel.HEAD_TOP_Y). Как у игрока: точка опоры у ступней,
+## центр капсулы на половине высоты. Тело на слое 1 — его чувствует маска
+## игрока (collision_mask = 1), сквозь жителя не пройти; Area3D самого
+## узла остаётся триггером подсказки «E».
+const COLLISION_RADIUS: float = 0.35
 
 ## Номер персонажа (0 Финн, 1 Луми, 2 Тимьян — как CharacterModel).
 @export var character: int = 0
@@ -43,6 +49,7 @@ func _ready() -> void:
 	use_radius = B.quest_npc_use_radius
 	EventBus.quest_state.connect(_on_quest_state)
 	_build_model()
+	_build_collision()
 	_build_badge()
 	_build_note()
 	# Хост-офлайн: применяем сразу своё состояние (клиент получит rpc).
@@ -90,6 +97,23 @@ func _nearest_player_distance() -> float:
 				continue
 			best = minf(best, global_position.distance_to(body.global_position))
 	return best
+
+
+## Физическая форма жителя (баг vfx-fix): капсула по габариту модели,
+## нижняя точка у ступней — Area3D самого узла остаётся триггером «E».
+func _build_collision() -> void:
+	var body := StaticBody3D.new()
+	body.name = "Body"
+	body.collision_layer = 1  # слой мира: маска игрока его чувствует
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = COLLISION_RADIUS
+	capsule.height = CharacterModel.HEAD_TOP_Y
+	shape.shape = capsule
+	shape.position = Vector3(0.0, CharacterModel.HEAD_TOP_Y * 0.5, 0.0)
+	body.add_child(shape)
+	add_child(body)
 
 
 ## Модель персонажа в нейтральном цвете; Тимьян сидит на пне.
