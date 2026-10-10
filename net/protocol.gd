@@ -25,6 +25,15 @@ const QUEST_KIND_MINT: String = "mint"
 const QUEST_KIND_BEACON: String = "beacon"
 const QUEST_KIND_FLAG: String = "flag"
 
+## id → ключ строки HUD-трекера (i18n) и вид шагов-целей: трекер пишет
+## «Мята: 3/5», карта (M) рисует точки несделанных шагов по группам узлов
+## (та же привязка kind → группа, что у Net._quest_node).
+const QUEST_TRACK: Dictionary = {
+	QUEST_THYME: {"key": "QUEST_TRACK_MINT", "kind": QUEST_KIND_MINT},
+	QUEST_LUMI: {"key": "QUEST_TRACK_BEACONS", "kind": QUEST_KIND_BEACON},
+	QUEST_FINN: {"key": "QUEST_TRACK_FLAGS", "kind": QUEST_KIND_FLAG},
+}
+
 ## Максимум игроков в мире; код должен работать до MAX_PLAYERS_HARD (раздел 10).
 const MAX_PLAYERS: int = 12
 const MAX_PLAYERS_HARD: int = 16

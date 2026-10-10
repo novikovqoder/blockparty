@@ -66,6 +66,9 @@ func _ready() -> void:
 	var quest_system := QuestSystem.new()
 	_island.add_child(quest_system)
 	add_child(QuestDialog.new())
+	# Трекер активных заданий справа сверху (раздел 15); карту (M) точками
+	# целей подписывает сама IslandMap.
+	add_child(QuestTracker.new())
 	if Dev.debug_collisions:
 		_draw_debug_collisions(_island)
 	_wire_network()

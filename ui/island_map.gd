@@ -7,6 +7,7 @@ class_name IslandMap
 extends CanvasLayer
 
 const TEXTURE: Texture2D = preload("res://assets/island_map.png")
+const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Остров 256 × 256 м: x и z ∈ [−128, 128] (IslandGen.HALF).
 const HALF_WORLD: float = 128.0
@@ -20,6 +21,10 @@ var _player: Player = null
 var _frame: Control = null
 var _marker: ColorRect = null
 var _zone_layer: Control = null
+## Точки целей активных заданий (П5.5): несделанные шаги — мята, маяки,
+## вехи. Перестраиваются по quest_state; видны только на открытой карте.
+var _quest_layer: Control = null
+var _quest_state: Dictionary = {}
 var _shown: bool = false
 var _was_pressed: bool = false
 
@@ -69,6 +74,12 @@ func _ready() -> void:
 	_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_holder.add_child(_marker)
 
+	_quest_layer = Control.new()
+	_quest_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_quest_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_holder.add_child(_quest_layer)
+	EventBus.quest_state.connect(_on_quest_state)
+
 	_frame.visible = false
 	if _island != null:
 		_build_zone_labels()
@@ -116,3 +127,57 @@ func _build_zone_labels() -> void:
 		label.size = Vector2(90, 20)
 		label.position -= Vector2(45, 10)
 		_zone_layer.add_child(label)
+
+
+## Состояние заданий от хоста: точки целей перерисовываются (слой виден
+## только вместе с картой — он внутри map_holder под _frame.visible).
+func _on_quest_state(state: Dictionary) -> void:
+	_quest_state = state
+	_build_quest_marks()
+
+
+## Точки несделанных шагов идущих заданий: цвет — квестовое свечение
+## (beacon_glow), чтобы отличать от красного маркера игрока.
+func _build_quest_marks() -> void:
+	if _quest_layer == null:
+		return
+	for child: Node in _quest_layer.get_children():
+		child.queue_free()
+	for id: String in Protocol.QUEST_IDS:
+		var quest: Variant = _quest_state.get(id)
+		if quest is not Dictionary:
+			continue
+		if int(quest["stage"]) != QuestAuthority.ACTIVE:
+			continue
+		var steps: Array = quest["steps"]
+		var track: Dictionary = Protocol.QUEST_TRACK[id]
+		for node in get_tree().get_nodes_in_group(_kind_group(String(track["kind"]))):
+			var spot := node as Node3D
+			if spot == null:
+				continue
+			var raw: Variant = spot.get("index")
+			if typeof(raw) != TYPE_INT:
+				continue
+			var index: int = raw
+			if index < 0 or index >= steps.size() or int(steps[index]) != 0:
+				continue
+			var mark := ColorRect.new()
+			mark.color = PAL.beacon_glow
+			mark.size = Vector2(MARKER_SIZE, MARKER_SIZE)
+			mark.pivot_offset = Vector2(MARKER_SIZE, MARKER_SIZE) * 0.5
+			mark.position = _world_to_map(spot.global_position)
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_quest_layer.add_child(mark)
+
+
+## Группа узлов шагов по виду (привязка как у Net._quest_node).
+func _kind_group(kind: String) -> StringName:
+	match kind:
+		Protocol.QUEST_KIND_MINT:
+			return MintPatch.MINT_GROUP
+		Protocol.QUEST_KIND_BEACON:
+			return QuestBeacon.QBEACON_GROUP
+		Protocol.QUEST_KIND_FLAG:
+			return TrailFlag.FLAG_GROUP
+		_:
+			return &""
