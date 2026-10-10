@@ -93,6 +93,13 @@ const SOLID_TYPES: PackedStringArray = [
 const PASS_THROUGH_TYPES: PackedStringArray = [
 	"grass_tuft", "reed", "flower", "pebble", "bush", "ruin_gate",
 ]
+## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
+## полилиния по земле. Шаг сэмплов, запас от твёрдых предметов, минимальная
+## высота суши маршрута и радиус зоны зверька для отбоя, м.
+const CRITTER_STEP: float = 0.75
+const CRITTER_CLEAR: float = 0.45
+const CRITTER_MIN_H: float = 0.35
+const CRITTER_ROUTE_MAX: float = 20.0
 
 
 ## Полные данные острова (детерминированы): heights (карта высот, м),
@@ -150,7 +157,7 @@ static func generate() -> Dictionary:
 	data["spawn_zones"] = spawns
 	data["beacons"] = beacons
 	data["coins"] = _coins(heights, props, ruins, pier, rng)
-	data["mobs"] = _mobs(heights, rng)
+	data["mobs"] = _mobs(heights, props, rng)
 	data["hang"] = _hang()
 	data["poi"] = {"ruins": ruins, "pier": pier, "campfire": fire, "lookouts": lookouts}
 	data["bounds"] = HALF - 0.5
@@ -206,6 +213,28 @@ static func top_of(data: Dictionary, x: int, z: int) -> float:
 	if absi(x) > HALF or absi(z) > HALF:
 		return NAN
 	return (data["heights"] as PackedFloat32Array)[_idx(x, z)]
+
+
+## Высота поверхности рельефа в дробной точке (vfx-fix, баг 3): та же
+## триангуляция, что у меша TerrainBuilder (квадрат сетки режется диагональю
+## (x,z)–(x+1,z+1)), без округления к ближайшему узлу. Для маршрутов
+## зверьков и высот «по земле» в рантайме.
+static func ground_height(heights: PackedFloat32Array, fx: float, fz: float) -> float:
+	var gx := clampf(fx + HALF, 0.0, POINTS - 2.0)
+	var gz := clampf(fz + HALF, 0.0, POINTS - 2.0)
+	var x0 := int(gx)
+	var z0 := int(gz)
+	var u := gx - float(x0)
+	var v := gz - float(z0)
+	var h00 := heights[z0 * POINTS + x0]
+	var h10 := heights[z0 * POINTS + x0 + 1]
+	var h01 := heights[(z0 + 1) * POINTS + x0]
+	var h11 := heights[(z0 + 1) * POINTS + x0 + 1]
+	if u >= v:
+		# Треугольник (x,z)–(x+1,z+1)–(x+1,z): подъём по u к (x+1,z), затем по v.
+		return h00 + (h10 - h00) * u + (h11 - h10) * v
+	# Треугольник (x,z)–(x,z+1)–(x+1,z+1): подъём по v к (x,z+1), затем по u.
+	return h00 + (h11 - h01) * u + (h01 - h00) * v
 
 
 ## Взвешенный цвет палитры зон в точке: зоны смешиваются по весам
@@ -1029,9 +1058,13 @@ static func _prop_columns(props: Array) -> Dictionary:
 
 # --- Мобы (раздел 8; траектории — чистые функции в mob_motion.gd) ---
 
-static func _mobs(heights: PackedFloat32Array, rng: RandomNumberGenerator) -> Array[Dictionary]:
+static func _mobs(
+	heights: PackedFloat32Array, props: Array, rng: RandomNumberGenerator
+) -> Array[Dictionary]:
 	var mobs: Array[Dictionary] = []
 	var spawn_id := 1
+	# Круги твёрдых предметов — для отбоя маршрутов зверьков (баг vfx-fix).
+	var circles := _solid_circles(props)
 	# Птицы: лес и холмы (кружат над землёй).
 	for center: Vector2 in [
 		Vector2(-64, -64), Vector2(-40, -70), Vector2(-30, -42),
@@ -1054,7 +1087,7 @@ static func _mobs(heights: PackedFloat32Array, rng: RandomNumberGenerator) -> Ar
 		Vector2(20, 22), Vector2(16, 72), Vector2(-2, 70),
 	]:
 		var base := _nearest_land(heights, int(center.x), int(center.y), 0.5)
-		var points: Array[Vector3] = []
+		var waypoints: Array[Vector3] = []
 		var count: int = rng.randi_range(3, 5)
 		for i: int in range(count):
 			var angle: float = TAU * i / float(count) + rng.randf_range(-0.4, 0.4)
@@ -1062,9 +1095,13 @@ static func _mobs(heights: PackedFloat32Array, rng: RandomNumberGenerator) -> Ar
 			var waypoint := _nearest_land(
 				heights, int(base.x + cos(angle) * dist), int(base.z + sin(angle) * dist), 0.5
 			)
-			points.append(waypoint)
+			waypoints.append(waypoint)
+		# Плотный маршрут по земле (баг vfx-fix): сэмплы по сегментам между
+		# вейпоинтами, высота рельефа в каждой точке, отбой от предметов.
 		mobs.append({
-			"kind": "critter", "spawn_id": spawn_id, "points": points,
+			"kind": "critter", "spawn_id": spawn_id,
+			"waypoints": waypoints,
+			"points": _critter_route(heights, circles, base, waypoints),
 			"speed": rng.randf_range(1.5, 2.5),
 		})
 		spawn_id += 1
@@ -1080,6 +1117,68 @@ static func _mobs(heights: PackedFloat32Array, rng: RandomNumberGenerator) -> Ar
 		})
 		spawn_id += 1
 	return mobs
+
+
+## Круги твёрдых предметов: (x, z, radius) — радиус по габариту коллизии
+## (PropMeshes.collision_size). Проходимые предметы (трава, кусты) не входят.
+static func _solid_circles(props: Array) -> Array[Vector3]:
+	var circles: Array[Vector3] = []
+	for prop: Dictionary in props:
+		var size: Vector3 = PropMeshes.collision_size(
+			StringName(prop["type"]), prop["scale"])
+		if size == Vector3.ZERO:
+			continue
+		var pos: Vector3 = prop["pos"]
+		circles.append(Vector3(pos.x, pos.z, maxf(size.x, size.z) * 0.5))
+	return circles
+
+
+## Плотный маршрут зверька по земле (баг vfx-fix): сэмплы каждые
+## CRITTER_STEP по сегментам между вейпоинтами; XZ каждого сэмпла отодвинут
+## из кругов твёрдых предметов, высота — поверхность рельефа
+## (ground_height). Замкнут: последний сегмент возвращается к старту.
+static func _critter_route(
+	heights: PackedFloat32Array, circles: Array[Vector3],
+	base: Vector3, waypoints: Array[Vector3],
+) -> Array[Vector3]:
+	# Препятствия дальше зоны зверька не влияют — не гонять их на каждом сэмпле.
+	var near: Array[Vector3] = []
+	var home := Vector2(base.x, base.z)
+	for circle: Vector3 in circles:
+		if Vector2(circle.x, circle.y).distance_to(home) <= CRITTER_ROUTE_MAX + circle.z:
+			near.append(circle)
+	var route: Array[Vector3] = []
+	for i: int in waypoints.size():
+		var a: Vector3 = waypoints[i]
+		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
+		var steps: int = maxi(1, ceili(a.distance_to(b) / CRITTER_STEP))
+		for s: int in steps:  # точка b не дублируется: она — старт следующего
+			var t: float = float(s) / float(steps)
+			var flat := _push_out(
+				Vector2(lerpf(a.x, b.x, t), lerpf(a.z, b.z, t)), near, heights)
+			route.append(
+				Vector3(flat.x, ground_height(heights, flat.x, flat.y), flat.y))
+	return route
+
+
+## Сдвиг XZ-точки из кругов твёрдых предметов (зверёк не ходит сквозь
+## деревья и валуны). Если сдвиг увёл к кромке воды — откат: лучше пройти
+## вплотную к предмету, чем идти по воде.
+static func _push_out(
+	flat: Vector2, circles: Array[Vector3], heights: PackedFloat32Array,
+) -> Vector2:
+	var shifted := flat
+	for circle: Vector3 in circles:
+		var center := Vector2(circle.x, circle.y)
+		var min_dist: float = circle.z + CRITTER_CLEAR
+		var offset := shifted - center
+		if offset.length() < 0.001:
+			offset = Vector2(min_dist, 0.0)  # точно в центре предмета
+		if offset.length() < min_dist:
+			shifted = center + offset.normalized() * min_dist
+	if ground_height(heights, shifted.x, shifted.y) < CRITTER_MIN_H:
+		return flat
+	return shifted
 
 
 ## Ближайшая суша не ниже min_h (поиск по кольцам — детерминирован).

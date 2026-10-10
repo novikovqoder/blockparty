@@ -334,6 +334,18 @@ func _shot_player_views(camera: Camera3D) -> void:
 	camera.global_position = feet + Vector3(2.8, 1.1, 0.0)
 	camera.look_at(feet + Vector3.UP * 0.9)
 	await _snap(camera, "char_side.png")
+	# SHOT_NPC=1 — Тимьян на пне у костра крупно (визуальная проверка капсулы
+	# коллизии жителя, vfx-fix: камера видит и костёр за ним).
+	if OS.get_environment("SHOT_NPC") == "1":
+		for node in get_tree().get_nodes_in_group(Townsfolk.TOWNSFOLK_GROUP):
+			var folk := node as Townsfolk
+			if folk == null or not folk.sitting:
+				continue
+			var stump: Vector3 = folk.global_position
+			camera.global_position = stump + Vector3(2.5, 1.2, 2.6)
+			camera.look_at(stump + Vector3.UP * 0.8)
+			await _snap(camera, "npc_thyme.png")
+			break
 
 
 ## Пауза на кадр рендера и сохранение снимка.
