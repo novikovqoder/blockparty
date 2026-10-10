@@ -21,6 +21,7 @@ const KIND_BOOST_GOT: String = "boost_got"      # он подсадил меня
 const KIND_BOOST_GAVE: String = "boost_gave"    # я подсадил его
 const KIND_FIREFLY: String = "firefly"          # вместе поймали золотого светлячка
 const KIND_EMOTE_REPLY: String = "emote_reply"  # ответная эмоция в течение 5 с
+const KIND_QUEST_DONE: String = "quest_done"    # вместе выполнили задание жителя (П5.5)
 
 ## peer_id -> суммарные очки.
 var _scores: Dictionary = {}
@@ -44,6 +45,7 @@ func _ready() -> void:
 	EventBus.beacons_state.connect(_on_beacons_state)
 	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.campfire_seats.connect(_on_campfire_seats)
+	EventBus.quest_reward.connect(_on_quest_reward)
 	EventBus.world_entered.connect(reset)
 
 
@@ -148,6 +150,18 @@ func _on_beacons_state(_lit: Array, lighters: Array, _starfall_started_at: float
 	for lighter: int in lighters:
 		if lighter != Net.local_peer_id:
 			add_points(lighter, KIND_BEACON_LIT, B.pts_beacon_lit, Session.world_time)
+
+
+## Задание жителя выполнено (П5.5): очки каждому участнику за каждого
+## другого — как у ворот и маяков; соло-прохождение очков не даёт.
+func _on_quest_reward(
+	_quest_id: String, peers: Array, _coins: Array, _extra: Dictionary
+) -> void:
+	if not peers.has(Net.local_peer_id) or peers.size() < 2:
+		return
+	for peer: int in peers:
+		if peer != Net.local_peer_id:
+			add_points(peer, KIND_QUEST_DONE, B.pts_quest_done, Session.world_time)
 
 
 ## Записать событие взаимодействия с другим игроком (at_world_time — с).

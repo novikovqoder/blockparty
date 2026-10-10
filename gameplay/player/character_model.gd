@@ -95,9 +95,14 @@ func setup(p_character: int) -> void:
 ## KayKit, детали одежды сохраняются. Контур и фирменный убор не тонируются:
 ## контур остаётся чёрным, убор отличает персонажа, цвет — игрока.
 func setup_palette(id: int) -> void:
+	setup_body_color(PAL.player_colors[palette_index(id)])
+
+
+## Тонирование тела конкретным цветом — игрокам цвет выдаётся по хэшу id
+## (setup_palette), жителям П5.5 задаётся нейтральный, не из 6 игроков.
+func setup_body_color(color: Color) -> void:
 	if _glb_root == null:
 		return
-	var color: Color = PAL.player_colors[palette_index(id)]
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		if _is_outline(mi) or mi.has_meta("hat_part"):

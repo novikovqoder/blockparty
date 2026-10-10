@@ -302,3 +302,37 @@ extends Resource
 ## Ответная эмоция в течение 5 с и лимит.
 @export var pts_emote_reply: float = 2.0
 @export var pts_emote_reply_max: float = 6.0
+
+# --- Задания жителей (П5.5) ---
+
+## Радиус E у жителя и дистанция, с которой он машет при подходе.
+@export var quest_npc_use_radius: float = 2.0
+@export var quest_npc_wave_range: float = 6.0
+## Радиус, в котором второй игрок ускоряет удержание маяка вдвое.
+@export var quest_hold_helper_radius: float = 3.0
+## Удержание E: квестовый маяк и веха, с.
+@export var quest_beacon_hold: float = 2.0
+@export var quest_flag_hold: float = 1.0
+## Базовая награда заданий: монет каждому участнику.
+@export var quest_reward_base: int = 10
+## «Вечерний чай»: +2 за каждого ДРУГОГО сидящего у костра, потолок бонуса.
+@export var quest_thyme_bonus_per_other: int = 2
+@export var quest_thyme_bonus_max: int = 10
+## Радиус финала Тимьяна от центра костра (сесть или стоять рядом).
+@export var quest_campfire_radius: float = 8.0
+## Радиус финала Луми и Финна от последнего объекта задания.
+@export var quest_final_radius: float = 8.0
+## Светлячки финала Тимьяна: длительность, базовое число и за каждого сидящего.
+@export var quest_firefly_duration: float = 30.0
+@export var quest_firefly_base: int = 10
+@export var quest_firefly_per_seated: int = 4
+## Мини-звездопад финала Луми, с.
+@export var quest_starfall_mini_duration: float = 20.0
+## Ворота руин в день выполнения «Короткой тропы»: соло-таймер, с
+## (обычный gate_open_wait — 60, в черновике ТЗ названо «45»).
+@export var quest_gate_open_wait: float = 20.0
+## Очки «Встреч» за совместно выполненное задание (каждому за каждого).
+@export var pts_quest_done: float = 6.0
+## Мята: минимальная высота земли (не пляж) и минимальный разнос пучков, м.
+@export var quest_mint_min_height: float = 1.5
+@export var quest_mint_spacing: float = 8.0

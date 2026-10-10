@@ -207,7 +207,9 @@ var _plates: Array[int] = []
 
 ## Тик ворот руин (вызывает хост activity_tick раз, раздел 9.2):
 ## plate_peers — кто стоит на плитах по снапшотам, player_count — игроков
-## в мире, anyone_at_gate — есть ли игрок у закрытых ворот (запасной путь).
+## в мире, anyone_at_gate — есть ли игрок у закрытых ворот (запасной путь),
+## gate_wait_override — ускоренный соло-таймер дня выполнения «Короткой
+## тропы» (П5.5; <= 0 — обычный b.gate_open_wait).
 ## Возвращает событие: {} — без изменений, {"plates": [int]} — изменились
 ## плиты, {"opened": bool, "openers": [int], "plates": [int]} — ворота
 ## открылись (openers — разные игроки на плитах; пусто при запасном пути),
@@ -218,6 +220,7 @@ func update_ruins_gate(
 	anyone_at_gate: bool,
 	world_time: float,
 	b: Balance,
+	gate_wait_override: float = -1.0,
 ) -> Dictionary:
 	# Открыты: только таймер сброса (ворота и сундук — 10 минут, раздел 8).
 	if _gate_opened_at >= 0.0:
@@ -241,11 +244,14 @@ func update_ruins_gate(
 			_gate_wait_started_at = -1.0
 			return {"opened": true, "openers": openers, "plates": _plates.duplicate()}
 		return {"plates": _plates.duplicate()}
-	# Плиты те же — запасной путь: 60 с присутствия у закрытых ворот.
+	# Плиты те же — запасной путь: 60 с присутствия у закрытых ворот
+	# (или ускоренный таймер дня «Короткой тропы», П5.5).
+	var gate_wait: float = gate_wait_override if gate_wait_override > 0.0 \
+		else b.gate_open_wait
 	if anyone_at_gate:
 		if _gate_wait_started_at < 0.0:
 			_gate_wait_started_at = world_time
-		if world_time - _gate_wait_started_at >= b.gate_open_wait:
+		if world_time - _gate_wait_started_at >= gate_wait:
 			_gate_opened_at = world_time
 			_gate_wait_started_at = -1.0
 			return {"opened": true, "openers": [], "plates": _plates.duplicate()}

@@ -91,6 +91,16 @@ signal mob_killed(spawn_id: int, killers: Array, respawn_at: float)
 signal firefly_weakened(spawn_id: int, peer: int, until: float)
 ## Хост разослал факт подсадки (раздел 13): jumper прыгнул с головы base.
 signal player_boosted(base_peer: int, jumper_peer: int)
+## Задания жителей (П5.5): хост разослал состояние заданий —
+## {quest_id: {stage, done_day, steps, peers}}; stage: 0 доступно,
+## 1 идёт, 2 выполнено сегодня.
+signal quest_state(state: Dictionary)
+## Задание выполнено: peers — участники, coins — монета каждому
+## (параллельные массивы; Тимьяну бонус индивидуален), extra — детали
+## финала (например, сидящие у костра).
+signal quest_reward(quest_id: String, peers: Array, coins: Array, extra: Dictionary)
+## Локальный игрок нажал E у жителя — открыть диалог (QuestDialog).
+signal quest_talk_requested(quest_id: String)
 ## Хост прислал полное состояние мира (вход в идущий мир, раздел 10):
 ## dead_mobs и taken_coins — массивы {spawn_id, respawn_at}.
 signal world_state_applied(dead_mobs: Array, taken_coins: Array)

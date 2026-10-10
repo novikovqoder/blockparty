@@ -22,8 +22,9 @@ func test_loss_threshold() -> void:
 
 
 func test_protocol_constants_section10() -> void:
-	# Раздел 10: версия 2, лимиты, каналы, снапшоты, интерполяция.
-	assert_eq(Protocol.PROTOCOL_VERSION, 2)
+	# Раздел 10: лимиты, каналы, снапшоты, интерполяция; версия 3 — П5.5
+	# (задания жителей), 2 — П4.5 (персонажи в ростере).
+	assert_eq(Protocol.PROTOCOL_VERSION, 3)
 	assert_eq(Protocol.MAX_PLAYERS, 12)
 	assert_eq(Protocol.MAX_PLAYERS_HARD, 16)
 	# Каналы 0..2 из раздела 10, все разные.

@@ -34,6 +34,8 @@ var world_time_offset_sec: float = 0.0
 var authority := HostAuthority.new()
 ## Авторитет хоста: активности и социальные механики П5 (разделы 7, 9).
 var activity := ActivityAuthority.new()
+## Авторитет хоста: задания жителей (П5.5).
+var quests := QuestAuthority.new()
 ## Связи «за руку» (раздел 9.5): leader → follower; заполняется rpc_hand_link
 ## у всех одинаково — для скорости цепочки (раздел 17) и HUD.
 var hand_links: Dictionary = {}
@@ -92,6 +94,7 @@ func _ready() -> void:
 				_start_world_clock()
 				authority.clear()
 				activity.clear()
+				quests.clear()
 				hand_links.clear()
 				_aoi.clear()
 				_peer_pos.clear()
@@ -154,6 +157,7 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		_start_world_clock()
 		authority.clear()
 		activity.clear()
+		quests.clear()
 		hand_links.clear()
 		_aoi.clear()
 		_peer_pos.clear()
@@ -327,6 +331,7 @@ func rpc_hello(player_name: String, character: int) -> void:
 			"beacons": activity.beacons_state(),
 			"stars_taken": activity.stars_taken_state(),
 			"seats": activity.seats_state(),
+			"quests": quests.state(),
 		},
 	}
 	_send(func() -> void: rpc_id(sender, "rpc_world_state", WorldState.pack(state)), false)
@@ -936,6 +941,7 @@ func _handle_sit(peer: int, seat_index: int) -> void:
 		return
 	Log.info("Игрок %d сел у костра (место %d)" % [peer, seat_index + 1], "Net")
 	_broadcast_seats()
+	_try_finish_thyme(seat)
 
 
 ## Игрок пошевелился сидя (раздел 9.6: любое движение — встать).
@@ -984,6 +990,208 @@ func _campfire_seats() -> Array[CampfireSeat]:
 		func(a: CampfireSeat, b: CampfireSeat) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
 	)
 	return seats
+
+
+# --- Задания жителей (П5.5; состояние решает хост) ---
+
+## E у жителя или таблички-записки: просим хоста взять задание.
+func request_quest_take(quest_id: String) -> void:
+	if is_host():
+		_handle_quest_take(local_peer_id, quest_id)
+	else:
+		_send(func() -> void: rpc_id(1, "rpc_quest_take", quest_id), false)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_quest_take(quest_id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_quest_take(multiplayer.get_remote_sender_id(), quest_id)
+
+
+## Проверка хоста: задание существует, просящий стоит у этого жителя
+## (радиус по горизонтали и окно высоты, как у лавок). Взять может любой
+## игрок (не только первый); состояние уходит всем одним пакетом.
+func _handle_quest_take(peer: int, quest_id: String) -> void:
+	if not _near_townsfolk(peer, quest_id):
+		return
+	if quests.take(quest_id, peer, day_index()):
+		Log.info("Игрок %d взял задание «%s»" % [peer, quest_id], "Net")
+		_broadcast_quest_state()
+
+
+## Действие шага задания (П5.5): подбор мяты, веха, квестовый маяк —
+## узел сам вызывал удержание E, хост проверяет дистанцию до узла.
+func request_quest_action(quest_id: String, kind: String, index: int) -> void:
+	if is_host():
+		_handle_quest_action(local_peer_id, quest_id, kind, index)
+	else:
+		_send(
+			func() -> void: rpc_id(1, "rpc_quest_action", quest_id, kind, index), false
+		)
+
+
+@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_quest_action(quest_id: String, kind: String, index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_handle_quest_action(multiplayer.get_remote_sender_id(), quest_id, kind, index)
+
+
+## Проверка хоста: узел этого шага существует (виден по группе и индексу)
+## и просящий рядом с ним. Последний шаг Луми и Финна завершает задание:
+## награда участникам и всем в радиусе финала.
+func _handle_quest_action(peer: int, quest_id: String, kind: String, index: int) -> void:
+	var node := _quest_node(kind, index)
+	if node == null or not _peer_near_quest_node(peer, node):
+		return
+	if not quests.do_step(quest_id, index, peer):
+		return
+	Log.info("Задание «%s»: шаг %d выполнен (peer %d)" % [quest_id, index + 1, peer], "Net")
+	if quests.steps_done(quest_id):
+		_finish_quest(quest_id, node.global_position)
+	else:
+		_broadcast_quest_state()
+
+
+## Финал у последнего узла (Луми, Финн): участники + все в радиусе
+## quest_final_radius от узла; награда каждому по quest_reward_base.
+## Тимьян завершается отдельно — посадкой у костра (_try_finish_thyme).
+func _finish_quest(quest_id: String, center: Vector3) -> void:
+	var around := ActivityAuthority.peers_in_radius(
+		_world_player_entries(), center, B.quest_final_radius
+	)
+	var event := quests.finish(quest_id, day_index(), around)
+	if event.is_empty():
+		return
+	var peers: Array = event["peers"]
+	var coins: Array[int] = []
+	for _peer: int in peers:
+		coins.append(B.quest_reward_base)
+	var extra: Dictionary = {"mini_starfall": quest_id == Protocol.QUEST_LUMI}
+	_broadcast_quest_state()
+	_broadcast_quest_reward(quest_id, peers, coins, extra)
+
+
+## Финал «Вечернего чая» (П5.5): мята собрана и игрок сел у костра —
+## задание выполнено. Участники + все в радиусе костра; бонус монет —
+## за каждого ДРУГОГО сидящего (у каждого свой, раздел 13 не нужен:
+## очки посчитает Interactions по общему событию).
+func _try_finish_thyme(seat: CampfireSeat) -> void:
+	if not quests.is_active(Protocol.QUEST_THYME) \
+			or not quests.steps_done(Protocol.QUEST_THYME):
+		return
+	var seated: Array[int] = []
+	for peer: int in activity.seats_state():
+		if peer != 0 and not seated.has(peer):
+			seated.append(peer)
+	var around := ActivityAuthority.peers_in_radius(
+		_world_player_entries(), seat.face_target, B.quest_campfire_radius
+	)
+	var event := quests.finish(Protocol.QUEST_THYME, day_index(), around)
+	if event.is_empty():
+		return
+	var peers: Array = event["peers"]
+	var coins: Array[int] = []
+	for peer: int in peers:
+		var others := 0
+		for seated_peer: int in seated:
+			if seated_peer != peer:
+				others += 1
+		coins.append(QuestAuthority.thyme_reward(others, B))
+	_broadcast_quest_state()
+	_broadcast_quest_reward(Protocol.QUEST_THYME, peers, coins, {"seated": seated})
+
+
+## Хост разослал состояние заданий (П5.5): значки жителей, мята, вехи,
+## квестовые маяки, HUD-трекер и открытый диалог читают его одинаково.
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_quest_state(state: Dictionary) -> void:
+	EventBus.quest_state.emit(state)
+
+
+func _broadcast_quest_state() -> void:
+	var state := quests.state()
+	if is_networked():
+		_send(func() -> void: rpc_quest_state.rpc(state), false)
+	else:
+		rpc_quest_state(state)
+
+
+## Хост разослал награду задания (П5.5): монеты начисляет себе каждый
+## участник на своём клиенте, очки «Встреч» — Interactions, эффекты
+## финалов — QuestSystem (extra: мини-звездопад, сидящие у костра).
+@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
+func rpc_quest_reward(quest_id: String, peers: Array, coins: Array, extra: Dictionary) -> void:
+	EventBus.quest_reward.emit(quest_id, peers, coins, extra)
+	if peers.has(local_peer_id):
+		var mine := 0
+		for i: int in peers.size():
+			if int(peers[i]) == local_peer_id and i < coins.size():
+				mine = int(coins[i])
+		Session.add_world_coins(mine)
+
+
+func _broadcast_quest_reward(
+	quest_id: String, peers: Array, coins: Array[int], extra: Dictionary
+) -> void:
+	if is_networked():
+		_send(
+			func() -> void: rpc_quest_reward.rpc(quest_id, peers, coins, extra), false
+		)
+	else:
+		rpc_quest_reward(quest_id, peers, coins, extra)
+
+
+## Житель задания рядом с просящим (радиус по горизонтали и окно высоты);
+## quest_id сверяем по узлу Townsfolk. Табличка-записка того же задания
+## стоит на месте скрытого жителя и проходит ту же проверку.
+func _near_townsfolk(peer: int, quest_id: String) -> bool:
+	var peer_pos: Vector3 = _peer_position(peer)
+	if peer_pos == _POS_UNKNOWN:
+		return false
+	for node in get_tree().get_nodes_in_group(Townsfolk.TOWNSFOLK_GROUP):
+		var folk := node as Townsfolk
+		if folk == null or folk.quest_id != quest_id:
+			continue
+		var flat := peer_pos - folk.global_position
+		flat.y = 0.0
+		if flat.length() <= folk.use_radius + B.mob_hit_slack \
+				and absf(peer_pos.y - folk.global_position.y) <= B.beacon_use_window:
+			return true
+	return false
+
+
+## Узел шага рядом с просящим: дистанция по горизонтали и окно высоты
+## (как у маяков, раздел 7).
+func _peer_near_quest_node(peer: int, node: Interactable) -> bool:
+	var peer_pos: Vector3 = _peer_position(peer)
+	if peer_pos == _POS_UNKNOWN:
+		return false
+	var flat := peer_pos - node.global_position
+	flat.y = 0.0
+	return flat.length() <= node.use_radius + B.mob_hit_slack \
+		and absf(peer_pos.y - node.global_position.y) <= B.beacon_use_window
+
+
+## Узел шага по типу и индексу (остров у всех одинаковый, раскладка
+## детерминирована — индексы совпадают на всех копиях).
+func _quest_node(kind: String, index: int) -> Interactable:
+	var group: StringName = &""
+	match kind:
+		Protocol.QUEST_KIND_MINT:
+			group = MintPatch.MINT_GROUP
+		Protocol.QUEST_KIND_BEACON:
+			group = QuestBeacon.QBEACON_GROUP
+		Protocol.QUEST_KIND_FLAG:
+			group = TrailFlag.FLAG_GROUP
+		_:
+			return null
+	for node in get_tree().get_nodes_in_group(group):
+		var interactable := node as Interactable
+		if interactable != null and interactable.get("index") == index:
+			return interactable
+	return null
 
 
 # --- Эмоции (раздел 9.7; хост фильтрует по расстоянию) ---
@@ -1216,8 +1424,11 @@ func _tick_activities() -> void:
 	var anyone_at_gate := false
 	if gate != null:
 		anyone_at_gate = _anyone_in_radius(entries, gate.global_position, B.gate_near_radius)
+	# День выполнения «Короткой тропы» (П5.5): соло-таймер ворот быстрее.
+	var gate_wait: float = B.quest_gate_open_wait \
+		if quests.done_today(Protocol.QUEST_FINN, day_index()) else -1.0
 	var event := activity.update_ruins_gate(
-		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B
+		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B, gate_wait
 	)
 	if not event.is_empty():
 		_open_ruins_event(event, entries)
@@ -1256,6 +1467,17 @@ func _tick_activities() -> void:
 		else:
 			Log.info("Маяки погасли (15 минут после Звездопада) — цикл заново", "Net")
 			_broadcast_beacons([], -1.0)
+	# Задания жителей (П5.5): смена игрового дня возвращает выполненные
+	# задания в «доступно» — значки «!» и диалоги оживают у всех.
+	if quests.day_rollover(day_index()):
+		Log.info("Новый день: задания жителей снова доступны", "Net")
+		_broadcast_quest_state()
+
+
+## Индекс игрового дня (одни сутки — day_cycle_sec; задания снова доступны
+## со следующего дня, П5.5).
+func day_index() -> int:
+	return int(world_time_sec() / B.day_cycle_sec)
 
 
 ## Событие ворот руин от authority: лог, награда сундука в момент открытия
@@ -1416,6 +1638,9 @@ func _apply_activities(state: Dictionary) -> void:
 	var seats: Array = activities.get("seats", [])
 	if not seats.is_empty():
 		EventBus.campfire_seats.emit(seats)
+	var quests_state: Dictionary = activities.get("quests", {})
+	if not quests_state.is_empty():
+		EventBus.quest_state.emit(quests_state)
 
 
 ## Ping часов: клиент раз в секунду.
@@ -1512,6 +1737,7 @@ func _teardown_network() -> void:
 	hand_links.clear()
 	authority.clear()
 	activity.clear()
+	quests.clear()
 	_activity_accum = 0.0
 	if was_steam:
 		# Раздел 11: выход из мира — выход из лобби (Rich Presence очищается).

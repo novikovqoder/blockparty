@@ -6,8 +6,24 @@ class_name Protocol
 extends RefCounted
 
 ## Версия протокола: миры с другой версией не показываются (раздел 10).
-## 2 — открытый 3D-мир (ТЗ v2); 1–3 — версии 2D-прототипа.
-const PROTOCOL_VERSION: int = 2
+## 3 — задания жителей (П5.5); 2 — открытый 3D-мир (ТЗ v2); 1–3 — версии
+## 2D-прототипа.
+const PROTOCOL_VERSION: int = 3
+
+# --- Задания жителей (П5.5) ---
+
+## Идентификаторы трёх заданий (по жителю, раздел «Общие правила»).
+const QUEST_THYME: String = "thyme_tea"
+const QUEST_LUMI: String = "lumi_beacons"
+const QUEST_FINN: String = "finn_trail"
+## Все задания мира — в стабильном порядке (порядок HUD-трекера).
+const QUEST_IDS: PackedStringArray = [QUEST_THYME, QUEST_LUMI, QUEST_FINN]
+
+## Вид шага задания в rpc_quest_action: подобрать мяту, зажечь квестовый
+## маяк, поставить веху.
+const QUEST_KIND_MINT: String = "mint"
+const QUEST_KIND_BEACON: String = "beacon"
+const QUEST_KIND_FLAG: String = "flag"
 
 ## Максимум игроков в мире; код должен работать до MAX_PLAYERS_HARD (раздел 10).
 const MAX_PLAYERS: int = 12

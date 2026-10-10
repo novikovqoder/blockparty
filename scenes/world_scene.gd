@@ -61,6 +61,11 @@ func _ready() -> void:
 	add_child(_debug)
 	_debug.watch_player(_player)
 	_debug.watch_island(_island)
+	# Задания жителей (П5.5): узлы на острове и диалог жителя. QuestSystem
+	# берёт арт у Island — поэтому после острова; слушатели сети — в _wire_network.
+	var quest_system := QuestSystem.new()
+	_island.add_child(quest_system)
+	add_child(QuestDialog.new())
 	if Dev.debug_collisions:
 		_draw_debug_collisions(_island)
 	_wire_network()

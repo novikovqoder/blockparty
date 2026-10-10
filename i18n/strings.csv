@@ -51,6 +51,9 @@ HINT_PULL,Вытянуть,Pull up
 HINT_LADDER,Сбросить лестницу,Drop the ladder
 HINT_BEACON,Зажечь маяк,Light the beacon
 HINT_SIT,Сесть,Sit
+HINT_TALK,Поговорить,Talk
+HINT_MINT,Собрать мяту,Pick the mint
+HINT_FLAG,Поставить веху,Plant the flag
 EMOTE_HELLO,Привет!,Hello!
 EMOTE_THANKS,Спасибо!,Thanks!
 EMOTE_HERE,Сюда!,Over here!
@@ -60,3 +63,25 @@ EMOTE_HELP,Помогите!,Help!
 TOAST_NEED_SECOND,Нужен второй игрок,Need a second player
 TOAST_STARFALL,Звездопад!,Starfall!
 BOARD_BEACONS,Маяки: %d / %d,Beacons: %d / %d
+QUEST_TOAST_DONE,Задание выполнено,Quest complete
+QUEST_HELP,Помогу,I'll help
+QUEST_LATER,Потом,Later
+QUEST_NOTE,Записка от %s,Note from %s
+QUEST_TRACK_MINT,Мята,Mint
+QUEST_TRACK_BEACONS,Маяки,Beacons
+QUEST_TRACK_FLAGS,Вехи,Flags
+QUEST_THYME_NAME,Вечерний чай,Evening Tea
+QUEST_THYME_L1,"«Здравствуй! Мяты на чай не собрать одной, а без неё вечер у костра не тот. Поможешь?»","“Hello! I can't gather mint for tea on my own, and an evening at the campfire isn't the same without it. Will you help?”"
+QUEST_THYME_L2,«В Лесу растёт светлая мята — пять пучков. Собери их и возвращайся к костру.»,“In the Forest grows bright mint — five bunches. Gather them and come back to the campfire.”
+QUEST_THYME_ACTIVE,«Мяту нашёл? Костёр ждёт.»,“Found the mint? The campfire is waiting.”
+QUEST_THYME_DONE,«Спасибо! Теперь вечер удался.»,“Thank you! Now the evening is perfect.”
+QUEST_LUMI_NAME,Зажги маяки,Light the Beacons
+QUEST_LUMI_L1,"«Стало рано темнеть, а старые маяки молчат. Огни любят компанию.»","“It gets dark so early now, and the old beacons stay silent. Fire loves company.”"
+QUEST_LUMI_L2,«Зажги три огня: на Холмах, у Озера и на смотровом уступе. Вдвоём — быстрее.»,“Light three fires: in the Hills, by the Lake and on the lookout ledge. Two make it faster.”
+QUEST_LUMI_ACTIVE,«Огни ждут тебя.»,“The fires are waiting for you.”
+QUEST_LUMI_DONE,«Как красиво! Спасибо.»,“How beautiful! Thank you.”
+QUEST_FINN_NAME,Короткая тропа,The Short Trail
+QUEST_FINN_L1,"«К Руинам в обход Расщелины идти целый день. Я знаю путь короче.»","“It takes a whole day to reach the Ruins around the Crevasse. I know a shorter way.”"
+QUEST_FINN_L2,«Поставь четыре вехи: от Площади через мостки до самых ворот Руин.»,“Plant four flags: from the Plaza across the plank bridges to the Ruins gate itself.”
+QUEST_FINN_ACTIVE,«Держись вех — тропа сама покажется.»,“Follow the flags — the trail will show itself.”
+QUEST_FINN_DONE,«Тропа готова! Теперь дорога к Руинам — минутное дело.»,“The trail is ready! Now the road to the Ruins takes a minute.”
