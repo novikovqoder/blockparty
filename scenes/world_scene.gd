@@ -267,12 +267,16 @@ func _apply_graphics_quality() -> void:
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
 	if tier == GraphicsQuality.Tier.HIGH:
-		for zone: String in ["forest", "lake"]:
-			var center := _island.spawn_point(zone)
-			var color := IslandGen.zone_blend(
-				Vector2(center.x, center.z), PAL.zone_fog
-			)
-			add_child(GraphicsQuality.make_zone_fog(center, color))
+		# Лес (П5.7 блок 3): сгусток шире зоны деревьев (~56 м) — объёмный
+		# туман стелется по всей реалистичной части; у Озера прежний компакт.
+		var center := _island.spawn_point("forest")
+		var color := IslandGen.zone_blend(
+			Vector2(center.x, center.z), PAL.zone_fog
+		)
+		add_child(GraphicsQuality.make_zone_fog(center, color, 64.0))
+		center = _island.spawn_point("lake")
+		color = IslandGen.zone_blend(Vector2(center.x, center.z), PAL.zone_fog)
+		add_child(GraphicsQuality.make_zone_fog(center, color))
 
 
 ## Фототур (шаг 2 П4.5, «Самопроверка картинки»): временная камера снимает
@@ -299,12 +303,17 @@ func _screenshot_tour() -> void:
 		_apply_graphics_quality()
 	# SHOT_P57=1 — тур П5.7: только Лес с фиксированных точек (день и закат,
 	# снимки «было — стало» реалистичной переделки), без общих облётов.
+	# SHOT_FRACTION=0..1 — снять в другой точке суток (например, ночь).
+	var shot_fraction := SHOT_DAY_FRACTION
+	if not OS.get_environment("SHOT_FRACTION").is_empty():
+		shot_fraction = clampf(
+			OS.get_environment("SHOT_FRACTION").to_float(), 0.0, 1.0)
 	if OS.get_environment("SHOT_P57") == "1":
-		_set_day_fraction(SHOT_DAY_FRACTION)
+		_set_day_fraction(shot_fraction)
 		await _shot_p57_forest(camera)
 		get_tree().quit()
 		return
-	_set_day_fraction(SHOT_DAY_FRACTION)
+	_set_day_fraction(shot_fraction)
 	if OS.get_environment("SHOT_NOFOG") == "1":
 		($WorldEnvironment.environment as Environment).fog_enabled = false
 	# SHOT_LAB=1 — лаборатория света в контексте мира: DayCycle выключен,

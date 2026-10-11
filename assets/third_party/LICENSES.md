@@ -33,6 +33,9 @@ Godot при импорте — это та же встроенная текст
 | dead_tree_trunk | Poly Haven | https://polyhaven.com/a/dead_tree_trunk | CC0 | 2026-10-11 | `polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res` |
 | grass_medium_02 | Poly Haven | https://polyhaven.com/a/grass_medium_02 | CC0 | 2026-10-11 | `polyhaven.com/grass_medium_02/grass_medium_02_lo.res` |
 | fern_02 | Poly Haven | https://polyhaven.com/a/fern_02 | CC0 | 2026-10-11 | `polyhaven.com/fern_02/fern_02_2k.gltf`, `polyhaven.com/fern_02/fern_02.bin`, `polyhaven.com/fern_02/textures/fern_02_arm_2k.jpg`, `polyhaven.com/fern_02/textures/fern_02_diff_2k.jpg`, `polyhaven.com/fern_02/textures/fern_02_nor_gl_2k.jpg` |
+| kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
+| grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
+| rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
 
 Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
 П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются
@@ -41,5 +44,7 @@ Godot при импорте — это та же встроенная текст
 брёвен Леса: скачанные glb децимированы до бюджетов low-poly и запечены в
 `.res` с цветом текстуры в вершинах (`tools/decimate_polyhaven.gd`;
 оригинальные glb в проекте не хранятся, страницы ассетов — в таблице).
+HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
+смешиваются по времени суток в `assets/shaders/sky.gdshader`.
 Наборы KayKit — персонажи игрока (раздел 16 SPEC, v2.3): три модели на общем
 риге Rig_Medium и скелетные клипы анимаций на том же риге.

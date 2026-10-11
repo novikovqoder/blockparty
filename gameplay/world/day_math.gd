@@ -91,3 +91,37 @@ static func horizon_color(world_time: float) -> Color:
 ## Энергия ambient-освещения (небо): ночь мягкая и светлая — не ниже 0.16.
 static func ambient_energy(world_time: float) -> float:
 	return 0.16 + 0.36 * dayness(world_time)
+
+
+## Азимут солнца внутри HDRI-панорамы заката (grasslands_sunset,
+## подобран по яркому пятну панорамы, tools/preview_hdri.gd):
+## направление солнца панорамы в мировых осях, atan2(x, z).
+const HDRI_SUN_AZIMUTH := 0.945
+
+
+## Высота солнца в долях: днём sin(π·прогресса дня) [0..1], ночью —
+## отрицательная глубина −sin(π·прогресса ночи) [−1..0]. На рассвете
+## и закате ровно ноль — функция непрерывна через границу суток (нет
+## «щёлчка» неба в момент ухода солнца).
+static func sun_height(world_time: float) -> float:
+	var h := sin(PI * phase_progress(world_time))
+	return h if is_day(world_time) else -h
+
+
+## Смешивание трёх панорам суток (П5.7 блок 3): возврат (день, закат,
+## ночь) от непрерывной высоты солнца. День полный при высоком солнце,
+## у горизонта — тёплая закатная панорама, ночь вступает по мере ухода
+## солнца под горизонт; сумма весов всегда 1, переходы непрерывны.
+static func sky_mixes(world_time: float) -> Vector3:
+	var h := sun_height(world_time)
+	var day := smoothstep(0.05, 0.5, h)
+	var night := smoothstep(0.0, -0.25, h)
+	return Vector3(day, 1.0 - day - night, night)
+
+
+## Поворот HDRI-панорамы (радианы вокруг вертикали), при котором солнце
+## панорамы смотрит туда же, куда игровое: свет, тени и закатное свечение
+## согласованы. Панорама медленно «едет» за солнцем в течение дня.
+static func sky_yaw(world_time: float) -> float:
+	var s := sun_direction(world_time)
+	return HDRI_SUN_AZIMUTH - atan2(s.x, s.z)

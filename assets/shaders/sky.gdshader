@@ -1,11 +1,16 @@
-// Небо (vfx-fix, визуальный блок в): градиент суток + процедурные облака.
-// Цвета top/horizon/ground и направление/цвет солнца каждый кадр задаёт
-// DayCycle (та же математика DayMath — «живой градиент по времени суток»);
-// здесь только картинка. Облака — четыре октавы value-шума на плоскости
-// над головой (uv = направление.xz / y), медленно дрейфуют по TIME,
-// подсвечены солнцем с серебристым краем к диску; у горизонта сгущаются
-// перспективой. Солнце — маленький диск с мягким гало, за облаками
-// прячется. Ночью облака темнеют и слабеют (цвет тоже ведёт DayCycle).
+// Небо (vfx-fix, визуальный блок в; П5.7 блок 3 — HDRI): градиент суток +
+// процедурные облака, а с П5.7 — панорамы Poly Haven (день/закат/ночь),
+// смешанные по времени суток. Цвета top/horizon/ground и направление/цвет
+// солнца каждый кадр задаёт DayCycle (та же математика DayMath — «живой
+// градиент по времени суток»); здесь только картинка.
+// HDRI-режим включён, когда назначены все три панорамы и hdri_mix > 0:
+// панорама повёрнута к азимуту игрового солнца (sky_yaw), так что запечённое
+// закатное свечение совпадает с направлением света и теней. Облака — четыре
+// октавы value-шума на плоскости над головой (uv = направление.xz / y),
+// медленно дрейфуют по TIME, подсвечены солнцем с серебристым краем к диску;
+// у горизонта сгущаются перспективой. Солнце — маленький диск с мягким гало,
+// за облаками прячется. Ночью облака темнеют и слабеют (цвет тоже ведёт
+// DayCycle).
 shader_type sky;
 
 uniform vec4 top_color : source_color = vec4(0.44, 0.64, 0.85, 1.0);
@@ -18,6 +23,21 @@ uniform vec4 cloud_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform float cloud_cover : hint_range(0.0, 1.0) = 0.38;
 // Дрейф облаков, единиц uv в секунду.
 uniform float cloud_speed = 0.004;
+
+// П5.7 блок 3: панорамы дня/заката/ночи и их смешивание. hdri_mix = 0 —
+// прежнее процедурное небо (материал без панорам, например в тестах).
+// repeat обязателен: u шва (u = 0/1) у equirect-панорамы склеивается
+// билинейно, без него на небе тёмный клин.
+uniform sampler2D hdri_day : repeat_enable, filter_linear_mipmap;
+uniform sampler2D hdri_dusk : repeat_enable, filter_linear_mipmap;
+uniform sampler2D hdri_night : repeat_enable, filter_linear_mipmap;
+uniform float hdri_mix : hint_range(0.0, 1.0) = 0.0;
+uniform float day_mix = 1.0;
+uniform float dusk_mix = 0.0;
+uniform float night_mix = 0.0;
+// Поворот панорам вокруг вертикали (радианы): DayCycle ведёт его так, чтобы
+// солнце панорамы смотрело туда же, куда игровое (свет и тени согласованы).
+uniform float sky_yaw = 0.0;
 
 
 float hash12(vec2 p) {
@@ -51,6 +71,14 @@ float fbm(vec2 p) {
 }
 
 
+// Пиксель панорамы (equirectangular) для направления на небо.
+vec2 panorama_uv(vec3 dir) {
+	float u = atan(dir.z, dir.x) / TAU + 0.5;
+	float v = acos(clamp(dir.y, -1.0, 1.0)) / PI;
+	return vec2(u, v);
+}
+
+
 void sky() {
 	vec3 dir = EYEDIR;
 	float up = clamp(dir.y, -1.0, 1.0);
@@ -75,6 +103,28 @@ void sky() {
 	float sun_up = clamp(sun_direction.y, 0.0, 1.0);
 	vec3 lit = cloud_color.rgb * (0.55 + 0.45 * sun_up);
 	lit += sun_color.rgb * pow(to_sun, 8.0) * 0.3;
+
+	// Панорамы суток (П5.7): поворот к солнцу и взвешенная сумма трёх
+	// HDRI; процедурная картинка остаётся под смешиванием (hdri_mix = 0
+	// у материалов без панорам — прежнее поведение).
+	if (hdri_mix > 0.001) {
+		float cy = cos(sky_yaw);
+		float sy = sin(sky_yaw);
+		vec3 rotated = vec3(
+			dir.x * cy - dir.z * sy, dir.y, dir.x * sy + dir.z * cy);
+		vec2 pano = panorama_uv(rotated);
+		vec3 hdri = texture(hdri_day, pano).rgb * day_mix;
+		if (dusk_mix > 0.001) {
+			hdri += texture(hdri_dusk, pano).rgb * dusk_mix;
+		}
+		if (night_mix > 0.001) {
+			hdri += texture(hdri_night, pano).rgb * night_mix;
+		}
+		col = mix(col, hdri, hdri_mix);
+		// Процедурные облака гаснут: у панорамы облака запечены, второй
+		// слой поверх выглядел бы двоящимся.
+		cover *= (1.0 - hdri_mix);
+	}
 
 	// Солнце: диск с гало; сквозь облака видно ослабленно.
 	float disk = smoothstep(0.9993, 0.9997, to_sun);

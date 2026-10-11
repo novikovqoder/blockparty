@@ -30,6 +30,9 @@ const GLOW_BLOOM: float = 0.55
 ## SSAO (блок е): мягкие контактные тени у камней и под деревьями.
 const SSAO_INTENSITY: float = 1.6
 const SSAO_RADIUS: float = 1.5
+## Вклад солнца в объёмный туман (П5.7 блок 3): заметнее лучи сквозь кроны
+## и длинные световые столбы на закате (по умолчанию у света — 1.0).
+const SUN_FOG_ENERGY: float = 1.4
 
 
 ## Активный уровень из настроек (экран настроек — П8; dev-флаги — Dev).
@@ -59,19 +62,23 @@ static func apply(env: Environment, sun: DirectionalLight3D, tier: int) -> void:
 	env.volumetric_fog_enabled = high
 	if high:
 		env.volumetric_fog_density = VOLUMETRIC_DENSITY
+	# Лучи сквозь кроны (П5.7 блок 3): вклад солнца в объёмный туман
+	# заметнее дефолтного — световые столбы между деревьями.
+	sun.light_volumetric_fog_energy = SUN_FOG_ENERGY if high else 1.0
 
 
 ## Локальный сгусток тумана зоны (шаг 4: «лёгкий объёмный туман в Лесу
-## и у Озера»). Работает только при volumetric_fog_enabled (HIGH).
-static func make_zone_fog(center: Vector3, color: Color) -> FogVolume:
+## и у Озера»; П5.7 блок 3: у Леса радиус больше — зона широкая). Работает
+## только при volumetric_fog_enabled (HIGH).
+static func make_zone_fog(
+	center: Vector3, color: Color, radius: float = ZONE_FOG_RADIUS
+) -> FogVolume:
 	var volume := FogVolume.new()
 	var material := FogMaterial.new()
 	material.density = ZONE_FOG_DENSITY
 	material.albedo = color
 	volume.material = material
-	volume.size = Vector3(
-		ZONE_FOG_RADIUS * 2.0, ZONE_FOG_HEIGHT, ZONE_FOG_RADIUS * 2.0
-	)
+	volume.size = Vector3(radius * 2.0, ZONE_FOG_HEIGHT, radius * 2.0)
 	# Центр бокса — над землёй зоны, чуть утоплен, чтобы дымка «стелилась».
 	volume.position = center + Vector3.UP * (ZONE_FOG_HEIGHT * 0.5 - 1.0)
 	return volume

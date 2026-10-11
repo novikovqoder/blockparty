@@ -89,3 +89,54 @@ func test_horizon_warms_at_sunrise() -> void:
 		(sunrise.r - sunrise.b) - (noon.r - noon.b), 0.0,
 		"рассвет теплее полудня",
 	)
+
+
+func test_sky_mixes_sum_to_one_all_day() -> void:
+	# П5.7 блок 3: веса панорам (день, закат, ночь) в сумме дают единицу
+	# в любой точке суток — небо не чернеет и не пересвечивается.
+	var step: float = B.day_cycle_sec / 60.0
+	for i: int in range(60):
+		var t: float = step * i
+		var mixes := DayMath.sky_mixes(t)
+		assert_almost_eq(mixes.x + mixes.y + mixes.z, 1.0, EPS,
+			"сумма весов панорам = 1 (t=%.1f)" % t)
+		assert_between(mixes.x, 0.0, 1.0, "вес дня корректен (t=%.1f)" % t)
+		assert_between(mixes.y, 0.0, 1.0, "вес заката корректен (t=%.1f)" % t)
+		assert_between(mixes.z, 0.0, 1.0, "вес ночи корректен (t=%.1f)" % t)
+
+
+func test_sky_mixes_phases() -> void:
+	# Полдень — чистый день, полночь — чистая ночь; закат (0.58 суток,
+	# солнце низко) замешан из тёплой панорамы и нарастающей ночи —
+	# переход плавный, без скачка на границе дня.
+	var noon := DayMath.sky_mixes(B.day_cycle_sec * 0.3)
+	assert_almost_eq(noon.x, 1.0, 0.01, "полдень — панорама дня")
+	assert_almost_eq(noon.z, 0.0, EPS, "ночную панораму не видно")
+	var midnight := DayMath.sky_mixes(B.day_cycle_sec * 0.8)
+	assert_almost_eq(midnight.z, 1.0, EPS, "полночь — панорама ночи")
+	var sunset := DayMath.sky_mixes(B.day_cycle_sec * 0.58)
+	assert_gt(sunset.y, noon.y + 0.1, "закат теплее полудня (dusk_mix вырос)")
+	assert_gt(sunset.y, sunset.x, "закатная панорама сильнее дневной")
+	assert_between(sunset.z, 0.0, 0.9, "закат ещё не ночь (ночь < 0.9)")
+	# Смешивание непрерывно на границе дня и ночи: шаг 1 % суток меняет
+	# веса мало (нет «щёлка» неба в момент заката).
+	var before := DayMath.sky_mixes(B.day_cycle_sec * (B.day_share - 0.01))
+	var after := DayMath.sky_mixes(B.day_cycle_sec * B.day_share)
+	assert_almost_eq(before.x, 0.0, 0.01, "у границы дня дневная доля ~0")
+	assert_almost_eq(after.x, 0.0, EPS, "за границей дня дневной доли нет")
+	assert_almost_eq(before.z, after.z, 0.01, "ночная доля непрерывна")
+
+
+func test_sky_yaw_follows_sun() -> void:
+	# Поворот панорамы согласован с азимутом солнца: у полудня и заката
+	# разница поворотов равна разнице азимутов (панорама едет за солнцем).
+	var noon_yaw := DayMath.sky_yaw(B.day_cycle_sec * 0.3)
+	var sunset_yaw := DayMath.sky_yaw(B.day_cycle_sec * 0.58)
+	var noon_dir := DayMath.sun_direction(B.day_cycle_sec * 0.3)
+	var sunset_dir := DayMath.sun_direction(B.day_cycle_sec * 0.58)
+	var dnoon := atan2(noon_dir.x, noon_dir.z)
+	var dsunset := atan2(sunset_dir.x, sunset_dir.z)
+	assert_almost_eq(
+		noon_yaw - sunset_yaw, dsunset - dnoon, 0.01,
+		"панорама повёрнута на разницу азимутов солнца",
+	)

@@ -20,6 +20,9 @@ const SUN_WARM := Color(1.0, 0.68, 0.45)
 ## светом, без LUT-текстуры цветокоррекции.
 const AMBIENT_NIGHT := Color(0.50, 0.58, 0.72)
 const AMBIENT_DAY := Color(0.82, 0.80, 0.76)
+## Экспозиция тонемапа ночью (П5.7 блок 3): ночная панорама HDRI тёмная,
+## поднятая экспозиция делает ночь «мягкой светлой» (раздел 7 SPEC).
+const NIGHT_EXPOSURE: float = 1.9
 ## Облака (vfx-fix, блок в): белый день, тёплый закат, приглушённая ночь.
 const CLOUD_DAY := Color(1.0, 1.0, 1.0)
 const CLOUD_SUNSET := Color(1.0, 0.74, 0.58)
@@ -80,6 +83,13 @@ func _process(_delta: float) -> void:
 		# Количество облаков медленно дышит по часам мира — небо живое.
 		_sky_shader.set_shader_parameter(
 			"cloud_cover", 0.32 + 0.10 * sin(world_time * 0.008))
+		# Панорамы суток (П5.7 блок 3): веса дня/заката/ночи и поворот
+		# к солнцу; в HDRI-режиме шейдер сам гасит процедурные облака.
+		var mixes := DayMath.sky_mixes(world_time)
+		_sky_shader.set_shader_parameter("day_mix", mixes.x)
+		_sky_shader.set_shader_parameter("dusk_mix", mixes.y)
+		_sky_shader.set_shader_parameter("night_mix", mixes.z)
+		_sky_shader.set_shader_parameter("sky_yaw", DayMath.sky_yaw(world_time))
 	elif _sky_procedural != null:
 		_sky_procedural.sky_top_color = top
 		_sky_procedural.sky_horizon_color = horizon
@@ -89,6 +99,10 @@ func _process(_delta: float) -> void:
 	_environment.ambient_light_color = AMBIENT_NIGHT.lerp(
 		AMBIENT_DAY, dayness
 	)
+	# Тональная коррекция (П5.7 блок 3): днём HDRI-панорама сама яркая,
+	# ночью экспозиция выше — «мягкая светлая ночь» (глаза адаптировались),
+	# звёзды панорамы остаются видимыми.
+	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE, 1.0, dayness)
 	# Закат (vfx-fix, блок в): солнце низкое — тени длинные; при низком
 	# солнце они ещё и мягче обычного (blur растёт к горизонту).
 	_sun.shadow_blur = 1.4 + warmth * 0.8

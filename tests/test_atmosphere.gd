@@ -176,3 +176,53 @@ func test_zone_fog_volume() -> void:
 	assert_gt(volume.size.y, 2.0, "сгусток выше 2 м")
 	assert_eq(material.albedo, Color.WHITE, "цвет зоны передан в материал")
 	volume.free()
+
+
+func test_world_scene_hdri_sky() -> void:
+	# П5.7 блок 3: небо мира — три HDRI-панорамы Poly Haven (день/закат/
+	# ночь), смешивание включено. Полноту лицензий на файлы проверяет
+	# test_third_party; здесь — что материал мира действительно их использует.
+	var scene := WORLD.instantiate()
+	var env: Environment = scene.get_node("WorldEnvironment").environment
+	var material := env.sky.sky_material as ShaderMaterial
+	assert_not_null(material, "материал неба — шейдерный")
+	for param: String in ["hdri_day", "hdri_dusk", "hdri_night"]:
+		var texture := material.get_shader_parameter(param) as Texture2D
+		assert_not_null(texture, "панорама %s назначена" % param)
+		assert_true(
+			ResourceLoader.exists(texture.resource_path),
+			"файл панорамы %s на месте" % param,
+		)
+	assert_almost_eq(
+		float(material.get_shader_parameter("hdri_mix")), 1.0, 0.001,
+		"HDRI-режим включён",
+	)
+	scene.free()
+
+
+func test_tonemap_exposure_brighter_at_night() -> void:
+	# П5.7 блок 3: «мягкая светлая ночь» (раздел 7 SPEC) на тёмной ночной
+	# панораме — экспозиция тонемапа ночью выше дневной, день — единица.
+	var sun := DirectionalLight3D.new()
+	var world_env := WorldEnvironment.new()
+	var env := Environment.new()
+	var sky := Sky.new()
+	sky.sky_material = ProceduralSkyMaterial.new()
+	env.sky = sky
+	world_env.environment = env
+	var cycle := DayCycle.new()
+	cycle.setup(sun, world_env)
+	var saved := Session.world_time
+	Session.world_time = 0.3 * B.day_cycle_sec
+	cycle._process(0.0)
+	var day_exposure: float = env.tonemap_exposure
+	Session.world_time = 0.8 * B.day_cycle_sec
+	cycle._process(0.0)
+	var night_exposure: float = env.tonemap_exposure
+	Session.world_time = saved
+	assert_almost_eq(day_exposure, 1.0, 0.001, "днём экспозиция — единица")
+	assert_gt(night_exposure, day_exposure + 0.5,
+		"ночью экспозиция заметно выше (светлая ночь)")
+	cycle.free()
+	sun.free()
+	world_env.free()
