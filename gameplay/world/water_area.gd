@@ -146,4 +146,7 @@ func _surface_material() -> Material:
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
 	material.set_shader_parameter("water_color", Color(PAL.water, 0.55))
+	# Мелководье чуть светлее основного тона (vfx-fix, блок а).
+	material.set_shader_parameter(
+		"shallow_color", Color(PAL.water.lightened(0.14), 0.55))
 	return material
