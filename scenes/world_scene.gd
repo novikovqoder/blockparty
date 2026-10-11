@@ -211,10 +211,12 @@ func _spawn_player() -> void:
 
 
 ## Отладка коллизий (--debug-collisions): поверх картинки рисуются
-## полупрозрачные оранжевые формы статичных тел острова — видно, где рельеф
-## и предметы с коллизией и совпадает ли она с видимым мешем (чек-лист
-## шага 1 П4.5). Динамичные триггеры (монеты, мобы, вода, расщелина)
-## не рисуются — важны именно статичные поверхности.
+## полупрозрачные оранжевые формы статичных тел острова — видно, где
+## предметы с коллизией и совпадает ли она с видимым мешем (чек-лист
+## шага 1 П4.5). Рельеф (HeightMapShape3D) не рисуется: его оверлей
+## заливал кадр целиком и глушил мелкие формы (vfx-fix). Динамичные
+## триггеры (монеты, мобы, вода, расщелина) не рисуются — важны именно
+## статичные поверхности.
 func _draw_debug_collisions(root: Node) -> void:
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -227,7 +229,7 @@ func _draw_debug_collisions(root: Node) -> void:
 			if child is not CollisionShape3D:
 				continue
 			var shape := child as CollisionShape3D
-			if shape.shape == null:
+			if shape.shape == null or shape.shape is HeightMapShape3D:
 				continue
 			var mesh := MeshInstance3D.new()
 			mesh.name = "DebugCollision"
@@ -336,11 +338,17 @@ func _shot_player_views(camera: Camera3D) -> void:
 	await _snap(camera, "char_side.png")
 	# SHOT_NPC=1 — Тимьян на пне у костра крупно (визуальная проверка капсулы
 	# коллизии жителя, vfx-fix: камера видит и костёр за ним).
+	# SHOT_NPCHULL=1 — то же место, но визуал жителя скрыт: в кадре остаётся
+	# только полупрозрачная капсула (измерение габарита без модели).
 	if OS.get_environment("SHOT_NPC") == "1":
 		for node in get_tree().get_nodes_in_group(Townsfolk.TOWNSFOLK_GROUP):
 			var folk := node as Townsfolk
 			if folk == null or not folk.sitting:
 				continue
+			if OS.get_environment("SHOT_NPCHULL") == "1":
+				for child: Node in folk.get_children():
+					if child.name != "Body":
+						(child as Node3D).visible = false
 			var stump: Vector3 = folk.global_position
 			camera.global_position = stump + Vector3(2.5, 1.2, 2.6)
 			camera.look_at(stump + Vector3.UP * 0.8)

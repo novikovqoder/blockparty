@@ -121,6 +121,68 @@ func test_water_surfaces_configured() -> void:
 			)
 
 
+## Море не накрывает озеро (vfx-fix, баг 4): у моря дырка по озеру,
+## поверхность — несколько мешей вне дырки, суммарная площадь равна
+## площади моря минус дырка; у озера — один меш без дырки.
+func test_sea_hole_removes_lake_overlap() -> void:
+	var island := ISLAND.instantiate() as Island
+	add_child_autofree(island)
+	var sea_hole := Rect2()
+	var lake_world := Rect2()
+	for child: Node in island.get_children():
+		var area := child as WaterArea
+		if area == null:
+			continue
+		var meshes := 0
+		var total := 0.0
+		for node: Node in area.get_children():
+			if node is not MeshInstance3D:
+				continue
+			var plane := (node as MeshInstance3D).mesh as PlaneMesh
+			if plane == null:
+				continue
+			meshes += 1
+			var rect := Rect2(
+				(node as Node3D).position.x - plane.size.x * 0.5,
+				(node as Node3D).position.z - plane.size.y * 0.5,
+				plane.size.x, plane.size.y)
+			# Ни один кусок поверхности не заходит в дырку (касание кромки
+			# стыком — не пересечение: strict). Пустая дырка — проверять нечего.
+			if area.surface_hole.has_area():
+				assert_false(
+					rect.intersects(area.surface_hole),
+					"%s: меш вне дырки" % area.name)
+			total += rect.size.x * rect.size.y
+		if area.name == "SeaWater":
+			assert_true(area.surface_hole.has_area(), "у моря есть дырка — озеро")
+			sea_hole = area.surface_hole
+			assert_gt(meshes, 1, "море с дыркой — не один меш")
+			assert_almost_eq(
+				total,
+				area.surface_size.x * area.surface_size.y \
+					- area.surface_hole.size.x * area.surface_hole.size.y,
+				1.0, "суммарная площадь: море минус дырка")
+		else:
+			assert_false(area.surface_hole.has_area(), "у озера дырки нет")
+			assert_eq(meshes, 1, "озеро — один меш")
+			lake_world = Rect2(
+				area.position.x - area.surface_size.x * 0.5,
+				area.position.z - area.surface_size.y * 0.5,
+				area.surface_size.x, area.surface_size.y)
+	# Дырка моря — прямоугольник озера в локальных координатах моря
+	# (центр моря в мировых XZ вычитается).
+	assert_almost_eq(
+		sea_hole.position.x + island.get_node("SeaWater").position.x,
+		lake_world.position.x, 0.01, "дырка по кромке озера (x)")
+	assert_almost_eq(
+		sea_hole.position.y + island.get_node("SeaWater").position.z,
+		lake_world.position.y, 0.01, "дырка по кромке озера (z)")
+	assert_almost_eq(
+		sea_hole.size.x, lake_world.size.x, 0.01, "размер дырки — озеро (x)")
+	assert_almost_eq(
+		sea_hole.size.y, lake_world.size.y, 0.01, "размер дырки — озеро (z)")
+
+
 func test_player_stands_in_every_spawn_zone() -> void:
 	# Коллизия рельефа (HeightMapShape3D) работает: персонаж не проваливается
 	# ни в одной зоне.

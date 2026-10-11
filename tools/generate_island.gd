@@ -104,12 +104,22 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 	root.add_child(view)
 
 	# Вода: море вокруг и озеро (surface_gap 0 — кромка вплотную к воде).
+	# У моря — дырка ровно по озеру (vfx-fix, баг 4): копланарное
+	# перекрытие двух полупрозрачных плоскостей мерцало (z-fighting).
+	var lake_area: Dictionary = data["water"]["lake"]
 	for water_key: String in ["sea", "lake"]:
 		var area: Dictionary = data["water"][water_key]
 		var water: Area3D = load(WATER_SCRIPT).new()
 		water.name = "SeaWater" if water_key == "sea" else "LakeWater"
 		root.add_child(water)
-		water.setup(area["center"], area["size"], area["level"], 0.0)
+		var hole_center := Vector2.ZERO
+		var hole_size := Vector2.ZERO
+		if water_key == "sea":
+			hole_center = lake_area["center"]
+			hole_size = lake_area["size"]
+		water.setup(
+			area["center"], area["size"], area["level"], 0.0,
+			hole_center, hole_size)
 
 	# Расщелина: зона и светящиеся HangPoint на кромках.
 	var hang: Dictionary = data["hang"]

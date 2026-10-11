@@ -26,6 +26,10 @@ const MAX_SUBDIVIDE: int = 192
 ## Насколько зона заканчивается выше поверхности: 0.2 — пруды площадки,
 ## 0 — море и озеро острова (пляж вплотную к воде, раздел 6).
 @export var surface_gap: float = 0.2
+## Прямоугольник без воды в локальных XZ, м (vfx-fix, баг 4): у моря дырка
+## ровно по озеру — две копланарные полупрозрачные плоскости на одном
+## уровне мерцали (z-fighting). Пустая — поверхность сплошная.
+@export var surface_hole: Rect2 = Rect2()
 
 var _surface_built: bool = false
 
@@ -42,12 +46,20 @@ func _ready() -> void:
 
 
 ## Построить зону: центр в плоскости XZ, размер, уровень воды (абсолютный Y).
+## Необязательная дырка (мировые XZ и размер, м) — у моря это озеро:
+## поверхности не накрывают друг друга (vfx-fix, баг 4).
 ## Коллизия добавляется сразу (сериализуется в сцену), плоскость — при входе
 ## в дерево, если нода ещё не в нём, иначе сразу (площадка П1 собирает так).
-func setup(center_xz: Vector2, size: Vector2, level: float, gap: float = 0.2) -> void:
+func setup(
+	center_xz: Vector2, size: Vector2, level: float, gap: float = 0.2,
+	hole_center_xz: Vector2 = Vector2.ZERO, hole_size: Vector2 = Vector2.ZERO,
+) -> void:
 	water_level = level
 	surface_size = size
 	surface_gap = gap
+	if hole_size.x > 0.0 and hole_size.y > 0.0:
+		surface_hole = Rect2(
+			hole_center_xz - hole_size * 0.5 - center_xz, hole_size)
 	for child in get_children():
 		if child is CollisionShape3D:
 			remove_child(child)
@@ -85,14 +97,39 @@ func _build_surface() -> void:
 	if _surface_built:
 		return
 	_surface_built = true
+	var material := _surface_material()
+	var full := Rect2(-surface_size * 0.5, surface_size)
+	# Дырка внутри поверхности: четыре прямоугольника вокруг неё; дырки нет
+	# или она за краем — сплошная плоскость (vfx-fix, баг 4).
+	var hole := surface_hole.intersection(full)
+	if not hole.has_area():
+		_add_plane(full, material)
+		return
+	for rect: Rect2 in [
+		Rect2(full.position.x, full.position.y,
+			hole.position.x - full.position.x, full.size.y),
+		Rect2(hole.end.x, full.position.y,
+			full.end.x - hole.end.x, full.size.y),
+		Rect2(hole.position.x, full.position.y,
+			hole.size.x, hole.position.y - full.position.y),
+		Rect2(hole.position.x, hole.end.y,
+			hole.size.x, full.end.y - hole.end.y),
+	]:
+		if rect.size.x > 0.05 and rect.size.y > 0.05:
+			_add_plane(rect, material)
+
+
+## Плоскость воды по прямоугольнику в локальных XZ (x, z, ширина, глубина).
+func _add_plane(rect: Rect2, material: Material) -> void:
 	var surface := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = surface_size
-	plane.subdivide_width = clampi(int(surface_size.x * MESH_DENSITY), 2, MAX_SUBDIVIDE)
-	plane.subdivide_depth = clampi(int(surface_size.y * MESH_DENSITY), 2, MAX_SUBDIVIDE)
+	plane.size = rect.size
+	plane.subdivide_width = clampi(int(rect.size.x * MESH_DENSITY), 2, MAX_SUBDIVIDE)
+	plane.subdivide_depth = clampi(int(rect.size.y * MESH_DENSITY), 2, MAX_SUBDIVIDE)
 	surface.mesh = plane
-	surface.material_override = _surface_material()
-	surface.position = Vector3(0.0, water_level - position.y, 0.0)
+	surface.material_override = material
+	surface.position = Vector3(
+		rect.get_center().x, water_level - position.y, rect.get_center().y)
 	add_child(surface)
 	surface.set_owner(null)  # не сериализовать: строится в рантайме
 
