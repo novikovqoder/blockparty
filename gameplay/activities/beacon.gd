@@ -24,11 +24,18 @@ const LAMP_SIZE: Vector3 = Vector3(0.52, 0.42, 0.52)
 const BEAM_LENGTH: float = 60.0
 const BEAM_BOTTOM_R: float = 0.18
 const BEAM_TOP_R: float = 0.34
+## Вращающийся световой конус (блок д, только «Высокое качество»):
+## прожектор из фонаря, обегающий горизонт. Радиус/угол/скорость.
+const CONE_RANGE: float = 38.0
+const CONE_ANGLE: float = 22.0
+const CONE_SPEED: float = 0.9
 
 var _lit: bool = false
 var _lamp: MeshInstance3D
 var _beam: MeshInstance3D
 var _light: OmniLight3D
+var _cone: SpotLight3D
+var _high_tier: bool = false
 
 ## Индекс в порядке имени узла — как сортирует хост.
 var _index: int = 0
@@ -39,9 +46,18 @@ func _ready() -> void:
 	add_to_group(BEACON_GROUP)
 	_index = _compute_index()
 	use_radius = 2.8
+	# Уровень качества фиксируется на входе в мир (world_scene применяет
+	# его в _ready) — конус живёт только в «Высоком качестве».
+	_high_tier = GraphicsQuality.tier_from_settings() == GraphicsQuality.Tier.HIGH
 	EventBus.beacons_state.connect(_on_beacons_state)
 	_build_visual()
 	set_lit(false)
+
+
+## Вращение конуса: обегает горизонт, пока маяк горит (блок д).
+func _process(delta: float) -> void:
+	if _cone.visible:
+		_cone.rotate_y(delta * CONE_SPEED)
 
 
 func _on_beacons_state(lit: Array, _lighters: Array, _starfall_started_at: float) -> void:
@@ -76,6 +92,7 @@ func set_lit(lit: bool) -> void:
 	_lit = lit
 	_beam.visible = lit
 	_light.visible = lit
+	_cone.visible = lit and _high_tier
 	var material := _lamp.material_override as StandardMaterial3D
 	material.emission_enabled = lit
 	material.emission = PAL.beacon_glow
@@ -132,6 +149,23 @@ func _build_visual() -> void:
 	_light.light_color = PAL.beacon_glow
 	_light.light_energy = 1.2
 	add_child(_light)
+
+	# Вращающийся прожектор (блок д): в фонаре, наклонён вниз — фонарь
+	# сидит на ~8 м, пятно ложится в ~12–20 м от башни. Спад 0.8 и энергия
+	# с запасом: на такой дистанции обратные квадраты быстро съедают свет.
+	# В HIGH конус дополнительно виден в объёмном тумане (Forward+).
+	_cone = SpotLight3D.new()
+	_cone.name = "Cone"
+	_cone.position = Vector3(0.0, LAMP_Y, 0.0)
+	_cone.spot_range = CONE_RANGE
+	_cone.spot_angle = CONE_ANGLE
+	_cone.spot_attenuation = 0.8
+	_cone.light_color = PAL.beacon_glow
+	_cone.light_energy = 12.0
+	_cone.shadow_enabled = false
+	_cone.rotation_degrees = Vector3(-25.0, 0.0, 0.0)
+	_cone.visible = false
+	add_child(_cone)
 
 
 func _lamp_material() -> StandardMaterial3D:

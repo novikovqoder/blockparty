@@ -9,6 +9,7 @@ extends Node3D
 
 const PAL: Palette = preload("res://assets/palette.tres")
 const B: Balance = preload("res://gameplay/balance.tres")
+const FIRE_SHADER: Shader = preload("res://assets/shaders/fire.gdshader")
 
 ## Параметры спокойного огня / разгоревшегося (раздел 9.6).
 const CALM_ENERGY: float = 0.55
@@ -22,14 +23,28 @@ const COMPANY_SPARKS: int = 26
 ## у них своя коллизия в раскладке.
 const HEARTH_RADIUS: float = 0.55
 const HEARTH_HEIGHT: float = 0.55
+## Пламя (блок д): конус над углями, м.
+const FLAME_HEIGHT: float = 0.72
+const FLAME_RADIUS: float = 0.27
 
 var _light: OmniLight3D
 var _sparks: GPUParticles3D
+## Базовая энергия света (calm/company); мерцание ходит вокруг неё.
+var _base_energy: float = CALM_ENERGY
 
 
 func _ready() -> void:
 	_build()
 	EventBus.campfire_seats.connect(_on_campfire_seats)
+
+
+## Тёплое мерцание света (блок д): два неравных такта — дыхание огня
+## без машинной периодичности. Амплитуда небольшая, у земли почти штиль.
+func _process(_delta: float) -> void:
+	var t := Time.get_ticks_msec() * 0.001
+	_light.light_energy = _base_energy * (
+		1.0 + 0.13 * sin(t * 7.3) + 0.07 * sin(t * 12.1 + 1.7)
+	)
 
 
 func _build() -> void:
@@ -69,6 +84,24 @@ func _build() -> void:
 	ember.material_override = ember_material
 	ember.position = Vector3(0.0, 0.32, 0.0)
 	add_child(ember)
+	# Пламя (блок д): шейдерный конус, колышется вершинами и мерцает
+	# кромкой; угли снизу подсвечивают его основание.
+	var flame := MeshInstance3D.new()
+	flame.name = "Flame"
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.04
+	cone.bottom_radius = FLAME_RADIUS
+	cone.height = FLAME_HEIGHT
+	cone.radial_segments = 10
+	flame.mesh = cone
+	var flame_mat := ShaderMaterial.new()
+	flame_mat.shader = FIRE_SHADER
+	flame_mat.set_shader_parameter("base_color", PAL.fire.darkened(0.15))
+	flame_mat.set_shader_parameter("tip_color", Color(1.0, 0.88, 0.42))
+	flame_mat.set_shader_parameter("height", FLAME_HEIGHT)
+	flame.material_override = flame_mat
+	flame.position = Vector3(0.0, 0.42 + FLAME_HEIGHT * 0.5, 0.0)
+	add_child(flame)
 	# Искры над углями (раздел 16: «искры костра»).
 	_sparks = Fx.fire_sparks(self, Vector3(0.0, 0.5, 0.0), PAL.fire)
 	_light = OmniLight3D.new()
@@ -86,10 +119,10 @@ func _on_campfire_seats(seats: Array) -> void:
 		if peer != 0:
 			seated += 1
 	if seated >= B.campfire_company_size:
-		_light.light_energy = COMPANY_ENERGY
+		_base_energy = COMPANY_ENERGY
 		_light.omni_range = COMPANY_RANGE
 		_sparks.amount = COMPANY_SPARKS
 	else:
-		_light.light_energy = CALM_ENERGY
+		_base_energy = CALM_ENERGY
 		_light.omni_range = CALM_RANGE
 		_sparks.amount = CALM_SPARKS
