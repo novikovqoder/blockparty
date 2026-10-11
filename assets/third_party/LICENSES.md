@@ -16,6 +16,11 @@ Godot при импорте — это та же встроенная текст
 | Castle Kit | Kenney | https://kenney.nl/assets/castle-kit | CC0 | 2026-10-05 | `kenney.nl/castle-kit/wall-pillar.glb`, `kenney.nl/castle-kit/tower-square-arch.glb`, `kenney.nl/castle-kit/Textures/colormap.png` (атлас цветов моделей) |
 | KayKit Adventurers 2.0 FREE | Kay Lousberg | https://kaylousberg.itch.io/kaykit-adventurers | CC0 | 2026-10-06 | `kaykit/adventurers/Knight.glb`, `kaykit/adventurers/Mage.glb`, `kaykit/adventurers/Ranger.glb`; текстуры (извлечены из glb при импорте): `kaykit/adventurers/Knight_knight_texture.png`, `kaykit/adventurers/Mage_mage_texture.png`, `kaykit/adventurers/Ranger_ranger_texture.png` |
 | KayKit Character Animations 1.1 | Kay Lousberg | https://kaylousberg.itch.io/kaykit-character-animations | CC0 | 2026-10-06 | `kaykit/animations/Rig_Medium_General.glb`, `kaykit/animations/Rig_Medium_MovementBasic.glb`, `kaykit/animations/Rig_Medium_Simulation.glb` |
+| Ground042 (Forest Ground Leaves) | ambientCG | https://ambientcg.com/view?id=Ground042 | CC0 | 2026-10-11 | `ambientcg.com/Ground042_2K/Ground042_2K-JPG_Color.jpg`, `ambientcg.com/Ground042_2K/Ground042_2K-JPG_NormalGL.jpg` |
+| Ground044 (Dirt Ground) | ambientCG | https://ambientcg.com/view?id=Ground044 | CC0 | 2026-10-11 | `ambientcg.com/Ground044_2K/Ground044_2K-JPG_Color.jpg`, `ambientcg.com/Ground044_2K/Ground044_2K-JPG_NormalGL.jpg` |
+| Moss001 | ambientCG | https://ambientcg.com/view?id=Moss001 | CC0 | 2026-10-11 | `ambientcg.com/Moss001_2K/Moss001_2K-JPG_Color.jpg`, `ambientcg.com/Moss001_2K/Moss001_2K-JPG_NormalGL.jpg` |
+| Rock045 | ambientCG | https://ambientcg.com/view?id=Rock045 | CC0 | 2026-10-11 | `ambientcg.com/Rock045_2K/Rock045_2K-JPG_Color.jpg`, `ambientcg.com/Rock045_2K/Rock045_2K-JPG_NormalGL.jpg` |
+| Gravel015 | ambientCG | https://ambientcg.com/view?id=Gravel015 | CC0 | 2026-10-11 | `ambientcg.com/Gravel015_2K/Gravel015_2K-JPG_Color.jpg`, `ambientcg.com/Gravel015_2K/Gravel015_2K-JPG_NormalGL.jpg` |
 
 Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
 П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются

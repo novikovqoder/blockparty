@@ -82,5 +82,7 @@ void sky() {
 	col = mix(col, lit, cover);
 	col += sun_color.rgb * (halo + disk * 3.0) * (1.0 - cover);
 
-	COLOR = vec4(col, 1.0);
+	// COLOR в sky-шейдере — vec3 (не vec4: присвоение vec4 не компилировалось
+	// ни в Forward+, ни в opengl3 — с vfx-fix небо было сплошно белым).
+	COLOR = col;
 }

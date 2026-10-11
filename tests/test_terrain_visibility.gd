@@ -80,36 +80,41 @@ func test_terrain_faces_point_up_in_every_zone() -> void:
 
 
 func test_terrain_material_is_opaque() -> void:
-	# Материал рельефа непрозрачен в обеих ветках LowPolyMat: плоский
-	# StandardMaterial3D (headless) без прозрачности и с альфой 1, а шейдер
-	# lowpoly не пишет ALPHA и не включает blend-режимы прозрачности.
+	# Материал рельефа непрозрачен: плоский StandardMaterial3D (headless)
+	# без прозрачности и с альфой 1; шейдер lowpoly (весь остров) и шейдер
+	# земли Леса forest_ground (сектор Леса, П5.7) не пишут ALPHA и не
+	# включают blend-режимы прозрачности.
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
-	var material: Material = _terrain_meshes(island)[0].material_override
-	assert_not_null(material, "у рельефа назначен материал")
-	if material is StandardMaterial3D:
-		var flat := material as StandardMaterial3D
-		assert_eq(
-			flat.transparency, BaseMaterial3D.TRANSPARENCY_DISABLED,
-			"плоский материал рельефа без прозрачности",
-		)
-		assert_almost_eq(flat.albedo_color.a, 1.0, 0.001, "альфа = 1")
-	elif material is ShaderMaterial:
-		assert_eq(
-			(material as ShaderMaterial).shader.resource_path,
-			LowPolyMat.SHADER.resource_path,
-			"шейдер рельефа — общий lowpoly",
-		)
-	else:
-		fail_test("неизвестный материал рельефа: %s" % material)
-	var code: String = LowPolyMat.SHADER.code
-	assert_false(
-		"ALPHA" in code, "шейдер lowpoly не пишет ALPHA (прозрачность)",
-	)
-	for mode: String in ["blend_add", "blend_sub", "blend_mul", "depth_prepass_alpha"]:
+	for mesh: MeshInstance3D in _terrain_meshes(island):
+		var material: Material = mesh.material_override
+		assert_not_null(material, "у рельефа назначен материал")
+		if material is StandardMaterial3D:
+			var flat := material as StandardMaterial3D
+			assert_eq(
+				flat.transparency, BaseMaterial3D.TRANSPARENCY_DISABLED,
+				"плоский материал рельефа без прозрачности",
+			)
+			assert_almost_eq(flat.albedo_color.a, 1.0, 0.001, "альфа = 1")
+		elif material is ShaderMaterial:
+			var path: String = (material as ShaderMaterial).shader.resource_path
+			assert_true(
+				path == LowPolyMat.SHADER.resource_path
+				or path == ForestGround.SHADER.resource_path,
+				"шейдер чанка — lowpoly или forest_ground (Лес)",
+			)
+		else:
+			fail_test("неизвестный материал рельефа: %s" % material)
+	for shader: Shader in [LowPolyMat.SHADER, ForestGround.SHADER]:
+		var code: String = shader.code
 		assert_false(
-			("render_mode %s" % mode) in code or (", %s" % mode) in code,
-			"render_mode без %s" % mode,
+			"ALPHA" in code,
+			"шейдер %s не пишет ALPHA (прозрачность)" % shader.resource_path,
+		)
+		for mode: String in ["blend_add", "blend_sub", "blend_mul", "depth_prepass_alpha"]:
+			assert_false(
+				("render_mode %s" % mode) in code or (", %s" % mode) in code,
+				"render_mode без %s" % mode,
 		)
 
 

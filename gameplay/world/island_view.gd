@@ -24,7 +24,9 @@ func _ready() -> void:
 
 
 ## Рельеф: одна карта высот и на коллизию (HeightMapShape3D), и на меш
-## чанками 32 × 32 м (вершины на целых координатах −128..128).
+## чанками 32 × 32 м (вершины на целых координатах −128..128). Сектор Леса
+## [−128..0)² с П5.7 красится реалистичным материалом ForestGround: те же
+## чанки и та же коллизия — меняется только материал.
 func _build_terrain() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Terrain"
@@ -36,12 +38,21 @@ func _build_terrain() -> void:
 	collision.shape = shape
 	body.add_child(collision)
 	var material := LowPolyMat.flat_or_vertex()
+	var forest_material := ForestGround.make_material(art)
 	for chunk: Mesh in art.chunks:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = chunk
-		mesh_instance.material_override = material
+		mesh_instance.material_override = (
+			forest_material if _in_forest_sector(chunk.get_aabb()) else material)
 		body.add_child(mesh_instance)
 	add_child(body)
+
+
+## Чанк целиком в секторе Леса (границы кратны 32 — пересечений нет).
+## Вершины чанков в мировых координатах, нод без transform — AABB готов.
+static func _in_forest_sector(aabb: AABB) -> bool:
+	return aabb.position.x >= -128.0 and aabb.end.x <= 0.0 \
+		and aabb.position.z >= -128.0 and aabb.end.z <= 0.0
 
 
 ## Предметы: MultiMesh собирается в рантайме из групп ресурса (инстанс-данные

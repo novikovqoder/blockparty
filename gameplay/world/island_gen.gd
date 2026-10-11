@@ -139,7 +139,7 @@ static func generate() -> Dictionary:
 	var data := {
 		"heights": heights,
 		"props": [],
-		"tint": _tint_hints(),
+		"tint": tint_hints(),
 		"water": {
 			"sea": {"center": Vector2(0, 0), "size": Vector2(HALF * 2, HALF * 2), "level": SEA_LEVEL},
 			"lake": {"center": Vector2(6, 82), "size": Vector2(30, 30), "level": SEA_LEVEL},
@@ -473,8 +473,9 @@ static func _bridge_ramps(heights: PackedFloat32Array) -> void:
 
 ## Подсказки цвета рельефа (terrain.gd): террасы и площадки — камень своей
 ## зоны вместо материала по высоте/склону; вне подсказок цвет смешивается
-## из базовых материалов и зональных тонов по радиусам зон.
-static func _tint_hints() -> Dictionary:
+## из базовых материалов и зональных тонов по радиусам зон. Публичная, чтобы
+## П5.7 красил край Леса тем же цветом, что соседние чанки.
+static func tint_hints() -> Dictionary:
 	var tint: Dictionary = {}
 	# Площадь: вымощенная терраса — тёплый камень зоны (охра/терракота).
 	for x: int in range(-19, 20):
