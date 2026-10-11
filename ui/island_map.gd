@@ -50,8 +50,7 @@ func _ready() -> void:
 	_frame.add_child(dim)
 
 	var map_holder := Control.new()
-	map_holder.size = Vector2(DISPLAY_SIZE, DISPLAY_SIZE)
-	map_holder.position = (Vector2(1280, 720) - Vector2(DISPLAY_SIZE, DISPLAY_SIZE)) * 0.5
+	UiLayout.center(map_holder, Vector2(DISPLAY_SIZE, DISPLAY_SIZE))
 	map_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_frame.add_child(map_holder)
 

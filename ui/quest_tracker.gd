@@ -27,10 +27,10 @@ func _ready() -> void:
 	add_child(root)
 	for i: int in LINES:
 		var label := Label.new()
-		label.position = Vector2(
-			1280.0 - LINE_WIDTH - MARGIN, MARGIN + float(i) * LINE_HEIGHT
+		UiLayout.top_right(
+			label, Vector2(LINE_WIDTH, LINE_HEIGHT),
+			MARGIN, MARGIN + float(i) * LINE_HEIGHT,
 		)
-		label.size = Vector2(LINE_WIDTH, LINE_HEIGHT)
 		label.add_theme_font_size_override("font_size", FONT_SIZE)
 		label.add_theme_color_override("font_color", PAL.coin)
 		label.add_theme_color_override("font_color_outline", Color(0, 0, 0))

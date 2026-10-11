@@ -142,9 +142,7 @@ func _build() -> void:
 	_root.add_child(dim)
 
 	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(430, 210)
-	panel.size = Vector2(420, 300)
+	UiLayout.center(panel, Vector2(420, 300))
 	var style := StyleBoxFlat.new()
 	style.bg_color = PAL.hud_panel
 	style.corner_radius_top_left = 12

@@ -28,8 +28,6 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	var viewport := get_viewport().get_visible_rect().size
-	var center := viewport * 0.5
 	for i: int in Protocol.EMOTE_KEYS.size():
 		var angle := -PI / 2.0 + TAU * i / float(Protocol.EMOTE_KEYS.size())
 		var label := Label.new()
@@ -39,9 +37,10 @@ func _ready() -> void:
 		label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		label.add_theme_constant_override("outline_size", 5)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.position = center + Vector2(cos(angle), sin(angle)) * WHEEL_RADIUS \
-			- Vector2(60.0, 24.0)
-		label.size = Vector2(120.0, 48.0)
+		UiLayout.center_offset(
+			label, Vector2(120.0, 48.0),
+			Vector2(cos(angle), sin(angle)) * WHEEL_RADIUS,
+		)
 		root.add_child(label)
 		_labels.append(label)
 	_show(false)

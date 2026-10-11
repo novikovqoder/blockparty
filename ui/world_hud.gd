@@ -71,9 +71,7 @@ func _build() -> void:
 	style.content_margin_top = 10.0
 	style.content_margin_bottom = 10.0
 	_panel.add_theme_stylebox_override("panel", style)
-	_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_panel.position = Vector2(440, 560)
-	_panel.size = Vector2(400, 60)
+	UiLayout.center_bottom(_panel, Vector2(400, 60), 100.0)
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 22)
 	_label.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
@@ -96,9 +94,7 @@ func _build() -> void:
 	_on_coins_changed(Session.world_coins)
 	# Название зоны: по центру сверху, показывается при переходе (П2).
 	_zone = Label.new()
-	_zone.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_zone.position = Vector2(540, 12)
-	_zone.size = Vector2(200, 30)
+	UiLayout.center_top(_zone, Vector2(200, 30), 12.0)
 	_zone.add_theme_font_size_override("font_size", 22)
 	_zone.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
 	_zone.add_theme_color_override("font_outline_color", Color(0, 0, 0))
@@ -108,9 +104,7 @@ func _build() -> void:
 	root.add_child(_zone)
 	# «Игрок вошёл/покинул мир» (П3): под названием зоны, гаснет сам.
 	_toast = Label.new()
-	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_toast.position = Vector2(540, 46)
-	_toast.size = Vector2(200, 26)
+	UiLayout.center_top(_toast, Vector2(200, 26), 46.0)
 	_toast.add_theme_font_size_override("font_size", 17)
 	_toast.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
 	_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0))
@@ -120,9 +114,7 @@ func _build() -> void:
 	root.add_child(_toast)
 	# Подсказка взаимодействия «E — …» (раздел 15) с прогрессом удержания.
 	_hint = Label.new()
-	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_hint.position = Vector2(440, 600)
-	_hint.size = Vector2(400, 28)
+	UiLayout.center_bottom(_hint, Vector2(400, 28), 92.0)
 	_hint.add_theme_font_size_override("font_size", 20)
 	_hint.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
 	_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0))
@@ -131,9 +123,7 @@ func _build() -> void:
 	_hint.hide()
 	root.add_child(_hint)
 	_hint_hold = ProgressBar.new()
-	_hint_hold.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_hint_hold.position = Vector2(540, 632)
-	_hint_hold.size = Vector2(200, 8)
+	UiLayout.center_bottom(_hint_hold, Vector2(200, 8), 80.0)
 	_hint_hold.min_value = 0.0
 	_hint_hold.max_value = 1.0
 	_hint_hold.show_percentage = false
@@ -143,9 +133,7 @@ func _build() -> void:
 	# Приглашение «за руку» (раздел 9.5): над подсказкой E, с обратным
 	# отсчётом; гаснет по таймеру или когда связь подтвердилась/оборвалась.
 	_invite = Label.new()
-	_invite.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_invite.position = Vector2(440, 566)
-	_invite.size = Vector2(400, 26)
+	UiLayout.center_bottom(_invite, Vector2(400, 26), 128.0)
 	_invite.add_theme_font_size_override("font_size", 19)
 	_invite.add_theme_color_override("font_color", PAL.coin)
 	_invite.add_theme_color_override("font_outline_color", Color(0, 0, 0))
