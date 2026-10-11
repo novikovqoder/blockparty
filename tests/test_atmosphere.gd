@@ -1,7 +1,7 @@
-# Тесты света и атмосферы (шаг 4 П4.5, раздел 16 SPEC): glow для огня и
-# маяков, тёплая тональная коррекция и цветокоррекция, дымка по высоте,
-# тёплое солнце у горизонта и уровни качества картинки (тяжёлый объёмный
-# туман — только «Высокое качество»).
+# Тесты света и атмосферы (шаг 4 П4.5, раздел 16 SPEC): тёплая тональная
+# коррекция и цветокоррекция, дымка по высоте, тёплое солнце у горизонта
+# и уровни качества картинки (блок е vfx-fix: постобработка — glow, SSAO
+# и виньетка — и тяжёлый объёмный туман только в «Высоком качестве»).
 extends GutTest
 
 const WORLD: PackedScene = preload("res://scenes/world_scene.tscn")
@@ -9,12 +9,14 @@ const B: Balance = preload("res://gameplay/balance.tres")
 
 
 func test_world_scene_atmosphere_base() -> void:
-	# Сцена мира (узлы без запуска _ready): glow включён, точка белого
-	# тёплая, цветокоррекция контраста и насыщенности, дымка по высоте,
+	# Сцена мира (узлы без запуска _ready): база без постобработки (glow
+	# и SSAO включает «Высокое качество»), точка белого тёплая,
+	# цветокоррекция контраста и насыщенности, дымка по высоте,
 	# тени солнца включены и мягкие.
 	var scene := WORLD.instantiate()
 	var env: Environment = scene.get_node("WorldEnvironment").environment
-	assert_true(env.glow_enabled, "glow включён (огонь, маяки, светлячки)")
+	assert_false(env.glow_enabled, "в базе glow выключен (только «Высокое»)")
+	assert_false(env.ssao_enabled, "в базе SSAO выключен (только «Высокое»)")
 	assert_gt(env.tonemap_white, 1.0, "точка белого приподнята (светлее)")
 	assert_true(env.adjustment_enabled, "цветокоррекция включена")
 	assert_gt(env.adjustment_saturation, 1.0, "насыщенность чуть выше единицы")
@@ -26,8 +28,9 @@ func test_world_scene_atmosphere_base() -> void:
 
 
 func test_quality_tiers() -> void:
-	# SIMPLE — без теней и пост-эффектов (слабые GPU); NORMAL — тени, SSAO
-	# и glow; HIGH — то же плюс объёмный туман (тяжёлый эффект).
+	# SIMPLE — без теней и пост-эффектов (слабые GPU); NORMAL — тени и
+	# базовая картинка; HIGH — постобработка (блок е: аккуратный glow
+	# SOFTLIGHT, SSAO) и объёмный туман (тяжёлый эффект).
 	for tier: int in [
 		GraphicsQuality.Tier.SIMPLE,
 		GraphicsQuality.Tier.NORMAL,
@@ -36,15 +39,45 @@ func test_quality_tiers() -> void:
 		var env := Environment.new()
 		var sun := DirectionalLight3D.new()
 		GraphicsQuality.apply(env, sun, tier)
-		var full: bool = tier != GraphicsQuality.Tier.SIMPLE
-		assert_eq(sun.shadow_enabled, full, "уровень %d: тени" % tier)
-		assert_eq(env.ssao_enabled, full, "уровень %d: SSAO" % tier)
-		assert_eq(env.glow_enabled, full, "уровень %d: glow" % tier)
+		var high: bool = tier == GraphicsQuality.Tier.HIGH
 		assert_eq(
-			env.volumetric_fog_enabled, tier == GraphicsQuality.Tier.HIGH,
+			sun.shadow_enabled, tier != GraphicsQuality.Tier.SIMPLE,
+			"уровень %d: тени" % tier,
+		)
+		assert_eq(env.ssao_enabled, high, "уровень %d: SSAO только в «Высоком»" % tier)
+		assert_eq(env.glow_enabled, high, "уровень %d: glow только в «Высоком»" % tier)
+		if high:
+			assert_eq(
+				env.glow_blend_mode, Environment.GLOW_BLEND_MODE_SOFTLIGHT,
+				"glow мягкий (SOFTLIGHT, не выбеливает)",
+			)
+			assert_gt(env.glow_bloom, 0.0, "порог bloom отсекает не-источники")
+		assert_eq(
+			env.volumetric_fog_enabled, high,
 			"уровень %d: объёмный туман только в «Высоком»" % tier,
 		)
 		sun.free()
+
+
+func test_vignette_layer() -> void:
+	# Виньетка (блок е): полноэкранная (якоря и офсеты на весь экран),
+	# клики проходят насквозь, материал — шейдер vignette.gdshader.
+	var rect := GraphicsQuality.make_vignette()
+	assert_almost_eq(rect.anchor_left, 0.0, 0.001, "виньетка: левый край у 0")
+	assert_almost_eq(rect.anchor_right, 1.0, 0.001, "виньетка: правый край у 1")
+	assert_almost_eq(rect.anchor_top, 0.0, 0.001, "виньетка: верх у 0")
+	assert_almost_eq(rect.anchor_bottom, 1.0, 0.001, "виньетка: низ у 1")
+	assert_eq(
+		rect.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+		"виньетка не ловит мышь",
+	)
+	var material := rect.material as ShaderMaterial
+	assert_not_null(material, "материал виньетки — ShaderMaterial")
+	assert_eq(
+		material.shader.resource_path, "res://assets/shaders/vignette.gdshader",
+		"шейдер виньетки подключён",
+	)
+	rect.free()
 
 
 func test_tier_from_settings() -> void:

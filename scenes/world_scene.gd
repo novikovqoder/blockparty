@@ -33,6 +33,9 @@ var _island: Island
 var _player: Player
 var _day_cycle: DayCycle
 var _ambient: AmbientParticles
+## Виньетка (vfx-fix, блок е): полноэкранный ColorRect под HUD —
+## затемняет углы, но не интерфейс; видна только в «Высоком качестве».
+var _vignette: ColorRect
 var _leaving: bool = false
 var _zone_now: String = ""
 var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
@@ -48,6 +51,9 @@ func _ready() -> void:
 	# Атмосферные частицы (vfx-fix, блок г): светлячки, пыльца, листья.
 	_ambient = AmbientParticles.new()
 	add_child(_ambient)
+	# Виньетка (vfx-fix, блок е) до HUD: рисуется под интерфейсом.
+	_vignette = GraphicsQuality.make_vignette()
+	add_child(_vignette)
 	_spawn_player()
 	_apply_graphics_quality()
 	_hud = WorldHud.new()
@@ -248,13 +254,15 @@ func _draw_debug_collisions(root: Node) -> void:
 
 ## Качество картинки (разделы 15–16): «Простая графика» — без теней и
 ## пост-эффектов, туман плотнее (DayCycle), камера видит на 70 м вместо 160
-## (слабые встроенные GPU); «Высокое качество» — плюс объёмный туман
-## с дымкой в Лесу и у Озера (шаг 4 П4.5; на compatibility-рендерере
-## серверных скриншотов объёмный туман недоступен — проверяет владелец).
+## (слабые встроенные GPU); «Высокое качество» — плюс постобработка
+## (блок е: glow, SSAO, виньетка) и объёмный туман с дымкой в Лесу
+## и у Озера (шаг 4 П4.5; на compatibility-рендерере серверных скриншотов
+## SSAO и объёмный туман недоступны — проверяет владелец).
 func _apply_graphics_quality() -> void:
 	var tier := GraphicsQuality.tier_from_settings()
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
 	_ambient.setup(tier)
+	_vignette.visible = tier == GraphicsQuality.Tier.HIGH
 	GraphicsQuality.apply($WorldEnvironment.environment, $Sun, tier)
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
