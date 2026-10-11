@@ -21,9 +21,25 @@ Godot при импорте — это та же встроенная текст
 | Moss001 | ambientCG | https://ambientcg.com/view?id=Moss001 | CC0 | 2026-10-11 | `ambientcg.com/Moss001_2K/Moss001_2K-JPG_Color.jpg`, `ambientcg.com/Moss001_2K/Moss001_2K-JPG_NormalGL.jpg` |
 | Rock045 | ambientCG | https://ambientcg.com/view?id=Rock045 | CC0 | 2026-10-11 | `ambientcg.com/Rock045_2K/Rock045_2K-JPG_Color.jpg`, `ambientcg.com/Rock045_2K/Rock045_2K-JPG_NormalGL.jpg` |
 | Gravel015 | ambientCG | https://ambientcg.com/view?id=Gravel015 | CC0 | 2026-10-11 | `ambientcg.com/Gravel015_2K/Gravel015_2K-JPG_Color.jpg`, `ambientcg.com/Gravel015_2K/Gravel015_2K-JPG_NormalGL.jpg` |
+| island_tree_01 | Poly Haven | https://polyhaven.com/a/island_tree_01 | CC0 | 2026-10-11 | `polyhaven.com/island_tree_01/island_tree_01_lo.res`, `polyhaven.com/island_tree_01/island_tree_01_giant.res` |
+| island_tree_02 | Poly Haven | https://polyhaven.com/a/island_tree_02 | CC0 | 2026-10-11 | `polyhaven.com/island_tree_02/island_tree_02_lo.res` |
+| island_tree_03 | Poly Haven | https://polyhaven.com/a/island_tree_03 | CC0 | 2026-10-11 | `polyhaven.com/island_tree_03/island_tree_03_lo.res` |
+| shrub_02 | Poly Haven | https://polyhaven.com/a/shrub_02 | CC0 | 2026-10-11 | `polyhaven.com/shrub_02/shrub_02_lo.res` |
+| shrub_03 | Poly Haven | https://polyhaven.com/a/shrub_03 | CC0 | 2026-10-11 | `polyhaven.com/shrub_03/shrub_03_lo.res` |
+| shrub_04 | Poly Haven | https://polyhaven.com/a/shrub_04 | CC0 | 2026-10-11 | `polyhaven.com/shrub_04/shrub_04_lo.res` |
+| rock_07 | Poly Haven | https://polyhaven.com/a/rock_07 | CC0 | 2026-10-11 | `polyhaven.com/rock_07/rock_07_lo.res` |
+| rock_09 | Poly Haven | https://polyhaven.com/a/rock_09 | CC0 | 2026-10-11 | `polyhaven.com/rock_09/rock_09_lo.res` |
+| boulder_01 | Poly Haven | https://polyhaven.com/a/boulder_01 | CC0 | 2026-10-11 | `polyhaven.com/boulder_01/boulder_01_lo.res` |
+| dead_tree_trunk | Poly Haven | https://polyhaven.com/a/dead_tree_trunk | CC0 | 2026-10-11 | `polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res` |
+| grass_medium_02 | Poly Haven | https://polyhaven.com/a/grass_medium_02 | CC0 | 2026-10-11 | `polyhaven.com/grass_medium_02/grass_medium_02_lo.res` |
+| fern_02 | Poly Haven | https://polyhaven.com/a/fern_02 | CC0 | 2026-10-11 | `polyhaven.com/fern_02/fern_02_2k.gltf`, `polyhaven.com/fern_02/fern_02.bin`, `polyhaven.com/fern_02/textures/fern_02_arm_2k.jpg`, `polyhaven.com/fern_02/textures/fern_02_diff_2k.jpg`, `polyhaven.com/fern_02/textures/fern_02_nor_gl_2k.jpg` |
 
 Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
 П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются
 под размеры процедурных мешей — см. `gameplay/world/props/cc0_meshes.gd`.
+Сканы Poly Haven (П5.7, блок 2) — фотограмметрия деревьев, кустов, камней и
+брёвен Леса: скачанные glb децимированы до бюджетов low-poly и запечены в
+`.res` с цветом текстуры в вершинах (`tools/decimate_polyhaven.gd`;
+оригинальные glb в проекте не хранятся, страницы ассетов — в таблице).
 Наборы KayKit — персонажи игрока (раздел 16 SPEC, v2.3): три модели на общем
 риге Rig_Medium и скелетные клипы анимаций на том же риге.

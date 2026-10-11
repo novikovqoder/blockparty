@@ -49,8 +49,51 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _plank_deck()
 		"boat":
 			return _boat()
+		"log_bridge":
+			return _log_bridge()
 	push_error("Неизвестный тип предмета: %s" % type)
 	return ArrayMesh.new()
+
+
+## Мостик из брёвен через лесной овраг (П5.7, блок 2): девять сканов
+## Poly Haven «rlog» (лежачий ствол 3.0 × 0.28 м) в ряд с шагом 0.55 вдоль
+## Z; бревно длинной стороной уже вдоль X (перестраховочный swap по AABB
+## оставлен). Все брёвна склеены в одну поверхность — как у прочих групп
+## предметов (IslandArt ждёт меш с одним surface). Низ моста — в origin,
+## лёгкое чередование высоты — вручную заданное, без rng.
+static func _log_bridge() -> ArrayMesh:
+	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	var drift := [0.0, -0.02, 0.015, -0.015, 0.02]
+	for i: int in 9:
+		var log := Cc0Meshes.mesh(&"rlog", 0)
+		if log == null:
+			continue
+		var arrays: Array = log.surface_get_arrays(0)
+		var log_verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var aabb := log.get_aabb()
+		if aabb.size.z > aabb.size.x:
+			for v: int in log_verts.size():
+				var swapped := log_verts[v]
+				log_verts[v] = Vector3(swapped.z, swapped.y, swapped.x)
+		var dy: float = drift[i % drift.size()]
+		var dz: float = (i - 4) * 0.55
+		var base: int = verts.size()
+		for v: int in log_verts.size():
+			verts.append(Vector3(
+				log_verts[v].x, log_verts[v].y + dy, log_verts[v].z + dz))
+		colors.append_array(arrays[Mesh.ARRAY_COLOR])
+		for index: int in arrays[Mesh.ARRAY_INDEX]:
+			indices.append(base + index)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 
 ## Радиус видимости MultiMesh предмета, м (0 — без ограничения;
@@ -67,6 +110,14 @@ static func visibility_range(type: StringName) -> float:
 			return 80.0
 		"bush":
 			return 70.0
+		"fern":
+			return 50.0
+		# Реалистичные сканы Леса (П5.7, блок 2): кусты и кочки — как их
+		# кенниевские аналоги, деревья видны всегда (силуэт леса издалека).
+		"rshrub":
+			return 70.0
+		"rgrass":
+			return 40.0
 	return 0.0
 
 
@@ -101,10 +152,36 @@ static func wind_params(type: StringName) -> Dictionary:
 				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
 				"wind_direction": Vector2(0.9, 0.4),
 			}
-		"tree_leafy", "tree_spruce":
+		"fern":
+			return {
+				"wind_amplitude": 0.05, "wind_freq": 1.3,
+				"wind_weight_base": 0.05, "wind_weight_span": 0.7,
+				"wind_direction": Vector2(0.85, 0.45),
+			}
+		"tree_leafy", "tree_spruce", "tree_giant":
 			return {
 				"wind_amplitude": 0.22, "wind_freq": 0.55,
 				"wind_weight_base": 1.6, "wind_weight_span": 3.5,
+				"wind_direction": Vector2(0.85, 0.45),
+			}
+		# Реалистичные сканы Леса (П5.7, блок 2): крона выше и массивнее
+		# кенниевской — качание чуть шире и начинается выше.
+		"rtree_leafy":
+			return {
+				"wind_amplitude": 0.26, "wind_freq": 0.5,
+				"wind_weight_base": 2.0, "wind_weight_span": 3.2,
+				"wind_direction": Vector2(0.85, 0.45),
+			}
+		"rshrub":
+			return {
+				"wind_amplitude": 0.06, "wind_freq": 1.1,
+				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
+				"wind_direction": Vector2(0.9, 0.4),
+			}
+		"rgrass":
+			return {
+				"wind_amplitude": 0.05, "wind_freq": 1.9,
+				"wind_weight_base": 0.02, "wind_weight_span": 0.35,
 				"wind_direction": Vector2(0.85, 0.45),
 			}
 	return {}
@@ -139,6 +216,21 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(1.9, 4.4, 1.9) * scale.x
 		"boat":
 			return Vector3(1.3, 0.5, 2.35)
+		# П5.7, блок 2: гигант — толстый ствол без кроны; валежник — лежачий
+		# ствол (длина по X до поворота yaw); мостик — настил из девяти
+		# трёхметровых брёвен (_log_bridge), толщина одного бревна.
+		"tree_giant":
+			return Vector3(1.5, 8.0, 1.5) * scale.x
+		"rlog":
+			return Vector3(3.0, 0.28, 0.5) * Vector3(scale.x, scale.y, scale.x)
+		"log_bridge":
+			return Vector3(3.0 * scale.x, 0.28 * scale.y, 4.95 * scale.z)
+		# Реалистичные сканы Леса (П5.7, блок 2): стволы сканов тоньше
+		# кенниевских — коробка уже; валежник rlog — в общем блоке выше.
+		"rtree_leafy":
+			return Vector3(0.6 * scale.x, 3.2 * scale.y, 0.6 * scale.x)
+		"rrock":
+			return Vector3(0.85 * scale.x, 0.5 * scale.y, 0.85 * scale.x)
 	return Vector3.ZERO
 
 

@@ -1,80 +1,144 @@
-# CC0-модели окружения (шаг 3 П4.5): наборы kenney.nl из assets/third_party
-# (правила — CLAUDE.md, записи — assets/third_party/LICENSES.md). GLB читается
-# напрямую GLTFDocument'ом — папки наборов закрыты .gdignore, импорт редактора
-# не нужен и в экспорт игры файлы не попадают. Поверхности перекрашиваются
-# в палитры игры вершинными цветами (шейдер lowpoly умножает их на instance-тон
-# зоны — как у процедурных мешей PropMeshes), а меш нормируется под эталонные
-# размеры процедурной модели того же типа — scale предметов IslandGen не
-# меняется. Используется только при запекании острова (tools/generate_island.gd)
-# и в тестах: в игре меши уже встроены в island_art.res.
+# CC0-модели окружения (шаг 3 П4.5; П5.7 — блок 2 добавил Poly Haven):
+# наборы kenney.nl и polyhaven.com из assets/third_party (правила — CLAUDE.md,
+# записи — assets/third_party/LICENSES.md). GLB/glTF читается напрямую
+# GLTFDocument'ом — папки наборов закрыты .gdignore, импорт редактора не нужен
+# и в экспорт игры файлы не попадают. Поверхности перекрашиваются в палитры
+# игры вершинными цветами (шейдер lowpoly умножает их на instance-тон зоны —
+# как у процедурных мешей PropMeshes); сканы Poly Haven берут цвет из своей
+# текстуры (режим "tex"), а меш нормируется под эталонные размеры — scale
+# предметов IslandGen не меняется. Используется только при запекании острова
+# (tools/generate_island.gd) и в тестах: в игре меши в island_art.res.
 class_name Cc0Meshes
 extends RefCounted
 
 const PAL: Palette = preload("res://assets/palette.tres")
-const ROOT: String = "res://assets/third_party/kenney.nl/"
+## Корень наборов — папки сайтов в assets/third_party (CLAUDE.md). Набор
+## в MODELS — путь от корня: "kenney.nl/nature-kit", "polyhaven.com/fern_02".
+const ROOT: String = "res://assets/third_party/"
 
 ## Тип → [набор, файлы-варианты (порядок = variant IslandGen), целевая высота,
 ## целевой макс. горизонтальный размер (м), запасная категория цвета для
-## материалов с безымянной поверхностью]. Целевые размеры — эталоны
-## процедурных мешей, которые эти типы заменяют (см. PROP_TYPES в тестах).
+## материалов с безымянной поверхностью, режим цвета (необязателен:
+## "tex" — цвет вершин из текстуры модели как есть, для сканов Poly Haven;
+## по умолчанию — палитры игры)]. Имя файла с точкой берётся целиком
+## (fern_02_2k.gltf), без — добавляется .glb (kenney). Целевые размеры —
+## эталоны для нормировки, см. PROP_TYPES в тестах.
 const MODELS: Dictionary = {
 	&"tree_leafy": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_small"],
 		3.8, 1.7, "trunk",
 	],
+	# Гигант лесной поляны — тот же скан island_tree_01, но с большим бюджетом
+	# децимации (см. tools/decimate_polyhaven.gd): нормировка до ~11 м высоты.
+	&"tree_giant": [
+		"polyhaven.com/island_tree_01",
+		["island_tree_01_giant.res"],
+		11.0, 11.0, "trunk",
+	],
 	&"tree_spruce": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["tree_pineRoundA", "tree_pineDefaultA", "tree_pineSmallA"],
 		3.2, 2.1, "trunk",
 	],
+	# Реалистичные деревья Леса (П5.7, блок 2): децимированные сканы Poly Haven
+	# (tools/decimate_polyhaven.gd) — цвет уже запечён в вершины, поэтому
+	# IslandGen даёт им kind "plain" (без зонального уклона). Набор в записи
+	# пуст: варианты лежат в разных папках наборов, файл — путь от
+	# polyhaven.com/.
+	&"rtree_leafy": [
+		"",
+		[
+			"polyhaven.com/island_tree_01/island_tree_01_lo.res",
+			"polyhaven.com/island_tree_02/island_tree_02_lo.res",
+			"polyhaven.com/island_tree_03/island_tree_03_lo.res",
+		],
+		6.0, 4.0, "trunk",
+	],
+	&"rshrub": [
+		"",
+		[
+			"polyhaven.com/shrub_02/shrub_02_lo.res",
+			"polyhaven.com/shrub_03/shrub_03_lo.res",
+			"polyhaven.com/shrub_04/shrub_04_lo.res",
+		],
+		0.9, 1.4, "leaf",
+	],
+	&"rrock": [
+		"",
+		[
+			"polyhaven.com/rock_07/rock_07_lo.res",
+			"polyhaven.com/rock_09/rock_09_lo.res",
+			"polyhaven.com/boulder_01/boulder_01_lo.res",
+		],
+		0.6, 1.0, "stone",
+	],
+	# Валежник Леса: скан лежачего ствола (исходник 3.05 × 0.29 м) —
+	# нормировка вытягивает до 3.0 м при толщине 0.28. Второй вариант
+	# не нужен: поворот вокруг Y и масштаб IslandGen дают вариативность.
+	# Этот же меш — настил мостика через овраг (_log_bridge).
+	&"rlog": [
+		"",
+		["polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res"],
+		0.5, 3.0, "trunk",
+	],
+	&"rgrass": [
+		"",
+		["polyhaven.com/grass_medium_02/grass_medium_02_lo.res"],
+		0.5, 0.7, "leaf",
+	],
+	&"fern": [
+		"polyhaven.com/fern_02",
+		["fern_02_2k.gltf"],
+		0.6, 2.4, "leaf", "tex",
+	],
 	&"bush": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["plant_bush", "plant_bushSmall", "plant_bushDetailed"],
 		0.8, 1.2, "leaf",
 	],
 	&"grass_tuft": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["grass", "grass_leafs", "grass_large"],
 		0.5, 0.45, "leaf",
 	],
 	&"flower": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["flower_redA", "flower_yellowA", "flower_purpleA"],
 		0.35, 0.35, "leaf",
 	],
 	&"boulder": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["rock_largeA", "rock_largeB", "rock_largeD"],
 		0.95, 1.15, "stone",
 	],
 	&"rock_pillar": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["rock_tallA", "rock_tallB", "rock_tallC"],
 		2.4, 1.3, "stone",
 	],
 	&"pebble": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["rock_smallA", "rock_smallB", "rock_smallC"],
 		0.18, 0.32, "stone",
 	],
 	&"reed": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["plant_flatTall", "plant_flatShort"],
 		0.55, 0.4, "leaf",
 	],
 	&"bench": [
-		"nature-kit",
+		"kenney.nl/nature-kit",
 		["log", "log_large"],
 		0.5, 2.0, "trunk",
 	],
 	&"ruin_column": [
-		"castle-kit",
+		"kenney.nl/castle-kit",
 		["wall-pillar"],
 		1.55, 1.05, "stone",
 	],
 	&"ruin_arch": [
-		"castle-kit",
+		"kenney.nl/castle-kit",
 		["tower-square-arch"],
 		2.7, 2.3, "stone",
 	],
@@ -94,8 +158,12 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 	var key: String = "%s:%d" % [type, index]
 	if _cache.has(key):
 		return _cache[key]
-	var path: String = "%s%s/%s.glb" % [ROOT, cfg[0], files[index]]
-	var mesh := _build(path, cfg)
+	var file := files[index]
+	if not file.contains("."):
+		file += ".glb"
+	var path := ROOT.path_join(String(cfg[0])).path_join(file)
+	var mesh := _build_res(path, cfg) if file.ends_with(".res") \
+		else _build(path, cfg)
 	_cache[key] = mesh
 	return mesh
 
@@ -109,7 +177,10 @@ static func _build(path: String, cfg: Array) -> ArrayMesh:
 		return ArrayMesh.new()
 	var root := doc.generate_scene(state)
 	var parts: Array = []
-	_collect(root, Transform3D.IDENTITY, String(cfg[4]), parts)
+	var color_mode := "palette"
+	if cfg.size() > 5:
+		color_mode = String(cfg[5])
+	_collect(root, Transform3D.IDENTITY, String(cfg[4]), color_mode, parts)
 	root.free()
 	if parts.is_empty():
 		push_error("CC0-модель без треугольных поверхностей: " + path)
@@ -117,10 +188,36 @@ static func _build(path: String, cfg: Array) -> ArrayMesh:
 	return _normalized(parts, float(cfg[2]), float(cfg[3]))
 
 
+## Децимированный скан Poly Haven (tools/decimate_polyhaven.gd): .res уже
+## несёт цвет в вершинах и общий базис — читаем поверхности как «детали»
+## и только нормируем под эталонные размеры.
+static func _build_res(path: String, cfg: Array) -> ArrayMesh:
+	var mesh: Mesh = load(path)
+	if mesh == null or mesh.get_surface_count() == 0:
+		push_error("CC0 .res не читается: " + path)
+		return ArrayMesh.new()
+	var parts: Array = []
+	for surface: int in mesh.get_surface_count():
+		var arrays: Array = mesh.surface_get_arrays(surface)
+		if arrays.is_empty() \
+				or (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+			continue
+		parts.append({
+			"verts": arrays[Mesh.ARRAY_VERTEX],
+			"colors": arrays[Mesh.ARRAY_COLOR],
+			"indices": arrays[Mesh.ARRAY_INDEX],
+		})
+	if parts.is_empty():
+		push_error("CC0 .res без поверхностей: " + path)
+		return ArrayMesh.new()
+	return _normalized(parts, float(cfg[2]), float(cfg[3]))
+
+
 ## Обход узлов с накоплением трансформа; каждая поверхность — «деталь»
 ## с вершинами, перекрашенными в палитры игры, и индексами.
 static func _collect(
-	node: Node3D, parent_xf: Transform3D, fallback: String, parts: Array
+	node: Node3D, parent_xf: Transform3D, fallback: String,
+	color_mode: String, parts: Array
 ) -> void:
 	var xf := parent_xf * node.transform
 	if node is MeshInstance3D:
@@ -157,9 +254,10 @@ static func _collect(
 							PAL.ruin_brick, brightness
 						)
 				elif textured:
-					# Цвет в текстуре (castle-kit «colormap.png»): сэмпл по UV
-					# каждой вершины, палитра руин по яркости пикселя —
-					# кладка и грани остаются разными.
+					# Цвет в текстуре: сэмпл по UV каждой вершины. Сканы
+					# Poly Haven (color_mode "tex") берут цвет пикселя как
+					# есть (sRGB → линейный), атлас castle-kit — палитру руин
+					# по яркости: кладка и грани остаются разными.
 					var image: Image = flat.albedo_texture.get_image()
 					var uv: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
 					for i: int in verts.size():
@@ -169,6 +267,9 @@ static func _collect(
 							clampi(roundi((1.0 - uv[i].y) * image.get_height()),
 								0, image.get_height() - 1),
 						)
+						if color_mode == "tex":
+							colors[i] = pixel.srgb_to_linear()
+							continue
 						var brightness := clampf(
 							maxf(pixel.r, maxf(pixel.g, pixel.b)), 0.0, 1.0
 						)
@@ -188,7 +289,7 @@ static func _collect(
 				})
 	for child: Node in node.get_children():
 		if child is Node3D:
-			_collect(child as Node3D, xf, fallback, parts)
+			_collect(child as Node3D, xf, fallback, color_mode, parts)
 
 
 ## Цвет поверхности nature-kit по имени материала kenney (в GLB имена

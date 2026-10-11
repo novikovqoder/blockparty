@@ -57,6 +57,23 @@ const CREVASSE_RIM_BLEND: float = 5.0
 const BRIDGE_X: PackedInt32Array = [33, 52]
 const BRIDGE_DECK_H: float = CREVASSE_RIM_H + 0.18
 
+## Лесной овраг (П5.7, блок 2): сухое русло поперёк лесной тропы, через
+## которое переброшен мостик из брёвен (_forest_landmarks). Ось задана
+## серединой (точка моста на тропе) и направлением; глубина — с плоским
+## дном и плавной кромкой (1 − smoothstep), сужение к концам за
+## GULLY_TAPER. Дно ложится во «влажную землю» ForestGround (h < 3.2),
+## стенки — в «камень» по уклону.
+const GULLY_MID: Vector2 = Vector2(-48.1, -45.4)
+const GULLY_DIR: Vector2 = Vector2(-0.809, 0.588)
+const GULLY_HALF_LEN: float = 7.0
+const GULLY_HALF_W: float = 1.7
+const GULLY_DEPTH: float = 2.1
+const GULLY_TAPER: float = 2.5
+
+## Поляна с огромным деревом: центр и радиус голой земли вокруг ствола.
+const GIANT_CELL: Vector2i = Vector2i(-41, -66)
+const GIANT_CLEAR_R: int = 7
+
 ## Зоны (раздел 6): имя для --dev-spawn и F3, круг для названия места.
 ## Порядок — как в палитрах зон (Palette.zone_*).
 const ZONES: Array[Dictionary] = [
@@ -82,16 +99,19 @@ const LOOKOUT_TOP_H: float = 10.0
 ## Типы предметов с коллизией (рецепт формы — в prop_meshes.gd).
 ## ruin_gate — только рама: проём закрывает узел RuinGate (П5, раздел 9.2).
 const SOLID_TYPES: PackedStringArray = [
-	"tree_leafy", "tree_spruce", "boulder", "rock_pillar", "rock_wall",
-	"ruin_block", "ruin_tower", "ruin_arch", "ruin_column", "bench",
-	"board", "beacon", "pier_post", "plank_deck", "boat",
+	"tree_leafy", "tree_spruce", "tree_giant", "boulder", "rock_pillar",
+	"rock_wall", "ruin_block", "ruin_tower", "ruin_arch", "ruin_column",
+	"bench", "log_bridge", "board", "beacon", "pier_post",
+	"plank_deck", "boat",
+	"rtree_leafy", "rrock", "rlog",
 ]
 ## Предметы раскладки без коллизии (vfx-fix, баг 2): мелкая растительность
 ## проходима, рама ruin_gate — по задумке (проём закрывает RuinGate).
 ## Тест проверяет: каждый тип раскладки — либо SOLID (форма в prop_meshes),
 ## либо здесь; ничего третьего не бывает.
 const PASS_THROUGH_TYPES: PackedStringArray = [
-	"grass_tuft", "reed", "flower", "pebble", "bush", "ruin_gate",
+	"grass_tuft", "reed", "flower", "pebble", "bush", "fern", "ruin_gate",
+	"rshrub", "rgrass",
 ]
 ## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
 ## замкнутая петля по земле вокруг дома. Радиус петли, запас от твёрдых
@@ -133,6 +153,7 @@ static func generate() -> Dictionary:
 	_carve_crevasse(heights)
 	_bridge_ramps(heights)
 	_lookouts(heights)
+	_carve_forest_gully(heights)
 	# Второй проход выравнивания: запланированные обрывы (каньон, площадки
 	# смотровых) защищены, а их кромки получают пологий подход к рельефу.
 	_limit_slopes(heights, _protected_cells())
@@ -151,6 +172,7 @@ static func generate() -> Dictionary:
 	var stones: Array[Vector3] = []
 	var spawns: Dictionary = {}
 	var reserved: Dictionary = _points_of_interest(heights, stones, spawns)
+	_forest_landmarks(heights, props, reserved)
 	var beacons: Array[Vector3] = _beacons(heights, props, reserved)
 	_trees_and_rocks(heights, props, rng, reserved)
 	_crevasse_walls(props, rng)
@@ -396,6 +418,13 @@ static func _protected_cells() -> Dictionary:
 		for z: int in range(CREVASSE_Z0 - 3, CREVASSE_Z1 + 4):
 			if _dist_to_crevasse(x, z) <= CREVASSE_RIM_BAND:
 				cells[Vector2i(x, z)] = true
+	# Лесной овраг: стенки остаются крутыми (камень по уклону), кромка
+	# получает пологий подход выравниванием — как у каньона.
+	var gully_reach := GULLY_HALF_LEN + GULLY_HALF_W + GULLY_TAPER + 2.0
+	for z: int in range(int(GULLY_MID.y - gully_reach), int(GULLY_MID.y + gully_reach) + 1):
+		for x: int in range(int(GULLY_MID.x - gully_reach), int(GULLY_MID.x + gully_reach) + 1):
+			if gully_across(x, z) <= GULLY_HALF_W:
+				cells[Vector2i(x, z)] = true
 	for center: Vector2i in LOOKOUTS:
 		for dx: int in range(-2, 3):
 			for dz: int in range(-2, 3):
@@ -443,6 +472,105 @@ static func _dist_to_crevasse(x: int, z: int) -> float:
 	var dx: float = maxf(maxf(CREVASSE_X0 - x, 0.0), x - CREVASSE_X1)
 	var dz: float = maxf(maxf(CREVASSE_Z0 - z, 0.0), z - CREVASSE_Z1)
 	return Vector2(dx, dz).length()
+
+
+## Лесной овраг: расстояние точки до оси русла (поперёк), со знаком вдоль
+## оси. Пользуются копка, резервация клеток и тесты.
+static func gully_across(x: float, z: float) -> float:
+	var v := Vector2(x, z) - GULLY_MID
+	return absf(v.dot(Vector2(-GULLY_DIR.y, GULLY_DIR.x)))
+
+
+static func gully_along(x: float, z: float) -> float:
+	var v := Vector2(x, z) - GULLY_MID
+	return v.dot(GULLY_DIR)
+
+
+## Прорезка русла: плоское дно в сердцевине, крутые стенки, плавная кромка
+## и сужение к концам. Глубина на клетку у стенки больше MAX_STEP — клетки
+## русла защищены от выравнивания (_protected_cells), как каньон.
+static func _carve_forest_gully(heights: PackedFloat32Array) -> void:
+	var reach := GULLY_HALF_LEN + GULLY_HALF_W + GULLY_TAPER + 1.0
+	for z: int in range(int(GULLY_MID.y - reach), int(GULLY_MID.y + reach) + 1):
+		for x: int in range(int(GULLY_MID.x - reach), int(GULLY_MID.x + reach) + 1):
+			if absi(x) > HALF or absi(z) > HALF:
+				continue
+			var across := gully_across(x, z)
+			if across >= GULLY_HALF_W:
+				continue
+			var taper: float = clampf(
+				(GULLY_HALF_LEN - absf(gully_along(x, z))) / GULLY_TAPER, 0.0, 1.0)
+			if taper <= 0.0:
+				continue
+			var depth: float = GULLY_DEPTH * (1.0 - smoothstep(
+				GULLY_HALF_W * 0.35, GULLY_HALF_W, across)) * smoothstep(
+				0.0, 1.0, taper)
+			var i: int = _idx(x, z)
+			heights[i] = maxf(SEA_H + 0.6, heights[i] - depth)
+
+
+## Ориентиры Леса (SPEC 2.5, блок 2 П5.7): поляна с огромным деревом и
+## овраг с мостиком из брёвен. Собраны вручную (координаты фиксированы),
+## генерация от них детерминирована; rng — свой поток, чтобы правки леса
+## не двигали маяки, и наоборот. Клетки поляны и русла резервируются:
+## на поляне не растут деревья, в русле — только папоротники (_trees_and_rocks).
+static func _forest_landmarks(
+		heights: PackedFloat32Array, props: Array, reserved: Dictionary) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED_VALUE + 57
+	for dz: int in range(-GIANT_CLEAR_R, GIANT_CLEAR_R + 1):
+		for dx: int in range(-GIANT_CLEAR_R, GIANT_CLEAR_R + 1):
+			if Vector2(float(dx), float(dz)).length() <= float(GIANT_CLEAR_R):
+				reserved[GIANT_CELL + Vector2i(dx, dz)] = true
+	var reach := GULLY_HALF_LEN + GULLY_HALF_W + 1.0
+	for z: int in range(int(GULLY_MID.y - reach), int(GULLY_MID.y + reach) + 1):
+		for x: int in range(int(GULLY_MID.x - reach), int(GULLY_MID.x + reach) + 1):
+			if gully_across(x, z) <= GULLY_HALF_W + 1.0 \
+					and absf(gully_along(x, z)) <= GULLY_HALF_LEN:
+				reserved[Vector2i(x, z)] = true
+	# Огромное дерево (~11 м, П5.7 блок 2): децимированный скан island_tree_01
+	# с крупным бюджетом — нормировкой поднят до высоты ориентира; цвет коры
+	# и листвы из текстуры скана (тон kind "plain" — только яркость).
+	var giant_h: float = heights[_idx(GIANT_CELL.x, GIANT_CELL.y)]
+	_add_prop(props, rng, &"tree_giant",
+		Vector3(GIANT_CELL.x + 0.5, giant_h, GIANT_CELL.y + 0.5),
+		rng.randf_range(-0.1, 0.1), Vector3.ONE * rng.randf_range(0.95, 1.05),
+		"plain", 1)
+	# Мостик из брёвен на тропе: ось вдоль тропы (перпендикуляр русла).
+	# Верх брёвен — вровень с высоким берегом (толщина бревна 0.28); подход
+	# низкого берега поднимается к настилу рампой (_ramp_banks, подъём
+	# меньше MAX_STEP — вход без ступеньки с обеих сторон).
+	var trail := Vector2(-0.588, -0.809)
+	var span := 2.2  # край настила по тропе
+	var deck: float = maxf(
+		ground_height(heights, GULLY_MID.x + trail.x * span, GULLY_MID.y + trail.y * span),
+		ground_height(heights, GULLY_MID.x - trail.x * span, GULLY_MID.y - trail.y * span))
+	_ramp_banks(heights, trail, deck)
+	_add_prop(props, rng, &"log_bridge",
+		Vector3(GULLY_MID.x, deck - 0.28, GULLY_MID.y),
+		atan2(trail.x, trail.y), Vector3.ONE, "plain", 1)
+
+
+## Рампа подхода к мостику: за каждым краем настила полоса 3 × 2 м
+## (поперёк тропы чуть шире мостика) поднимается maxf к уровню настила
+## с затуханием на три клетки — у дальнего края сливается с рельефом.
+## Клетки русла (across ≤ GULLY_HALF_W) не задеты: полоса начинается
+## от края настила, дальше от оси русла.
+static func _ramp_banks(
+	heights: PackedFloat32Array, trail: Vector2, deck: float
+) -> void:
+	var across := Vector2(-trail.y, trail.x)
+	for side: int in [-1, 1]:
+		for k: int in 3:
+			var target: float = deck - 0.35 * float(k)
+			var center := GULLY_MID + trail * (2.2 + float(k)) * float(side)
+			for w: float in [-1.5, -0.75, 0.0, 0.75, 1.5]:
+				var p := center + across * w
+				var cell := Vector2i(roundi(p.x), roundi(p.y))
+				if absi(cell.x) > HALF or absi(cell.y) > HALF:
+					continue
+				var i: int = _idx(cell.x, cell.y)
+				heights[i] = maxf(heights[i], target)
 
 
 ## Пологие подходы к мостам: полоса рельефа шириной в настил поднимается
@@ -596,17 +724,21 @@ static func _trees_and_rocks(
 			var grassy: bool = h > 0.9 and h < 16.0
 			var d_forest: float = Vector2(x, z).distance_to(forest)
 			var in_hills: bool = Vector2(x + 58.0, z - 42.0).length() < 42.0
-			# Лес: деревья с отступом 2 м, ели вперемежку (примерно каждая
-			# пятая). Лиственных — 5 CC0-вариантов (шаг 3 П4.5: лес гуще).
+			# Лес (П5.7, блок 2): внутри радиуса 40 м — реалистичные сканы
+			# Poly Haven (децимация, цвет из текстуры — тон kind "plain",
+			# только вариация яркости). Подлесок — сканы кустов, редкие
+			# брёвна и камни; ели остались в кольце 40–56 м (переход
+			# к стилю лугов).
 			if d_forest < 40.0 and grassy:
 				if rng.randf() < 0.07 and _no_trees_near(trees, x, z, 2):
 					trees[cell] = true
-					var spruce: bool = rng.randf() < 0.22
-					_prop(props, rng, cell, h,
-						"tree_spruce" if spruce else "tree_leafy", "leaf",
-						3 if spruce else 5)
+					_prop(props, rng, cell, h, "rtree_leafy", "plain", 3)
 				elif rng.randf() < 0.022:
-					_prop(props, rng, cell, h, "bush", "leaf")
+					_prop(props, rng, cell, h, "rshrub", "plain", 3)
+				elif rng.randf() < 0.006:
+					_prop(props, rng, cell, h, "rlog", "plain", 1)
+				elif rng.randf() < 0.004:
+					_prop(props, rng, cell, h, "rrock", "plain", 3)
 			# Редкие деревья вокруг леса (не на площади).
 			elif d_forest < 56.0 and Vector2(x, z - 4.0).length() > 20.0 and grassy:
 				if rng.randf() < 0.01 and _no_trees_near(trees, x, z, 3):
@@ -625,6 +757,22 @@ static func _trees_and_rocks(
 			# Пляж: камешки.
 			elif h <= 0.9 and h > -0.2 and rng.randf() < 0.05:
 				_prop(props, rng, cell, h, "pebble", "stone")
+	# Папоротники (П5.7, блок 2): сплошной ковёр по дну оврага (клетки русла
+	# зарезервированы от деревьев — здесь это разрешено) и редкие — по влажным
+	# низинам леса, где ForestGround красит влажную землю.
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			var cell := Vector2i(x, z)
+			var h: float = heights[_idx(x, z)]
+			var on_gully: bool = gully_across(x, z) <= GULLY_HALF_W \
+				and absf(gully_along(x, z)) <= GULLY_HALF_LEN - 1.0
+			if on_gully:
+				if h > 0.6 and rng.randf() < 0.35:
+					_prop(props, rng, cell, h, "fern", "leaf", 1)
+			elif not reserved.has(cell) and h > 0.9 and h < 3.4 \
+					and Vector2(x + 52.0, z + 52.0).length() < 40.0:
+				if rng.randf() < 0.05:
+					_prop(props, rng, cell, h, "fern", "leaf", 1)
 	# Трава и цветы на лугах (MultiMesh, раздел 16: трава исчезает дальше 40 м).
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
@@ -638,6 +786,12 @@ static func _trees_and_rocks(
 				continue  # площадь — вымощенная, без травы
 			if Vector2(x - 58.0, z + 48.0).length() < 25.0:
 				continue  # терраса руин — камень
+			if Vector2(x + 52.0, z + 52.0).distance_to(forest) < 40.0:
+				# В Лесу (П5.7, блок 2) — сканы кочек Poly Haven, гуще травы
+				# лугов; цветы остаются луговой особенностью.
+				if rng.randf() < 0.35:
+					_prop(props, rng, cell, h, "rgrass", "plain", 1)
+				continue
 			if rng.randf() < 0.30:
 				_prop(props, rng, cell, h, "grass_tuft", "grass")
 			elif rng.randf() < 0.08:
@@ -683,7 +837,7 @@ static func _prop(
 	props: Array, rng: RandomNumberGenerator, cell: Vector2i, h: float,
 	type: String, kind: String, variants: int = 3,
 ) -> void:
-	var scale: float = rng.randf_range(0.85, 1.25)
+	var scale: float = rng.randf_range(0.8, 1.2)
 	var pos := Vector3(
 		cell.x + rng.randf_range(-0.3, 0.3), h, cell.y + rng.randf_range(-0.3, 0.3)
 	)
@@ -1233,8 +1387,24 @@ static func _critter_sample(
 		flat = home + Vector2(cos(angle), sin(angle)) * r
 	if ground_height(heights, flat.x, flat.y) < CRITTER_MIN_H:
 		flat = _nearest_dry(home, heights)  # и у дома вода (пик в один узел)
-	flat = _push_out(flat, circles, heights)
-	return Vector3(flat.x, ground_height(heights, flat.x, flat.y), flat.y)
+	var pushed := _push_out(flat, circles, heights)
+	if not _clear_of_props(pushed, circles):
+		# Отбой упёрся в воду (узкая полоса суши между предметом и кромкой —
+		# блок 2 П5.7 передвинул rock_wall на берег озера): втянуть точку
+		# к дому, петля обойдёт предмет с внутренней стороны.
+		var pull: float = home.distance_to(flat)
+		var dir := (flat - home) / pull if pull > 0.001 else Vector2(1.0, 0.0)
+		while pull > 0.5:
+			pull -= 0.5
+			var cand := home + dir * pull
+			if ground_height(heights, cand.x, cand.y) < CRITTER_MIN_H:
+				continue
+			var cleared := _push_out(cand, circles, heights)
+			if _clear_of_props(cleared, circles):
+				return Vector3(
+					cleared.x, ground_height(heights, cleared.x, cleared.y),
+					cleared.y)
+	return Vector3(pushed.x, ground_height(heights, pushed.x, pushed.y), pushed.y)
 
 
 ## Ближайшая суша по интерполированной высоте: узел сетки может быть сухим,
@@ -1279,7 +1449,7 @@ static func _densify_segment(
 			var pushed := _push_out(flat, circles, heights)
 			var point := Vector3(
 				pushed.x, ground_height(heights, pushed.x, pushed.y), pushed.y)
-			if point.y >= CRITTER_MIN_H:
+			if point.y >= CRITTER_MIN_H and _clear_of_props(pushed, circles):
 				chain.append(point)
 	chain.append(b)
 	for i: int in chain.size() - 1:
@@ -1306,8 +1476,8 @@ static func _subdivide_pair(
 	var mid_flat := _push_out(chord_mid, circles, heights)
 	var mid := Vector3(
 		mid_flat.x, ground_height(heights, mid_flat.x, mid_flat.y), mid_flat.y)
-	if mid.y < CRITTER_MIN_H:
-		return  # сдвиг из предмета увёл в воду: точку не добавляем
+	if mid.y < CRITTER_MIN_H or not _clear_of_props(mid_flat, circles):
+		return  # сдвиг из предмета увёл в воду или не расчистил: не добавляем
 	_subdivide_pair(a, mid, circles, heights, out)
 	out.append(mid)
 	_subdivide_pair(mid, b, circles, heights, out)
@@ -1331,6 +1501,17 @@ static func _push_out(
 	if ground_height(heights, shifted.x, shifted.y) < CRITTER_MIN_H:
 		return flat
 	return shifted
+
+
+## Вне запаса всех твёрдых предметов (порог — как в тестах маршрутов):
+## _push_out откатывает сдвиг, который увёл бы в воду, и точка может
+## остаться внутри чьей-то зоны — callers обязаны проверить и отработать.
+static func _clear_of_props(flat: Vector2, circles: Array[Vector3]) -> bool:
+	for circle: Vector3 in circles:
+		if flat.distance_to(Vector2(circle.x, circle.y)) \
+				<= circle.z + CRITTER_CLEAR - 0.01:
+			return false
+	return true
 
 
 ## Ближайшая суша не ниже min_h (поиск по кольцам — детерминирован).

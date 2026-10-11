@@ -32,7 +32,7 @@ func test_generation_is_deterministic() -> void:
 	)
 	# Хеш закреплён: непреднамеренное изменение генератора уронит этот тест
 	# (намеренное — требует обновить константу и перегенерировать остров).
-	assert_eq(first_hash, 1371873556, "хеш острова совпадает с сгенерированной сценой")
+	assert_eq(first_hash, 187143540, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_heightmap_fully_covered() -> void:
@@ -112,6 +112,48 @@ func test_crevasse_hang_points_on_rim() -> void:
 		var in_canyon: bool = point.x >= IslandGen.CREVASSE_X0 and point.x <= IslandGen.CREVASSE_X1 \
 			and point.z >= IslandGen.CREVASSE_Z0 and point.z <= IslandGen.CREVASSE_Z1
 		assert_false(in_canyon, "точка вне каньона — на стене у края")
+
+
+func test_forest_landmarks_giant_tree_and_gully_bridge() -> void:
+	# П5.7, блок 2: ориентиры Леса — поляна с огромным деревом и овраг
+	# с мостиком из брёвен на тропе. Гигант — ровно один, в центре своей
+	# поляны; мостик — один, над дном русла; русло реально прорезано
+	# (кромка выше дна больше чем на метр — внутрь не спрыгнуть по BFS
+	# вверх), папоротники растут по дну и влажным низинам леса.
+	var data: Dictionary = _island_data()
+	var heights: PackedFloat32Array = data["heights"]
+	var giants := 0
+	var bridges := 0
+	var ferns := 0
+	for prop: Dictionary in data["props"]:
+		match String(prop["type"]):
+			"tree_giant":
+				giants += 1
+				var pos: Vector3 = prop["pos"]
+				assert_almost_eq(
+					pos.x, IslandGen.GIANT_CELL.x + 0.5, 0.1, "гигант в центре поляны")
+				assert_almost_eq(
+					pos.z, IslandGen.GIANT_CELL.y + 0.5, 0.1, "гигант в центре поляны")
+			"log_bridge":
+				bridges += 1
+				var bridge_pos: Vector3 = prop["pos"]
+				assert_almost_eq(
+					bridge_pos.x, IslandGen.GULLY_MID.x, 0.1, "мостик на тропе, в середине русла")
+				assert_almost_eq(
+					bridge_pos.z, IslandGen.GULLY_MID.y, 0.1, "мостик на тропе, в середине русла")
+			"fern":
+				ferns += 1
+	assert_eq(giants, 1, "огромное дерево на поляне — одно")
+	assert_eq(bridges, 1, "мостик из брёвен через овраг — один")
+	assert_gt(ferns, 30, "папоротники по дну оврага и низинам леса")
+	# Русло прорезано: дно в середине ниже кромки на метр и больше.
+	var mid := Vector2i(roundi(IslandGen.GULLY_MID.x), roundi(IslandGen.GULLY_MID.y))
+	var bottom: float = heights[IslandGen._idx(mid.x, mid.y)]
+	var across := Vector2(-IslandGen.GULLY_DIR.y, IslandGen.GULLY_DIR.x)
+	var bank_flat: Vector2 = IslandGen.GULLY_MID + across * 3.2
+	var bank: float = heights[IslandGen._idx(
+		roundi(bank_flat.x), roundi(bank_flat.y))]
+	assert_gt(bank - bottom, 0.9, "овраг глубже метра")
 
 
 func test_mobs_match_spec_table() -> void:

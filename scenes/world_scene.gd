@@ -291,6 +291,19 @@ func _screenshot_tour() -> void:
 	if OS.get_environment("SHOT_NOWATER") == "1":
 		for water: WaterArea in _island.find_children("*", "WaterArea"):
 			water.visible = false
+	# SHOT_SIMPLE=1 — «Простая графика» для серверного стенда: после П5.7
+	# лес тянет ~3 млн треугольников, и llvmpipe рендерит кадр с тенями
+	# минутами; без теней тур укладывается в разумное время.
+	if OS.get_environment("SHOT_SIMPLE") == "1":
+		Settings.simple_graphics = true
+		_apply_graphics_quality()
+	# SHOT_P57=1 — тур П5.7: только Лес с фиксированных точек (день и закат,
+	# снимки «было — стало» реалистичной переделки), без общих облётов.
+	if OS.get_environment("SHOT_P57") == "1":
+		_set_day_fraction(SHOT_DAY_FRACTION)
+		await _shot_p57_forest(camera)
+		get_tree().quit()
+		return
 	_set_day_fraction(SHOT_DAY_FRACTION)
 	if OS.get_environment("SHOT_NOFOG") == "1":
 		($WorldEnvironment.environment as Environment).fog_enabled = false
@@ -307,12 +320,6 @@ func _screenshot_tour() -> void:
 		if OS.get_environment("SHOT_AERIAL") == "0":
 			env.fog_aerial_perspective = 0.0
 	await _shot_player_views(camera)
-	# SHOT_P57=1 — тур П5.7: зона Лес с фиксированных точек на уровне глаз,
-	# день и закат (снимки «было — стало» реалистичной переделки).
-	if OS.get_environment("SHOT_P57") == "1":
-		await _shot_p57_forest(camera)
-		get_tree().quit()
-		return
 	if OS.get_environment("SHOT_ONLY") == "eye":
 		get_tree().quit()
 		return

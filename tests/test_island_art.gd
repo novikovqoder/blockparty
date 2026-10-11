@@ -9,12 +9,15 @@ extends GutTest
 const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Все типы предметов генератора (порядок — как в PropMeshes.mesh;
-## CC0-модели kenney.nl — через Cc0Meshes, см. assets/third_party/LICENSES.md).
+## CC0-модели kenney.nl — через Cc0Meshes, см. assets/third_party/LICENSES.md;
+## r-типы — децимированные сканы polyhaven.com, П5.7 блок 2).
 const PROP_TYPES: PackedStringArray = [
-	"tree_leafy", "tree_spruce", "bush", "boulder", "rock_pillar", "rock_wall",
+	"tree_leafy", "tree_spruce", "tree_giant", "bush", "fern",
+	"log_bridge", "boulder", "rock_pillar", "rock_wall",
 	"pebble", "grass_tuft", "flower", "reed", "ruin_block", "ruin_tower",
 	"ruin_gate", "ruin_arch", "ruin_column", "bench", "board", "beacon",
 	"pier_post", "plank_deck", "boat",
+	"rtree_leafy", "rshrub", "rrock", "rlog", "rgrass",
 ]
 
 ## Кэш данных генератора между тестами (generate() дорогой, ~10 с).
@@ -179,7 +182,9 @@ func test_art_prop_data_survives_save_load() -> void:
 		)
 		assert_eq(group.colors.size(), group.transforms.size(), "тоны %s пережили save/load" % key)
 		assert_not_null(group.mesh, "меш группы %s на месте" % key)
-		if String(key).begins_with("tree"):
+		# П5.7, блок 2: деревья Леса — сканы «rtree_leafy», луга и рощи —
+		# прежние «tree_*»; считаются все (включая гиганта «tree_giant»).
+		if String(key).contains("tree"):
 			for xf: Transform3D in group.transforms:
 				trees += 1
 				if Vector2(xf.origin.x, xf.origin.z).distance_to(Vector2(-52, -52)) < 40.0:

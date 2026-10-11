@@ -9,10 +9,13 @@ const ROOT: String = "res://assets/third_party"
 const LICENSES: String = "res://assets/third_party/LICENSES.md"
 ## Префиксы каталогов наборов в колонке «Файлы» LICENSES.md.
 const VENDOR_PREFIXES: PackedStringArray = ["kenney.nl/", "kaykit/"]
-## Допустимые форматы (CLAUDE.md, «Скачивание ресурсов»).
+## Допустимые форматы (CLAUDE.md, «Скачивание ресурсов»); .res и .bin —
+## производные: .res — децимированные Godot-ArrayMesh со сканами Poly Haven
+## (tools/decimate_polyhaven.gd, исходники glb в проекте не хранятся),
+## .bin — буфер геометрии glTF-модели fern_02.
 const FORMATS: PackedStringArray = [
 	".glb", ".gltf", ".obj", ".png", ".jpg", ".webp", ".hdr", ".exr",
-	".ogg", ".wav", ".ttf", ".otf",
+	".ogg", ".wav", ".ttf", ".otf", ".res", ".bin",
 ]
 ## Лимит общего размера ресурсов (CLAUDE.md).
 const SIZE_LIMIT_MB: float = 300.0
@@ -98,15 +101,17 @@ func test_formats_and_size_limit() -> void:
 func test_cc0_models_exist_on_disk() -> void:
 	# Каждая модель из таблицы Cc0Meshes лежит в assets/third_party —
 	# запекание острова не зависит от файлов, которых нет в репозитории.
+	# Путь строится как в Cc0Meshes.mesh: набор — папка от корня (набор ""
+	# у Poly Haven-записей — файлы в списке уже с путём от корня), имя
+	# без точки — kenney-файл .glb.
 	for type: StringName in Cc0Meshes.MODELS:
 		var cfg: Array = Cc0Meshes.MODELS[type]
 		for file: String in cfg[1]:
-			var path: String = "%s/%s/%s/%s.glb" % [
-				ROOT, "kenney.nl", cfg[0], file,
-			]
+			var name := file if file.contains(".") else file + ".glb"
+			var path: String = ROOT.path_join(String(cfg[0])).path_join(name)
 			assert_true(
 				FileAccess.file_exists(path),
-				"модель %s (%s) существует" % [file, type],
+				"модель %s (%s) существует" % [name, type],
 			)
 
 
