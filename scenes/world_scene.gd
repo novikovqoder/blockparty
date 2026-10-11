@@ -307,6 +307,12 @@ func _screenshot_tour() -> void:
 		if OS.get_environment("SHOT_AERIAL") == "0":
 			env.fog_aerial_perspective = 0.0
 	await _shot_player_views(camera)
+	# SHOT_P57=1 — тур П5.7: зона Лес с фиксированных точек на уровне глаз,
+	# день и закат (снимки «было — стало» реалистичной переделки).
+	if OS.get_environment("SHOT_P57") == "1":
+		await _shot_p57_forest(camera)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOT_ONLY") == "eye":
 		get_tree().quit()
 		return
@@ -368,6 +374,53 @@ func _shot_player_views(camera: Camera3D) -> void:
 			camera.look_at(stump + Vector3.UP * 0.8)
 			await _snap(camera, "npc_thyme.png")
 			break
+
+
+## Тур П5.7: зона Лес с фиксированных точек на уровне глаз персонажа (1.5 м
+## над рельефом), день и закат. Точки зашиты в коде — снимки «до» и «после»
+## переделки делаются с одних и тех же ракурсов (кадры сравнимы). Высота
+## земли берётся рейкастом, поэтому тур переживёт замену рельефа Леса.
+const P57_FOREST_POINTS: Array[Vector2] = [
+	Vector2(-52.0, -52.0),  # центр зоны, взгляд к Площади
+	Vector2(-33.0, -41.0),  # опушка к Площади, взгляд вглубь леса
+	Vector2(-70.0, -62.0),  # глубина леса, взгляд на восток
+	Vector2(-47.0, -71.0),  # южная часть, взгляд на юг
+	Vector2(-61.0, -36.0),  # северная опушка, взгляд на юго-восток
+]
+const P57_FOREST_YAWS: Array[float] = [223.0, 45.0, 270.0, 180.0, 210.0]
+
+
+func _shot_p57_forest(camera: Camera3D) -> void:
+	for i: int in P57_FOREST_POINTS.size():
+		var ground := _ground_at(P57_FOREST_POINTS[i])
+		var eye := Vector3(P57_FOREST_POINTS[i].x, ground + 1.5, P57_FOREST_POINTS[i].y)
+		var yaw := deg_to_rad(P57_FOREST_YAWS[i])
+		var look := eye + Vector3(-sin(yaw), 0.0, -cos(yaw))
+		camera.global_position = eye
+		camera.look_at(look, Vector3.UP)
+		await _snap(camera, "p57_forest_day_%d.png" % (i + 1))
+	_set_day_fraction(SHOT_SUNSET_FRACTION)
+	await get_tree().create_timer(0.4).timeout
+	for i: int in P57_FOREST_POINTS.size():
+		var ground := _ground_at(P57_FOREST_POINTS[i])
+		var eye := Vector3(P57_FOREST_POINTS[i].x, ground + 1.5, P57_FOREST_POINTS[i].y)
+		var yaw := deg_to_rad(P57_FOREST_YAWS[i])
+		var look := eye + Vector3(-sin(yaw), 0.0, -cos(yaw))
+		camera.global_position = eye
+		camera.look_at(look, Vector3.UP)
+		await _snap(camera, "p57_forest_sunset_%d.png" % (i + 1))
+
+
+## Высота рельефа в точке XZ рейкастом вниз (высоко над самым высоким
+## холмом); мимо мира — уровень моря.
+func _ground_at(xz: Vector2) -> float:
+	var from := Vector3(xz.x, 60.0, xz.y)
+	var query := PhysicsRayQueryParameters3D.create(from, Vector3(xz.x, -5.0, xz.y))
+	query.collide_with_areas = false
+	var hit := get_tree().root.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.has("position"):
+		return (hit["position"] as Vector3).y
+	return 0.0
 
 
 ## Пауза на кадр рендера и сохранение снимка.
