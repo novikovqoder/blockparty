@@ -20,10 +20,17 @@ const SUN_WARM := Color(1.0, 0.68, 0.45)
 ## светом, без LUT-текстуры цветокоррекции.
 const AMBIENT_NIGHT := Color(0.50, 0.58, 0.72)
 const AMBIENT_DAY := Color(0.82, 0.80, 0.76)
+## Облака (vfx-fix, блок в): белый день, тёплый закат, приглушённая ночь.
+const CLOUD_DAY := Color(1.0, 1.0, 1.0)
+const CLOUD_SUNSET := Color(1.0, 0.74, 0.58)
+const CLOUD_NIGHT := Color(0.30, 0.36, 0.50)
 
 var _sun: DirectionalLight3D
 var _environment: Environment
-var _sky: ProceduralSkyMaterial
+## Небо-шейдер (облака, солнце); с ProceduralSkyMaterial (старые сцены
+## и тесты) — просто без облаков, цвета ведёт как раньше.
+var _sky_shader: ShaderMaterial
+var _sky_procedural: ProceduralSkyMaterial
 
 ## «Простая графика» (раздел 15): туман плотнее — мир меньше на вид.
 var simple: bool = false
@@ -35,7 +42,8 @@ var _fog_focus_set: bool = false
 func setup(sun: DirectionalLight3D, world_env: WorldEnvironment) -> void:
 	_sun = sun
 	_environment = world_env.environment
-	_sky = _environment.sky.sky_material as ProceduralSkyMaterial
+	_sky_shader = _environment.sky.sky_material as ShaderMaterial
+	_sky_procedural = _environment.sky.sky_material as ProceduralSkyMaterial
 
 
 ## Куда «смотрит» туман: цвет зоны в этой точке подмешивается к туману.
@@ -56,14 +64,34 @@ func _process(_delta: float) -> void:
 	_sun.light_color = SUN_NOON.lerp(SUN_WARM, DayMath.warmth(world_time))
 	var horizon := DayMath.horizon_color(world_time)
 	var top := DayMath.sky_top_color(world_time)
-	_sky.sky_top_color = top
-	_sky.sky_horizon_color = horizon
-	_sky.ground_horizon_color = horizon
-	_sky.ground_bottom_color = top.darkened(0.3)
+	var warmth := DayMath.warmth(world_time)
+	var dayness := DayMath.dayness(world_time)
+	# Небо (vfx-fix, блок в): шейдер — градиент, облака, солнце;
+	# ProceduralSkyMaterial — прежние цвета без облаков.
+	if _sky_shader != null:
+		_sky_shader.set_shader_parameter("top_color", top)
+		_sky_shader.set_shader_parameter("horizon_color", horizon)
+		_sky_shader.set_shader_parameter("ground_color", top.darkened(0.3))
+		_sky_shader.set_shader_parameter("sun_direction", to_sun)
+		_sky_shader.set_shader_parameter("sun_color", _sun.light_color)
+		var cloud := CLOUD_NIGHT.lerp(CLOUD_DAY, dayness)
+		_sky_shader.set_shader_parameter(
+			"cloud_color", cloud.lerp(CLOUD_SUNSET, warmth * 0.65))
+		# Количество облаков медленно дышит по часам мира — небо живое.
+		_sky_shader.set_shader_parameter(
+			"cloud_cover", 0.32 + 0.10 * sin(world_time * 0.008))
+	elif _sky_procedural != null:
+		_sky_procedural.sky_top_color = top
+		_sky_procedural.sky_horizon_color = horizon
+		_sky_procedural.ground_horizon_color = horizon
+		_sky_procedural.ground_bottom_color = top.darkened(0.3)
 	_environment.ambient_light_energy = DayMath.ambient_energy(world_time)
 	_environment.ambient_light_color = AMBIENT_NIGHT.lerp(
-		AMBIENT_DAY, DayMath.dayness(world_time)
+		AMBIENT_DAY, dayness
 	)
+	# Закат (vfx-fix, блок в): солнце низкое — тени длинные; при низком
+	# солнце они ещё и мягче обычного (blur растёт к горизонту).
+	_sun.shadow_blur = 1.4 + warmth * 0.8
 	_environment.fog_light_color = horizon
 	if _fog_focus_set:
 		# Туман по зонам (раздел 16): цвет зоны игрока поверх цвета горизонта.

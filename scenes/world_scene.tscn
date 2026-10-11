@@ -1,15 +1,21 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/world_scene.gd" id="1_world"]
+[ext_resource type="Shader" path="res://assets/shaders/sky.gdshader" id="2_sky"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-sky_top_color = Color(0.42, 0.63, 0.85, 1)
-sky_horizon_color = Color(0.72, 0.83, 0.9, 1)
-ground_bottom_color = Color(0.32, 0.42, 0.48, 1)
-ground_horizon_color = Color(0.72, 0.83, 0.9, 1)
+[sub_resource type="ShaderMaterial" id="SkyMaterial_1"]
+shader = ExtResource("2_sky")
+shader_parameter/top_color = Color(0.42, 0.63, 0.85, 1)
+shader_parameter/horizon_color = Color(0.72, 0.83, 0.9, 1)
+shader_parameter/ground_color = Color(0.32, 0.42, 0.48, 1)
+shader_parameter/sun_direction = Vector3(0, 1, 0)
+shader_parameter/sun_color = Color(1, 0.95, 0.85, 1)
+shader_parameter/cloud_color = Color(1, 1, 1, 1)
+shader_parameter/cloud_cover = 0.38
+shader_parameter/cloud_speed = 0.004
 
 [sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("ProceduralSkyMaterial_1")
+sky_material = SubResource("SkyMaterial_1")
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
