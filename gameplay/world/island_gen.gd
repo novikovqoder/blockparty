@@ -94,12 +94,24 @@ const PASS_THROUGH_TYPES: PackedStringArray = [
 	"grass_tuft", "reed", "flower", "pebble", "bush", "ruin_gate",
 ]
 ## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
-## полилиния по земле. Шаг сэмплов, запас от твёрдых предметов, минимальная
-## высота суши маршрута и радиус зоны зверька для отбоя, м.
-const CRITTER_STEP: float = 0.75
+## замкнутая петля по земле вокруг дома. Радиус петли, запас от твёрдых
+## предметов, минимальная высота суши маршрута и радиус зоны зверька для
+## отбоя, м; TURN — насколько соседние радиусы петли различаются (плавность).
+## Сгущение сегментов (хвост бага 3): пока прямая между соседними точками
+## не ляжет на рельеф с точностью CRITTER_ROUTE_TOL; предел дробления
+## CRITTER_ROUTE_MIN — на резких изломах (край площадки, обход валуна)
+## ошибка хорды растёт линейно с длиной сегмента, мельчайший сегмент
+## держит её в допуске теста движения (5 см).
+const CRITTER_R_MIN: float = 1.6
+const CRITTER_R_MAX: float = 7.0
+const CRITTER_TURN: float = 1.2
+const CRITTER_BASE_H: float = 1.2
 const CRITTER_CLEAR: float = 0.45
 const CRITTER_MIN_H: float = 0.35
 const CRITTER_ROUTE_MAX: float = 20.0
+const CRITTER_ROUTE_TOL: float = 0.012
+const CRITTER_ROUTE_MIN: float = 0.05
+const CRITTER_ROUTE_SAMPLE: float = 0.025
 
 
 ## Полные данные острова (детерминированы): heights (карта высот, м),
@@ -1086,22 +1098,25 @@ static func _mobs(
 		Vector2(30, 12), Vector2(42, -4), Vector2(26, -18),
 		Vector2(20, 22), Vector2(16, 72), Vector2(-2, 70),
 	]:
-		var base := _nearest_land(heights, int(center.x), int(center.y), 0.5)
+		var base := _nearest_land(heights, int(center.x), int(center.y), CRITTER_BASE_H)
+		# Плотная петля по земле вокруг дома (баг 3): сегменты между редкими
+		# вейпоинтами пересекали воду и висели над склонами — теперь сэмплы
+		# по кругу, у кромки воды радиус сжимается к дому; вейпоинты —
+		# 3–5 опорных точек петли (таблица SPEC). Дом у самой воды (узкий
+		# пик) — хорды петли не убрать сжатием, дом переносится выше от кромки.
+		var points := _critter_route(heights, circles, base, rng)
+		if _route_has_wet_chord(points, heights):
+			base = _nearest_land(
+				heights, int(center.x), int(center.y), CRITTER_BASE_H + 1.5)
+			points = _critter_route(heights, circles, base, rng)
+		var waypoint_count: int = rng.randi_range(3, 5)
 		var waypoints: Array[Vector3] = []
-		var count: int = rng.randi_range(3, 5)
-		for i: int in range(count):
-			var angle: float = TAU * i / float(count) + rng.randf_range(-0.4, 0.4)
-			var dist: float = rng.randf_range(4.0, 8.0)
-			var waypoint := _nearest_land(
-				heights, int(base.x + cos(angle) * dist), int(base.z + sin(angle) * dist), 0.5
-			)
-			waypoints.append(waypoint)
-		# Плотный маршрут по земле (баг vfx-fix): сэмплы по сегментам между
-		# вейпоинтами, высота рельефа в каждой точке, отбой от предметов.
+		for i: int in waypoint_count:
+			waypoints.append(points[i * points.size() / waypoint_count])
 		mobs.append({
 			"kind": "critter", "spawn_id": spawn_id,
 			"waypoints": waypoints,
-			"points": _critter_route(heights, circles, base, waypoints),
+			"points": points,
 			"speed": rng.randf_range(1.5, 2.5),
 		})
 		spawn_id += 1
@@ -1133,13 +1148,25 @@ static func _solid_circles(props: Array) -> Array[Vector3]:
 	return circles
 
 
-## Плотный маршрут зверька по земле (баг vfx-fix): сэмплы каждые
-## CRITTER_STEP по сегментам между вейпоинтами; XZ каждого сэмпла отодвинут
-## из кругов твёрдых предметов, высота — поверхность рельефа
-## (ground_height). Замкнут: последний сегмент возвращается к старту.
+## Есть ли у замкнутого маршрута хорда через воду (середина ниже
+## CRITTER_MIN_H) — петлю вокруг такого дома не построить сжатием радиуса.
+static func _route_has_wet_chord(route: Array[Vector3], heights: PackedFloat32Array) -> bool:
+	for i: int in route.size():
+		var mid: Vector3 = (route[i] + route[(i + 1) % route.size()]) * 0.5
+		if ground_height(heights, mid.x, mid.z) < CRITTER_MIN_H:
+			return true
+	return false
+
+
+## Плотная петля зверька по земле вокруг дома (баг 3): сэмплы по равномерным
+## углам круга, радиус каждого — из rng в пределах R_MIN..R_MAX и не круче
+## CRITTER_TURN от соседнего (петля плавная, без «пилы»); у кромки воды
+## радиус сжимается к дому (петля не пересекает воду), сэмпл отодвинут от
+## твёрдых предметов, высота — рельеф. Замкнута: последний радиус тоже
+## стыкуется с первым по CRITTER_TURN.
 static func _critter_route(
 	heights: PackedFloat32Array, circles: Array[Vector3],
-	base: Vector3, waypoints: Array[Vector3],
+	base: Vector3, rng: RandomNumberGenerator,
 ) -> Array[Vector3]:
 	# Препятствия дальше зоны зверька не влияют — не гонять их на каждом сэмпле.
 	var near: Array[Vector3] = []
@@ -1147,18 +1174,142 @@ static func _critter_route(
 	for circle: Vector3 in circles:
 		if Vector2(circle.x, circle.y).distance_to(home) <= CRITTER_ROUTE_MAX + circle.z:
 			near.append(circle)
-	var route: Array[Vector3] = []
-	for i: int in waypoints.size():
-		var a: Vector3 = waypoints[i]
-		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
-		var steps: int = maxi(1, ceili(a.distance_to(b) / CRITTER_STEP))
-		for s: int in steps:  # точка b не дублируется: она — старт следующего
-			var t: float = float(s) / float(steps)
-			var flat := _push_out(
-				Vector2(lerpf(a.x, b.x, t), lerpf(a.z, b.z, t)), near, heights)
-			route.append(
-				Vector3(flat.x, ground_height(heights, flat.x, flat.y), flat.y))
-	return route
+	var samples: int = rng.randi_range(36, 44)
+	var loop: Array[Vector3] = []
+	var radii: PackedFloat32Array = []
+	radii.resize(samples)
+	var prev_r: float = -1.0
+	for i: int in samples:
+		var angle := TAU * i / samples
+		var radius: float = rng.randf_range(CRITTER_R_MIN, CRITTER_R_MAX)
+		if prev_r >= 0.0:
+			radius = clampf(radius, prev_r - CRITTER_TURN, prev_r + CRITTER_TURN)
+		var sample := _critter_sample(home, angle, radius, near, heights)
+		loop.append(sample)
+		# Сосед ограничен относительно ФАКТИЧЕСКОГО радиуса: у кромки воды
+		# радиус сжался — петля плавно стягивается, а не скачет 7↔0.5.
+		radii[i] = home.distance_to(Vector2(sample.x, sample.z))
+		prev_r = radii[i]
+	# Замыкание: последний радиус стыкуется с первым тем же правилом.
+	var last: int = samples - 1
+	radii[last] = clampf(radii[last], radii[0] - CRITTER_TURN, radii[0] + CRITTER_TURN)
+	loop[last] = _critter_sample(home, TAU * last / samples, radii[last], near, heights)
+	# Залив врезается в круг: соседние сухие точки по его берегам, хорда —
+	# над водой. Обе точки сжимаются к дому, пока хорды не станут сухими:
+	# петля обходит залив по берегу, а не пересекает его (хвост бага 3).
+	for iteration: int in 20:
+		var wet: bool = false
+		for i: int in samples:
+			var mid: Vector3 = (loop[i] + loop[(i + 1) % samples]) * 0.5
+			if ground_height(heights, mid.x, mid.z) < CRITTER_MIN_H:
+				wet = true
+				radii[i] = maxf(0.5, radii[i] - 0.6)
+				radii[(i + 1) % samples] = maxf(0.5, radii[(i + 1) % samples] - 0.6)
+		if not wet:
+			break
+		for i: int in samples:
+			loop[i] = _critter_sample(home, TAU * i / samples, radii[i], near, heights)
+	# Сгущение (хвост бага 3): обход валунов разводит соседние точки, и
+	# линейная интерполяция MobMotion между ними повисает над склоном.
+	var dense: Array[Vector3] = []
+	for i: int in loop.size():
+		dense.append(loop[i])
+		_densify_segment(loop[i], loop[(i + 1) % loop.size()], near, heights, dense)
+	return dense
+
+
+## Точка петли на угле и радиусе: сжатие радиуса к дому у кромки воды
+## (сэмпл не ниже CRITTER_MIN_H над морем), отбой от предметов, высота —
+## поверхность рельефа.
+static func _critter_sample(
+	home: Vector2, angle: float, radius: float,
+	circles: Array[Vector3], heights: PackedFloat32Array,
+) -> Vector3:
+	var r := radius
+	var flat := home + Vector2(cos(angle), sin(angle)) * r
+	while r > 0.5 and ground_height(heights, flat.x, flat.y) < CRITTER_MIN_H:
+		r -= 0.5
+		flat = home + Vector2(cos(angle), sin(angle)) * r
+	if ground_height(heights, flat.x, flat.y) < CRITTER_MIN_H:
+		flat = _nearest_dry(home, heights)  # и у дома вода (пик в один узел)
+	flat = _push_out(flat, circles, heights)
+	return Vector3(flat.x, ground_height(heights, flat.x, flat.y), flat.y)
+
+
+## Ближайшая суша по интерполированной высоте: узел сетки может быть сухим,
+## а точка между узлами — нет (узкий пик у кромки), поэтому поиск кольцами
+## от точки, а не от узла.
+static func _nearest_dry(flat: Vector2, heights: PackedFloat32Array) -> Vector2:
+	for radius: float in [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]:
+		for step: int in range(8):
+			var angle := TAU * step / 8.0
+			var probe := flat + Vector2(cos(angle), sin(angle)) * radius
+			if ground_height(heights, probe.x, probe.y) >= CRITTER_MIN_H:
+				return probe
+	return flat
+
+
+## Сгущение сегмента маршрута, две фазы. Фаза 1 — равномерные сэмплы по
+## хорде каждые CRITTER_ROUTE_SAMPLE: находят узкие канавки, мимо которых
+## чистое серединное деление проходит (его середина может попасть между
+## канавками). Фаза 2 — деление каждой соседней пары пополам, пока прямая
+## не ляжет на рельеф с точностью CRITTER_ROUTE_TOL (отклонение меряем на
+## самой хорде — сдвиг push_out может уйти на другую высоту). Вставляемые
+## точки — на земле, с отбоем от предметов; в воду (ниже CRITTER_MIN_H)
+## точки не добавляются. Предел дробления CRITTER_ROUTE_MIN: у изломов
+## триангуляции (диагонали клеток) ошибка хорды линейна по длине сегмента.
+static func _densify_segment(
+	a: Vector3, b: Vector3, circles: Array[Vector3],
+	heights: PackedFloat32Array, out: Array[Vector3],
+) -> void:
+	var flat_a := Vector2(a.x, a.z)
+	var flat_b := Vector2(b.x, b.z)
+	var length := (flat_b - flat_a).length()
+	if length <= CRITTER_ROUTE_MIN:
+		return  # мельче не дробить: излом у препятствия, тест движения терпит
+	var chain: Array[Vector3] = [a]
+	var steps: int = maxi(2, ceili(length / CRITTER_ROUTE_SAMPLE))
+	for s: int in range(1, steps):
+		var t := float(s) / float(steps)
+		var flat := flat_a.lerp(flat_b, t)
+		var ground_here: float = ground_height(heights, flat.x, flat.y)
+		if ground_here >= CRITTER_MIN_H \
+				and absf(lerpf(a.y, b.y, t) - ground_here) > CRITTER_ROUTE_TOL:
+			var pushed := _push_out(flat, circles, heights)
+			var point := Vector3(
+				pushed.x, ground_height(heights, pushed.x, pushed.y), pushed.y)
+			if point.y >= CRITTER_MIN_H:
+				chain.append(point)
+	chain.append(b)
+	for i: int in chain.size() - 1:
+		_subdivide_pair(chain[i], chain[i + 1], circles, heights, out)
+		out.append(chain[i])
+
+
+## Серединное деление пары точек (фаза 2 сгущения): середина — на земле,
+## с отбоем от предметов; отклонение хорды меряем на самой хорде.
+static func _subdivide_pair(
+	a: Vector3, b: Vector3, circles: Array[Vector3],
+	heights: PackedFloat32Array, out: Array[Vector3],
+) -> void:
+	var flat_a := Vector2(a.x, a.z)
+	var flat_b := Vector2(b.x, b.z)
+	if (flat_b - flat_a).length() <= CRITTER_ROUTE_MIN:
+		return
+	var chord_mid := (flat_a + flat_b) * 0.5
+	var chord_y: float = ground_height(heights, chord_mid.x, chord_mid.y)
+	if chord_y < CRITTER_MIN_H:
+		return  # хорда через низину у воды: точку в воду не добавляем
+	if absf(lerpf(a.y, b.y, 0.5) - chord_y) <= CRITTER_ROUTE_TOL:
+		return  # хорда уже на земле
+	var mid_flat := _push_out(chord_mid, circles, heights)
+	var mid := Vector3(
+		mid_flat.x, ground_height(heights, mid_flat.x, mid_flat.y), mid_flat.y)
+	if mid.y < CRITTER_MIN_H:
+		return  # сдвиг из предмета увёл в воду: точку не добавляем
+	_subdivide_pair(a, mid, circles, heights, out)
+	out.append(mid)
+	_subdivide_pair(mid, b, circles, heights, out)
 
 
 ## Сдвиг XZ-точки из кругов твёрдых предметов (зверёк не ходит сквозь

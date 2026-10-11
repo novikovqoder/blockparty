@@ -32,7 +32,7 @@ func test_generation_is_deterministic() -> void:
 	)
 	# Хеш закреплён: непреднамеренное изменение генератора уронит этот тест
 	# (намеренное — требует обновить константу и перегенерировать остров).
-	assert_eq(first_hash, 741176340, "хеш острова совпадает с сгенерированной сценой")
+	assert_eq(first_hash, 3991478866, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_heightmap_fully_covered() -> void:
@@ -136,7 +136,7 @@ func test_mobs_match_spec_table() -> void:
 				critters += 1
 				assert_between(
 					(mob["waypoints"] as Array).size(), 3, 5, "вейпоинтов в маршруте")
-				assert_ge(
+				assert_gte(
 					(mob["points"] as Array).size(),
 					(mob["waypoints"] as Array).size(),
 					"маршрут плотнее вейпоинтов (по земле)")
