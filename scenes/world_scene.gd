@@ -32,6 +32,7 @@ var _hud: WorldHud
 var _island: Island
 var _player: Player
 var _day_cycle: DayCycle
+var _ambient: AmbientParticles
 var _leaving: bool = false
 var _zone_now: String = ""
 var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
@@ -44,6 +45,9 @@ func _ready() -> void:
 	_day_cycle = DayCycle.new()
 	add_child(_day_cycle)
 	_day_cycle.setup($Sun, $WorldEnvironment)
+	# Атмосферные частицы (vfx-fix, блок г): светлячки, пыльца, листья.
+	_ambient = AmbientParticles.new()
+	add_child(_ambient)
 	_spawn_player()
 	_apply_graphics_quality()
 	_hud = WorldHud.new()
@@ -88,6 +92,7 @@ func _process(delta: float) -> void:
 		_hud.show_zone(zone)
 	# Туман по зонам (раздел 16): цвет подмешивается там, где стоит игрок.
 	_day_cycle.set_fog_focus(_player.global_position)
+	_ambient.set_focus(_player.global_position)
 	_proximity_tick(delta)
 
 
@@ -249,6 +254,7 @@ func _draw_debug_collisions(root: Node) -> void:
 func _apply_graphics_quality() -> void:
 	var tier := GraphicsQuality.tier_from_settings()
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
+	_ambient.setup(tier)
 	GraphicsQuality.apply($WorldEnvironment.environment, $Sun, tier)
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
