@@ -8,8 +8,10 @@ class_name LowPolyMat
 extends RefCounted
 
 const SHADER: Shader = preload("res://assets/shaders/lowpoly.gdshader")
+const WIND_SHADER: Shader = preload("res://assets/shaders/wind.gdshader")
 
 static var _cache: Dictionary = {}
+static var _wind_cache: Dictionary = {}
 
 
 ## Материал с цветом albedo (для однотонных мешей: мобы, коллизионные столбы).
@@ -31,6 +33,23 @@ static func mat(color: Color, emission_energy: float = 0.0) -> ShaderMaterial:
 ## цвет берётся из COLOR (вершины × instance-цвет MultiMesh).
 static func vertex() -> ShaderMaterial:
 	return mat(Color.WHITE)
+
+
+## Материал растительности с ветром (vfx-fix, блок б): шейдер wind.gdshader
+## плюс вершинное покачивание; wind — параметры из PropMeshes.wind_params.
+## Кэшируется по типу (материал один на все экземпляры MultiMesh типа).
+static func wind_or_vertex(type: StringName) -> Material:
+	if DisplayServer.get_name() == "headless":
+		return flat_or_vertex()
+	if _wind_cache.has(type):
+		return _wind_cache[type]
+	var params: Dictionary = PropMeshes.wind_params(type)
+	var material := ShaderMaterial.new()
+	material.shader = WIND_SHADER
+	for key: String in params:
+		material.set_shader_parameter(key, params[key])
+	_wind_cache[type] = material
+	return material
 
 
 ## Headless-вариант (dummy-рендер): плоский цвет без шейдера.

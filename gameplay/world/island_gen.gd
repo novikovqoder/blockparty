@@ -637,9 +637,9 @@ static func _trees_and_rocks(
 				continue  # площадь — вымощенная, без травы
 			if Vector2(x - 58.0, z + 48.0).length() < 25.0:
 				continue  # терраса руин — камень
-			if rng.randf() < 0.13:
+			if rng.randf() < 0.30:
 				_prop(props, rng, cell, h, "grass_tuft", "grass")
-			elif rng.randf() < 0.025:
+			elif rng.randf() < 0.08:
 				_prop(props, rng, cell, h, "flower", "flower")
 	# Камыши по кромке озера (шаг 3 П4.5): полоса берега шириной ~0.5 м
 	# над уровнем воды; камыш проходим, виден с 40 м как трава.

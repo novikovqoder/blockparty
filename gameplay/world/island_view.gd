@@ -55,7 +55,10 @@ func _build_props() -> void:
 		var instance := MultiMeshInstance3D.new()
 		instance.name = "Props_" + key.replace(":", "_")
 		instance.multimesh = group.to_multimesh()
-		instance.material_override = material
+		# Растительность качается на ветру (vfx-fix, блок б); остальные
+		# предметы — общий статичный материал.
+		instance.material_override = LowPolyMat.wind_or_vertex(StringName(type)) \
+			if not PropMeshes.wind_params(StringName(type)).is_empty() else material
 		var range: float = PropMeshes.visibility_range(StringName(type))
 		if range > 0.0:
 			instance.visibility_range_end = range

@@ -70,6 +70,46 @@ static func visibility_range(type: StringName) -> float:
 	return 0.0
 
 
+## Параметры ветра для качающихся типов (vfx-fix, блок б): амплитуда, м;
+## частота; высота начала качания и размах нарастания, м; направление.
+## Пустой словарь — тип не качается (камни, постройки). Трава мелко и часто,
+## кусты медленнее, камыши выше, ветви деревьев — широко и размашисто,
+## ствол (ниже base) стоит на месте.
+static func wind_params(type: StringName) -> Dictionary:
+	match String(type):
+		"grass_tuft":
+			return {
+				"wind_amplitude": 0.05, "wind_freq": 1.9,
+				"wind_weight_base": 0.02, "wind_weight_span": 0.35,
+				"wind_direction": Vector2(0.85, 0.45),
+			}
+		"flower":
+			return {
+				"wind_amplitude": 0.04, "wind_freq": 2.2,
+				"wind_weight_base": 0.05, "wind_weight_span": 0.25,
+				"wind_direction": Vector2(0.85, 0.45),
+			}
+		"reed":
+			return {
+				"wind_amplitude": 0.08, "wind_freq": 1.4,
+				"wind_weight_base": 0.1, "wind_weight_span": 0.8,
+				"wind_direction": Vector2(0.8, 0.5),
+			}
+		"bush":
+			return {
+				"wind_amplitude": 0.06, "wind_freq": 1.1,
+				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
+				"wind_direction": Vector2(0.9, 0.4),
+			}
+		"tree_leafy", "tree_spruce":
+			return {
+				"wind_amplitude": 0.22, "wind_freq": 0.55,
+				"wind_weight_base": 1.6, "wind_weight_span": 3.5,
+				"wind_direction": Vector2(0.85, 0.45),
+			}
+	return {}
+
+
 ## Размер бокса коллизии предмета (Vector3.ZERO — предмет проходим).
 ## Для «метровых» типов это сам scale; для остальных — доля натурального
 ## размера, умноженная на масштаб предмета.
