@@ -33,6 +33,13 @@ const SSAO_RADIUS: float = 1.5
 ## Вклад солнца в объёмный туман (П5.7 блок 3): заметнее лучи сквозь кроны
 ## и длинные световые столбы на закате (по умолчанию у света — 1.0).
 const SUN_FOG_ENERGY: float = 1.4
+## Смещение мипов текстур в «Простой графике» (П5.7 блок 7): +1 сэмплит
+## текстуры 2K из мипа 1K — дешевле выборки при том же виде (SPEC п. 7:
+## «текстуры 1K»).
+const SIMPLE_MIPMAP_BIAS: float = 1.0
+## Доля обычной дистанции LOD персонажей в «Простой графике» (П5.7 блок 7):
+## облегчённые копии включаются заметно ближе (18 м → ~8 м).
+const CHARACTER_LOD_FACTOR: float = 0.45
 
 
 ## Активный уровень из настроек (экран настроек — П8; dev-флаги — Dev).
@@ -45,9 +52,14 @@ static func tier_from_settings() -> int:
 
 
 ## Тени и пост-эффекты по уровню (блок е: постобработка — только HIGH).
-## Цвет тумана и неба ведёт DayCycle.
-static func apply(env: Environment, sun: DirectionalLight3D, tier: int) -> void:
+## Цвет тумана и неба ведёт DayCycle. Viewport (опционально) получает
+## смещение мипов текстур: SIMPLE сэмплит из мипа 1K (П5.7 блок 7).
+static func apply(
+	env: Environment, sun: DirectionalLight3D, tier: int, viewport: Viewport = null
+) -> void:
 	sun.shadow_enabled = tier != Tier.SIMPLE
+	if viewport != null:
+		viewport.texture_mipmap_bias = SIMPLE_MIPMAP_BIAS if tier == Tier.SIMPLE else 0.0
 	var high := tier == Tier.HIGH
 	env.ssao_enabled = high
 	if high:
@@ -65,6 +77,13 @@ static func apply(env: Environment, sun: DirectionalLight3D, tier: int) -> void:
 	# Лучи сквозь кроны (П5.7 блок 3): вклад солнца в объёмный туман
 	# заметнее дефолтного — световые столбы между деревьями.
 	sun.light_volumetric_fog_energy = SUN_FOG_ENERGY if high else 1.0
+
+
+## Дистанция переключения LOD персонажей по уровню (П5.7 блок 7): «Простая
+## графика» приближает облегчённые копии (SPEC п. 7), остальные уровни
+## оставляют базовую дистанцию модели.
+static func character_lod_distance(base: float) -> float:
+	return base * CHARACTER_LOD_FACTOR if tier_from_settings() == Tier.SIMPLE else base
 
 
 ## Локальный сгусток тумана зоны (шаг 4: «лёгкий объёмный туман в Лесу

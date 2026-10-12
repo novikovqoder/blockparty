@@ -136,13 +136,15 @@ func set_lod_distance(distance: float) -> void:
 ## Раскладка пар полная версия/_LOD: у мешей с LOD-близнецом рядом (до
 ## lod_distance) играют полные меши, дальше — облегчённые копии; меши без
 ## копии (detail-части, уши/ракушка/росток) видны на любой дистанции.
+## «Простая графика» приближает переключение (П5.7 блок 7).
 func _apply_lod_distance() -> void:
+	var distance := GraphicsQuality.character_lod_distance(lod_distance)
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		if _is_lod(mi):
-			mi.visibility_range_begin = lod_distance
+			mi.visibility_range_begin = distance
 		elif mi.get_parent().has_node(String(mi.name) + LOD_SUFFIX):
-			mi.visibility_range_end = lod_distance
+			mi.visibility_range_end = distance
 
 
 ## Сетевое состояние анимации (Protocol.AnimState): покой/ходьба/бег/фазы

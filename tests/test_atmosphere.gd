@@ -56,7 +56,35 @@ func test_quality_tiers() -> void:
 			env.volumetric_fog_enabled, high,
 			"уровень %d: объёмный туман только в «Высоком»" % tier,
 		)
+		# П5.7 блок 7: «Простая графика» сэмплит текстуры из мипа 1K.
+		var viewport := SubViewport.new()
+		GraphicsQuality.apply(env, sun, tier, viewport)
+		assert_eq(
+			viewport.texture_mipmap_bias,
+			GraphicsQuality.SIMPLE_MIPMAP_BIAS if tier == GraphicsQuality.Tier.SIMPLE else 0.0,
+			"уровень %d: смещение мипов текстур" % tier,
+		)
+		viewport.free()
 		sun.free()
+
+
+func test_simple_tier_character_lod_closer() -> void:
+	# П5.7 блок 7 (SPEC п. 7): «Простая графика» приближает переключение
+	# LOD персонажей (облегчённые копии с ~8 м), обычные уровни оставляют
+	# базовую дистанцию модели.
+	var simple := Settings.simple_graphics
+	Settings.simple_graphics = false
+	assert_eq(
+		GraphicsQuality.character_lod_distance(18.0), 18.0,
+		"обычный уровень: базовая дистанция LOD",
+	)
+	Settings.simple_graphics = true
+	assert_almost_eq(
+		GraphicsQuality.character_lod_distance(18.0),
+		18.0 * GraphicsQuality.CHARACTER_LOD_FACTOR, 0.01,
+		"«Простая графика»: LOD ближе",
+	)
+	Settings.simple_graphics = simple
 
 
 func test_vignette_layer() -> void:

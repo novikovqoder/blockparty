@@ -263,7 +263,15 @@ func _apply_graphics_quality() -> void:
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
 	_ambient.setup(tier)
 	_vignette.visible = tier == GraphicsQuality.Tier.HIGH
-	GraphicsQuality.apply($WorldEnvironment.environment, $Sun, tier)
+	# Viewport — для смещения мипов текстур: «Простая графика» сэмплит
+	# 2K-текстуры Леса из мипа 1K (П5.7 блок 7).
+	GraphicsQuality.apply(
+		$WorldEnvironment.environment, $Sun, tier, get_viewport())
+	# Трава и мелкие предметы: «Простая графика» прячет lowpoly-траву
+	# и приближает дальность предметов. Метод существовал с П4.5, но
+	# не вызывался (найдено в П5.7 блоке 7).
+	(_island.get_node("IslandView") as IslandView).set_simple_graphics(
+		tier == GraphicsQuality.Tier.SIMPLE)
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
 	if tier == GraphicsQuality.Tier.HIGH:
