@@ -190,18 +190,19 @@ func _spawn_player() -> void:
 	_player = PLAYER_SCENE.instantiate() as Player
 	_player.position = _island.spawn_point(Session.spawn_zone)
 	add_child(_player)
-	# Персонаж локального игрока — выбранный на экране «Персонаж» (раздел 15;
-	# сохранение в user://, дефолт — первый; номер по сети — шаг 8). Цвет тела
-	# по хэшу id (раздел 16): в Steam-режиме — Steam id, в ENet и без сети —
-	# peer id. Хэш локальный, по сети не передаётся.
+	# Внешность локального игрока — собранная в редакторе внешности (П5.8,
+	# часть B; сохранение в user://, дефолт — мужское тело). Цвет верхней
+	# одежды по хэшу id (раздел 16): в Steam-режиме — Steam id, в ENet и без
+	# сети — peer id. Хэш локальный, по сети не передаётся.
 	var own_id: int = SteamService.steam_id if SteamService.steam_id != 0 \
 		else Net.local_peer_id
-	var character := Save.load_character()
-	_player.visual.setup(character)
-	_player.apply_stats(character)
+	var appearance := Save.load_appearance()
+	_player.visual.setup_appearance(appearance)
 	_player.visual.setup_palette(own_id)
 	Log.info(
-		"Персонаж %d, цвет %d (id=%d)" % [character, CharacterModel.palette_index(own_id), own_id],
+		"Внешность: пол %d, причёска %d, цвет %d (id=%d)" % [
+			appearance.gender, appearance.hair,
+			CharacterModel.palette_index(own_id), own_id],
 		"World",
 	)
 	# Точки интереса бота (раздел 18): зоны появления и Камни духа.

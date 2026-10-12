@@ -66,11 +66,11 @@ func _on_friends_world_pressed() -> void:
 	SteamService.create_world(SteamService.LOBBY_MODE_FRIENDS)
 
 
-## «Персонаж» (раздел 15): экран выбора персонажа (шаг 7 П4.6).
+## «Внешность» (раздел 15, П5.8): редактор внешности игрока.
 func _on_character_pressed() -> void:
-	Log.info("MainMenu: «Персонаж»", "Menu")
+	Log.info("MainMenu: «Внешность»", "Menu")
 	get_tree().call_deferred("change_scene_to_file",
-		"res://scenes/character_select.tscn")
+		"res://scenes/appearance_editor.tscn")
 
 
 # --- Steam-поток входа (раздел 11) ---

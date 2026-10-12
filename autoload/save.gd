@@ -1,27 +1,34 @@
-# Локальное сохранение user://save.json: выбранный персонаж (раздел 15,
-# П4.6), счётчики выполненных заданий жителей (П5.5, на будущее для
-# «Встреч» П7). Монеты, косметика и блок-лист допишутся на своих этапах.
+# Локальное сохранение user://save.json: внешность игрока (редактор
+# П5.8, часть B), счётчики выполненных заданий жителей (П5.5, на будущее
+# для «Встреч» П7). Монеты, косметика и блок-лист допишутся на своих этапах.
 # Файл маленький и правится руками: значения вне диапазона молча
 # превращаются в дефолтные, битый файл равен отсутствию.
 extends Node
 
 const PATH: String = "user://save.json"
-## Дефолтный персонаж — первый (раздел 15).
-const DEFAULT_CHARACTER: int = 0
 
 
-## Запомнить выбранный персонаж (0…2).
-func save_character(index: int) -> void:
+## Запомнить внешность из редактора (валидную комбинацию — validated()).
+func save_appearance(value: Appearance) -> void:
 	var data := _read_all()
-	data["character"] = clampi(index, 0, CharacterModel.count() - 1)
+	var fixed := value.validated()
+	data["appearance"] = [
+		fixed.gender, fixed.hair, fixed.top, fixed.legs, fixed.feet,
+		fixed.hat, fixed.hair_color, fixed.skin, fixed.eye_color,
+	]
 	_write_all(data)
 
 
-## Выбранный персонаж; нет файла или неверное число — первый.
-func load_character() -> int:
-	var index := int(_read_all().get("character", DEFAULT_CHARACTER))
-	return index if index >= 0 and index < CharacterModel.count() \
-		else DEFAULT_CHARACTER
+## Сохранённая внешность; нет файла или мусор в поле — дефолтная
+## (мужское тело, допустимые индексы — Appearance.default_for).
+func load_appearance() -> Appearance:
+	var saved: Variant = _read_all().get("appearance")
+	if saved is Array and (saved as Array).size() >= Appearance.NET_SIZE:
+		var bytes := PackedByteArray()
+		for value: Variant in saved:
+			bytes.append(clampi(int(value), 0, 255))
+		return Appearance.from_bytes(bytes).validated()
+	return Appearance.default_for(0)
 
 
 ## Счётчик выполненных заданий жителей (П5.5): +1 по id задания.

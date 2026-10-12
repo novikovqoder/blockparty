@@ -181,20 +181,28 @@ func test_jump_multiplier_applied_in_game() -> void:
 	)
 
 
-func test_save_roundtrip_and_invalid_becomes_first() -> void:
+func test_save_roundtrip_and_invalid_becomes_default() -> void:
 	# Тест правит user://save.json — прежнее содержимое восстанавливается.
 	var backup := ""
 	if FileAccess.file_exists(Save.PATH):
 		backup = FileAccess.get_file_as_string(Save.PATH)
-	Save.save_character(2)
-	assert_eq(Save.load_character(), 2, "выбранный третий читается обратно")
-	Save.save_character(99)
-	assert_eq(Save.load_character(), 2, "запись вне диапазона клампится")
-	# Файл правится руками: мусорное число читается как первый (раздел 15).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261012
+	var ap := Appearance.random(rng)
+	Save.save_appearance(ap)
+	assert_true(Save.load_appearance().same(ap.validated()),
+		"сохранённая внешность читается обратно")
+	# Бороде не место на женском теле: сохранение чинит комбинацию.
+	ap.gender = Appearance.GENDER_FEMALE
+	ap.hair = 5
+	Save.save_appearance(ap)
+	assert_ne(Save.load_appearance().hair, 5, "борода не сохранилась на женское тело")
+	# Файл правится руками: мусор в поле — дефолтная внешность.
 	var file := FileAccess.open(Save.PATH, FileAccess.WRITE)
-	file.store_string('{"character": 17}')
+	file.store_string('{"appearance": "junk"}')
 	file.close()
-	assert_eq(Save.load_character(), 0, "сохранённый номер вне диапазона → 0")
+	assert_true(Save.load_appearance().same(Appearance.default_for(0)),
+		"мусор в поле внешности → дефолт")
 	if backup.is_empty():
 		DirAccess.open("user://").remove("save.json")
 	else:

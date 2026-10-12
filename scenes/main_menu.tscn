@@ -53,8 +53,8 @@ metadata/tr_key = "MENU_FRIENDS_WORLD"
 [node name="Character" type="Button" parent="Menu"]
 custom_minimum_size = Vector2(280, 56)
 theme_override_font_sizes/font_size = 26
-text = "MENU_CHARACTER"
-metadata/tr_key = "MENU_CHARACTER"
+text = "MENU_APPEARANCE"
+metadata/tr_key = "MENU_APPEARANCE"
 
 [node name="Meetings" type="Button" parent="Menu"]
 custom_minimum_size = Vector2(280, 56)

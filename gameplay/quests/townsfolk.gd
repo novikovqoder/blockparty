@@ -2,10 +2,10 @@
 # нейтральном цвете песка (не из 6 цветов игроков — не путать с людьми).
 # Стоит на месте; когда игрок подходит ближе quest_npc_wave_range — машет
 # (Тимьян сидит и не встаёт). Значок над головой: «!» — задание доступно,
-# «…» — идёт, ничего — выполнено сегодня. Если локальный игрок играет тем
-# же персонажем, житель скрыт и заменён табличкой «Записка от …» —
-# только локальное отображение, по сети не передаётся. E — диалог
-# (QuestDialog открывается сигналом EventBus).
+# «…» — идёт, ничего — выполнено сегодня. E — диалог (QuestDialog
+# открывается сигналом EventBus). Подмена жителя табличкой при совпадении
+# с персонажем игрока убрана (П5.8): внешность игрока теперь редактируется
+# свободно, совпадений с жителями больше не бывает.
 class_name Townsfolk
 extends Interactable
 
@@ -37,10 +37,7 @@ const COLLISION_RADIUS: float = 0.35
 
 var _model: CharacterModel
 var _badge: Label3D
-var _note: Node3D
 var _wave_cooldown: float = 0.0
-## Житель скрыт подменой на табличку (локальный игрок — тот же персонаж).
-var _hidden: bool = false
 
 
 func _ready() -> void:
@@ -51,7 +48,6 @@ func _ready() -> void:
 	_build_model()
 	_build_collision()
 	_build_badge()
-	_build_note()
 	# Хост-офлайн: применяем сразу своё состояние (клиент получит rpc).
 	_on_quest_state(Net.quests.state())
 
@@ -67,7 +63,7 @@ func _process(delta: float) -> void:
 		_model.play_one_shot(Protocol.AnimState.WAVE, 2.0)
 
 
-## «E — поговорить» (житель скрыт подменой — табличка говорит тем же E).
+## «E — поговорить».
 func hint_key() -> String:
 	return "HINT_TALK"
 
@@ -84,7 +80,7 @@ func _on_quest_state(state: Dictionary) -> void:
 		stage = int(quest["stage"])
 	_badge.text = BADGE_AVAILABLE if stage == QuestAuthority.AVAILABLE \
 		else BADGE_ACTIVE
-	_badge.visible = stage != QuestAuthority.DONE and not _hidden
+	_badge.visible = stage != QuestAuthority.DONE
 
 
 ## Ближайший игрок (свой и чужие) — для взмаха при подходе.
@@ -153,55 +149,3 @@ func _build_badge() -> void:
 	_badge.pixel_size = 0.004
 	_badge.position = Vector3(0.0, CharacterModel.HEAD_TOP_Y + 0.55, 0.0)
 	add_child(_badge)
-
-
-## Табличка «Записка от …»: показывается вместо жителя, когда локальный
-## игрок играет тем же персонажем (по сети ничего не меняется).
-func _build_note() -> void:
-	_note = Node3D.new()
-	_note.name = "Note"
-	var post := MeshInstance3D.new()
-	post.name = "Post"
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.04
-	cyl.bottom_radius = 0.05
-	cyl.height = 1.05
-	post.mesh = cyl
-	post.position = Vector3(0.0, 0.525, 0.0)
-	var post_mat := StandardMaterial3D.new()
-	post_mat.albedo_color = PAL.trunk
-	post.material_override = post_mat
-	_note.add_child(post)
-
-	var board := MeshInstance3D.new()
-	board.name = "Board"
-	var box := BoxMesh.new()
-	box.size = Vector3(0.72, 0.42, 0.05)
-	board.mesh = box
-	board.position = Vector3(0.0, 0.95, 0.0)
-	var board_mat := StandardMaterial3D.new()
-	board_mat.albedo_color = PAL.planks
-	board.material_override = board_mat
-	_note.add_child(board)
-
-	var label := Label3D.new()
-	label.name = "Text"
-	label.text = tr("QUEST_NOTE") % _npc_name()
-	label.font_size = 22
-	label.outline_size = 4
-	label.modulate = Color(0.25, 0.17, 0.1)
-	label.pixel_size = 0.004
-	label.position = Vector3(0.0, 0.95, 0.04)
-	_note.add_child(label)
-
-	add_child(_note)
-	_hidden = Save.load_character() == character
-	_note.visible = _hidden
-	_model.visible = not _hidden
-	if _hidden:
-		_badge.visible = false
-
-
-## Имя жителя из characters.json по текущей локали (как в UI выбора).
-func _npc_name() -> String:
-	return CharacterData.pick_text(CharacterData.get_character(character)["name"])

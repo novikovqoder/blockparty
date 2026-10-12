@@ -1725,7 +1725,9 @@ func _on_connected_to_server() -> void:
 	local_peer_id = multiplayer.get_unique_id()
 	if not players.has(local_peer_id):
 		players[local_peer_id] = _new_local_slot()
-	_send(func() -> void: rpc_hello.rpc(_display_name(), Save.load_character()), false)
+	# П5.8/B3: номер персонажа исчезает — следующим шагом rpc_hello повезёт
+	# внешность байтами и PROTOCOL_VERSION поднимется до 4; пока дефолтный 0.
+	_send(func() -> void: rpc_hello.rpc(_display_name(), 0), false)
 	if mode == "steam":
 		# Лобби подключено и хост ответил — можно загружать остров (раздел 11).
 		EventBus.steam_world_ready.emit()
@@ -1814,10 +1816,10 @@ func _new_slot(player_name: String, character: int = 0) -> Dictionary:
 	return {"name": player_name, "in_world": false, "character": character}
 
 
-## Слот локального игрока: персонаж — выбранный на экране «Персонаж»
-## (раздел 16, сохранение в user://, дефолт — первый).
+## Слот локального игрока: внешность приходит с rpc_hello (часть B3
+## передаёт её байтами; пока дефолтный номер 0).
 func _new_local_slot() -> Dictionary:
-	return _new_slot(_display_name(), Save.load_character())
+	return _new_slot(_display_name())
 
 
 ## Номер персонажа игрока в ростере (раздел 16): им сцены ставят модель.

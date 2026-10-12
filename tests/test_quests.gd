@@ -404,39 +404,6 @@ func test_reward_coins_local_participant_only() -> void:
 	Session.world_coins = saved_coins
 
 
-# --- Скрытие жителя при совпадении персонажа (раздел 7 ТЗ) ---
-
-
-## Локальный игрок играет тем же персонажем — житель скрыт, на его месте
-## табличка «Записка от …»; другим персонажем — житель виден.
-func test_townsfolk_hidden_for_same_character() -> void:
-	var backup: String = ""
-	if FileAccess.file_exists(Save.PATH):
-		backup = FileAccess.get_file_as_string(Save.PATH)
-	Save.save_character(1)
-	var folk_same := Townsfolk.new()
-	folk_same.character = 1
-	folk_same.quest_id = Protocol.QUEST_LUMI
-	add_child_autofree(folk_same)
-	var folk_other := Townsfolk.new()
-	folk_other.character = 0
-	folk_other.quest_id = Protocol.QUEST_FINN
-	add_child_autofree(folk_other)
-	assert_true(bool(folk_same.get("_hidden")), "житель-двойник скрыт")
-	assert_false((folk_same.get_node("Model") as Node3D).visible, "модель скрыта")
-	assert_true((folk_same.get_node("Note") as Node3D).visible, "табличка видна")
-	assert_false((folk_same.get_node("Badge") as Label3D).visible, "значка нет")
-	assert_false(bool(folk_other.get("_hidden")), "другой персонаж не скрывает")
-	assert_true((folk_other.get_node("Model") as Node3D).visible, "модель видна")
-	assert_false((folk_other.get_node("Note") as Node3D).visible, "таблички нет")
-	var file := FileAccess.open(Save.PATH, FileAccess.WRITE)
-	if backup.is_empty():
-		file.store_string("{}")
-	else:
-		file.store_string(backup)
-	file.close()
-
-
 # --- Физическая форма жителя (баг vfx-fix: сквозь NPC проходили) ---
 
 
