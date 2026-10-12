@@ -40,8 +40,21 @@ const HEAD_TOP_Y: float = 1.65
 const LOD_DISTANCE: float = 18.0
 ## Суффикс узлов облегчённых копий мешей из той же сцены.
 const LOD_SUFFIX: String = "_LOD"
+## Убор (индекс Appearance) → префикс части сцены (пол допишет _m/_f);
+## HAT_NONE отсутствует намеренно — проверяется до поиска.
+const _HAT_PARTS: PackedStringArray = [
+	"", "hood_ranger_", "hat_panama_", "hat_brim_", "hat_cap_",
+]
 ## Число цветовых вариантов игрока (выдаётся по хэшу id).
 const PALETTES: int = 6
+
+
+## Имя части сцены для убора индекса на теле пола («» — «без убора»):
+## единый список для показа и тестов, чтобы не разъезжались.
+static func hat_part(hat: int, gender: int) -> String:
+	if hat <= Appearance.HAT_NONE or hat >= _HAT_PARTS.size():
+		return ""
+	return "%s%s" % [_HAT_PARTS[hat], "mf"[gender]]
 ## Плавный переход между клипами, с.
 const ANIM_BLEND: float = 0.15
 
@@ -82,20 +95,28 @@ static func valid_index(p_character: int) -> int:
 	return p_character if p_character >= 0 and p_character < count() else 0
 
 
-## Построить модель персонажа; вне диапазона — первый пресет.
+## Построить модель персонажа; вне диапазона — первый пресет. Пресеты —
+## жители П5.5 той же системой внешности, что игрок (П5.8, часть E):
+## фирменный убор + волосы своего оттенка.
 func setup(p_character: int) -> void:
 	character = valid_index(p_character)
 	var ap := Appearance.default_for(character % Appearance.GENDERS)
 	match character:
 		1:
 			ap.hair = 0  # Луми: длинные волосы
+			ap.hair_color = 7  # светлые
 			ap.top = 0
+			ap.hat = Appearance.HAT_BRIM  # шляпа с ракушкой
 		2:
 			ap.hair = 1  # Тимьян: пучки
+			ap.hair_color = 1  # тёмные
 			ap.top = 1
+			ap.hat = Appearance.HAT_PANAMA  # панама с веточкой
 		_:
 			ap.hair = 4  # Финн: пробор
+			ap.hair_color = 8  # рыжеватые
 			ap.top = 0
+			ap.hat = Appearance.HAT_CAP  # кепка с «ушками»
 	setup_appearance(ap)
 
 
@@ -298,8 +319,9 @@ func _apply_parts() -> void:
 		"legs_%s_%s" % [Appearance.OUTFITS[appearance.legs], g],
 		"feet_%s_%s" % [Appearance.OUTFITS[appearance.feet], g],
 	])
-	if appearance.hat == Appearance.HAT_HOOD:
-		show.append("hood_ranger_%s" % g)
+	var hat := hat_part(appearance.hat, appearance.gender)
+	if hat != "":
+		show.append(hat)
 	for part: String in _parts.keys():
 		if part.ends_with(LOD_SUFFIX):
 			continue  # близнец включается вместе со своей полной версией

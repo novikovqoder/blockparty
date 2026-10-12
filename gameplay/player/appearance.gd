@@ -30,10 +30,15 @@ const HAIRS_FEMALE: PackedInt32Array = [0, 1, 3, 4]
 ## Комплекты одежды (верх+руки / низ / обувь): peasant, ranger.
 const OUTFITS: PackedStringArray = ["peasant", "ranger"]
 
-## Головной убор: «без» или капюшон Ranger.
+## Головной убор: «без», капюшон Ranger или процедурные уборы жителей
+## (П5.8, часть E: панама Тимьяна с веточкой, шляпа Луми с ракушкой,
+## кепка Финна с «ушками» — меши строит tools/make_hats.gd).
 const HAT_NONE: int = 0
 const HAT_HOOD: int = 1
-const HATS: int = 2
+const HAT_PANAMA: int = 2
+const HAT_BRIM: int = 3
+const HAT_CAP: int = 4
+const HATS: int = 5
 
 ## Палитра волос, ~10 естественных цветов (albedo-тон материалов hair_*).
 const HAIR_COLORS: PackedColorArray = [

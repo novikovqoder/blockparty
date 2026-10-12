@@ -63,8 +63,9 @@ func _check_structure(model: CharacterModel, ap: Appearance) -> void:
 		"legs_%s_%s" % [Appearance.OUTFITS[ap.legs], g],
 		"feet_%s_%s" % [Appearance.OUTFITS[ap.feet], g],
 	]
-	if ap.hat == Appearance.HAT_HOOD:
-		expected.append("hood_ranger_%s" % g)
+	var hat := CharacterModel.hat_part(ap.hat, ap.gender)
+	if hat != "":
+		expected.append(hat)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		var name := String(mi.name)

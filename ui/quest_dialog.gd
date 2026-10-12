@@ -32,6 +32,7 @@ const TRACK_KEYS: Dictionary = {
 
 var _root: Control
 var _title: Label
+var _motto: Label
 var _quest_name: Label
 var _line1: Label
 var _line2: Label
@@ -89,6 +90,10 @@ func _fill() -> void:
 	var stage := Net.quests.stage(_quest_id)
 	var quest: Variant = Net.quests.state().get(_quest_id)
 	_title.text = _npc_name()
+	# Девиз жителя (П5.8, часть E) — как на прежнем экране выбора: короткая
+	# приглушённая строка под именем.
+	_motto.text = CharacterData.pick_text(
+		CharacterData.get_character(_npc_character())["motto"])
 	_quest_name.text = tr(String(keys["name"]))
 	_help.visible = stage == QuestAuthority.AVAILABLE
 	_line2.visible = true
@@ -124,12 +129,16 @@ func _take() -> void:
 
 ## Имя жителя задания из characters.json по текущей локали.
 func _npc_name() -> String:
+	return CharacterData.pick_text(
+		CharacterData.get_character(_npc_character())["name"])
+
+
+## Номер жителя задания в раскладке П5.5 (0 Финн, 1 Луми, 2 Тимьян).
+func _npc_character() -> int:
 	for spot: Dictionary in QuestLayout.npc_spots(null):
 		if String(spot["quest_id"]) == _quest_id:
-			return CharacterData.pick_text(
-				CharacterData.get_character(int(spot["character"]))["name"]
-			)
-	return ""
+			return int(spot["character"])
+	return 0
 
 
 func _build() -> void:
@@ -165,6 +174,12 @@ func _build() -> void:
 	_title.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_title)
+
+	_motto = Label.new()
+	_motto.add_theme_font_size_override("font_size", 16)
+	_motto.add_theme_color_override("font_color", Color(0.72, 0.76, 0.83))
+	_motto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_motto)
 
 	_quest_name = Label.new()
 	_quest_name.add_theme_font_size_override("font_size", 19)

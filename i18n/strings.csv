@@ -28,6 +28,9 @@ APPEARANCE_FEET,Обувь,Shoes
 APPEARANCE_HAT,Головной убор,Headwear
 APPEARANCE_HAT_NONE,Без,None
 APPEARANCE_HAT_HOOD,Капюшон,Hood
+APPEARANCE_HAT_PANAMA,Панама,Panama hat
+APPEARANCE_HAT_BRIM,Шляпа с полями,Wide-brim hat
+APPEARANCE_HAT_CAP,Кепка,Cap
 APPEARANCE_OUTFIT_PEASANT,Простая,Simple
 APPEARANCE_OUTFIT_RANGER,Егерская,Ranger
 APPEARANCE_RANDOM,Случайно,Random

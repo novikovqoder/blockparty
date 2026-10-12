@@ -21,7 +21,10 @@ const HAIR_KEYS: PackedStringArray = [
 const OUTFIT_KEYS: PackedStringArray = [
 	"APPEARANCE_OUTFIT_PEASANT", "APPEARANCE_OUTFIT_RANGER",
 ]
-const HAT_KEYS: PackedStringArray = ["APPEARANCE_HAT_NONE", "APPEARANCE_HAT_HOOD"]
+const HAT_KEYS: PackedStringArray = [
+	"APPEARANCE_HAT_NONE", "APPEARANCE_HAT_HOOD", "APPEARANCE_HAT_PANAMA",
+	"APPEARANCE_HAT_BRIM", "APPEARANCE_HAT_CAP",
+]
 ## Чувствительность вращения, рад на пиксель драга.
 const SPIN_SENS: float = 0.009
 ## Торможение инерции после отпускания, рад/с².
@@ -40,14 +43,15 @@ const CAM_HEIGHT: float = 1.18
 const CAM_LOOK_Y: float = 0.95
 ## Фототур редактора (--shot-dir, проверки SPEC 18): шесть собранных
 ## персонажей — по индексам Appearance (пол, причёска, верх, низ, обувь,
-## убор, волосы, кожа, глаза).
+## убор, волосы, кожа, глаза). Первые трое — как жители острова (кепка/
+## шляпа/панама), дальше капюшон и «без убора».
 const TOUR: Array = [
-	[0, 4, 0, 0, 0, 0, 4, 2, 1],
-	[1, 0, 0, 0, 0, 0, 7, 0, 0],
+	[0, 4, 0, 0, 0, 4, 8, 0, 0],
+	[1, 0, 0, 0, 0, 3, 7, 0, 0],
+	[0, 1, 1, 1, 1, 2, 1, 3, 2],
 	[0, 0, 1, 1, 1, 1, 0, 5, 4],
-	[1, 1, 1, 0, 1, 0, 2, 3, 2],
-	[0, 2, 0, 1, 0, 0, 8, 7, 3],
-	[1, 4, 1, 1, 0, 1, 5, 1, 5],
+	[1, 4, 1, 0, 1, 0, 2, 3, 2],
+	[1, 2, 0, 1, 0, 2, 4, 6, 5],
 ]
 
 @onready var model: CharacterModel = $ViewArea/View/Model
