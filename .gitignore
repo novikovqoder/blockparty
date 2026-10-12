@@ -25,3 +25,4 @@ assets/incoming/
 
 # Лог фототура (временный артефакт прогонов)
 .tour.log
+library/
