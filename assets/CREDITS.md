@@ -7,3 +7,7 @@
 | --- | --- | --- |
 | `icon.svg` | сделано для проекта | MIT (как и весь код проекта) |
 | `assets/third_party/kenney.nl/` (Nature Kit, Castle Kit) | kenney.nl | CC0 — детали в `assets/third_party/LICENSES.md` |
+| `assets/third_party/ambientcg.com/` (текстуры земли Леса) | ambientcg.com | CC0 — детали в `assets/third_party/LICENSES.md` |
+| `assets/third_party/polyhaven.com/` (деревья/кусты/HDRI) | polyhaven.com | CC0 — детали в `assets/third_party/LICENSES.md` |
+| `assets/third_party/makehumancommunity.org/` (Финн, Луми, Тимьян) | makehumancommunity.org (MPFB, базовые ассеты) | CC0 — детали в `assets/third_party/LICENSES.md` |
+| `assets/third_party/quaternius.com/` (Universal Animation Library, ретаргеченные клипы) | quaternius.com | CC0 — детали в `assets/third_party/LICENSES.md` |
