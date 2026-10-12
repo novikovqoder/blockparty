@@ -55,6 +55,42 @@ varying vec3 world_pos;
 // а туда varyings из fragment() не передаются.
 varying float edge_w;
 
+// --- Разбивка повтора (П5.8, часть A: «плитка» на открытых местах) ---
+// Каждая текстура семплится дважды — в своём масштабе и в повёрнутом
+// (золотой угол, другой период), смешение ведёт низкочастотный шум:
+// глазу не за что зацепиться, сетка повтора не читается. Поверх —
+// макровариация яркости крупными пятнами (~25 м): поляна неоднородна.
+const float DETAIL_ROT = 2.39996;  // золотой угол, рад
+uniform float detail2_scale = 0.71;  // период второй копии к первой
+uniform float macro_scale = 0.04;  // период макропятен, 1/м (~25 м)
+uniform float macro_strength = 0.16;  // размах яркости макропятен
+
+float hash12(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = hash12(i);
+	float b = hash12(i + vec2(1.0, 0.0));
+	float c = hash12(i + vec2(0.0, 1.0));
+	float d = hash12(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Альбедо слоя с разбивкой повтора: две копии, смешанные местным шумом.
+vec3 layer_albedo(sampler2D tex, vec2 uv) {
+	float c = cos(DETAIL_ROT);
+	float s = sin(DETAIL_ROT);
+	vec2 uv2 = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c) * detail2_scale;
+	float mask = smoothstep(0.35, 0.65, vnoise(uv * 0.13));
+	return mix(texture(tex, uv).rgb, texture(tex, uv2).rgb, mask);
+}
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 128.0;
@@ -78,7 +114,7 @@ void fragment() {
 	vec2 uv_r = world_pos.xz * rock_scale;
 	vec2 uv_p = world_pos.xz * path_scale;
 
-	vec3 albedo = texture(litter_albedo, uv_l).rgb;
+	vec3 albedo = layer_albedo(litter_albedo, uv_l);
 	vec3 detail = to_world_basis(texture(litter_normal, uv_l).rgb * 2.0 - 1.0);
 	float roughness = 0.95;
 
@@ -88,10 +124,10 @@ void fragment() {
 	float total = w.r + w.g + w.b + w.a;
 	if (total > 1e-3) {
 		vec3 over_a = (
-			texture(rock_albedo, uv_r).rgb * w.r
-			+ texture(wet_albedo, uv_w).rgb * w.g * wet_darken
-			+ texture(moss_albedo, uv_m).rgb * w.b
-			+ texture(path_albedo, uv_p).rgb * w.a) / total;
+			layer_albedo(rock_albedo, uv_r) * w.r
+			+ layer_albedo(wet_albedo, uv_w) * w.g * wet_darken
+			+ layer_albedo(moss_albedo, uv_m) * w.b
+			+ layer_albedo(path_albedo, uv_p) * w.a) / total;
 		vec3 over_n = (
 			(texture(rock_normal, uv_r).rgb * 2.0 - 1.0) * w.r
 			+ (texture(wet_normal, uv_w).rgb * 2.0 - 1.0) * w.g
@@ -103,6 +139,10 @@ void fragment() {
 		// Влажная земля бликует: грубость падает с долей влаги.
 		roughness = mix(roughness, 0.55, clamp(w.g, 0.0, 1.0));
 	}
+
+	// Макровариация яркости: крупные пятна ~25 м (перед кромкой — у самой
+	// границы альбедо всё равно заменяется плоским цветом соседа).
+	albedo *= 1.0 + macro_strength * (vnoise(world_pos.xz * macro_scale) - 0.5) * 2.0;
 
 	// Край сектора: тонировка цветом соседней зоны, у границы вес 1 —
 	// плоский цвет соседа (текстурная деталь гаснет вместе с ним).

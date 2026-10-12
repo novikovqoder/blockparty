@@ -739,13 +739,14 @@ static func _trees_and_rocks(
 					_prop(props, rng, cell, h, "rlog", "plain", 1)
 				elif rng.randf() < 0.004:
 					_prop(props, rng, cell, h, "rrock", "plain", 3)
-			# Редкие деревья вокруг леса (не на площади).
+			# Редкие деревья вокруг леса (не на площади). П5.8, часть A:
+			# старые low-poly деревья с границы Леса убраны — кольцо
+			# перехода тоже занимает реалистичный скан (реже и шире
+			# отступ: дерево крупнее кенниевского).
 			elif d_forest < 56.0 and Vector2(x, z - 4.0).length() > 20.0 and grassy:
-				if rng.randf() < 0.01 and _no_trees_near(trees, x, z, 3):
+				if rng.randf() < 0.007 and _no_trees_near(trees, x, z, 4):
 					trees[cell] = true
-					var spruce: bool = rng.randf() < 0.3
-					_prop(props, rng, cell, h,
-						"tree_spruce" if spruce else "tree_leafy", "leaf")
+					_prop(props, rng, cell, h, "rtree_leafy", "plain", 3)
 			# Холмы: валуны повыше, редкие ели, камни у вершин.
 			elif in_hills and h > 4.0:
 				if rng.randf() < 0.012:
