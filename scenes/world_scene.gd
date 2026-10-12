@@ -321,6 +321,12 @@ func _screenshot_tour() -> void:
 		await _shot_p57_forest(camera)
 		get_tree().quit()
 		return
+	# SHOT_TRIO=1 — кадры П5.7 блока 8: трое персонажей вместе (Лес днём,
+	# костёр вечером), без общих облётов.
+	if OS.get_environment("SHOT_TRIO") == "1":
+		await _shot_p57_trio(camera)
+		get_tree().quit()
+		return
 	_set_day_fraction(shot_fraction)
 	if OS.get_environment("SHOT_NOFOG") == "1":
 		($WorldEnvironment.environment as Environment).fog_enabled = false
@@ -433,6 +439,65 @@ func _shot_p57_forest(camera: Camera3D) -> void:
 		camera.global_position = eye
 		camera.look_at(look, Vector3.UP)
 		await _snap(camera, "p57_forest_sunset_%d.png" % (i + 1))
+
+
+## Кадры П5.7 блока 8 (SPEC п. 8): три новых персонажа вместе — днём
+## в Лесу (та же первая точка тура) и вечером у костра на Площади.
+## SHOT_TRIO=1. Модели в цветах разных id (как в мире), центральная
+## машет; лица к камере (модель в покое смотрит в +Z — look_at наводит
+## −Z, поэтому цель отражается через позицию модели).
+func _shot_p57_trio(camera: Camera3D) -> void:
+	_set_day_fraction(SHOT_DAY_FRACTION)
+	var point := P57_FOREST_POINTS[0]
+	var ground := _ground_at(point)
+	var yaw := deg_to_rad(P57_FOREST_YAWS[0])
+	var eye := Vector3(point.x, ground + 1.5, point.y)
+	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	await _shot_trio_at(
+		camera, eye + forward * 4.0, forward, "p57_trio_forest_day.png")
+	# Вечер у костра (0.62 — сумерки сразу после заката, огонь читается):
+	# тройка полукругом за костром, лица освещены огнём.
+	_set_day_fraction(0.62)
+	await get_tree().create_timer(0.4).timeout
+	var fire := Vector3(0.5, 2.0, 2.5)
+	await _shot_trio_at(
+		camera, fire + Vector3(0.0, 0.7, 5.5), Vector3(0.0, 0.0, 1.0),
+		"p57_trio_campfire_evening.png")
+
+
+## Поставить трёх персонажей полукругом в точке (ноги на землю) лицом
+## к камере и снять кадр. cam_pos/forward задают позицию камеры и
+## направление «от камеры вглубь» (персонажи в 3/4 оборота друг к другу).
+func _shot_trio_at(
+	camera: Camera3D, cam_pos: Vector3, forward: Vector3, file_name: String
+) -> void:
+	var right := forward.cross(Vector3.UP).normalized()
+	var ground := _ground_at(Vector2(cam_pos.x + forward.x * 2.5,
+		cam_pos.z + forward.z * 2.5))
+	var center := cam_pos + forward * 2.5
+	var poses: Array[Vector3] = [
+		center + right * 1.4 - forward * 0.45,
+		center + forward * 0.35,
+		center - right * 1.4 - forward * 0.45,
+	]
+	var ids: Array[int] = [11, 22, 33]  # три разных цвета палитры
+	for i: int in poses.size():
+		var model := CharacterModel.new()
+		add_child(model)
+		model.position = Vector3(poses[i].x, ground, poses[i].z)
+		model.setup(i)
+		model.setup_palette(ids[i])
+		# Лицом к камере: look_at наводит локальную −Z, модель смотрит +Z.
+		model.look_at(model.position * 2.0 - cam_pos, Vector3.UP)
+		if i == 1:
+			model.play_one_shot(Protocol.AnimState.WAVE, 1.2)
+	camera.global_position = cam_pos + Vector3.UP * 0.4
+	camera.look_at(center + Vector3.UP * 0.9, Vector3.UP)
+	await get_tree().create_timer(0.9).timeout
+	await _snap(camera, file_name)
+	for child in get_children():
+		if child is CharacterModel:
+			child.queue_free()
 
 
 ## Высота рельефа в точке XZ рейкастом вниз (высоко над самым высоким
