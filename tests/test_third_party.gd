@@ -41,11 +41,33 @@ func _files_under(path: String) -> PackedStringArray:
 func test_every_third_party_file_is_licensed() -> void:
 	var text: String = FileAccess.get_file_as_string(LICENSES)
 	assert_false(text.is_empty(), "LICENSES.md существует и не пуст")
+	# Маска каталога (токен в бэктиках с косой чертой на конце) покрывает
+	# всё его содержимое: запечённые наборы вроде UBC дают сотню
+	# производных .res-файлов, перечислять их поэлементно бессмысленно;
+	# сама маска проверяется на непустоту тестом stale-entries ниже.
+	var masks := _dir_masks(text)
 	for path: String in _files_under(ROOT):
+		var rel := path.trim_prefix(ROOT + "/")
+		var covered := text.contains(path.get_file())
+		for mask: String in masks:
+			if rel.begins_with(mask):
+				covered = true
 		assert_true(
-			text.contains(path.get_file()),
+			covered,
 			"%s упомянут в LICENSES.md" % path.get_file(),
 		)
+
+
+## Токены-маски каталогов из колонки «Файлы» (токен заканчивается «/»).
+func _dir_masks(text: String) -> PackedStringArray:
+	var masks := PackedStringArray()
+	for line: String in text.split("\n"):
+		if not line.begins_with("|") or "CC0" not in line:
+			continue
+		for token: String in line.split("`"):
+			if token.ends_with("/"):
+				masks.append(token)
+	return masks
 
 
 func test_licenses_have_no_stale_entries() -> void:
