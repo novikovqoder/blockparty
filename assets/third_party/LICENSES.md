@@ -5,17 +5,17 @@
 (архивы не хранятся). Папки наборов Kenney закрыты `.gdignore`: Godot не
 импортирует эти файлы, их читает напрямую `gameplay/world/props/cc0_meshes.gd`
 при запекании острова (в игре меши уже встроены в `island_art.res`). Папки
-KayKit `.gdignore` НЕ закрыты: модели персонажей и библиотеки анимаций —
-готовые сцены Godot, они импортируются движком и загружаются в рантайме
-(раздел 16 SPEC; извлечённые из glb текстуры `*_texture.png` создаёт сам
-Godot при импорте — это та же встроенная текстура модели).
+остальных наборов импортируются движком и загружаются в рантайме; извлечённые
+из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
+это та же встроенная текстура модели. Наборы KayKit (персонажи и анимации,
+раздел 16 SPEC v2.3) удалены после перехода на персонажей MakeHuman и
+ретаргеченные анимации Quaternius (П5.7, блоки 4–5).
 
 | Набор | Автор | Страница набора | Лицензия | Дата | Файлы |
 | --- | --- | --- | --- | --- | --- |
 | Nature Kit | Kenney | https://kenney.nl/assets/nature-kit | CC0 | 2026-10-05 | `kenney.nl/nature-kit/`: tree_default.glb, tree_oak.glb, tree_detailed.glb, tree_fat.glb, tree_small.glb, tree_pineRoundA.glb, tree_pineDefaultA.glb, tree_pineSmallA.glb, plant_bush.glb, plant_bushSmall.glb, plant_bushDetailed.glb, grass.glb, grass_leafs.glb, grass_large.glb, flower_redA.glb, flower_yellowA.glb, flower_purpleA.glb, rock_largeA.glb, rock_largeB.glb, rock_largeD.glb, rock_tallA.glb, rock_tallB.glb, rock_tallC.glb, rock_smallA.glb, rock_smallB.glb, rock_smallC.glb, log.glb, log_large.glb, plant_flatTall.glb, plant_flatShort.glb |
 | Castle Kit | Kenney | https://kenney.nl/assets/castle-kit | CC0 | 2026-10-05 | `kenney.nl/castle-kit/wall-pillar.glb`, `kenney.nl/castle-kit/tower-square-arch.glb`, `kenney.nl/castle-kit/Textures/colormap.png` (атлас цветов моделей) |
-| KayKit Adventurers 2.0 FREE | Kay Lousberg | https://kaylousberg.itch.io/kaykit-adventurers | CC0 | 2026-10-06 | `kaykit/adventurers/Knight.glb`, `kaykit/adventurers/Mage.glb`, `kaykit/adventurers/Ranger.glb`; текстуры (извлечены из glb при импорте): `kaykit/adventurers/Knight_knight_texture.png`, `kaykit/adventurers/Mage_mage_texture.png`, `kaykit/adventurers/Ranger_ranger_texture.png` |
-| KayKit Character Animations 1.1 | Kay Lousberg | https://kaylousberg.itch.io/kaykit-character-animations | CC0 | 2026-10-06 | `kaykit/animations/Rig_Medium_General.glb`, `kaykit/animations/Rig_Medium_MovementBasic.glb`, `kaykit/animations/Rig_Medium_Simulation.glb` |
+| Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_mpfb.res` — 18 скелетных клипов, перегенерированных с универсального рига UAL на риг MPFB персонажей (`tools/retarget_anims.gd`); исходные glb наборов и архивы в репозитории не хранятся |
 | Ground042 (Forest Ground Leaves) | ambientCG | https://ambientcg.com/view?id=Ground042 | CC0 | 2026-10-11 | `ambientcg.com/Ground042_2K/Ground042_2K-JPG_Color.jpg`, `ambientcg.com/Ground042_2K/Ground042_2K-JPG_NormalGL.jpg` |
 | Ground044 (Dirt Ground) | ambientCG | https://ambientcg.com/view?id=Ground044 | CC0 | 2026-10-11 | `ambientcg.com/Ground044_2K/Ground044_2K-JPG_Color.jpg`, `ambientcg.com/Ground044_2K/Ground044_2K-JPG_NormalGL.jpg` |
 | Moss001 | ambientCG | https://ambientcg.com/view?id=Moss001 | CC0 | 2026-10-11 | `ambientcg.com/Moss001_2K/Moss001_2K-JPG_Color.jpg`, `ambientcg.com/Moss001_2K/Moss001_2K-JPG_NormalGL.jpg` |
@@ -53,9 +53,12 @@ Godot при импорте — это та же встроенная текст
 оригинальные glb в проекте не хранятся, страницы ассетов — в таблице).
 HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
 смешиваются по времени суток в `assets/shaders/sky.gdshader`.
-Наборы KayKit (раздел 16 SPEC, v2.3) — скелетные клипы анимаций на риге
-Rig_Medium (пока не заменены ретаргетингом П5.7, блок 5); модели Adventurers
-после перехода на персонажей MakeHuman в рендере не участвуют.
+Universal Animation Library 1/2 (П5.7, блок 5) — исходные скелетные анимации
+персонажей: `tools/retarget_anims.gd` переносит клипы покоя/ходьбы/бега/
+прыжков/эмоций с универсального рига Quaternius (T-pose) на риг MPFB
+персонажей (A-pose) и запекает в `anims_mpfb.res`; движения без аналогов
+в Standard-наборах (взмах, «за руку», вис у кромки, «Помогите!») генерируются
+процедурно поверх ретаргеченных баз (подробности — docs/STATUS.md).
 Ассеты MakeHuman (П5.7, блок 4) — исходники новых реалистичных персонажей
 (Финн/Луми/Тимьян): `tools/make_characters.py` собирает их в headless-Blender
 через MPFB и запекает в glb (тело + одежда + фирменные детали + копии `_LOD`);

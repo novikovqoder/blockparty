@@ -1,8 +1,7 @@
-# Рендер-стенд персонажей (замена персонажей, шаги 2+): три модели KayKit
-# с уборами и контуром на нейтральном тёмном фоне — по три ракурса
-# (фронт/бок/зад) и общий ряд. Для осмотра картинки самим агентом
-# (SPEC 18: «Самопроверка картинки»), шаг 10 расширяет список цветами
-# и сценами в игре.
+# Рендер-стенд персонажей (П5.7): три модели MakeHuman (Финн/Луми/Тимьян)
+# на нейтральном тёмном фоне — по три ракурса (фронт/бок/зад), общий ряд,
+# цвета игрока и кадры всех состояний аниматора (ретаргеченные клипы UAL).
+# Для осмотра картинки самим агентом (SPEC 18: «Самопроверка картинки»).
 # Запуск (сервер без экрана, только opengl3 — Forward+/llvmpipe сегфолтит):
 #   xvfb-run -a godot --path . --resolution 1280x720 \
 #     --rendering-driver opengl3 -s res://tools/shot_characters.gd -- \
@@ -10,7 +9,7 @@
 extends SceneTree
 
 const MODEL_SCENE: PackedScene = preload("res://gameplay/player/character_model.tscn")
-const NAMES: PackedStringArray = ["knight", "mage", "ranger"]
+const NAMES: PackedStringArray = ["finn", "lumi", "thyme"]
 ## Ракурс: имя → позиция камеры относительно персонажа.
 const VIEWS: Dictionary = {
 	"front": Vector3(0.0, 1.05, 3.4),
@@ -18,7 +17,9 @@ const VIEWS: Dictionary = {
 	"back": Vector3(0.0, 1.05, -3.4),
 }
 ## Анимационные кадры: имя → [состояние Protocol.AnimState, пауза до
-## снимка в середине клипа, с].
+## снимка в середине клипа, с]. Полный набор из ТЗ П5.7 (покой, ходьба, бег,
+## прыжок взлёт/полёт/приземление, взмах, сидение) + механики П5 (вис,
+## вытягивание, подсадка-помощь, «за руку») + эмоции колеса.
 const ANIM_SHOTS: Array = [
 	["idle", Protocol.AnimState.IDLE, 0.6],
 	["walk", Protocol.AnimState.WALK, 0.55],
@@ -28,6 +29,16 @@ const ANIM_SHOTS: Array = [
 	["land", Protocol.AnimState.LAND, 0.2],
 	["wave", Protocol.AnimState.WAVE, 1.0],
 	["sit", Protocol.AnimState.SIT, 1.6],
+	["hang", Protocol.AnimState.HANG, 0.8],
+	["pulled", Protocol.AnimState.PULLED_UP, 0.5],
+	["helppull", Protocol.AnimState.HELP_PULL, 0.5],
+	["holdhand", Protocol.AnimState.HOLD_HAND, 0.55],
+	["emote2", Protocol.AnimState.EMOTE_2, 0.8],
+	["emote3", Protocol.AnimState.EMOTE_3, 0.9],
+	["emote4", Protocol.AnimState.EMOTE_4, 0.9],
+	["emote5", Protocol.AnimState.EMOTE_5, 0.9],
+	["emote6", Protocol.AnimState.EMOTE_6, 0.6],
+	["bonk", Protocol.AnimState.BONK, 0.3],
 ]
 const OUT_PREFIX: String = "--out="
 
@@ -95,9 +106,9 @@ func _init() -> void:
 		for colored in row:
 			colored.queue_free()
 
-	# Анимации KayKit (шаг 4): knight — все состояния из ТЗ (покой, ходьба,
-	# бег, прыжок взлёт/полёт/приземление, помахать, сесть), mage/ranger —
-	# ходьба и взмах (клипы на всех трёх ригах). Кадр в середине клипа.
+	# Анимации (П5.7 блок 5, ретаргеченные клипы UAL): Финн — все состояния
+	# из ТЗ и механик П5; Луми/Тимьян — ходьба и взмах (риг один, клипы
+	# общие — выборочно, чтобы не снимать 18 кадров трижды). Кадр в середине.
 	for i: int in models.size():
 		var model := models[i]
 		for j: int in models.size():

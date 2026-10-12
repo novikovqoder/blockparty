@@ -52,7 +52,7 @@ extends Resource
 ]
 
 @export_group("Цвета игроков (раздел 16)")
-## 6 ярких цветовых вариантов персонажа: тонировка текстуры KayKit
+## 6 ярких цветовых вариантов персонажа: тонировка материала PlayerColor
 ## (albedo_color материала), один и тот же набор для всех трёх персонажей.
 ## Вариант выдаётся по хэшу id — см. CharacterModel.palette_index.
 @export var player_colors: PackedColorArray = [

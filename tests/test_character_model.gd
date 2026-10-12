@@ -204,13 +204,14 @@ func test_every_anim_state_maps_to_existing_clip() -> void:
 			"состояние %d: клип %s есть в библиотеке" % [state, clip],
 		)
 	# Циклические состояния зациклены, разовые — нет.
-	for clip: String in ["Idle_A", "Walking_A", "Running_A", "Jump_Idle", "Sit_Chair_Idle"]:
+	for clip: String in ["Idle", "Walk", "Jog_Fwd", "NinjaJump_Idle",
+			"Sitting_Idle", "Hang_Pose", "Walk_Hand"]:
 		assert_eq(
 			(lib.get_animation(clip) as Animation).loop_mode, Animation.LOOP_LINEAR,
 			"клип %s зациклен" % clip,
 		)
 	assert_ne(
-		(lib.get_animation("Waving") as Animation).loop_mode, Animation.LOOP_LINEAR,
+		(lib.get_animation("Wave_Hand") as Animation).loop_mode, Animation.LOOP_LINEAR,
 		"взмах — разовый клип",
 	)
 	assert_true(CharacterAnims.is_loop(Protocol.AnimState.IDLE), "покой цикличен")
@@ -223,14 +224,14 @@ func test_set_state_plays_matching_clip() -> void:
 	var model := _make(0)
 	var player := _anim_player(model)
 	var cases := {
-		Protocol.AnimState.IDLE: "kaykit/Idle_A",
-		Protocol.AnimState.WALK: "kaykit/Walking_A",
-		Protocol.AnimState.RUN: "kaykit/Running_A",
-		Protocol.AnimState.JUMP: "kaykit/Jump_Start",
-		Protocol.AnimState.FALL: "kaykit/Jump_Idle",
-		Protocol.AnimState.LAND: "kaykit/Jump_Land",
-		Protocol.AnimState.SIT: "kaykit/Sit_Chair_Idle",
-		Protocol.AnimState.WAVE: "kaykit/Waving",
+		Protocol.AnimState.IDLE: "mpfb/Idle",
+		Protocol.AnimState.WALK: "mpfb/Walk",
+		Protocol.AnimState.RUN: "mpfb/Jog_Fwd",
+		Protocol.AnimState.JUMP: "mpfb/Jump_Start",
+		Protocol.AnimState.FALL: "mpfb/NinjaJump_Idle",
+		Protocol.AnimState.LAND: "mpfb/Jump_Land",
+		Protocol.AnimState.SIT: "mpfb/Sitting_Idle",
+		Protocol.AnimState.WAVE: "mpfb/Wave_Hand",
 	}
 	for state: int in cases.keys():
 		model.set_state(state)
@@ -260,11 +261,11 @@ func test_play_one_shot_speeds_up_and_returns() -> void:
 	var player := _anim_player(model)
 	model.set_state(Protocol.AnimState.SIT)
 	model.play_one_shot(Protocol.AnimState.WAVE, 0.3)
-	assert_eq(player.current_animation, "kaykit/Waving", "играет взмах")
+	assert_eq(player.current_animation, "mpfb/Wave_Hand", "играет взмах")
 	assert_gt(player.speed_scale, 1.0, "короткий вызов ускоряет клип")
-	# Фактическая длительность взмаха при клампе скорости ~0.7 с.
+	# Фактическая длительность взмаха при клампе скорости ~0.85 с.
 	await get_tree().create_timer(1.2).timeout
-	assert_eq(player.current_animation, "kaykit/Sit_Chair_Idle", "вернулись к состоянию")
+	assert_eq(player.current_animation, "mpfb/Sitting_Idle", "вернулись к состоянию")
 	assert_eq(player.speed_scale, 1.0, "скорость восстановлена")
 
 
@@ -277,7 +278,7 @@ func test_animations_attach_on_all_characters() -> void:
 		assert_eq(players.size(), 1, "персонаж %d: один AnimationPlayer" % character)
 		model.set_state(Protocol.AnimState.RUN)
 		assert_eq(
-			(players[0] as AnimationPlayer).current_animation, "kaykit/Running_A",
+			(players[0] as AnimationPlayer).current_animation, "mpfb/Jog_Fwd",
 			"персонаж %d: клип назначен" % character,
 		)
 

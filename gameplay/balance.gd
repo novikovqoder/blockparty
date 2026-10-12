@@ -99,7 +99,7 @@ extends Resource
 ## Окно высоты проверки «у лавки» (лавка на возвышении площади), м.
 @export var campfire_use_window: float = 1.5
 ## На сколько ниже узла места (верх лавки) сидит origin игрока, м:
-## KayKit-поза сидя считается от пола, лавки генератора — на полметра выше.
+## Поза сидя (Sitting_Idle) считается от пола, лавки генератора — выше.
 @export var campfire_seat_floor: float = 0.45
 ## Скольких сидящих огонь принимает за «компанию» (разгорается), раздел 9.6.
 @export var campfire_company_size: int = 2
@@ -184,7 +184,7 @@ extends Resource
 @export var attack_cooldown: float = 0.35
 ## Длительность реакции «тычок» у получившего удар игрока, с.
 @export var bonk_time: float = 0.4
-## Длительность взмаха «Привет!» (клавиша 1; клип KayKit Waving ≈2.1 с), с.
+## Длительность взмаха «Привет!» (клавиша 1; клип Wave_Hand ≈2.5 с), с.
 @export var wave_time: float = 2.0
 
 @export_group("Вода (раздел 6)")

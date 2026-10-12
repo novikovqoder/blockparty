@@ -8,11 +8,12 @@ extends GutTest
 const ROOT: String = "res://assets/third_party"
 const LICENSES: String = "res://assets/third_party/LICENSES.md"
 ## Префиксы каталогов наборов в колонке «Файлы» LICENSES.md.
-const VENDOR_PREFIXES: PackedStringArray = ["kenney.nl/", "kaykit/"]
+const VENDOR_PREFIXES: PackedStringArray = ["kenney.nl/", "quaternius.com/"]
 ## Допустимые форматы (CLAUDE.md, «Скачивание ресурсов»); .res и .bin —
 ## производные: .res — децимированные Godot-ArrayMesh со сканами Poly Haven
-## (tools/decimate_polyhaven.gd, исходники glb в проекте не хранятся),
-## .bin — буфер геометрии glTF-модели fern_02.
+## (tools/decimate_polyhaven.gd, исходники glb в проекте не хранятся) и
+## AnimationLibrary с ретаргеченными клипами Quaternius UAL
+## (tools/retarget_anims.gd), .bin — буфер геометрии glTF-модели fern_02.
 const FORMATS: PackedStringArray = [
 	".glb", ".gltf", ".obj", ".png", ".jpg", ".webp", ".hdr", ".exr",
 	".ogg", ".wav", ".ttf", ".otf", ".res", ".bin",
@@ -26,9 +27,9 @@ func _files_under(path: String) -> PackedStringArray:
 	for file: String in DirAccess.get_files_at(path):
 		if file == ".gdignore" or file == "LICENSES.md":
 			continue
-		# .import/.uid — служебные файлы Godot рядом с ресурсом (наборы
-		# KayKit импортируются движком, в отличие от закрытых .gdignore
-		# наборов Kenney): генерируются автоматически, не скачиваются.
+		# .import/.uid — служебные файлы Godot рядом с ресурсом (импортируемые
+		# движком наборы, в отличие от закрытых .gdignore наборов Kenney):
+		# генерируются автоматически, не скачиваются.
 		if file.ends_with(".import") or file.ends_with(".uid"):
 			continue
 		found.append(path.path_join(file))

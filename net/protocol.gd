@@ -131,7 +131,7 @@ const EMOTE_KEYS: Array[String] = [
 	"EMOTE_HELLO", "EMOTE_THANKS", "EMOTE_HERE", "EMOTE_WAIT", "EMOTE_HAHA", "EMOTE_HELP",
 ]
 
-## Анимация KayKit эмоции (раздел 5): «Привет!» машет, остальные — жесты.
+## Анимация эмоции (раздел 5): «Привет!» машет, остальные — жесты.
 const EMOTE_ANIMS: Array[int] = [
 	AnimState.WAVE, AnimState.EMOTE_2, AnimState.EMOTE_3,
 	AnimState.EMOTE_4, AnimState.EMOTE_5, AnimState.EMOTE_6,

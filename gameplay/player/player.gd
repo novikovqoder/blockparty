@@ -289,7 +289,7 @@ func _on_campfire_seats(seats: Array) -> void:
 		_leave_seat()
 
 
-## Поза KayKit «Sit_Chair_Idle» считается от пола: origin опускаем на землю
+## Поза сидя «Sitting_Idle» считается от пола: origin опускаем на землю
 ## перед лавкой (вне её коллайдера), модель — лицом к костру. Физика сидя
 ## заморожена (ранний выход в _physics_process), снапшоты идут как обычно.
 func _sit_at(seat_index: int) -> void:
@@ -706,7 +706,7 @@ func _update_animation(wish: Vector3) -> void:
 	elif not is_on_floor():
 		_set_anim(Protocol.AnimState.JUMP if velocity.y > 0.0 else Protocol.AnimState.FALL)
 	elif moving and linked:
-		# Пара на ходу — рука вытянута к партнёру (клип KayKit Walking_B).
+		# Пара на ходу — рука вытянута к партнёру (клип Walk_Hand).
 		_set_anim(Protocol.AnimState.HOLD_HAND)
 	elif moving:
 		var walking: bool = Input.is_action_pressed("walk") or wish.length() <= 0.1
