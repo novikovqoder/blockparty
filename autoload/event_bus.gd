@@ -110,8 +110,9 @@ signal world_state_applied(dead_mobs: Array, taken_coins: Array)
 ## Снапшот чужого игрока (хост переслал после AOI-фильтра).
 signal peer_snapshot(peer_id: int, snap: Dictionary, recv_msec: int)
 ## Игрок вошёл в мир — его персонаж появляется у всех (rpc_player_joined);
-## character — номер персонажа из раздела 16, проверенный хостом.
-signal peer_joined_world(peer_id: int, player_name: String, character: int)
+## appearance — внешность байтами индексов редактора (П5.8), проверенная
+## хостом на входе.
+signal peer_joined_world(peer_id: int, player_name: String, appearance: PackedByteArray)
 
 ## Изменился состав участников мира.
 signal roster_changed(count: int)

@@ -113,20 +113,22 @@ func _wire_network() -> void:
 	for peer_id: int in Net.players.keys():
 		if peer_id != Net.local_peer_id and Net._peer_in_world(peer_id):
 			_on_peer_joined_world(
-				peer_id, str(Net.players[peer_id]["name"]), Net.peer_character(peer_id)
+				peer_id, str(Net.players[peer_id]["name"]),
+				Net._slot_appearance_bytes(peer_id)
 			)
 
 
-func _on_peer_joined_world(peer_id: int, player_name: String, character: int) -> void:
+func _on_peer_joined_world(peer_id: int, player_name: String,
+		appearance: PackedByteArray) -> void:
 	if peer_id == Net.local_peer_id or _remotes.has(peer_id):
 		return
 	var remote := RemotePlayer.new()
-	remote.setup(peer_id, player_name, character)
+	remote.setup(peer_id, player_name, appearance)
 	add_child(remote)
 	_remotes[peer_id] = remote
 	Log.info(
-		"Игрок «%s» (peer %d, персонаж %d) появился в мире"
-		% [player_name, peer_id, character], "World"
+		"Игрок «%s» (peer %d, внешность %s) появился в мире"
+		% [player_name, peer_id, appearance], "World"
 	)
 
 

@@ -28,22 +28,24 @@ func _snap(seq: int, x: float, yaw: float, anim: int = 0) -> Dictionary:
 	}
 
 
-func test_model_matches_character_number() -> void:
-	# Шаг 8 П4.6: модель ремоута — персонаж, выбранный игроком (пришёл
-	# с rpc_player_joined), а не хэш peer id. Мусорный номер клампится.
+func test_model_matches_player_appearance() -> void:
+	# П5.8/B3: модель ремоута — внешность, собранная игроком в редакторе
+	# (пришла байтами с rpc_player_joined). Мусорные байты чинятся
+	# validated(): причёска-борода не остаётся на женском теле.
 	var remote := RemotePlayer.new()
-	remote.setup(7, "Тест", 2)
+	remote.setup(7, "Тест", PackedByteArray([1, 3, 1, 0, 1, 1, 7, 5, 2]))
 	add_child_autofree(remote)
 	var visual := remote.get_node("Model/CharacterModel") as CharacterModel
-	assert_eq(visual.character, 2, "третий персонаж")
+	assert_eq(visual.appearance.gender, 1, "женское тело")
+	assert_eq(visual.appearance.hat, 1, "капюшон")
 	var junk := RemotePlayer.new()
-	junk.setup(8, "Мусор", 17)
+	junk.setup(8, "Мусор", PackedByteArray([1, 200, 99, 0, 0, 0, 0, 0, 0]))
 	add_child_autofree(junk)
-	assert_eq(
-		(junk.get_node("Model/CharacterModel") as CharacterModel).character,
-		CharacterModel.count() - 1,
-		"номер вне диапазона клампится к последнему"
-	)
+	var junk_visual := junk.get_node("Model/CharacterModel") as CharacterModel
+	var variants: Array = []
+	variants.append_array(Appearance.hair_variants(Appearance.GENDER_FEMALE))
+	assert_has(variants, junk_visual.appearance.hair,
+		"мусорная причёска заменена допустимой для пола")
 
 
 func test_node_has_name_and_head_collider() -> void:

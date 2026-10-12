@@ -20,9 +20,9 @@ const GROUP: StringName = &"remote_player"
 
 var peer_id: int = 0
 var player_name: String = ""
-## Номер персонажа из раздела 16 (пришёл с rpc_player_joined, хост уже
-## проверил диапазон; клампимся ещё раз на случай мусора в ростере).
-var character: int = 0
+## Внешность байтами индексов редактора (П5.8, пришла с rpc_player_joined;
+## хост уже проверил диапазоны, валидируем ещё раз на случай мусора).
+var appearance: PackedByteArray = PackedByteArray()
 
 var _model: Node3D
 var _visual: CharacterModel
@@ -32,10 +32,10 @@ var _last_anim: int = -1
 var _flags: int = 0
 
 
-func setup(p_peer_id: int, p_name: String, p_character: int = 0) -> void:
+func setup(p_peer_id: int, p_name: String, p_appearance: PackedByteArray = PackedByteArray()) -> void:
 	peer_id = p_peer_id
 	player_name = p_name
-	character = p_character
+	appearance = p_appearance
 
 
 func _ready() -> void:
@@ -45,9 +45,9 @@ func _ready() -> void:
 	add_child(_model)
 	_visual = VISUAL.instantiate() as CharacterModel
 	_model.add_child(_visual)
-	# Персонаж игрока — выбранный им на экране «Персонаж» (раздел 16),
-	# пришёл с rpc_player_joined. Цвет тела — по хэшу id того же игрока.
-	_visual.setup(clampi(character, 0, CharacterModel.count() - 1))
+	# Внешность игрока — собранная им в редакторе (П5.8), пришла
+	# с rpc_player_joined. Цвет верхней одежды — по хэшу id того же игрока.
+	_visual.setup_appearance(Appearance.from_bytes(appearance).validated())
 	_visual.setup_palette(peer_id)
 
 	# Ник над головой (раздел 6: в радиусе 40 м), к игроку лицом.

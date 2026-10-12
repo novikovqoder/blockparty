@@ -250,18 +250,11 @@ func _follow_leader() -> Vector3:
 	return to_target / distance if distance > 0.15 else Vector3.ZERO
 
 
-## Пока веду за руку (цепочка до 4), бег — со скоростью более медленного
-## из цепочки (раздел 17): характеристики каждый клиент берёт из своего
-## файла данных по номеру персонажа из ростера (раздел 16), по сети числа
-## не ходят.
+## Пока веду за руку (цепочка до 4), все бегут одной скоростью (раздел 17):
+## характеристики персонажей убраны (П5.8, часть D), «за руку» — скорость
+## ведущего, по сети числа не ходят.
 func _link_speed_multiplier() -> float:
-	var multiplier := _run_multiplier
-	for peer_id: int in Net.hand_chain_below(Net.local_peer_id):
-		if peer_id == Net.local_peer_id:
-			continue
-		var stats := CharacterData.stats(Net.peer_character(peer_id))
-		multiplier = minf(multiplier, B.stat_multipliers[(stats["speed"] as int) - 1])
-	return multiplier
+	return _run_multiplier
 
 
 # --- Эмоции (раздел 9.7: ввод — колесо Q и клавиши 1–6, EmoteWheel) ---

@@ -1,12 +1,12 @@
 # Сериализация состояния мира для входа в любой момент (раздел 10 SPEC):
 # хост отправляет rpc_world_state одним надёжным пакетом — эпоху часов мира,
-# состав игроков (ник, номер персонажа из раздела 16, флаг «в мире»),
-# мёртвых мобов и подобранные монеты с временем возрождения по world_time.
-# Поздно вошедший клиент применяет пакет и сразу видит то же, что остальные.
-# Формат (little endian): u32 эпоха, u8 n × {i32 peer, u8 len, имя utf8,
-# u8 в мире, u8 персонаж}, u16 n × {u16 spawn_id, f32 respawn_at} — мобы,
-# затем монеты. Чистые функции без узлов — обязательный тест раздела 18
-# «без потерь».
+# состав игроков (ник, внешность байтами индексов редактора П5.8, флаг
+# «в мире»), мёртвых мобов и подобранные монеты с временем возрождения
+# по world_time. Поздно вошедший клиент применяет пакет и сразу видит то же,
+# что остальные. Формат (little endian): u32 эпоха, u8 n × {i32 peer,
+# u8 len, имя utf8, u8 в мире, 9 байтов внешности (Appearance.to_bytes)},
+# u16 n × {u16 spawn_id, f32 respawn_at} — мобы, затем монеты. Чистые
+# функции без узлов — обязательный тест раздела 18 «без потерь».
 class_name WorldState
 extends RefCounted
 
@@ -15,8 +15,8 @@ const NAME_MAX_CHARS: int = 20
 
 
 ## Собрать состояние в байты. Словарь: {world_epoch_msec: int,
-## players: [{peer_id, name, in_world, character}], dead_mobs:
-## [{spawn_id, respawn_at}], taken_coins: [{spawn_id, respawn_at}]}.
+## players: [{peer_id, name, in_world, appearance: PackedByteArray}],
+## dead_mobs: [{spawn_id, respawn_at}], taken_coins: [{spawn_id, respawn_at}]}.
 static func pack(state: Dictionary) -> PackedByteArray:
 	var buffer := StreamPeerBuffer.new()
 	buffer.big_endian = false
@@ -29,7 +29,11 @@ static func pack(state: Dictionary) -> PackedByteArray:
 		buffer.put_u8(mini(name.size(), 255))
 		buffer.put_data(name)
 		buffer.put_u8(1 if bool(entry.get("in_world", false)) else 0)
-		buffer.put_u8(int(entry.get("character", 0)) & 0xFF)
+		# Внешность — 9 байтов индексов; короткое/мусорное поле дополняется
+		# дефолтом (клиент ещё раз проверит диапазоны validated()).
+		var appearance: PackedByteArray = entry.get("appearance", PackedByteArray())
+		for i: int in Appearance.NET_SIZE:
+			buffer.put_u8(appearance[i] if i < appearance.size() else 0)
 	var dead_mobs: Array = state.get("dead_mobs", [])
 	buffer.put_u16(mini(dead_mobs.size(), 0xFFFF))
 	for entry: Dictionary in dead_mobs:
@@ -66,11 +70,15 @@ static func unpack(data: PackedByteArray) -> Dictionary:
 		var name_size: int = buffer.get_u8()
 		var name_bytes := (buffer.get_data(name_size) as Array)[1] as PackedByteArray
 		var in_world: bool = buffer.get_u8() != 0
+		var appearance := PackedByteArray()
+		appearance.resize(Appearance.NET_SIZE)
+		for b: int in Appearance.NET_SIZE:
+			appearance[b] = buffer.get_u8()
 		state["players"].append({
 			"peer_id": peer_id,
 			"name": name_bytes.get_string_from_utf8(),
 			"in_world": in_world,
-			"character": buffer.get_u8(),
+			"appearance": appearance,
 		})
 	var mob_count: int = buffer.get_u16()
 	for i: int in mob_count:
