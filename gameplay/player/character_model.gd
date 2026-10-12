@@ -1,62 +1,68 @@
-# Модель персонажа игрока (раздел 16 SPEC, v2.3): одна из трёх моделей
-# CC0-набора KayKit Adventurers (автор Kay Lousberg, лицензия CC0 —
-# assets/third_party/LICENSES.md) на общем риге Rig_Medium.
-# Что делает setup(character):
+# Модель персонажа игрока (П5.7, блок 4): одна из трёх реалистичных моделей
+# (Финн/Луми/Тимьян), собранных tools/make_characters.py из базовых CC0-ассетов
+# MakeHuman через MPFB (лицензии — assets/third_party/LICENSES.md; риг MPFB
+# game_engine, 52 кости). Что делает setup(character):
 # - инстансит glb (точка опоры glb уже у ступней) и масштабирует так, чтобы
-#   макушка головы встала на HEAD_TOP_Y — рост подогнан под коллизию игрока
-#   (капсула из раздела 5), управление и физика не меняются;
-# - вокруг каждого меша строит мультяшный чёрный контур (обратная оболочка:
-#   близнец-меш расширяется вдоль нормалей и рисуется задними гранями,
-#   без прозрачности — assets/shaders/outline.gdshader);
-# - к кости head крепит фирменный процедурный головной убор (CharacterHat).
-# Цвет тела по хэшу id выдаёт setup_palette (шаг 3); скелетные анимации
-# KayKit подключает set_state/play_one_shot (шаг 4) — интерфейсы уже здесь,
+#   макушка головы (волосы, без шляпы) встала на HEAD_TOP_Y — как коллизия
+#   игрока из раздела 5, управление и физика не меняются;
+# - раскладывает пары полная версия/_LOD по дистанции видимости: рядом играют
+#   полные меши (~20–30 тыс. треугольников), издали — облегчённые копии из
+#   того же glb (detail-части LOD-копий не имеют и видны всегда);
+# - цвет игрока не трогает: setup_palette перекрашивает только материал
+#   PlayerColor (заметная часть одежды — поло/свитер/футболка), кожа и вещи
+#   остаются как собраны. Фирменные детали (ушки на шляпе, ракушка, росток
+#   на панаме) запечены в модели с префиксом Detail_ в имени узла.
+# Чёрный мультяшный контур (обратная оболочка KayKit-моделей) в П5.7 убран:
+# у реалистичных моделей контура нет. Анимации подключает
+# set_state/play_one_shot (клипы — CharacterAnims); интерфейс не менялся,
 # чтобы player.gd и remote_player.gd не переключали класс второй раз.
 class_name CharacterModel
 extends Node3D
 
-## glb-модели персонажей (0 — Knight, 1 — Mage, 2 — Ranger).
+## glb-модели персонажей (0 — Финн, 1 — Луми, 2 — Тимьян).
 const GLBS: PackedStringArray = [
-	"res://assets/third_party/kaykit/adventurers/Knight.glb",
-	"res://assets/third_party/kaykit/adventurers/Mage.glb",
-	"res://assets/third_party/kaykit/adventurers/Ranger.glb",
-]
-## Фирменный убор по персонажу (раздел 16: круглые ушки, ракушка-веер,
-## росток с двумя листиками).
-const HATS: Array[int] = [
-	CharacterHat.Kind.EARS,
-	CharacterHat.Kind.SHELL,
-	CharacterHat.Kind.SPROUT,
+	"res://assets/third_party/makehumancommunity.org/finn/finn.glb",
+	"res://assets/third_party/makehumancommunity.org/lumi/lumi.glb",
+	"res://assets/third_party/makehumancommunity.org/thyme/thyme.glb",
 ]
 ## Целевая высота макушки головы, м — как HeadTop в player.tscn
 ## и remote_player.gd (коллизия капсулы игрока до 1.6 м).
 const HEAD_TOP_Y: float = 1.65
-## Толщина чёрного контура в метрах (после масштаба модели).
-const OUTLINE_WIDTH: float = 0.022
+## Дальше этой дистанции модель показывается LOD-копиями, м («Простая»
+## графика приближает переключение — уровни качества, П5.7 блок 7).
+const LOD_DISTANCE: float = 18.0
+## Имя материала одежды в glb: цвет игрока применяется только к нему.
+const COLOR_MATERIAL: String = "PlayerColor"
+## Префикс узлов декоративных частей (шляпы, фирменные детали): исключаются
+## из замера макушки и никогда не тонируются.
+const DETAIL_PREFIX: String = "Detail"
+## Суффикс узлов облегчённых копий мешей из того же glb.
+const LOD_SUFFIX: String = "_LOD"
+## Узел меша тела: в позе связки MPFB руки подняты выше макушки, замер роста
+## идёт по волосам/лицу, тело из него исключено.
+const BODY_MESH: String = "Human_export"
 ## Плавный переход между клипами, с.
 const ANIM_BLEND: float = 0.15
-## Кость крепления убора (риг KayKit Rig_Medium, имена в нижнем регистре).
-const HEAD_BONE: String = "head"
-## Число цветовых вариантов тела (шаг 3: выдаётся по хэшу id).
+## Число цветовых вариантов игрока (выдаётся по хэшу id).
 const PALETTES: int = 6
 
-const OUTLINE_SHADER: Shader = preload("res://assets/shaders/outline.gdshader")
 const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Номер персонажа (0…GLBS.size()−1), фиксируется в setup.
 var character: int = 0
+## Дистанция переключения LOD (меняют уровни качества).
+var lod_distance: float = LOD_DISTANCE
 
 var _glb_root: Node3D = null
 var _skeleton: Skeleton3D = null
 var _player: AnimationPlayer = null
 var _scale: float = 1.0
-var _outline: ShaderMaterial = null
 var _state: int = Protocol.AnimState.IDLE
 ## Сколько ещё играть разовый клип (play_one_shot), с; < 0 — не играет.
 var _one_shot_left: float = -1.0
 
 
-## Номер персонажа по хэшу id: один id — всегда один цвет и один ремоут-вариант.
+## Номер цветового варианта по хэшу id: один id — всегда один цвет.
 ## absi — id бывает отрицательным (peer id ENet); по сети ничего не передаётся.
 static func palette_index(id: int) -> int:
 	return absi(id) % PALETTES
@@ -81,47 +87,56 @@ func setup(p_character: int) -> void:
 	_glb_root = scene.instantiate() as Node3D
 	add_child(_glb_root)
 	_skeleton = _find_skeleton(_glb_root)
-	# Контур зависит от масштаба модели — материал свой у каждого экземпляра.
-	_outline = ShaderMaterial.new()
-	_outline.shader = OUTLINE_SHADER
 	_apply_fit_scale()
-	_outline_pass(_glb_root)
-	_attach_hat()
+	_apply_lod_distance()
 	_setup_animations()
 
 
-## Цвет тела по хэшу id: все меши glb тонируются одним из 6 ярких цветов
-## (PAL.player_colors, раздел 16) — albedo_color умножается на текстуру
-## KayKit, детали одежды сохраняются. Контур и фирменный убор не тонируются:
-## контур остаётся чёрным, убор отличает персонажа, цвет — игрока.
+## Цвет игрока по хэшу id: заметная часть одежды (материал PlayerColor)
+## тонируется одним из 6 ярких цветов (PAL.player_colors, раздел 16).
 func setup_palette(id: int) -> void:
 	setup_body_color(PAL.player_colors[palette_index(id)])
 
 
-## Тонирование тела конкретным цветом — игрокам цвет выдаётся по хэшу id
+## Тонирование одежды конкретным цветом — игрокам цвет выдаётся по хэшу id
 ## (setup_palette), жителям П5.5 задаётся нейтральный, не из 6 игроков.
+## Дубликат материала один на экземпляр модели (полная версия и _LOD делят
+## исходный ресурс) и применяется поверхным материалом каждого surface.
 func setup_body_color(color: Color) -> void:
 	if _glb_root == null:
 		return
+	var tinted: StandardMaterial3D = null
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		if _is_outline(mi) or mi.has_meta("hat_part"):
+		if mi.mesh == null:
 			continue
-		var base := _surface_material(mi)
-		if base == null:
-			continue
-		# Материал glb — общий ресурс всех инстансов сцены, поэтому каждому
-		# экземпляру кладём раскрашенный дубликат через material_override.
-		var mat := base.duplicate() as StandardMaterial3D
-		mat.albedo_color = color
-		mi.material_override = mat
+		for surface in mi.mesh.get_surface_count():
+			var base := mi.mesh.surface_get_material(surface) as StandardMaterial3D
+			if base == null or base.resource_name != COLOR_MATERIAL:
+				continue
+			if tinted == null:
+				tinted = base.duplicate() as StandardMaterial3D
+				tinted.albedo_color = color
+			mi.set_surface_override_material(surface, tinted)
 
 
-## Материал первого surface меша (у моделей KayKit один surface на меш).
-func _surface_material(mi: MeshInstance3D) -> StandardMaterial3D:
-	if mi.mesh == null or mi.mesh.get_surface_count() == 0:
-		return null
-	return mi.mesh.surface_get_material(0) as StandardMaterial3D
+## Дистанция переключения LOD (уровни качества: «Простая» — ближе).
+func set_lod_distance(distance: float) -> void:
+	lod_distance = distance
+	if _glb_root != null:
+		_apply_lod_distance()
+
+
+## Раскладка пар полная версия/_LOD: у мешей с LOD-близнецом рядом (до
+## lod_distance) играют полные меши, дальше — облегчённые копии; меши без
+## копии (detail-части, уши/ракушка/росток) видны на любой дистанции.
+func _apply_lod_distance() -> void:
+	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if _is_lod(mi):
+			mi.visibility_range_begin = lod_distance
+		elif mi.get_parent().has_node(String(mi.name) + LOD_SUFFIX):
+			mi.visibility_range_end = lod_distance
 
 
 ## Сетевое состояние анимации (Protocol.AnimState): покой/ходьба/бег/фазы
@@ -177,9 +192,9 @@ func _play_clip(clip: StringName, speed: float) -> void:
 
 
 func _setup_animations() -> void:
-	# Плеер — ребёнок корня glb: корневой путь «..» указывает на Knight/
-	# Mage/Ranger, пути треков KayKit «Rig_Medium/Skeleton3D:<кость>»
-	# совпадают с деревом персонажа (см. CharacterAnims).
+	# Плеер — ребёнок корня glb; библиотека KayKit пока играет на новом риге
+	# без совпадения имён костей (до ретаргетинга П5.7 блок 5 модель стоит
+	# в позе связки) — интерфейс состояний не менялся.
 	_player = AnimationPlayer.new()
 	_player.name = "CharacterAnims"
 	_glb_root.add_child(_player)
@@ -187,23 +202,25 @@ func _setup_animations() -> void:
 	set_state(Protocol.AnimState.IDLE)
 
 
-## Макушка головы с учётом масштаба, м (только исходные меши, без контура).
+## Макушка головы с учётом масштаба, м: верх волос без шляпы и detail-частей
+## (шляпы выше HEAD_TOP_Y — декор, раздел 16); LOD-копии и меш тела (руки
+## в позе связки выше макушки) не считаются.
 func head_top_height() -> float:
 	var top := 0.0
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		if _is_outline(mi) or not (mi.name as String).ends_with("_Head"):
+		if _is_lod(mi) or _is_detail(mi) or _is_body(mi):
 			continue
 		top = maxf(top, _mesh_box(mi).end.y)
 	return top
 
 
-## Нижняя точка модели (ступни), м — только исходные меши.
+## Нижняя точка модели (подошвы), м — полные меши, без detail-частей.
 func lowest_point() -> float:
 	var bottom := 0.0
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		if _is_outline(mi):
+		if _is_lod(mi) or _is_detail(mi):
 			continue
 		bottom = minf(bottom, _mesh_box(mi).position.y)
 	return bottom
@@ -216,69 +233,33 @@ func _mesh_box(mi: MeshInstance3D) -> AABB:
 	return to_model * (mi.global_transform * mi.mesh.get_aabb())
 
 
-## Число контурных близнецов (по одному на меш).
-func outline_count() -> int:
+## Число мешей с LOD-близнецом (для тестов): полная версия + копия _LOD.
+func lod_pairs() -> int:
 	var found := 0
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
-		if (node as MeshInstance3D).name.ends_with("Outline"):
+		var mi := node as MeshInstance3D
+		if not _is_lod(mi) and mi.get_parent().has_node(String(mi.name) + LOD_SUFFIX):
 			found += 1
 	return found
 
 
-## Узор убора (для тестов): узел Hat с мета kind, или null.
-func hat() -> Node3D:
-	if _skeleton == null:
-		return null
-	return _skeleton.get_node_or_null("HatAnchor/Hat")
-
-
 func _apply_fit_scale() -> void:
-	# Масштаб по верху меша *_Head: у KayKit верх головы 2.16–2.28 при
-	# ногах на y=0; шляпы выше — декор поверх HEAD_TOP_Y. Так головы всех
-	# персонажей на одной высоте (ник, коллайдер головы) при разных шляпах.
-	# glb-меши в origin скелета — aabb.end.y без трансформа узла.
+	# Масштаб по верху волос (шляпы и меш тела с поднятыми руками
+	# исключены): головы всех персонажей на одной высоте (ник, коллайдер
+	# головы) при разных шляпах и пропорциях. glb-меши в origin скелета —
+	# aabb.end.y без трансформа узла.
 	var top := 0.0
 	for node in _glb_root.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		if not _is_outline(mi) and (mi.name as String).ends_with("_Head"):
+		if not _is_lod(mi) and not _is_detail(mi) and not _is_body(mi):
 			top = maxf(top, mi.mesh.get_aabb().end.y)
 	assert(top > 1.0, "меш головы не найден: некуда подгонять рост")
 	_scale = HEAD_TOP_Y / top
 	_glb_root.scale = Vector3.ONE * _scale
-	# Толщина контура задана в метрах готовой модели — в локали меша она
-	# больше во столько же, во сколько модель уменьшена.
-	_outline.set_shader_parameter("thickness", OUTLINE_WIDTH / _scale)
 
 
-func _outline_pass(root: Node) -> void:
-	# Близнец кладётся тому же родителю: относительный skeleton NodePath
-	# («..») остаётся валидным, скиннинг работает, трансформ копируется.
-	for node in root.find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		if _is_outline(mi) or mi.has_meta("outlined"):
-			continue
-		mi.set_meta("outlined", true)
-		var twin := MeshInstance3D.new()
-		twin.name = String(mi.name) + "Outline"
-		twin.mesh = mi.mesh
-		twin.skeleton = mi.skeleton
-		twin.material_override = _outline
-		twin.transform = mi.transform
-		twin.set_meta("outlined", true)
-		mi.get_parent().add_child(twin)
-
-
-func _attach_hat() -> void:
-	if _skeleton == null or _skeleton.find_bone(HEAD_BONE) < 0:
-		push_warning("CharacterModel: кость %s не найдена — убор не закреплён" % HEAD_BONE)
-		return
-	var anchor := BoneAttachment3D.new()
-	anchor.name = "HatAnchor"
-	anchor.bone_name = HEAD_BONE
-	_skeleton.add_child(anchor)
-	var hat := CharacterHat.build(HATS[character])
-	anchor.add_child(hat)
-	_outline_pass(hat)
+static func _is_body(mi: MeshInstance3D) -> bool:
+	return mi.name == BODY_MESH
 
 
 func _find_skeleton(root: Node) -> Skeleton3D:
@@ -287,5 +268,10 @@ func _find_skeleton(root: Node) -> Skeleton3D:
 	return null
 
 
-static func _is_outline(mi: MeshInstance3D) -> bool:
-	return (mi.name as String).ends_with("Outline")
+## LOD-копии лежат рядом с полными мешами и помечены суффиксом _LOD.
+static func _is_lod(mi: MeshInstance3D) -> bool:
+	return (mi.name as String).ends_with(LOD_SUFFIX)
+
+
+static func _is_detail(mi: MeshInstance3D) -> bool:
+	return (mi.name as String).begins_with(DETAIL_PREFIX)

@@ -127,6 +127,14 @@ pause={
 3d_physics/layer_names/3d_layer_2="players"
 3d_physics/layer_names/3d_layer_3="head_top"
 
+[animation]
+
+; Временно (П5.7, до ретаргетинга анимаций на риг MPFB в блоке 5): клипы
+; KayKit ещё играют на старых путях Rig_Medium и не находят костей нового
+; скелета — модель стоит в позе связки. Предупреждения выключены, чтобы не
+; заспамить лог; после блока 5 удалить строку (вернётся true по умолчанию).
+warnings/check_invalid_track_paths=false
+
 [rendering]
 
 renderer/rendering_method="forward_plus"

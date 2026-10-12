@@ -1,13 +1,16 @@
-# Тесты модели персонажа (раздел 16 SPEC, шаг 2 замены персонажей):
-# все три модели KayKit строятся, ступни на y = 0 (±0.02), макушка головы
-# подогнана под коллизию игрока, у каждого меша — контурный близнец
-# (обратная оболочка, непрозрачный чёрный), у каждого персонажа — свой
-# фирменный убор; цветовой индекс по хэшу id детерминирован, все 6 цветов
-# достижимы, номер вне диапазона даёт 0.
+# Тесты модели персонажа (П5.7, блок 4): все три реалистичные модели
+# MakeHuman/MPFB строятся, ступни на y = 0 (±0.02), макушка головы (по волосам,
+# без шляпы) подогнана под коллизию игрока, у каждого крупного меша есть
+# облегчённая копия _LOD с раскладкой по дистанции видимости, чёрного
+# мультяшного контура нет, фирменные детали запечены в модели (Detail_*);
+# цвет игрока тонирует только материал PlayerColor верхней одежды; цветовой
+# индекс по хэшу id детерминирован, все 6 цветов достижимы, номер вне
+# диапазона даёт 0.
 extends GutTest
 
 const MODEL: PackedScene = preload("res://gameplay/player/character_model.tscn")
-const OUTLINE_SHADER_PATH: String = "res://assets/shaders/outline.gdshader"
+## Риг MPFB game_engine (tools/make_characters.py): 53 кости (Root + 52).
+const BONES_MPFB: int = 53
 
 
 func _make(character: int) -> CharacterModel:
@@ -24,13 +27,13 @@ func test_all_three_characters_build() -> void:
 		var skeleton := model.find_children("*", "Skeleton3D", true, false)
 		assert_eq(skeleton.size(), 1, "персонаж %d: один скелет" % character)
 		assert_eq(
-			(skeleton[0] as Skeleton3D).get_bone_count(), 23,
-			"персонаж %d: риг Rig_Medium" % character,
+			(skeleton[0] as Skeleton3D).get_bone_count(), BONES_MPFB,
+			"персонаж %d: риг MPFB game_engine" % character,
 		)
 
 
 func test_feet_at_zero_and_head_under_collision() -> void:
-	# Раздел 16: точка опоры — у ступней, рост подогнан под коллизию
+	# П5.7: точка опоры — у ступней, рост подогнан под коллизию
 	# (HEAD_TOP_Y 1.65 у player.tscn и remote_player.gd).
 	for character: int in CharacterModel.count():
 		var model := _make(character)
@@ -45,51 +48,86 @@ func test_feet_at_zero_and_head_under_collision() -> void:
 		)
 
 
-func test_outline_twin_for_every_mesh() -> void:
+func test_no_cartoon_outline() -> void:
+	# Чёрный контур (обратная оболочка KayKit-моделей) в П5.7 убран: ни одного
+	# контурного близнеца ни у одного персонажа.
 	for character: int in CharacterModel.count():
 		var model := _make(character)
-		var meshes := 0
-		var twins := 0
+		for node in model.find_children("*", "MeshInstance3D", true, false):
+			assert_false(
+				(node as MeshInstance3D).name.ends_with("Outline"),
+				"персонаж %d: узла-контура нет" % character,
+			)
+
+
+func test_lod_twin_for_every_body_mesh() -> void:
+	# Каждый крупный меш (тело, одежда, волосы, обувь, шляпа) имеет _LOD-копию
+	# из того же glb; декоративные мелочи (Detail_*) копий не имеют — видны
+	# на любой дистанции.
+	for character: int in CharacterModel.count():
+		var model := _make(character)
+		assert_gt(model.lod_pairs(), 5, "персонаж %d: LOD-пар несколько" % character)
 		for node in model.find_children("*", "MeshInstance3D", true, false):
 			var mi := node as MeshInstance3D
-			if (mi.name as String).ends_with("Outline"):
-				twins += 1
-				assert_not_null(mi.material_override, "контур с материалом")
+			var is_lod := (mi.name as String).ends_with("_LOD")
+			var is_detail := (mi.name as String).begins_with("Detail")
+			if is_lod:
 				assert_true(
-					mi.material_override is ShaderMaterial,
-					"контур — шейдер обратной оболочки",
+					mi.get_parent().has_node(
+						String(mi.name).substr(0, String(mi.name).length() - 4)),
+					"персонаж %d: у %s есть полная версия" % [character, mi.name],
 				)
-				continue
-			meshes += 1
-			assert_not_null(
-				mi.get_parent().get_node_or_null(String(mi.name) + "Outline"),
-				"у меша %s есть контурный близнец" % mi.name,
-			)
-		assert_gt(meshes, 5, "у модели есть меши (не один меш)")
-		assert_eq(twins, meshes, "персонаж %d: близнец у каждого меша" % character)
+				assert_almost_eq(
+					mi.visibility_range_begin, model.lod_distance, 0.01,
+					"персонаж %d: %s включается с дистанции LOD" % [character, mi.name],
+				)
+				assert_eq(mi.visibility_range_end, 0.0,
+					"персонаж %d: %s виден до бесконечности" % [character, mi.name])
+			elif is_detail:
+				assert_eq(mi.visibility_range_begin, 0.0,
+					"персонаж %d: деталь %s всегда видна" % [character, mi.name])
+			else:
+				assert_true(
+					mi.get_parent().has_node(String(mi.name) + "_LOD"),
+					"персонаж %d: у меша %s есть LOD-копия" % [character, mi.name],
+				)
+				assert_almost_eq(
+					mi.visibility_range_end, model.lod_distance, 0.01,
+					"персонаж %d: %s гаснет на дистанции LOD" % [character, mi.name],
+				)
 
 
-func test_outline_shader_is_opaque_black_shell() -> void:
-	# «Мультяшный чёрный контур без прозрачности»: шейдер рисует задние
-	# грани (cull_front), чистый чёрный и не трогает альфу.
-	var text: String = FileAccess.get_file_as_string(OUTLINE_SHADER_PATH)
-	assert_false(text.is_empty(), "шейдер контура читается")
-	assert_true(text.contains("cull_front"), "задние грани (обратная оболочка)")
-	assert_true(text.contains("ALBEDO = vec3(0.0)"), "чистый чёрный")
-	assert_false(text.contains("ALPHA"), "без прозрачности")
+func test_set_lod_distance_updates_ranges() -> void:
+	# Уровни качества (П5.7, блок 7): «Простая» графика приближает переключение.
+	var model := _make(0)
+	model.set_lod_distance(7.0)
+	var checked := 0
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if (mi.name as String).ends_with("_LOD"):
+			assert_almost_eq(mi.visibility_range_begin, 7.0, 0.01,
+				"LOD-копия переключилась на 7 м")
+			checked += 1
+	assert_gt(checked, 5, "проверено несколько LOD-копий")
 
 
-func test_each_character_has_own_hat() -> void:
-	var kinds: Array[int] = []
+func test_signature_details_baked_into_models() -> void:
+	# Фирменные детали (раздел 16): у Финна ушки на шляпе, у Луми ракушка,
+	# у Тимьяна панама с ростком — запечены в glb с префиксом Detail_.
+	const EXPECTED: Array = [
+		["Detail_ear_l", "Detail_ear_r", "Detail_hat"],
+		["Detail_shell", "Detail_hat"],
+		["Detail_hat_crown", "Detail_hat_brim", "Detail_sprout_stalk"],
+	]
+	assert_eq(CharacterModel.count(), EXPECTED.size(), "трое персонажей")
 	for character: int in CharacterModel.count():
 		var model := _make(character)
-		var hat := model.hat()
-		assert_not_null(hat, "персонаж %d: убор закреплён" % character)
-		var kind: int = hat.get_meta("kind")
-		assert_false(kinds.has(kind), "убор не повторяется между персонажами")
-		kinds.append(kind)
-		var parts := hat.find_children("*", "MeshInstance3D", true, false)
-		assert_gt(parts.size(), 0, "персонаж %d: в уборe есть меши" % character)
+		var names: Array[String] = []
+		for node in model.find_children("*", "MeshInstance3D", true, false):
+			names.append(node.name)
+		for wanted: String in EXPECTED[character]:
+			assert_has(names, wanted,
+				"персонаж %d: деталь %s в модели" % [character, wanted])
 
 
 func test_palette_index_deterministic_and_complete() -> void:
@@ -118,9 +156,10 @@ func test_character_out_of_range_gives_first() -> void:
 	assert_eq(model.character, 0, "setup с неверным номером строит первого")
 
 
-func test_setup_palette_tints_body_not_hat_or_outline() -> void:
-	# Раздел 16 «Цвета»: все меши glb тонируются цветом варианта по хэшу id,
-	# фирменный убор и контурный близнец цвет игрока не получают.
+func test_setup_palette_tints_only_player_color() -> void:
+	# П5.7: цвет игрока тонирует только заметную часть одежды (материал
+	# PlayerColor: поло/свитер/футболка) в полной версии и в LOD-копии;
+	# кожа, волосы и обувь цвет не получают.
 	const PAL: Palette = preload("res://assets/palette.tres")
 	for character: int in CharacterModel.count():
 		var model := _make(character)
@@ -130,30 +169,31 @@ func test_setup_palette_tints_body_not_hat_or_outline() -> void:
 		var tinted := 0
 		for node in model.find_children("*", "MeshInstance3D", true, false):
 			var mi := node as MeshInstance3D
-			if mi.has_meta("hat_part"):
-				assert_false(
-					mi.material_override.albedo_color.is_equal_approx(expected),
-					"персонаж %d: убор не тонируется цветом игрока" % character,
-				)
-				continue
-			if (mi.name as String).ends_with("Outline"):
-				continue
-			assert_true(
-				mi.material_override is StandardMaterial3D,
-				"персонаж %d: меш %s получил материал" % [character, mi.name],
-			)
-			assert_true(
-				(mi.material_override as StandardMaterial3D).albedo_color.is_equal_approx(expected),
-				"персонаж %d: меш %s тонирован цветом варианта" % [character, mi.name],
-			)
-			tinted += 1
-		assert_gt(tinted, 5, "персонаж %d: тонировано несколько мешей" % character)
+			for surface: int in mi.mesh.get_surface_count():
+				var base := mi.mesh.surface_get_material(surface) as StandardMaterial3D
+				var override := mi.get_surface_override_material(surface)
+				if base != null and base.resource_name == "PlayerColor":
+					tinted += 1
+					assert_true(
+						override is StandardMaterial3D,
+						"персонаж %d: %s surface %d тонирован"
+						% [character, mi.name, surface],
+					)
+					assert_true(
+						(override as StandardMaterial3D).albedo_color.is_equal_approx(expected),
+						"персонаж %d: %s цвет варианта" % [character, mi.name],
+					)
+				else:
+					assert_null(override,
+						"персонаж %d: %s surface %d не тронут цветом"
+						% [character, mi.name, surface])
+		assert_gt(tinted, 1, "персонаж %d: PlayerColor и в полной, и в LOD" % character)
 
 
-# --- Анимации (шаг 4, раздел 16: клипы KayKit Character Animations) ---
+# --- Анимации (интерфейс состояний; клипы — CharacterAnims) ---
 
 func test_every_anim_state_maps_to_existing_clip() -> void:
-	# Каждое состояние аниматора (раздел 5) играет клип KayKit — включая
+	# Каждое состояние аниматора (раздел 5) играет назначенный клип — включая
 	# состояния без своего клипа в наборе (ближайший по смыслу).
 	var lib := CharacterAnims.library()
 	for state: int in Protocol.AnimState.values():
@@ -163,8 +203,7 @@ func test_every_anim_state_maps_to_existing_clip() -> void:
 			lib.has_animation(clip),
 			"состояние %d: клип %s есть в библиотеке" % [state, clip],
 		)
-	# Циклические состояния зациклены (KayKit экспортирует всё one-shot),
-	# разовые — нет.
+	# Циклические состояния зациклены, разовые — нет.
 	for clip: String in ["Idle_A", "Walking_A", "Running_A", "Jump_Idle", "Sit_Chair_Idle"]:
 		assert_eq(
 			(lib.get_animation(clip) as Animation).loop_mode, Animation.LOOP_LINEAR,
@@ -230,8 +269,8 @@ func test_play_one_shot_speeds_up_and_returns() -> void:
 
 
 func test_animations_attach_on_all_characters() -> void:
-	# Плеер один, лежит в корне glb (пути треков KayKit относительны него)
-	# и клипы играют на всех трёх ригах.
+	# Плеер один, лежит в корне glb, клипы назначаются на всех персонажах
+	# (ретаргетинг на риг MPFB — П5.7, блок 5).
 	for character: int in CharacterModel.count():
 		var model := _make(character)
 		var players := model.find_children("*", "AnimationPlayer", true, false)
@@ -239,7 +278,7 @@ func test_animations_attach_on_all_characters() -> void:
 		model.set_state(Protocol.AnimState.RUN)
 		assert_eq(
 			(players[0] as AnimationPlayer).current_animation, "kaykit/Running_A",
-			"персонаж %d: клипы на его риге" % character,
+			"персонаж %d: клип назначен" % character,
 		)
 
 

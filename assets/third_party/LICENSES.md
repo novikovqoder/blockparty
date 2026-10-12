@@ -36,6 +36,13 @@ Godot при импорте — это та же встроенная текст
 | kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
 | grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
 | rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
+| MakeHuman базовые ассеты (MPFB) | MakeHuman team (Data Collection AB, Joel Palmius, Jonas Hauquier) | https://makehumancommunity.org | CC0 (явный релиз сентября 2020) | 2026-10-11 | `makehumancommunity.org/finn/finn.glb`, `makehumancommunity.org/lumi/lumi.glb`, `makehumancommunity.org/thyme/thyme.glb` — собраны из базовых ассетов: волосы short02/short04/ponytail01, прокси тел male_generic/female_generic, скины young_caucasian_male/young_asian_female/middleage_caucasian_male, зубы teeth_base, брови eyebrow001, ресницы eyelashes01, глаза low-poly, язык tongue01, шляпа fedora01; текстуры (извлечены из glb при импорте): `finn_brown_eye.png`, `finn_cargo_pants_diff.png`, `finn_cargo_pants_norm.png`, `finn_eyebrow001.png`, `finn_eyelashes01.png`, `finn_fedora_diffuse.png`, `finn_fedora_normal.png`, `finn_Polo_Base_Color.png`, `finn_shoes01_diffuse.png`, `finn_shoes01_normal.png`, `finn_short02_diffuse.png`, `finn_teeth.png`, `finn_tongue01_diffuse.png`, `finn_young_lightskinned_male_diffuse.png`, `lumi_brown_eye.png`, `lumi_cloche_hat_green.png`, `lumi_eyebrow001.png`, `lumi_eyelashes01.png`, `lumi_Pants_wool.png`, `lumi_ponytail01_diffuse.png`, `lumi_shirt-knit.png`, `lumi_shoes01_diffuse.png`, `lumi_shoes01_normal.png`, `lumi_teeth.png`, `lumi_tongue01_diffuse.png`, `lumi_young_lightskinned_female_diffuse3.png`, `thyme_brown_eye.png`, `thyme_crude_male_tex.png`, `thyme_eyebrow001.png`, `thyme_eyelashes01.png`, `thyme_middleage_lightskinned_male_diffuse.png`, `thyme_Pants_wool.png`, `thyme_shoes01_diffuse.png`, `thyme_shoes01_normal.png`, `thyme_short04_diffuse.png`, `thyme_teeth.png`, `thyme_tongue01_diffuse.png` |
+| Cloche Hat | Aethelraed_Unraed | https://makehumancommunity.org/node/582 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/lumi/lumi.glb` (запечена в модель) |
+| Cargo pants | Cortu | https://makehumancommunity.org/node/2798 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/finn/finn.glb` (запечена в модель) |
+| Wool pants | MargaretToigo | https://makehumancommunity.org/node/1194 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/lumi/lumi.glb` и `makehumancommunity.org/thyme/thyme.glb` (запечена в модель) |
+| Fisherman sweater | MargaretToigo | https://makehumancommunity.org/node/1187 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/lumi/lumi.glb` (запечена в модель) |
+| Crude t-shirt (male) | Elvaerwyn | https://makehumancommunity.org/node/1416 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/thyme/thyme.glb` (запечена в модель) |
+| Polo shirt (male) | namuhekam | https://makehumancommunity.org/node/2909 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/finn/finn.glb` (запечена в модель) |
 
 Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
 П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются
@@ -46,5 +53,12 @@ Godot при импорте — это та же встроенная текст
 оригинальные glb в проекте не хранятся, страницы ассетов — в таблице).
 HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
 смешиваются по времени суток в `assets/shaders/sky.gdshader`.
-Наборы KayKit — персонажи игрока (раздел 16 SPEC, v2.3): три модели на общем
-риге Rig_Medium и скелетные клипы анимаций на том же риге.
+Наборы KayKit (раздел 16 SPEC, v2.3) — скелетные клипы анимаций на риге
+Rig_Medium (пока не заменены ретаргетингом П5.7, блок 5); модели Adventurers
+после перехода на персонажей MakeHuman в рендере не участвуют.
+Ассеты MakeHuman (П5.7, блок 4) — исходники новых реалистичных персонажей
+(Финн/Луми/Тимьян): `tools/make_characters.py` собирает их в headless-Blender
+через MPFB и запекает в glb (тело + одежда + фирменные детали + копии `_LOD`);
+исходные ассеты лежат вне репозитория (`~/mpfb_assets`, метаданные наборов —
+зеркало makehumancommunity.org), в git попадают только собранные glb
+и извлечённые при импорте текстуры.

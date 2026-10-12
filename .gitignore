@@ -14,6 +14,9 @@ config.cfg
 .DS_Store
 Thumbs.db
 
+# Байт-код Python инструментов (tools/*.py)
+__pycache__/
+
 # Архивы ресурсов до разбора (не в git)
 assets/incoming/
 
