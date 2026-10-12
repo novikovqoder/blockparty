@@ -1,9 +1,10 @@
-# Данные персонажей (раздел 16 SPEC, «Описания»): имя, девиз, описание и
-# «Любит» трёх жителей острова лежат в characters.json — владелец правит
+# Данные жителей острова (раздел 16 SPEC, «Описания»): имя, девиз,
+# описание и «Любит» троих NPC лежат в characters.json — владелец правит
 # тексты без правок кода. Каждое текстовое поле двуязычное {ru, en}; язык
 # выбирается по текущей локали перевода (как tr()), запасной — ru.
-# Номера записей совпадают с CharacterModel: 0 — Финн (Knight), 1 — Луми
-# (Mage), 2 — Тимьян (Ranger).
+# Номера записей совпадают с жителями П5.5: 0 — Финн, 1 — Луми,
+# 2 — Тимьян. Играбельным списком файл больше не является (П5.8, часть D):
+# внешность игрока собирает редактор, характеристики убраны.
 class_name CharacterData
 extends RefCounted
 
@@ -43,17 +44,6 @@ static func pick_text(field: Dictionary) -> String:
 	if not field.has(locale):
 		locale = FALLBACK_LOCALE
 	return String(field.get(locale, ""))
-
-
-## Характеристики персонажа (раздел 16): сила/скорость/прыжок, значения 1–5,
-## сумма 9, каждый лучший ровно в одной. Ключи: "strength", "speed", "jump".
-## Значения вне 1–5 заменяются серединой (3) — файл правится руками, без кода.
-static func stats(index: int) -> Dictionary:
-	var raw: Dictionary = get_character(index).get("stats", {})
-	var result := {}
-	for key: String in ["strength", "speed", "jump"]:
-		result[key] = clampi(int(raw.get(key, 3)), 1, 5)
-	return result
 
 
 static func _load() -> void:

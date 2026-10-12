@@ -63,13 +63,8 @@ var _leader_was_jumping: bool = false
 var _sitting: bool = false
 var _seat_index: int = -1
 var _stand_sent: bool = false
-## Множители выбранного персонажа (раздел 16, «Характеристики»): бег и высота
-## прыжка. Скорость прыжка умножается на корень высотного множителя.
-var _run_multiplier: float = 1.0
-var _jump_height_multiplier: float = 1.0
-## Сила 1–5 (раздел 17): ускоряет вытягивание и даёт чуть больше высоты
-## прыжка с головы; хранится индексом массива множителей в balance.
-var _strength: int = 3
+## Характеристики (Сила/Скорость/Прыжок) убраны — П5.8, часть D: все
+## игроки равны, множителей бега/прыжка/кооп-действий нет.
 ## Точка, за которую висим (куда поднимет вытягивание; раздел 9.1).
 var _hang_point: Vector3 = Vector3.ZERO
 
@@ -244,17 +239,10 @@ func _follow_leader() -> Vector3:
 	# Прыжки ведущего повторяются (раздел 9.5): на отрыве и с земли.
 	var leader_jumping := leader.is_jumping()
 	if leader_jumping and not _leader_was_jumping and is_on_floor():
-		velocity.y = B.jump_speed * sqrt(_jump_height_multiplier)
+		velocity.y = B.jump_speed
 		_jump_cut_done = true
 	_leader_was_jumping = leader_jumping
 	return to_target / distance if distance > 0.15 else Vector3.ZERO
-
-
-## Пока веду за руку (цепочка до 4), все бегут одной скоростью (раздел 17):
-## характеристики персонажей убраны (П5.8, часть D), «за руку» — скорость
-## ведущего, по сети числа не ходят.
-func _link_speed_multiplier() -> float:
-	return _run_multiplier
 
 
 # --- Эмоции (раздел 9.7: ввод — колесо Q и клавиши 1–6, EmoteWheel) ---
@@ -399,36 +387,6 @@ func _nearest_interactable() -> Interactable:
 
 # --- Движение ---
 
-## Характеристики выбранного персонажа (раздел 16): множители бега и высоты
-## прыжка из characters.json по номеру модели; Сила с П5 ускоряет
-## вытягивание и прибавляет высоту прыжка с головы (раздел 17).
-## По сети числа не ходят: каждый клиент берёт их из своего файла данных.
-func apply_stats(character: int) -> void:
-	var stats := CharacterData.stats(character)
-	_run_multiplier = B.stat_multipliers[stats["speed"] as int - 1]
-	_jump_height_multiplier = B.stat_multipliers[stats["jump"] as int - 1]
-	_strength = stats["strength"] as int
-
-
-func run_multiplier() -> float:
-	return _run_multiplier
-
-
-func jump_height_multiplier() -> float:
-	return _jump_height_multiplier
-
-
-## Сила персонажа 1–5 (кооп-действия П5; множители — в balance).
-func strength() -> int:
-	return _strength
-
-
-## Множитель усиления прыжка с головы от Силы прыгуна (раздел 17: «чуть
-## больше высоты подсадки» у сильных) — вызывается при прыжке с головы.
-func strength_head_boost() -> float:
-	return B.strength_head_boost[clampi(_strength, 1, 5) - 1]
-
-
 ## Направление ввода в мире: относительно камеры, в плоскости земли.
 ## Бот (--bot) задаёт направление сам — куда идти.
 func _wish_direction() -> Vector3:
@@ -468,10 +426,8 @@ func _move_horizontally(wish: Vector3, delta: float) -> void:
 	var walking: bool = Input.is_action_pressed("walk") if _bot == null else false
 	var speed: float = B.walk_speed if walking else B.run_speed
 	if _in_water:
-		# Множитель персонажа — про бег по земле (раздел 16), плавание не трогаем.
+		# Плавание медленнее бега (раздел 6): одна скорость для всех.
 		speed = minf(speed, B.swim_speed)
-	else:
-		speed *= _link_speed_multiplier()
 	var target := wish.limit_length(1.0) * speed
 	var accel: float = B.deceleration if target == Vector3.ZERO else B.acceleration
 	if not is_on_floor() and not _in_water:
@@ -506,14 +462,13 @@ func _update_jump(delta: float) -> void:
 	if _jump_buffer > 0.0 and (_coyote > 0.0 or _in_water):
 		var speed := B.jump_speed
 		if is_on_floor() and _head_below:
-			# Прыжок с головы другого игрока усилен (раздел 5); Сила прыгуна
-			# добавляет чуть больше высоты (раздел 17, П5). Факт подсадки —
-			# хост рассылает всем для очков «Встреч» (раздел 13).
-			speed = JumpMath.boosted_jump_speed(B) * strength_head_boost()
+			# Прыжок с головы другого игрока усилен (раздел 5) — базовая
+			# подсадка без бонусов (характеристики убраны, П5.8 часть D).
+			# Факт подсадки — хост рассылает всем для очков «Встреч» (раздел 13).
+			speed = JumpMath.boosted_jump_speed(B)
 			if _head_peer != 0:
 				Net.request_boost(_head_peer)
-		# Множитель высоты прыжка персонажа: v = √(2·g·h) — скорость из корня.
-		velocity.y = speed * sqrt(_jump_height_multiplier)
+		velocity.y = speed
 		_jump_buffer = 0.0
 		_coyote = 0.0
 		_jump_cut_done = false

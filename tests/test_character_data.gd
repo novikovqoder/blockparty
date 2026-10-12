@@ -1,18 +1,17 @@
-# Тесты данных персонажей (раздел 16, шаги 5–6 П4.6): characters.json полон
-# и на двух языках, характеристики соблюдают правила (1–5, сумма 9, каждый
-# лучший ровно в одной), множители из balance.tres применяются к игроку,
-# выбор сохраняется в user://, неверный номер читается как первый.
+# Тесты данных жителей (раздел 16, П4.6 → П5.8 часть D): characters.json —
+# тексты троих NPC (имя/девиз/описание/«любит») на двух языках, играбельным
+# списком файл больше не является; характеристик нет нигде — внешность игрока
+# собирает редактор (Save), все игроки бегут и прыгают одинаково.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
 const PLAYER_SCENE: PackedScene = preload("res://gameplay/player/player.tscn")
-const STAT_KEYS: PackedStringArray = ["strength", "speed", "jump"]
 const TEXT_FIELDS: PackedStringArray = ["name", "motto", "description", "loves"]
 const LOCALES: PackedStringArray = ["ru", "en"]
 
 
 func test_all_three_have_full_data() -> void:
-	assert_eq(CharacterData.count(), 3, "три персонажа")
+	assert_eq(CharacterData.count(), 3, "трое жителей")
 	for index: int in CharacterData.count():
 		var entry := CharacterData.get_character(index)
 		for field: String in TEXT_FIELDS:
@@ -20,97 +19,42 @@ func test_all_three_have_full_data() -> void:
 			for locale: String in LOCALES:
 				assert_true(
 					texts.has(locale),
-					"персонаж %d: поле %s есть на %s" % [index, field, locale]
+					"житель %d: поле %s есть на %s" % [index, field, locale]
 				)
 				assert_false(
 					String(texts.get(locale, "")).strip_edges().is_empty(),
-					"персонаж %d: поле %s на %s не пустое" % [index, field, locale]
+					"житель %d: поле %s на %s не пустое" % [index, field, locale]
 				)
 
 
-func test_stats_values_and_sum() -> void:
-	for index: int in CharacterData.count():
-		var stats := CharacterData.stats(index)
-		var sum: int = 0
-		for key: String in STAT_KEYS:
-			var value := int(stats[key])
-			assert_between(value, 1, 5, "персонаж %d: %s в 1–5" % [index, key])
-			sum += value
-		assert_eq(sum, 9, "персонаж %d: сумма характеристик 9" % index)
+func test_no_stats_left_in_data() -> void:
+	# Характеристики убраны (П5.8, часть D): в characters.json их нет.
+	var text := FileAccess.get_file_as_string(CharacterData.PATH)
+	assert_false(text.is_empty(), "characters.json читается")
+	for key: String in ["stats", "strength", "speed", "jump"]:
+		assert_false(
+			text.contains('"%s"' % key),
+			"characters.json без поля «%s»" % key
+		)
 
 
-func test_each_best_in_exactly_one_stat() -> void:
-	# Раздел 16: у каждого персонажа ровно одна характеристика, в которой он
-	# лучший (строго больше всех остальных), и каждая характеристика имеет
-	# ровно одного лучшего — раскладка не вырождается.
-	var best_counts: Array[int] = []
-	for index: int in CharacterData.count():
-		var mine := CharacterData.stats(index)
-		var best_count: int = 0
-		for key: String in STAT_KEYS:
-			var is_best := true
-			for other: int in CharacterData.count():
-				if other != index \
-						and int(CharacterData.stats(other)[key]) >= int(mine[key]):
-					is_best = false
-					break
-			if is_best:
-				best_count += 1
-		best_counts.append(best_count)
-	assert_eq(best_counts, [1, 1, 1], "у каждого ровно одна «лучшая»")
-	# Симметрично: каждая характеристика — ровно у одного максимума.
-	for key: String in STAT_KEYS:
-		var values: Array[int] = []
-		for index: int in CharacterData.count():
-			values.append(int(CharacterData.stats(index)[key]))
-		var holders: int = 0
-		for value: int in values:
-			if value == values.max():
-				holders += 1
-		assert_eq(holders, 1, "%s: лучший ровно один" % key)
-
-
-func test_stats_out_of_range_falls_back_to_first() -> void:
-	# Правило CharacterModel: номер вне диапазона — первая запись.
+func test_out_of_range_falls_back_to_first() -> void:
+	# Правило жителей (бывший CharacterModel): номер вне диапазона — первая
+	# запись.
 	for bad: int in [-7, 99]:
-		var stats := CharacterData.stats(bad)
-		var first := CharacterData.stats(0)
-		for key: String in STAT_KEYS:
-			assert_eq(
-				int(stats[key]), int(first[key]),
-				"номер %d: %s от первого персонажа" % [bad, key]
-			)
+		var entry := CharacterData.get_character(bad)
+		var first := CharacterData.get_character(0)
+		assert_eq(
+			CharacterData.pick_text(entry["name"]),
+			CharacterData.pick_text(first["name"]),
+			"номер %d: имя от первого жителя" % bad
+		)
 
 
-func test_apply_stats_sets_multipliers() -> void:
-	# Множители 0.90–1.10 по значению характеристики (шаг 6): скорость и
-	# прыжок берут свой множитель из balance.tres, сила — П5.
-	var player := PLAYER_SCENE.instantiate() as Player
-	add_child_autofree(player)
-	player.apply_stats(0)  # Финн 2/5/2
-	assert_almost_eq(
-		player.run_multiplier(), B.stat_multipliers[4], 0.0001,
-		"Финн: скорость 5 → множитель 1.10"
-	)
-	assert_almost_eq(
-		player.jump_height_multiplier(), B.stat_multipliers[1], 0.0001,
-		"Финн: прыжок 2 → множитель 0.95"
-	)
-	player.apply_stats(1)  # Луми 3/1/5
-	assert_almost_eq(
-		player.run_multiplier(), B.stat_multipliers[0], 0.0001,
-		"Луми: скорость 1 → множитель 0.90"
-	)
-	assert_almost_eq(
-		player.jump_height_multiplier(), B.stat_multipliers[4], 0.0001,
-		"Луми: прыжок 5 → множитель 1.10"
-	)
+# --- Все игроки равны: реальная физика CharacterBody3D без множителей ---
 
-
-# --- Множители в игре: реальная физика CharacterBody3D (как test_player_physics) ---
-
-func _player_on_floor(character: int) -> Player:
-	# Своя площадка на каждого персонажа: игроки не сталкиваются между собой.
+func _player_on_floor() -> Player:
+	# Своя площадка каждому: игроки не сталкиваются между собой.
 	var world := Node3D.new()
 	add_child_autofree(world)
 	var body := StaticBody3D.new()
@@ -124,7 +68,6 @@ func _player_on_floor(character: int) -> Player:
 	var player := PLAYER_SCENE.instantiate() as Player
 	world.add_child(player)
 	player.global_position = Vector3(0, 0.05, 0)
-	player.apply_stats(character)
 	return player
 
 
@@ -133,51 +76,51 @@ func _settle() -> void:
 		await get_tree().physics_frame
 
 
-func test_run_multiplier_applied_in_game() -> void:
-	# Финн (скорость 5) и Луми (скорость 1) бегут по площадке: установившаяся
-	# горизонтальная скорость — B.run_speed × множитель персонажа.
-	var finn := _player_on_floor(0)
-	var lumi := _player_on_floor(1)
-	var finn_mult: float = B.stat_multipliers[int(CharacterData.stats(0)["speed"]) - 1]
-	var lumi_mult: float = B.stat_multipliers[int(CharacterData.stats(1)["speed"]) - 1]
+func test_all_players_run_same_speed() -> void:
+	# Двое без всяких настроек бегут с одинаковой скоростью B.run_speed —
+	# множителей персонажей больше нет («за руку» и соло — одна скорость).
+	var first := _player_on_floor()
+	var second := _player_on_floor()
 	await _settle()
 	Input.action_press("move_forward")
-	var finn_speed := 0.0
-	var lumi_speed := 0.0
+	var first_speed := 0.0
+	var second_speed := 0.0
 	for i: int in range(60):
 		await get_tree().physics_frame
-		finn_speed = maxf(
-			finn_speed, Vector2(finn.velocity.x, finn.velocity.z).length()
+		first_speed = maxf(
+			first_speed, Vector2(first.velocity.x, first.velocity.z).length()
 		)
-		lumi_speed = maxf(
-			lumi_speed, Vector2(lumi.velocity.x, lumi.velocity.z).length()
+		second_speed = maxf(
+			second_speed, Vector2(second.velocity.x, second.velocity.z).length()
 		)
 	Input.action_release("move_forward")
-	assert_almost_eq(finn_speed, B.run_speed * finn_mult, 0.05, "Финн: бег ×множитель")
-	assert_almost_eq(lumi_speed, B.run_speed * lumi_mult, 0.05, "Луми: бег ×множитель")
+	assert_almost_eq(first_speed, B.run_speed, 0.05, "первый: бег B.run_speed")
+	assert_almost_eq(second_speed, B.run_speed, 0.05, "второй: та же скорость")
 
 
-func test_jump_multiplier_applied_in_game() -> void:
-	# Высота прыжка ∝ v², скорость — из корня множителя: отношение апексов
-	# Финна и Луми равно отношению множителей (прыжок 2 против 5).
-	var finn := _player_on_floor(0)
-	var lumi := _player_on_floor(1)
-	var finn_mult: float = B.stat_multipliers[int(CharacterData.stats(0)["jump"]) - 1]
-	var lumi_mult: float = B.stat_multipliers[int(CharacterData.stats(1)["jump"]) - 1]
+func test_all_players_jump_same_height() -> void:
+	# Прыжок без множителя высоты: двое поднимаются одинаково, высота —
+	# в пределах раздела 18 (1.3–1.5 м, «на один блок да, на два нет»);
+	# точные формулы прыжка проверяет test_player_physics.
+	var first := _player_on_floor()
+	var second := _player_on_floor()
 	await _settle()
+	var first_start := first.global_position.y
+	var second_start := second.global_position.y
 	Input.action_press("jump")
-	var finn_top := 0.0
-	var lumi_top := 0.0
+	var first_top := 0.0
+	var second_top := 0.0
 	for i: int in range(150):
 		await get_tree().physics_frame
-		finn_top = maxf(finn_top, finn.global_position.y)
-		lumi_top = maxf(lumi_top, lumi.global_position.y)
+		first_top = maxf(first_top, first.global_position.y)
+		second_top = maxf(second_top, second.global_position.y)
 	Input.action_release("jump")
-	assert_gt(finn_top, 1.0, "Финн оторвался от земли")
-	assert_gt(lumi_top, finn_top + 0.1, "Луми прыгает выше Финна")
 	assert_almost_eq(
-		lumi_top / finn_top, lumi_mult / finn_mult, 0.04,
-		"отношение апексов = отношению множителей",
+		first_top - first_start, second_top - second_start, 0.01,
+		"апексы равны — множителей нет",
+	)
+	assert_between(
+		first_top - first_start, 1.3, 1.5, "высота в норме раздела 18"
 	)
 
 

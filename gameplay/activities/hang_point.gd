@@ -29,13 +29,10 @@ func hint_key() -> String:
 	return "HINT_PULL" if hanging_peer_nearby() != 0 else ""
 
 
-## Удержание E: базовое время делится на множитель Силы помощника —
-## сильный тянет быстрее (раздел 17), но вытянуть может любой.
-func hold_time(player: Node3D) -> float:
-	var strength: int = 3
-	if player is Player:
-		strength = (player as Player).strength()
-	return B.pull_hold_time / B.strength_multipliers[strength - 1]
+## Удержание E: базовое время для всех — характеристики убраны (П5.8,
+## часть D), вытянуть может любой за одинаковое время.
+func hold_time(_player: Node3D) -> float:
+	return B.pull_hold_time
 
 
 func use(player: Node3D) -> void:
