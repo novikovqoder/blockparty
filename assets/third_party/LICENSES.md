@@ -8,14 +8,15 @@
 остальных наборов импортируются движком и загружаются в рантайме; извлечённые
 из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
 это та же встроенная текстура модели. Наборы KayKit (персонажи и анимации,
-раздел 16 SPEC v2.3) удалены после перехода на персонажей MakeHuman и
-ретаргеченные анимации Quaternius (П5.7, блоки 4–5).
+раздел 16 SPEC v2.3) удалены после перехода на персонажей Quaternius
+Universal Base Characters + Modular Character Outfits и клипы Universal
+Animation Library (П5.7–П5.8).
 
 | Набор | Автор | Страница набора | Лицензия | Дата | Файлы |
 | --- | --- | --- | --- | --- | --- |
 | Nature Kit | Kenney | https://kenney.nl/assets/nature-kit | CC0 | 2026-10-05 | `kenney.nl/nature-kit/`: tree_default.glb, tree_oak.glb, tree_detailed.glb, tree_fat.glb, tree_small.glb, tree_pineRoundA.glb, tree_pineDefaultA.glb, tree_pineSmallA.glb, plant_bush.glb, plant_bushSmall.glb, plant_bushDetailed.glb, grass.glb, grass_leafs.glb, grass_large.glb, flower_redA.glb, flower_yellowA.glb, flower_purpleA.glb, rock_largeA.glb, rock_largeB.glb, rock_largeD.glb, rock_tallA.glb, rock_tallB.glb, rock_tallC.glb, rock_smallA.glb, rock_smallB.glb, rock_smallC.glb, log.glb, log_large.glb, plant_flatTall.glb, plant_flatShort.glb |
 | Castle Kit | Kenney | https://kenney.nl/assets/castle-kit | CC0 | 2026-10-05 | `kenney.nl/castle-kit/wall-pillar.glb`, `kenney.nl/castle-kit/tower-square-arch.glb`, `kenney.nl/castle-kit/Textures/colormap.png` (атлас цветов моделей) |
-| Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_mpfb.res` — 18 скелетных клипов, перегенерированных с универсального рига UAL на риг MPFB персонажей (`tools/retarget_anims.gd`); исходные glb наборов и архивы в репозитории не хранятся |
+| Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_ubc.res` — 19 скелетных клипов, переложенных с универсального рига UAL на риг Universal Base Characters (`tools/make_ubc_anims.gd`; линейки Quaternius Universal делят один риг); исходные glb наборов и архивы в репозитории не хранятся |
 | Universal Base Characters (Standard) | Quaternius | https://quaternius.com/packs/universalbasecharacters.html | CC0 | 2026-10-12 | `quaternius.com/universal_base_characters/baked/` — риг 65 костей (тела Superhero Male/Female, глаза, брови) и причёски (Long, Buns, Buzzed, BuzzedFemale, SimpleParted, Beard), запечённые `tools/make_ubc_characters.gd` в сцены `ubc_male.res`/`ubc_female.res` (срез головы, меши + `_lod1` + скины, материалы, текстуры — кожа обесцвечена под палитры); исходные gltf и архивы в репозитории не хранятся |
 | Modular Character Outfits — Fantasy (Standard) | Quaternius | https://quaternius.com/packs/modularcharacteroutfits.html | CC0 | 2026-10-12 | внутри `quaternius.com/universal_base_characters/baked/` — модульная одежда Peasant/Ranger (верх, руки, низ, обувь, капюшон) из частей Male/Female, собранная тем же запеканием в `meshes/` и сцены `ubc_*.res`; исходные gltf и архивы в репозитории не хранятся |
 | Ground042 (Forest Ground Leaves) | ambientCG | https://ambientcg.com/view?id=Ground042 | CC0 | 2026-10-11 | `ambientcg.com/Ground042_2K/Ground042_2K-JPG_Color.jpg`, `ambientcg.com/Ground042_2K/Ground042_2K-JPG_NormalGL.jpg` |
@@ -38,13 +39,6 @@
 | kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
 | grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
 | rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
-| MakeHuman базовые ассеты (MPFB) | MakeHuman team (Data Collection AB, Joel Palmius, Jonas Hauquier) | https://makehumancommunity.org | CC0 (явный релиз сентября 2020) | 2026-10-11 | `makehumancommunity.org/finn/finn.glb`, `makehumancommunity.org/lumi/lumi.glb`, `makehumancommunity.org/thyme/thyme.glb` — собраны из базовых ассетов: волосы short02/short04/ponytail01, прокси тел male_generic/female_generic, скины young_caucasian_male/young_asian_female/middleage_caucasian_male, зубы teeth_base, брови eyebrow001, ресницы eyelashes01, глаза low-poly, язык tongue01, шляпа fedora01; текстуры (извлечены из glb при импорте): `finn_brown_eye.png`, `finn_cargo_pants_diff.png`, `finn_cargo_pants_norm.png`, `finn_eyebrow001.png`, `finn_eyelashes01.png`, `finn_fedora_diffuse.png`, `finn_fedora_normal.png`, `finn_Polo_Base_Color.png`, `finn_shoes01_diffuse.png`, `finn_shoes01_normal.png`, `finn_short02_diffuse.png`, `finn_teeth.png`, `finn_tongue01_diffuse.png`, `finn_young_lightskinned_male_diffuse.png`, `lumi_brown_eye.png`, `lumi_cloche_hat_green.png`, `lumi_eyebrow001.png`, `lumi_eyelashes01.png`, `lumi_Pants_wool.png`, `lumi_ponytail01_diffuse.png`, `lumi_shirt-knit.png`, `lumi_shoes01_diffuse.png`, `lumi_shoes01_normal.png`, `lumi_teeth.png`, `lumi_tongue01_diffuse.png`, `lumi_young_lightskinned_female_diffuse3.png`, `thyme_brown_eye.png`, `thyme_crude_male_tex.png`, `thyme_eyebrow001.png`, `thyme_eyelashes01.png`, `thyme_middleage_lightskinned_male_diffuse.png`, `thyme_Pants_wool.png`, `thyme_shoes01_diffuse.png`, `thyme_shoes01_normal.png`, `thyme_short04_diffuse.png`, `thyme_teeth.png`, `thyme_tongue01_diffuse.png` |
-| Cloche Hat | Aethelraed_Unraed | https://makehumancommunity.org/node/582 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/lumi/lumi.glb` (запечена в модель) |
-| Cargo pants | Cortu | https://makehumancommunity.org/node/2798 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/finn/finn.glb` (запечена в модель) |
-| Wool pants | MargaretToigo | https://makehumancommunity.org/node/1194 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/lumi/lumi.glb` и `makehumancommunity.org/thyme/thyme.glb` (запечена в модель) |
-| Fisherman sweater | MargaretToigo | https://makehumancommunity.org/node/1187 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/lumi/lumi.glb` (запечена в модель) |
-| Crude t-shirt (male) | Elvaerwyn | https://makehumancommunity.org/node/1416 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/thyme/thyme.glb` (запечена в модель) |
-| Polo shirt (male) | namuhekam | https://makehumancommunity.org/node/2909 | CC0 | 2026-10-11 | внутри `makehumancommunity.org/finn/finn.glb` (запечена в модель) |
 
 Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
 П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются
@@ -55,15 +49,10 @@
 оригинальные glb в проекте не хранятся, страницы ассетов — в таблице).
 HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
 смешиваются по времени суток в `assets/shaders/sky.gdshader`.
-Universal Animation Library 1/2 (П5.7, блок 5) — исходные скелетные анимации
-персонажей: `tools/retarget_anims.gd` переносит клипы покоя/ходьбы/бега/
-прыжков/эмоций с универсального рига Quaternius (T-pose) на риг MPFB
-персонажей (A-pose) и запекает в `anims_mpfb.res`; движения без аналогов
-в Standard-наборах (взмах, «за руку», вис у кромки, «Помогите!») генерируются
-процедурно поверх ретаргеченных баз (подробности — docs/STATUS.md).
-Ассеты MakeHuman (П5.7, блок 4) — исходники новых реалистичных персонажей
-(Финн/Луми/Тимьян): `tools/make_characters.py` собирает их в headless-Blender
-через MPFB и запекает в glb (тело + одежда + фирменные детали + копии `_LOD`);
-исходные ассеты лежат вне репозитория (`~/mpfb_assets`, метаданные наборов —
-зеркало makehumancommunity.org), в git попадают только собранные glb
-и извлечённые при импорте текстуры.
+Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — исходные
+скелетные анимации персонажей: `tools/make_ubc_anims.gd` перекладывает клипы
+покоя/ходьбы/бега/прыжков/эмоций с универсального рига UAL на общий с ним
+риг Universal Base Characters и запекает в `anims_ubc.res` (одна библиотека
+на оба тела); движения без аналогов в Standard-наборах (взмах, «за руку»,
+вис у кромки, «Помогите!») генерируются процедурно поверх rest/запечённых
+баз (подробности — docs/STATUS.md).

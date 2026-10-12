@@ -18,8 +18,9 @@
 # часть верхней одежды: материал cloth_* верха+рук красится цветом,
 # текстура снимается (цвет читается издалека; приём П5.7). Кожа, волосы,
 # обувь и низ цвет игрока не получают.
-# Анимации (часть C) подключаются поверх через set_state/play_one_shot;
-# пока клипов на риге UBC нет, вызовы безвредны.
+# Анимации (часть C): плеер с библиотекой CharacterAnims (UAL на риге
+# UBC, клипы «Armature/Skeleton3D:<кость>» от корня сцены пола) — ребёнок
+# UbcRoot, как и треки; set_state/play_one_shot переключают клипы.
 class_name CharacterModel
 extends Node3D
 
@@ -41,6 +42,8 @@ const LOD_DISTANCE: float = 18.0
 const LOD_SUFFIX: String = "_LOD"
 ## Число цветовых вариантов игрока (выдаётся по хэшу id).
 const PALETTES: int = 6
+## Плавный переход между клипами, с.
+const ANIM_BLEND: float = 0.15
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
@@ -53,7 +56,11 @@ var lod_distance: float = LOD_DISTANCE
 
 var _root: Node3D = null
 var _parts: Dictionary = {}
+var _player: AnimationPlayer = null
 var _scale: float = 1.0
+var _state: int = Protocol.AnimState.IDLE
+## Сколько ещё играть разовый клип (play_one_shot), с; < 0 — не играет.
+var _one_shot_left: float = -1.0
 
 ## Кэш перекрашенных текстур глаз (индекс палитры → текстура).
 static var _eye_cache: Dictionary = {}
@@ -112,6 +119,7 @@ func setup_appearance(ap: Appearance) -> void:
 	_apply_parts()
 	_apply_tints()
 	_apply_lod_distance()
+	_setup_animations()
 
 
 ## Цвет игрока по хэшу id: заметная часть верхней одежды (материалы
@@ -142,16 +150,70 @@ func set_lod_distance(distance: float) -> void:
 		_apply_lod_distance()
 
 
-## Сетевое состояние анимации (Protocol.AnimState): локомоция выбирается
-## локально по скорости и касанию земли (player.gd), ремоуты получают то
-## же состояние в снапшоте. Клипы UAL подключаются в части C.
-func set_state(_state: int) -> void:
-	pass
+## Сетевое состояние анимации (Protocol.AnimState): покой/ходьба/бег/фазы
+## прыжка выбираются локально по скорости и касанию земли (player.gd),
+## ремоуты получают то же состояние в снапшоте. Один и тот же клип не
+## перезапускается, разовый клип не сбивается кадром состояния (приземление
+## и взмах доигрывают, состояние включится после).
+func set_state(state: int) -> void:
+	_state = state
+	if _one_shot_left > 0.0:
+		return  # разовый клип доигрывает и сам вернёт уже новое состояние
+	if _player == null:
+		return
+	var clip := CharacterAnims.clip_for_state(state)
+	if clip == &"" or _playing_clip() == clip:
+		return
+	_play_clip(clip, 1.0)
 
 
-## Разовая анимация (взмах «Привет!», приземление) — часть C.
-func play_one_shot(_state: int, _duration: float) -> void:
-	pass
+## Разовая анимация (взмах «Привет!», «тычок», приземление): клип играет
+## целиком и возвращает состояние; скорость подгоняется под duration,
+## но не быстрее/медленнее разумных пределов.
+func play_one_shot(state: int, duration: float) -> void:
+	if _player == null:
+		return
+	var clip := CharacterAnims.clip_for_state(state)
+	if clip == &"":
+		return
+	var length: float = (_player.get_animation(
+		"%s/%s" % [CharacterAnims.LIB_NAME, clip]) as Animation).length
+	var speed: float = clampf(length / maxf(duration, 0.05), 0.6, 3.0)
+	_one_shot_left = length / speed
+	_play_clip(clip, speed)
+
+
+func _process(delta: float) -> void:
+	# Разовый клип закончился — вернуться к состоянию (сетевому/локальному).
+	if _one_shot_left > 0.0:
+		_one_shot_left -= delta
+		if _one_shot_left <= 0.0:
+			set_state(_state)
+
+
+## Клип, играющий сейчас (без имени библиотеки).
+func _playing_clip() -> StringName:
+	if _player == null or _player.current_animation.is_empty():
+		return &""
+	var full := _player.current_animation.split("/")
+	return StringName(full[full.size() - 1])
+
+
+func _play_clip(clip: StringName, speed: float) -> void:
+	_player.speed_scale = speed
+	_player.play("%s/%s" % [CharacterAnims.LIB_NAME, clip], ANIM_BLEND)
+
+
+## Плеер — ребёнок корня сцены пола: треки библиотеки ubc (CharacterAnims)
+## записаны от корня сцены, root_node плеера по умолчанию «..» — родитель.
+## Пересобирается в setup_appearance вместе с моделью; сетевое состояние
+## сохраняется и включается заново.
+func _setup_animations() -> void:
+	_player = AnimationPlayer.new()
+	_player.name = "CharacterAnims"
+	_root.add_child(_player)
+	_player.add_animation_library(CharacterAnims.LIB_NAME, CharacterAnims.library())
+	set_state(_state)
 
 
 ## Точка крепления предмета (задел на бой после MVP): HandL/HandR/Back.

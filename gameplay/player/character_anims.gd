@@ -1,23 +1,24 @@
-# Скелетные анимации персонажей (П5.7, блок 5): клипы Quaternius Universal
-# Animation Library 1/2 (CC0 — assets/third_party/LICENSES.md), запечённые
-# tools/retarget_anims.gd в anims_mpfb.res на риг MPFB реалистичных моделей
-# (Финн/Луми/Тимьян). Дерево узлов glb у троих одинаково (риг один), треки
-# записаны путями «Human_rig_export/Skeleton3D:<кость>» — одна библиотека
-# работает на всех, при загрузке ничего не пересобирается (loop-режимы
-# выставлены при запечке). Клипы без аналога в UAL (взмах, «за руку», вис у
-# кромки, «Помогите!» обеими руками) сгенерированы процедурно поверх
-# ретаргеченных баз — честная запись в docs/STATUS.md (раздел 16).
-# Состояние Protocol.AnimState → клип: у эмоций колеса (раздел 5) жесты по
-# смыслу — полный список клипов UAL и маппинг в docs/STATUS.md.
+# Скелетные анимации персонажей (П5.7, блок 5 → П5.8, часть C): клипы
+# Quaternius Universal Animation Library 1/2 (CC0 — assets/third_party/
+# LICENSES.md), запечённые tools/make_ubc_anims.gd в anims_ubc.res на риг
+# Universal Base Characters (65 костей). Линейки Quaternius Universal
+# делят риг с UBC, треки записаны путями «Armature/Skeleton3D:<кость>» —
+# одна библиотека работает на ubc_male и ubc_female, при загрузке ничего
+# не пересобирается (loop-режимы выставлены при запечке). Клипы без
+# аналога в UAL Standard (взмах, «Помогите!», вис у кромки, «за руку»)
+# сгенерированы процедурно поверх rest/запечённых баз — честная запись
+# в docs/STATUS.md (раздел 16). Состояние Protocol.AnimState → клип: у
+# эмоций колеса (раздел 5) жесты по смыслу — полный список клипов UAL
+# и маппинг в docs/STATUS.md.
 class_name CharacterAnims
 extends RefCounted
 
-## Запечённая библиотека ретаргеченных клипов UAL (ресурс, не glb).
+## Запечённая библиотека клипов UAL на риге UBC (ресурс, не glb).
 const LIB_PATH: String = "res://assets/third_party/quaternius.com/" \
-	+ "universal_animation_library/anims_mpfb.res"
+	+ "universal_animation_library/anims_ubc.res"
 
 ## Имя библиотеки внутри AnimationPlayer моделей персонажей.
-const LIB_NAME: StringName = &"mpfb"
+const LIB_NAME: StringName = &"ubc"
 
 ## Состояние аниматора (раздел 5) → клип UAL (после ретаргетинга).
 const STATE_CLIPS: Dictionary = {
@@ -62,7 +63,7 @@ const LOOP_STATES: Array[int] = [
 static var _library: AnimationLibrary = null
 
 
-## Общая библиотека «mpfb»: запечённый ресурс со всеми клипами и
+## Общая библиотека «ubc»: запечённый ресурс со всеми клипами и
 ## loop-режимами; загрузка один раз на процесс, playback клипы не мутирует.
 static func library() -> AnimationLibrary:
 	if _library == null:
