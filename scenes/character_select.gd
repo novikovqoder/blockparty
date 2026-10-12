@@ -8,6 +8,9 @@
 # в user:// (Save) и возвращается в меню, «Назад» — без сохранения.
 # Панели не перекрывают модель при любом размере окна: 3D-зона — отдельный
 # SubViewportContainer, сжимающийся вместе с окном.
+# Свет под реалистичные модели (П5.7, блок 6): студийная схема в tscn —
+# ключевой Sun с мягкой тенью на подиум, холодный контровой Rim (отделяет
+# силуэт от тёмного фона), тёплая Omni на лицо; тоника Filmic как в мире.
 extends Control
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -19,14 +22,15 @@ const SPIN_DECEL: float = 3.0
 ## Автоповорот: после стольких секунд покоя, рад/с.
 const AUTO_TURN_DELAY: float = 3.0
 const AUTO_TURN_SPEED: float = 0.35
-## Зум колёсиком: база и пределы, м. База 3.5 со взглядом на 1.02 — иначе
-## шляпа Луми (самая высокая модель) упирается в верх кадра без запаса.
-const ZOOM_BASE: float = 3.5
-const ZOOM_MIN: float = 2.3
-const ZOOM_MAX: float = 4.4
+## Зум колёсиком: база и пределы, м. Охват кадра по вертикали ≈ [-0.23, 2.09]:
+## снизу подиум (низ −0.12) с запасом, сверху — росток на панаме Тимьяна
+## (1.79, самая высокая деталь; лучи шляпы Луми — 1.73). fov 33, взгляд 0.95.
+const ZOOM_BASE: float = 3.9
+const ZOOM_MIN: float = 2.6
+const ZOOM_MAX: float = 4.8
 const ZOOM_STEP: float = 0.3
-const CAM_HEIGHT: float = 1.05
-const CAM_LOOK_Y: float = 1.02
+const CAM_HEIGHT: float = 1.18
+const CAM_LOOK_Y: float = 0.95
 
 @onready var model: CharacterModel = $ViewArea/View/Model
 @onready var camera: Camera3D = $ViewArea/View/Camera
@@ -59,6 +63,10 @@ func _ready() -> void:
 	_index = Save.load_character()
 	camera.look_at_from_position(
 		camera.global_position, Vector3(0.0, CAM_LOOK_Y, 0.0))
+	# Контровые споты (Rim/RimSide) наводим на фигуру из кода: базис в tscn
+	# нейтральный, чтобы не считать матрицы руками.
+	$ViewArea/View/Rim.look_at(Vector3(0.0, 0.95, 0.0))
+	$ViewArea/View/RimSide.look_at(Vector3(0.0, 0.9, 0.0))
 	_apply()
 	Log.info("Экран персонажа: показываю %d (выбор из save)" % _index, "Menu")
 	if not Dev.shot_dir.is_empty():

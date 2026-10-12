@@ -103,6 +103,10 @@ func setup_palette(id: int) -> void:
 ## (setup_palette), жителям П5.5 задаётся нейтральный, не из 6 игроков.
 ## Дубликат материала один на экземпляр модели (полная версия и _LOD делят
 ## исходный ресурс) и применяется поверхным материалом каждого surface.
+## Текстура одежды в дубликате снимается: Godot умножает albedo_color на
+## albedo_texture, и цвет игрока глушится рисунком ткани (у свитера Луми
+## бордовые «косы» превращали жёлтый в бурое пятно) — цвет должен читаться
+## безоговорочно, это идентификация игрока (раздел 16).
 func setup_body_color(color: Color) -> void:
 	if _glb_root == null:
 		return
@@ -117,6 +121,7 @@ func setup_body_color(color: Color) -> void:
 				continue
 			if tinted == null:
 				tinted = base.duplicate() as StandardMaterial3D
+				tinted.albedo_texture = null
 				tinted.albedo_color = color
 			mi.set_surface_override_material(surface, tinted)
 
