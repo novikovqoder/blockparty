@@ -9,6 +9,10 @@ var bot: bool = false
 ## Автопрогон задания жителя (--quest-bot, П5.5): телепорты вместо ходьбы,
 ## прогулочный бот при этом не включается.
 var quest_bot: bool = false
+## Самопроверка анимаций персонажа (--selftest-anim, возврат П5.8): после
+## входа в мир гоняет AnimSelfCheck на модели локального игрока, печатает
+## SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL).
+var selftest_anim: bool = false
 ## Зона появления из --dev-spawn (пустая строка — стандартная Площадь).
 var spawn_zone: String = ""
 
@@ -25,11 +29,14 @@ var world_coins: int = 0
 func _ready() -> void:
 	bot = Dev.bot
 	quest_bot = Dev.quest_bot
+	selftest_anim = Dev.selftest_anim
 	spawn_zone = Dev.spawn_zone
 	if bot:
 		Log.info("Режим бота включён", "Session")
 	if quest_bot:
 		Log.info("Режим автопрогона заданий включён", "Session")
+	if selftest_anim:
+		Log.info("Режим самопроверки анимаций включён", "Session")
 	if bot or quest_bot:
 		if DisplayServer.get_name() == "headless":
 			# Нагрузочные прогоны: без ограничения FPS копии игры на сервере

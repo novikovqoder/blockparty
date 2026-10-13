@@ -1,7 +1,10 @@
 # Разбор аргументов командной строки для локальных тестов (раздел 4 SPEC):
 # --dev-host, --dev-join=IP, --dev-name, --dev-spawn=ZONE, --bot, --net-lag,
 # --net-loss, --log-net, --shot-dir, --simple-graphics, --high-quality,
-# --debug-collisions (полупрозрачные формы коллизий мира поверх картинки).
+# --debug-collisions (полупрозрачные формы коллизий мира поверх картинки),
+# --selftest-anim (самопроверка анимаций персонажа в запущенной игре:
+# печатает SELFTEST-ANIM: PASS/FAIL и выходит с кодом 1 при FAIL —
+# гоняется и на экспортированных сборках, возврат П5.8).
 # Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
@@ -27,6 +30,7 @@ var shot_dir: String = ""        # --shot-dir=PATH: скриншоты площ�
 var simple_graphics: bool = false  # --simple-graphics: «Простая графика» (раздел 15)
 var high_quality: bool = false   # --high-quality: тяжёлые эффекты, шаг 4 П4.5
 var debug_collisions: bool = false  # --debug-collisions: показать формы коллизий
+var selftest_anim: bool = false  # --selftest-anim: проверка анимаций и выход
 
 
 func _init() -> void:
@@ -44,6 +48,7 @@ func _init() -> void:
 	simple_graphics = parsed["simple_graphics"]
 	high_quality = parsed["high_quality"]
 	debug_collisions = parsed["debug_collisions"]
+	selftest_anim = parsed["selftest_anim"]
 
 
 func _ready() -> void:
@@ -71,6 +76,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"simple_graphics": false,
 		"high_quality": false,
 		"debug_collisions": false,
+		"selftest_anim": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -102,6 +108,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["high_quality"] = true
 		elif arg == "--debug-collisions":
 			result["debug_collisions"] = true
+		elif arg == "--selftest-anim":
+			result["selftest_anim"] = true
 	return result
 
 

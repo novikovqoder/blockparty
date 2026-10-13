@@ -4,6 +4,10 @@
 # скелета, циклические состояния играются зацикленными клипами; модель
 # переключает клипы по set_state, разовый play_one_shot возвращается к
 # состоянию, пересборка внешности не роняет аниматор.
+# Возврат П5.8 (T-pose): + проверки, что анимация ДОХОДИТ до мешей —
+# позы ключевых костей ходьбы против покоя (численно, с порогом),
+# скин-привязка мешей (skeleton-путь резолвится в скелет сцены) и сдвиг
+# вершин меша ног за костями (формула скиннинга рендера).
 extends GutTest
 
 const MODEL: PackedScene = preload("res://gameplay/player/character_model.tscn")
@@ -103,3 +107,41 @@ func test_rebuild_keeps_animator() -> void:
 	model.setup_appearance(changed)
 	assert_eq(model._playing_clip(), &"Sitting_Idle",
 		"после пересборки играет состояние")
+
+
+# --- Возврат П5.8 (T-pose): анимация обязана доходит до мешей ---
+
+func test_walk_pose_differs_from_idle() -> void:
+	# Поза ходьбы против покоя, оба пола: ключевые кости (бедро, колено,
+	# плечо) поворачиваются на заметный угол И вершины меша ног едут за
+	# костями (численный скиннинг). До возврата П5.8 кости двигались, а
+	# меши стояли в байнд-позе — эти проверки ловят именно такой разрыв.
+	for gender: int in Appearance.GENDERS:
+		var model := _make(gender)
+		var result: Dictionary = await AnimSelfCheck.run(model, true)
+		assert_true(result["ok"], "пол %d: %s" % [gender,
+			" ; ".join(result["reasons"] as PackedStringArray)])
+
+
+func test_skin_binds_meshes_to_skeleton() -> void:
+	# Регрессия возврата П5.8: у меша со скином skeleton-путь обязан
+	# резолвиться в Skeleton3D сцены — пустой путь молча выключает
+	# скиннинг на рендере (никаких ошибок в логе, T-pose).
+	for gender: int in Appearance.GENDERS:
+		var model := _make(gender)
+		var skel := model.find_children("*", "Skeleton3D", true,
+			false)[0] as Skeleton3D
+		var with_skin := 0
+		for node in model.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			if mi.skin == null:
+				continue
+			with_skin += 1
+			var target := mi.get_node_or_null(mi.skeleton)
+			assert_not_null(target, "пол %d: меш %s — skeleton-путь «%s»"
+				% [gender, mi.name, String(mi.skeleton)])
+			if target is Skeleton3D:
+				assert_eq((target as Skeleton3D), skel,
+					"пол %d: меш %s ведёт к скелету сцены" % [gender, mi.name])
+		assert_gt(with_skin, 20,
+			"пол %d: мешей со скином не меньше частей×2 (пол+LOD)" % gender)

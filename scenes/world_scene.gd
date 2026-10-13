@@ -225,6 +225,29 @@ func _spawn_player() -> void:
 		var quest_bot := QuestBot.new()
 		add_child(quest_bot)
 		quest_bot.setup(_player)
+	# Самопроверка анимаций (--selftest-anim, возврат П5.8): позы и
+	# скиннинг модели локального игрока в запущенном мире — печатает
+	# SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL); гоняется и на
+	# экспортированных сборках, чтобы ловить проблемы экспорта.
+	if Session.selftest_anim:
+		_selftest_anim(_player.visual)
+
+
+## Прогон AnimSelfCheck на модели локального игрока и выход (--selftest-anim):
+## полсекунды на успокоение разовых клипов появления (приземление), затем
+## снимки покоя/ходьбы и вердикт.
+func _selftest_anim(visual: CharacterModel) -> void:
+	for i: int in 40:
+		await get_tree().physics_frame
+	var result: Dictionary = await AnimSelfCheck.run(visual, true)
+	if result["ok"]:
+		print("SELFTEST-ANIM: PASS")
+		get_tree().quit(0)
+		return
+	print("SELFTEST-ANIM: FAIL")
+	for reason: String in result["reasons"]:
+		print("SELFTEST-ANIM: %s" % reason)
+	get_tree().quit(1)
 
 
 ## Отладка коллизий (--debug-collisions): поверх картинки рисуются
