@@ -1,8 +1,15 @@
-# П5.7, блок 8 (SPEC п. 8): склейки «было — стало» реалистичной
-# переделки Леса и экрана выбора. Каждая пара — один PNG: слева кадр
-# из docs/screenshots/P5.7/before/, справа тот же ракурс из after/,
-# между ними узкая тёмная разделительная полоса. Кладёт результат в
-# docs/screenshots/P5.7/compare/. Запуск:
+# Склейки «было — стало» (П5.7 блок 8, SPEC п. 8; финал П5.8 — те же точки
+# Леса против П5.7). Каждая пара — один PNG: слева кадр «было», справа тот
+# же ракурс «стало», между ними узкая тёмная разделительная полоса.
+# По умолчанию пары П5.7 (before/ → after/ внутри BASE); переопределяется
+# переменными окружения без правки кода:
+#   COMPARE_BASE — каталог этапа (…/P5.7 или …/P5.8);
+#   COMPARE_BEFORE_DIR / COMPARE_AFTER_DIR — половинки (по умолчанию
+#     COMPARE_BASE/before и COMPARE_BASE/after; для П5.8 «было» — это
+#     after П5.7);
+#   COMPARE_OUT_DIR — куда класть (по умолчанию COMPARE_BASE/compare);
+#   COMPARE_PAIRS — список имён через запятую.
+# Запуск:
 #   godot --headless --script tools/make_compare.gd --path .
 extends SceneTree
 
@@ -30,18 +37,38 @@ const PAIRS: Array[String] = [
 
 func _init() -> void:
 	await create_timer(0.01).timeout
+	var base_dir := OS.get_environment("COMPARE_BASE")
+	if base_dir.is_empty():
+		base_dir = BASE
+	var before_dir := OS.get_environment("COMPARE_BEFORE_DIR")
+	if before_dir.is_empty():
+		before_dir = "%s/before" % base_dir
+	var after_dir := OS.get_environment("COMPARE_AFTER_DIR")
+	if after_dir.is_empty():
+		after_dir = "%s/after" % base_dir
+	var out_dir := OS.get_environment("COMPARE_OUT_DIR")
+	if out_dir.is_empty():
+		out_dir = "%s/compare" % base_dir
+	var pairs: Array[String] = PAIRS
+	var pairs_env := OS.get_environment("COMPARE_PAIRS")
+	if not pairs_env.is_empty():
+		# У PackedStringArray нет map() — собираем типизированный список циклом.
+		pairs = []
+		for item: String in pairs_env.split(",", false):
+			pairs.append(item.strip_edges())
 	var made := 0
-	for pair: String in PAIRS:
-		if _make_pair(pair):
+	for pair: String in pairs:
+		if _make_pair("%s/%s.png" % [before_dir, pair],
+				"%s/%s.png" % [after_dir, pair],
+				"%s/%s.png" % [out_dir, pair], pair):
 			made += 1
-	print("склеек готово: %d из %d" % [made, PAIRS.size()])
+	print("склеек готово: %d из %d" % [made, pairs.size()])
 	quit()
 
 
 ## Собрать пару: true, если обе половинки нашлись и PNG записан.
-func _make_pair(pair: String) -> bool:
-	var before_path := "%s/before/%s.png" % [BASE, pair]
-	var after_path := "%s/after/%s.png" % [BASE, pair]
+func _make_pair(before_path: String, after_path: String,
+		out_path: String, pair: String) -> bool:
 	var before_img := Image.load_from_file(ProjectSettings.globalize_path(before_path))
 	var after_img := Image.load_from_file(ProjectSettings.globalize_path(after_path))
 	if before_img == null or after_img == null:
@@ -62,9 +89,8 @@ func _make_pair(pair: String) -> bool:
 		Rect2i(size.x, 0, DIVIDER, size.y), Color(0.12, 0.12, 0.12))
 	canvas.blit_rect(
 		after_img, Rect2i(Vector2i.ZERO, size), Vector2i(size.x + DIVIDER, 0))
-	var out_path := "%s/compare/%s.png" % [BASE, pair]
 	DirAccess.make_dir_recursive_absolute(
-		ProjectSettings.globalize_path("%s/compare" % BASE))
+		ProjectSettings.globalize_path(out_path.get_base_dir()))
 	var err := canvas.save_png(ProjectSettings.globalize_path(out_path))
 	if err != OK:
 		push_error("не записался PNG: " + out_path)

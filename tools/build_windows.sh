@@ -47,6 +47,10 @@ done
 
 cp steam_appid.txt "$OUT_DIR/"
 
+# Описание текущей реализации (docs/BLOCKPARTY.md — версионный источник,
+# в builds/ лежит копия для владельца рядом со сборкой).
+cp docs/BLOCKPARTY.md builds/BLOCKPARTY.md
+
 echo "==> Упаковка $ZIP_PATH"
 # Файлы кладутся в корень архива (без каталога windows/).
 python3 - "$ZIP_PATH" "$OUT_DIR" <<'PY'

@@ -42,17 +42,10 @@ const ZOOM_STEP: float = 0.3
 const CAM_HEIGHT: float = 1.18
 const CAM_LOOK_Y: float = 0.95
 ## Фототур редактора (--shot-dir, проверки SPEC 18): шесть собранных
-## персонажей — по индексам Appearance (пол, причёска, верх, низ, обувь,
-## убор, волосы, кожа, глаза). Первые трое — как жители острова (кепка/
-## шляпа/панама), дальше капюшон и «без убора».
-const TOUR: Array = [
-	[0, 4, 0, 0, 0, 4, 8, 0, 0],
-	[1, 0, 0, 0, 0, 3, 7, 0, 0],
-	[0, 1, 1, 1, 1, 2, 1, 3, 2],
-	[0, 0, 1, 1, 1, 1, 0, 5, 4],
-	[1, 4, 1, 0, 1, 0, 2, 3, 2],
-	[1, 2, 0, 1, 0, 2, 4, 6, 5],
-]
+## персонажей — Appearance.SHOWCASE (общий список с групповыми кадрами
+## мира SHOT_CREW: на снимках «в редакторе» и «в мире» одни герои).
+## Первые трое — как жители острова (кепка/шляпа/панама), дальше капюшон
+## и «без убора».
 
 @onready var model: CharacterModel = $ViewArea/View/Model
 @onready var camera: Camera3D = $ViewArea/View/Camera
@@ -346,9 +339,11 @@ func _back_to_menu() -> void:
 ## закрывается. Только для проверок (запуск с --shot-dir=PATH).
 func _screenshot_tour() -> void:
 	DirAccess.make_dir_recursive_absolute(Dev.shot_dir)
-	for index: int in TOUR.size():
-		ap = Appearance.from_bytes(PackedByteArray(TOUR[index]))
+	for index: int in Appearance.SHOWCASE.size():
+		ap = Appearance.from_bytes(Appearance.SHOWCASE[index])
 		_apply()
+		Log.info("Тур редактора %d: пол %d, hair %d, hat %d, skin %d"
+			% [index, ap.gender, ap.hair, ap.hat, ap.skin], "Menu")
 		await get_tree().create_timer(0.9).timeout
 		var path := Dev.shot_dir.path_join("editor_character_%d.png" % index)
 		get_viewport().get_texture().get_image().save_png(path)

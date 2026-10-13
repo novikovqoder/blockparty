@@ -212,6 +212,18 @@ func _process(delta: float) -> void:
 			set_state(_state)
 
 
+## Покадровое продвижение анимации (съёмка GIF-серий, финал П5.8): при
+## Engine.time_scale = 0 продвигает клипы и таймер разовой анимации на
+## delta — фазы кадров идут равномерно при любом темпе рендера стенда.
+func advance_preview(delta: float) -> void:
+	if _one_shot_left > 0.0:
+		_one_shot_left -= delta
+		if _one_shot_left <= 0.0:
+			set_state(_state)
+	if _player != null:
+		_player.advance(delta)
+
+
 ## Клип, играющий сейчас (без имени библиотеки).
 func _playing_clip() -> StringName:
 	if _player == null or _player.current_animation.is_empty():

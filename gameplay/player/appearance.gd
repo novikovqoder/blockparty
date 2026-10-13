@@ -61,6 +61,22 @@ const EYE_COLORS: PackedColorArray = [
 	Color("4b7aa6"), Color("33507e"), Color("7a5c33"),
 ]
 
+## Демо-внешности для съёмочных туров (финал П5.8): шесть собранных
+## персонажей. Их показывает тур редактора (--shot-dir, appearance_editor)
+## и групповые кадры мира (SHOT_CREW, world_scene) — на снимках «в
+## редакторе» и «в мире» одни и те же герои. Первые трое — как жители
+## острова (кепка/шляпа/панама), дальше капюшон и «без убора».
+## static var, а не const: литералы PackedByteArray(...) — не константные
+## выражения парсера; список только читается, меняться не должен.
+static var SHOWCASE: Array[PackedByteArray] = [
+	PackedByteArray([0, 4, 0, 0, 0, 4, 8, 0, 0]),
+	PackedByteArray([1, 0, 0, 0, 0, 3, 7, 0, 0]),
+	PackedByteArray([0, 1, 1, 1, 1, 2, 1, 3, 2]),
+	PackedByteArray([0, 0, 1, 1, 1, 1, 0, 5, 4]),
+	PackedByteArray([1, 4, 1, 0, 1, 0, 2, 3, 2]),
+	PackedByteArray([1, 3, 0, 1, 0, 2, 4, 6, 5]),
+]
+
 ## Число байтов сетевой структуры (часть B3): по байту на индекс.
 const NET_SIZE: int = 9
 

@@ -106,9 +106,9 @@ func test_drag_spins_with_inertia_and_zoom_clamps() -> void:
 ## Пресеты фототура (--shot-dir, материалы этапа): каждый валиден как есть —
 ## validated() ничего не меняет, на снимках именно заданные комбинации.
 func test_tour_presets_are_valid() -> void:
-	assert_gte(AppearanceEditor.TOUR.size(), 4,
+	assert_gte(Appearance.SHOWCASE.size(), 4,
 		"фототур покрывает несколько персонажей")
-	for entry: Array in AppearanceEditor.TOUR:
-		var ap := Appearance.from_bytes(PackedByteArray(entry))
+	for entry: PackedByteArray in Appearance.SHOWCASE:
+		var ap := Appearance.from_bytes(entry)
 		assert_true(ap.same(ap.validated()),
 			"пресет фототура валиден без правок")
