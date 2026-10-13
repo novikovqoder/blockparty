@@ -714,6 +714,11 @@ func _build_gender_scene(gender: String, skeleton: Skeleton3D) -> void:
 			mi.name = pair[0]
 			mi.mesh = pair[1]
 			mi.skin = skin
+			# skeleton-путь обязателен: у созданного кодом MeshInstance3D он
+			# пуст, скелет не резолвится и скиннинг не включается — меши
+			# рендерятся байнд-позой (T-pose) при живом скелете. Меш — ребёнок
+			# Skeleton3D, путь «..» и есть скелет (возврат П5.8, фикс).
+			mi.skeleton = ^".."
 			mi.visible = false
 			skeleton.add_child(mi)
 			mi.owner = scene_root

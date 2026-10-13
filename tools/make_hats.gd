@@ -111,6 +111,9 @@ func _patch_scene(gender: String) -> void:
 			mi.name = "hat_%s_%s%s" % [hat, g, suffix]
 			mi.mesh = mesh
 			mi.skin = load("%s/hat_head_%s_skin.res" % [MESH_DIR, g]) as Skin
+			# skeleton-путь обязателен (как у частей make_ubc_characters):
+			# без него убор не скиннится — см. комментарий там (фикс П5.8).
+			mi.skeleton = ^".."
 			mi.visible = false
 			skeleton.add_child(mi)
 			mi.owner = root
