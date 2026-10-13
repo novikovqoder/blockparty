@@ -2567,7 +2567,7 @@ gifsicle): GIF89a, одна глобальная палитра 255 цветов
 оборванные серии переснимает), контакт-листы для глазной проверки —
 `tools/series_sheet.gd`.
 
-**Полный GUT:** @@ТЕСТЫ@@ тестов — все зелёные, включая «всегда одет»
+**Полный GUT:** 290 тестов — все зелёные, включая «всегда одет»
 (`test_ubc_combinations`), сеть внешностей (roundtrip байтов, валидация
 мусора хостом), анимации обоих тел (`test_ubc_anims`), механики П5 и
 соло-пути. E2E заданий `tools/quest_e2e.sh` — зелёный (обе копии видят
@@ -2597,9 +2597,11 @@ Characters Standard (тела/причёски), Modular Character Outfits Fanta
 Standard (одежда). С других сайтов новых загрузок не было; Лес части A
 использует активы П5.7 (Poly Haven/ambientCG, уже в LICENSES.md).
 
-**Сборка Windows:** `builds/blockparty-windows.zip` — @@РАЗМЕР@@ МБ (П5.7:
-172 МБ; MakeHuman-модели −47 МБ, вместо них запечённые UBC+MCO и анимации
-UAL). В сборке: `blockparty.exe` (PCK встроен), DLL GodotSteam,
+**Сборка Windows:** `builds/blockparty-windows.zip` — 226 МБ (П5.7:
+172 МБ). Рост +54 МБ, главный вклад — запечённые тела/причёски/одежда
+UBC+MCO обоих полов с LOD-парами (42 МБ ассетов, MakeHuman-модели трёх
+жителей меньше по объёму), остальное — перепечка острова П5.8 и анимации
+UAL. В сборке: `blockparty.exe` (PCK встроен), DLL GodotSteam,
 `steam_appid.txt`, рядом `BLOCKPARTY.md` (копия из `docs/`).
 
 **Время загрузки мира** (холодный старт на сервере, xvfb + llvmpipe, лог
