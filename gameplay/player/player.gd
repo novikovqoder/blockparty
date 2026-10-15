@@ -126,7 +126,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if was_floor and is_on_floor() and is_on_wall():
 		_try_step_up(wish)
-	_update_animation(wish)
+	_update_animation()
 	_turn_model(wish, delta)
 	if _attack_pressed():
 		_try_attack()
@@ -641,13 +641,16 @@ func in_water() -> bool:
 
 # --- Модель и анимации ---
 
-func _update_animation(wish: Vector3) -> void:
+func _update_animation() -> void:
 	if not _was_on_floor and is_on_floor():
-		visual.play_one_shot(Protocol.AnimState.LAND, 0.25)
+		# Приземление короткое (Д2): сразу после него — локомоция по
+		# фактической скорости, длинная поза не скользит по земле.
+		visual.play_one_shot(Protocol.AnimState.LAND, B.land_time)
 		# Облачко пыли при приземлении (раздел 16); частицы в мировых
 		# координатах — эмиттер едет вместе с игроком, пыль остаётся на месте.
 		Fx.puff(self, Vector3(0.0, 0.06, 0.0), Color(0.86, 0.8, 0.7), 10, 0.12, 1.1)
-	var moving := Vector2(velocity.x, velocity.z).length() > 0.3
+	var hspeed := Vector2(velocity.x, velocity.z).length()
+	var moving := hspeed > B.anim_idle_speed
 	var linked := _hand_leader_peer != 0 or _hand_follower_peer != 0
 	if _in_water:
 		_set_anim(Protocol.AnimState.WALK if moving else Protocol.AnimState.IDLE)
@@ -657,8 +660,9 @@ func _update_animation(wish: Vector3) -> void:
 		# Пара на ходу — рука вытянута к партнёру (клип Walk_Hand).
 		_set_anim(Protocol.AnimState.HOLD_HAND)
 	elif moving:
-		var walking: bool = Input.is_action_pressed("walk") or wish.length() <= 0.1
-		_set_anim(Protocol.AnimState.WALK if walking else Protocol.AnimState.RUN)
+		# Ходьба/бег — по фактической скорости (Д2), не по вводу.
+		_set_anim(Protocol.AnimState.WALK if hspeed < B.anim_walk_run_speed
+			else Protocol.AnimState.RUN)
 	else:
 		_set_anim(Protocol.AnimState.IDLE)
 	_was_on_floor = is_on_floor()

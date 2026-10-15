@@ -189,8 +189,8 @@ func set_state(state: int) -> void:
 
 
 ## Разовая анимация (взмах «Привет!», «тычок», приземление): клип играет
-## целиком и возвращает состояние; скорость подгоняется под duration,
-## но не быстрее/медленнее разумных пределов.
+## целиком и возвращает состояние; скорость подгоняется под duration —
+## вплоть до 6× (приземление ≤0.2 с длинным клипом Jump_Land, Д2).
 func play_one_shot(state: int, duration: float) -> void:
 	if _player == null:
 		return
@@ -199,7 +199,7 @@ func play_one_shot(state: int, duration: float) -> void:
 		return
 	var length: float = (_player.get_animation(
 		"%s/%s" % [CharacterAnims.LIB_NAME, clip]) as Animation).length
-	var speed: float = clampf(length / maxf(duration, 0.05), 0.6, 3.0)
+	var speed: float = clampf(length / maxf(duration, 0.05), 0.6, 6.0)
 	_one_shot_left = length / speed
 	_play_clip(clip, speed)
 

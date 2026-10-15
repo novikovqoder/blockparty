@@ -34,6 +34,13 @@ extends Resource
 @export var step_up_height: float = 0.55
 ## Поворот модели к направлению движения, рад/с.
 @export var model_turn_speed: float = 12.0
+## Порог «почти стоит» для анимаций, м/с (Д2: покой — только при ≈0).
+@export var anim_idle_speed: float = 0.3
+## Выше этой скорости снапшот несёт состояние бега (ходьба/бег — по
+## фактической скорости, не по вводу, Д2), м/с.
+@export var anim_walk_run_speed: float = 4.5
+## Приземление после прыжка, с (Д2: короткое, сразу локомоция по скорости).
+@export var land_time: float = 0.2
 ## Капсула персонажа: радиус и высота, м.
 @export var body_radius: float = 0.35
 @export var body_height: float = 1.6
