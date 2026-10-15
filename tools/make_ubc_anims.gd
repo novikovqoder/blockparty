@@ -169,21 +169,70 @@ func _remapped(out_name: String, anim: Animation) -> Animation:
 
 
 # --- Процедурные клипы (нет аналогов в UAL Standard) ---
-# Направление кости задаётся словарём {"base": Vector3, "sway": Vector3}:
-# итог = normal(base + sway·sin(2πt/SWAY_PERIOD)), качание гасит статичность.
+# Фикс Д1 (руки выкручивало): старый генератор наводил только направление
+# оси кости минимальным свингом — ролл вокруг оси кости не контролировался
+# и при качании «гулял» по кадрам (закрученные кисть/локоть). Теперь
+# ориентация кости задаётся в мире ДВУМЯ наведениями + шарниром:
+#   dir     — куда смотрит ось кости (basis.y, от родительского сустава);
+#   aim_dir — куда смотреть вторичной осью aim_axis (rest-базис кости,
+#             по умолчанию basis.z): ролл вокруг dir подбирается так, чтобы
+#             проекция aim-оси на плоскость ⊥ dir смотрела на aim_dir —
+#             ладонь/локоть контролируются явно и стабильно по кадрам;
+#   sway_axis/sway_angle/sway_phase — качание вокруг ФИКСИРОВАННОЙ мировой
+#             оси (шарнир): ролл стабилен по построению, ладонь не выкручивает.
+# В rest у костей рук UBC: basis.y — вдоль руки, basis.x — вверх, basis.z —
+# вперёд (T-pose). Нормаль ладони кисти — −basis.x (ладони вниз в T-pose),
+# поэтому ладонь к зрителю держим наведением оси (−1,0,0) в (0,0,1).
 
 
-func _sway_dir(base: Vector3, sway: Vector3, t: float) -> Vector3:
-	return (base + sway * sin(TAU * t / SWAY_PERIOD)).normalized()
+## Спека ориентации одной кости (все поля, кроме dir, опциональны).
+func _pose(dir: Vector3, aim_dir: Vector3 = Vector3.ZERO,
+		aim_axis: Vector3 = Vector3(0.0, 0.0, 1.0),
+		sway_axis: Vector3 = Vector3.ZERO, sway_angle: float = 0.0,
+		sway_phase: float = 0.0) -> Dictionary:
+	var spec := {"dir": dir.normalized()}
+	if aim_dir != Vector3.ZERO:
+		spec["aim_dir"] = aim_dir.normalized()
+		spec["aim_axis"] = aim_axis.normalized()
+	if sway_axis != Vector3.ZERO:
+		spec["sway_axis"] = sway_axis.normalized()
+		spec["sway_angle"] = sway_angle
+		spec["sway_phase"] = sway_phase
+	return spec
 
 
-func _static_(dir: Vector3) -> Dictionary:
-	return {"base": dir, "sway": Vector3.ZERO}
+## Мировая ориентация кости i по спеке в момент t.
+func _aimed_world(i: int, spec: Dictionary, t: float) -> Quaternion:
+	var dir: Vector3 = (spec["dir"] as Vector3).normalized()
+	var q := _swing(_rest_dir[i], dir) \
+		* _rest_world[i].basis.get_rotation_quaternion()
+	if spec.has("aim_dir"):
+		q = _roll_to_aim(q, dir, spec["aim_axis"], spec["aim_dir"])
+	if spec.has("sway_axis"):
+		var ang: float = spec["sway_angle"] \
+			* sin(TAU * t / SWAY_PERIOD + spec["sway_phase"])
+		q = Quaternion(spec["sway_axis"] as Vector3, ang) * q
+	return q
 
 
-## Вис у кромки расщелины: руки подняты через стороны над головой (плечи
-## наклонены наружу, предплечья почти вертикальны — кисти на ширине плеч,
-## не над лицом), ноги слегка поджаты. Тело прямое — остальное в rest.
+## Докрутка вокруг оси кости dir: проекция aim-оси на плоскость ⊥ dir
+## поворачивается на aim_dir. Держит ролл заданным, не минимальным.
+func _roll_to_aim(q1: Quaternion, dir: Vector3, aim_axis: Vector3,
+		aim_dir: Vector3) -> Quaternion:
+	var cur := (q1 * aim_axis).normalized()
+	var cur_p := cur - dir * cur.dot(dir)
+	var tgt_p := aim_dir - dir * aim_dir.dot(dir)
+	if cur_p.length_squared() < 1e-9 or tgt_p.length_squared() < 1e-9:
+		return q1  # aim-ось вдоль кости — ролль не определить, оставляем свинг
+	cur_p = cur_p.normalized()
+	tgt_p = tgt_p.normalized()
+	var ang := atan2(cur_p.cross(tgt_p).dot(dir), cur_p.dot(tgt_p))
+	return Quaternion(dir, ang) * q1
+
+
+## Вис у кромки расщелины: руки над головой почти прямые (вис на выпрямленных
+## руках — локоть ~157°), кисти на ширине плеч, ладони вперёд (обхват кромки);
+## ноги слегка поджаты. Тело прямое — остальное в rest.
 func _gen_hang_pose() -> Animation:
 	var anim := Animation.new()
 	anim.resource_name = "Hang_Pose"
@@ -192,18 +241,20 @@ func _gen_hang_pose() -> Animation:
 	for k in int(anim.length * 30.0) + 1:
 		times.push_back(minf(k / 30.0, anim.length))
 	var overrides := {
-		"upperarm_l": _static_(Vector3(-0.36, 0.91, 0.02)),
-		"lowerarm_l": _static_(Vector3(-0.24, 0.96, 0.02)),
-		"hand_l": _static_(Vector3(-0.14, 0.99, 0.05)),
-		"upperarm_r": _static_(Vector3(0.36, 0.91, 0.02)),
-		"lowerarm_r": _static_(Vector3(0.24, 0.96, 0.02)),
-		"hand_r": _static_(Vector3(0.14, 0.99, 0.05)),
-		"thigh_l": _static_(Vector3(0.0, -0.85, 0.52)),
-		"calf_l": _static_(Vector3(0.0, -0.95, -0.3)),
-		"foot_l": _static_(Vector3(0.0, -0.35, 0.94)),
-		"thigh_r": _static_(Vector3(0.0, -0.85, 0.52)),
-		"calf_r": _static_(Vector3(0.0, -0.95, -0.3)),
-		"foot_r": _static_(Vector3(0.0, -0.35, 0.94)),
+		"upperarm_l": _pose(Vector3(-0.26, 0.96, 0.02)),
+		"lowerarm_l": _pose(Vector3(-0.10, 0.99, 0.02)),
+		"hand_l": _pose(Vector3(-0.06, 0.998, 0.02), Vector3(0.0, 0.0, 1.0),
+			Vector3(-1.0, 0.0, 0.0)),
+		"upperarm_r": _pose(Vector3(0.26, 0.96, 0.02)),
+		"lowerarm_r": _pose(Vector3(0.10, 0.99, 0.02)),
+		"hand_r": _pose(Vector3(0.06, 0.998, 0.02), Vector3(0.0, 0.0, 1.0),
+			Vector3(-1.0, 0.0, 0.0)),
+		"thigh_l": _pose(Vector3(0.0, -0.87, 0.49)),
+		"calf_l": _pose(Vector3(0.0, -0.90, -0.43)),
+		"foot_l": _pose(Vector3(0.0, -0.40, 0.92)),
+		"thigh_r": _pose(Vector3(0.0, -0.87, 0.49)),
+		"calf_r": _pose(Vector3(0.0, -0.90, -0.43)),
+		"foot_r": _pose(Vector3(0.0, -0.40, 0.92)),
 	}
 	# База — пустая анимация (все кости в rest), треки только на override-кости.
 	var scratch := Animation.new()
@@ -217,39 +268,54 @@ func _gen_hang_pose() -> Animation:
 	return anim
 
 
-## «За руку»: ходьба с вытянутой к ведущему рукой — вперёд и вбок, на уровне
-## груди (база — запечённая ходьба UAL, правая рука каждый кадр в направлении).
+## «За руку»: ходьба с вытянутой к ведущему рукой — вперёд и вбок, чуть ниже
+## плеча, ладонь вперёд (база — запечённая ходьба UAL, правая рука каждый
+## кадр наведена на ведущего).
 func _gen_walk_hand(walk_src: Animation) -> Animation:
-	var dir := (Vector3(0.0, 0.0, 1.0) * 0.88 + Vector3(0.40, -0.14, 0.0)).normalized()
 	return _with_overrides(walk_src, "Walk_Hand", {
-		"upperarm_r": _static_(dir),
-		"lowerarm_r": _static_(dir),
-		"hand_r": _static_(dir),
+		"upperarm_r": _pose(Vector3(0.30, -0.18, 0.93)),
+		"lowerarm_r": _pose(Vector3(0.28, -0.16, 0.94)),
+		"hand_r": _pose(Vector3(0.27, -0.15, 0.95), Vector3(0.0, 0.0, 1.0),
+			Vector3(-1.0, 0.0, 0.0)),
 	})
 
 
-## Взмах одной рукой («Привет!»), both — «Помогите!» обеими руками: рука(и)
-## подняты через сторону вверх, предплечья машут туда-сюда; у Help_Call плечи
-## разведены шире (кисти на ширине плеч, не над лицом). База — Idle.
+## Взмах одной рукой («Привет!»), both — «Помогите!» обеими руками.
+## Геометрия человеческого взмаха: плечо почти горизонтально (подъём ~103°
+## от «вниз»), предплечье вверх от локтя (сгиб локтя ~110°), ладонь вперёд.
+## Качание — шарнир вокруг мировой оси Z (вперёд): предплечье ходит
+## в боковой плоскости, ладонь к зрителю всю дорогу, ролл стабилен.
+## У Help_Call руки выше (V над головой, качание симметричное наружу).
 func _gen_arm_wave(idle_src: Animation, both: bool) -> Animation:
 	var clip_name := "Help_Call" if both else "Wave_Hand"
-	var side := 0.38 if both else 0.42
-	var forearm := 0.50 if both else 0.52
-	var overrides := {
-		"upperarm_r": {"base": Vector3(side, 0.91, 0.05),
-			"sway": Vector3(0.06, 0.0, 0.0)},
-		"lowerarm_r": {"base": Vector3(forearm, 0.84, 0.05),
-			"sway": Vector3(0.28, 0.0, 0.0)},
-		"hand_r": {"base": Vector3(forearm, 0.84, 0.05),
-			"sway": Vector3(0.22, 0.0, 0.0)},
-	}
+	var overrides := {}
 	if both:
-		overrides["upperarm_l"] = {"base": Vector3(-side, 0.91, 0.05),
-			"sway": Vector3(-0.06, 0.0, 0.0)}
-		overrides["lowerarm_l"] = {"base": Vector3(-forearm, 0.84, 0.05),
-			"sway": Vector3(-0.28, 0.0, 0.0)}
-		overrides["hand_l"] = {"base": Vector3(-forearm, 0.84, 0.05),
-			"sway": Vector3(-0.22, 0.0, 0.0)}
+		overrides = {
+			"upperarm_r": _pose(Vector3(0.72, 0.68, 0.06),
+				Vector3.ZERO, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), 0.08),
+			"lowerarm_r": _pose(Vector3(0.30, 0.95, 0.06),
+				Vector3.ZERO, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), 0.40),
+			"hand_r": _pose(Vector3(0.32, 0.94, 0.10),
+				Vector3(0.0, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0),
+				Vector3(0.0, 0.0, 1.0), 0.26),
+			"upperarm_l": _pose(Vector3(-0.72, 0.68, 0.06),
+				Vector3.ZERO, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), -0.08),
+			"lowerarm_l": _pose(Vector3(-0.30, 0.95, 0.06),
+				Vector3.ZERO, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), -0.40),
+			"hand_l": _pose(Vector3(-0.32, 0.94, 0.10),
+				Vector3(0.0, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0),
+				Vector3(0.0, 0.0, 1.0), -0.26),
+		}
+	else:
+		overrides = {
+			"upperarm_r": _pose(Vector3(0.95, 0.22, 0.05),
+				Vector3.ZERO, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), 0.10),
+			"lowerarm_r": _pose(Vector3(0.10, 0.99, 0.05),
+				Vector3.ZERO, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), 0.45),
+			"hand_r": _pose(Vector3(0.14, 0.98, 0.10),
+				Vector3(0.0, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0),
+				Vector3(0.0, 0.0, 1.0), 0.30),
+		}
 	return _with_overrides(idle_src, clip_name, overrides)
 
 
@@ -309,9 +375,7 @@ func _fill_overrides(out: Animation, times: Array[float], base: Animation,
 				if _parent[i] >= 0 else Quaternion.IDENTITY
 			if overrides.has(_bones[i].to_lower()):
 				var spec: Dictionary = overrides[_bones[i].to_lower()]
-				locals[i] = parent_q.inverse() * (_swing(_rest_dir[i],
-					_sway_dir(spec["base"], spec["sway"], t))
-					* _rest_world[i].basis.get_rotation_quaternion())
+				locals[i] = parent_q.inverse() * _aimed_world(i, spec, t)
 			worlds[i] = parent_q * locals[i]
 		for tgt in bones:
 			out.rotation_track_insert_key(track_of[tgt], t, locals[tgt])
