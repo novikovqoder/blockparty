@@ -35,9 +35,57 @@ const TEX_DIR := BAKED + "/textures"
 const MAT_DIR := BAKED + "/materials"
 const MESH_DIR := BAKED + "/meshes"
 
-## Кости среза головы: всё ниже закрыто одеждой MCO.
-const HEAD_BONES: PackedStringArray = ["Head", "neck_01"]
-const HEAD_WEIGHT: float = 0.5
+## Срез тела (Д4) — «по одежде», не плоскостью: вершина кожи удаляется,
+## только если она гарантированно закрыта — на внутренней стороне ткани
+## и дальше HIDE_RIM_CLEAR от открытых кантов — и так в КАЖДОМ наряде
+## (Peasant и Ranger). Всё, что выступает из одежды или стоит у кромки,
+## остаётся целиком: одежда MCO построена на своём манекене, тело UBC в
+## плечах/груди местами шире — плоскостной срез проходил по «торчащей»
+## зоне и оставлял на плечах открытые края-дыры. Край среза по этому
+## правилу всегда под тканью и не виден. Прежний весовой срез
+## (Head/neck_01 ≥0.5) оставлял край над воротом (низ 1.535 при вороте
+## 1.474) — сквозь вырез было видно «насквозь».
+const HIDE_DEPTH_MIN: float = 0.008
+## Запас от проекции вершины до открытого канта ткани (ворот, проймы,
+## манжеты; у самой кромки кожа видна и остаётся).
+const HIDE_RIM_CLEAR: float = 0.012
+## Подгонка топа (Д4): тело UBC в груди/плечах шире манекена MCO, топ
+## прилегает вплотную и не может закрыть кожу срезом. Топ подгоняется —
+## вершины ткани сдвигаются по своим нормалям до равномерного зазора
+## CLOTH_CLEAR до торса (зазор > HIDE_DEPTH_MIN — срез получает запас).
+## Смещения сглаживаются (FIT_SMOOTH_PASSES с затуханием FIT_SMOOTH_DECAY
+## — локальная шишка расплывается в плавный баллон), кап CLOTH_INFLATE_MAX.
+## Подгоняются только топы: рукава, штаны и обувь сидят на коже MCO —
+## сдвиг разъединит манжеты и голенища. Зазор меряется до торса без
+## конечностей — проймы не раздуваются вокруг рук; у кантов топа
+## нарастание от соседей гасится (ворот/пройма не расходятся с шеей и
+## рукавом).
+const CLOTH_CLEAR: float = 0.012
+const CLOTH_INFLATE_MAX: float = 0.04
+const FIT_SMOOTH_PASSES: int = 3
+const FIT_SMOOTH_DECAY: float = 0.55
+## Перенос весов (Д4): MCO шьёт одежду по своим весовым полям (топ Ranger
+## взвешен на clavicle_l/r), кожа UBC — по своим (spine_*); при махе руки
+## ткань груди уезжала от кожи до 72 мм. На ткань ТОПА переносятся веса
+## ближайшей точки тела UBC без цепочек рук (барицентрическая смесь,
+## топ-4): плечевая ткань садится на грудь, как и оставшаяся кожа, и
+## двигается с ней одним полем; ноги в индексе остаются — подол peasant
+## клеится на бёдра, как шьются юбки. Рукава/штаны/обувь/капюшон весов не
+## меняют: со своей кожей MCO они делят одно авторское поле, перенос по
+## полному телу в bind-позе брал соседние части (рукав — грудь) и
+## расходил швы на 35 мм. Скин топа остаётся MCO: его бинды пересаживают
+## геометрию на скелет UBC (ресты различаются до 24 мм), bind_bone у всех
+## скинов identity — слоты костей совместимы без ремапа.
+const TRANSFER_BONES: int = 4
+
+## Ячейка сетки поиска ткани для среза (м).
+const HIDE_CELL: float = 0.05
+## Максимальный суммарный вес вершины на цепочках конечностей: руки и ноги
+## ведут свои части (arms_* со своей кожей MCO, legs_*), в head-часть они
+## не входят вовсе — иначе куски UBC-конечностей торчат из одежды в позах
+## (замер: до 75 мм). Дельтоиды уходят вместе с рукой — пройму прикрывает
+## кожа части arms.
+const LIMB_WEIGHT_MAX: float = 0.01
 
 ## Целевые треугольники ближних вариантов (LOD — половина): худшая
 ## комбинация (Ranger + капюшон + пышная причёска) остаётся в бюджете
@@ -48,7 +96,7 @@ const ARMS_TARGET: int = 3900
 const ARMS_F_RANGER_TARGET: int = 5500  # жен. руки Ranger со встроенными наручами
 const BOOTS_TARGET: int = 2900
 const HOOD_TARGET: int = 1800
-const HEAD_TARGET: int = 1800
+const HEAD_TARGET: int = 1700
 const HAIR_TARGET: int = 2000
 const EYES_TARGET: int = 400
 const BROWS_TARGET: int = 480
@@ -102,6 +150,12 @@ const MAT_MAP: Dictionary = {
 }
 
 var _reports: PackedStringArray = []
+# Статистика Д4 за текущий пол: подгонка топов и перенос весов.
+var _fit_max: float = 0.0
+var _fit_moved: int = 0
+var _fit_total: int = 0
+var _wt_missing: int = 0
+var _wt_total: int = 0
 
 
 func _init() -> void:
@@ -188,6 +242,10 @@ func _bake_material(mat_name: String) -> void:
 			mat.roughness = 0.2
 		"cloth_peasant", "cloth_ranger":
 			_fill_cloth_material(mat, mat_name)
+			# Внутренняя сторона ткани видна у ворота, рукавов, капюшона и
+			# под подолом (Д4): без этого взгляд внутрь ворот проходил
+			# сквозь дальнюю стенку «насквозь» (backface culling).
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var err := ResourceSaver.save(mat, "%s/%s.res" % [MAT_DIR, mat_name])
 	_reports.append("  материал %-16s err %d" % [mat_name, err])
 
@@ -297,41 +355,100 @@ func _bake_gender(gender: String) -> void:
 		return
 	var root := doc.generate_scene(state)
 	var skeleton := _find_of(root, "Skeleton3D") as Skeleton3D
-	var bone_ok := {}
-	for bone in HEAD_BONES:
-		bone_ok[skeleton.find_bone(bone)] = true
 
-	# Голова (срез), глаза, брови — из FullBody; тело больше не нужно.
 	var body := _collect_body(root)
-	_save_part("head_%s" % g, _slice_head(body.body, bone_ok),
-		HEAD_TARGET, body.body_skin, body.body_mats)
-	_save_part("eyes_%s" % g, body.eyes, EYES_TARGET, body.eyes_skin, body.eyes_mats)
-	_save_part("brows_%s" % g, body.brows, BROWS_TARGET, body.brows_skin,
-		body.brows_mats)
+	# Индексы тела (bind-позы): подгонка топа — до торса без конечностей;
+	# веса топа — без цепочек рук (с ногами, см. TRANSFER_BONES).
+	var fit_body := _body_index(body.body, skeleton,
+		["upperarm_l", "upperarm_r", "thigh_l", "thigh_r"], false)
+	var torso_wt := _body_index(body.body, skeleton,
+		["upperarm_l", "upperarm_r"], true)
 
-	# Одежда MCO по слотам.
+	# Наряды грузятся по одному разу: поверхности топа подгоняются, все
+	# поверхности получают веса тела — и в ЭТУ ЖЕ геометрию режется голова,
+	# и она же сохраняется (раньше часть грузилась дважды и раздувалась
+	# независимо — срез и меш могли разойтись).
+	var outfits := {}
 	for outfit in OUTFITS:
+		var by_slot := {}
 		for slot in ["top", "arms", "legs", "feet", "hood"]:
 			if slot == "hood" and outfit != "ranger":
 				continue
-			var files := _gender_files(gender, outfit, slot)
 			var arrays: Array = []
 			var mats: Array[String] = []
 			var skin: Skin = null
 			var missing := false
-			for path in files:
+			for path in _gender_files(gender, outfit, slot):
 				var packed := _load_part(path)
 				if packed.is_empty():
 					missing = true
 					break
-				arrays.append_array(packed["arrays"])
-				mats.append_array(packed["mats"])
+				var part_mats: Array[String] = packed["mats"]
+				for i: int in packed["arrays"].size():
+					var arr := _stripped(packed["arrays"][i])
+					var is_cloth: bool = MAT_MAP.has(part_mats[i]) \
+						and String(MAT_MAP[part_mats[i]]).begins_with("cloth_")
+					if slot == "top" and is_cloth:
+						arr = _fit_cloth(arr, fit_body)
+						arr = _transfer_weights(arr, torso_wt)
+					arrays.append(arr)
+					mats.append(part_mats[i])
 				if skin == null:
 					skin = packed["skin"]
-			if missing or arrays.is_empty():
+			if not missing and not arrays.is_empty():
+				by_slot[slot] = {"arrays": arrays, "mats": mats, "skin": skin}
+		outfits[outfit] = by_slot
+
+	# Голова (срез «по одежде», Д4): всё, что гарантированно закрыто
+	# одеждой каждого наряда, удаляется. Ткань ВСЕХ слотов накрывает кожу
+	# (рукава глотают кольцо проймы, пояс штанов и голенища — таз и икры);
+	# строгий запас (глубина+кант) — только у топа: его канты граничат с
+	# видимой кожей ворота и подола, у прочих слотов видимой кожи нет.
+	# Тест — в позе Idle (скиннингом, как в BodyFitCheck): bind-поза
+	# держит руки в стороны, и кольцо проймы, закрытое в Idle рукавом,
+	# оставалось жить — и протыкалось им в Jog на 47–83 мм.
+	var hide_sets: Array = []
+	for outfit in OUTFITS:
+		var strict: Array = []
+		var loose: Array = []
+		var by_slot: Dictionary = outfits[outfit]
+		for slot in ["top", "arms", "legs", "feet", "hood"]:
+			if not by_slot.has(slot):
 				continue
-			_save_part("%s_%s_%s" % [slot, outfit, g], arrays,
-				_slot_target(slot, gender, outfit), skin, mats)
+			var slot_data: Dictionary = by_slot[slot]
+			var mats: Array[String] = slot_data["mats"]
+			var slot_skin: Skin = slot_data["skin"]
+			for i: int in mats.size():
+				if MAT_MAP.has(mats[i]) \
+						and String(MAT_MAP[mats[i]]).begins_with("cloth_"):
+					var target := strict if slot == "top" else loose
+					target.append({"arrays": (slot_data["arrays"] as Array)[i],
+						"skin": slot_skin})
+		hide_sets.append({"strict": strict, "loose": loose})
+	_save_part("head_%s" % g, _cull_hidden(body.body, body.body_skin,
+		hide_sets, skeleton), HEAD_TARGET, body.body_skin, body.body_mats)
+	_save_part("eyes_%s" % g, body.eyes, EYES_TARGET, body.eyes_skin, body.eyes_mats)
+	_save_part("brows_%s" % g, body.brows, BROWS_TARGET, body.brows_skin,
+		body.brows_mats)
+
+	# Одежда MCO по слотам — из кэша.
+	for outfit in OUTFITS:
+		var by_slot: Dictionary = outfits[outfit]
+		for slot in ["top", "arms", "legs", "feet", "hood"]:
+			if not by_slot.has(slot):
+				continue
+			var slot_data: Dictionary = by_slot[slot]
+			_save_part("%s_%s_%s" % [slot, outfit, g], slot_data["arrays"],
+				_slot_target(slot, gender, outfit), slot_data["skin"],
+				slot_data["mats"])
+	_reports.append("  Д4 %s: подгонка топов — макс %.1f мм, вершин %d из %d;"
+		% [gender, _fit_max * 1000.0, _fit_moved, _fit_total]
+		+ " веса — без тела %d из %d" % [_wt_missing, _wt_total])
+	_fit_max = 0.0
+	_fit_moved = 0
+	_fit_total = 0
+	_wt_missing = 0
+	_wt_total = 0
 	_build_gender_scene(gender, skeleton)
 	root.free()
 
@@ -488,33 +605,586 @@ func _collect_body(root: Node3D) -> BodyMeshes:
 	return out
 
 
-## Голова и шея: остаются треугольники, у которых ВСЕ вершины нагружены
-## на Head/neck_01 (сумма весов ≥ HEAD_WEIGHT); вершины компактируются.
-## Число весов на вершину берётся из самого массива (паки дают 4 или 8).
-func _slice_head(body_arrays: Array, bone_ok: Dictionary) -> Array:
+## Срез тела «по одежде» (Д4, комментарий к HIDE_DEPTH_MIN): конечности
+## уходят по весам (LIMB_WEIGHT_MAX), из оставшегося удаляются только
+## вершины, скрытые в КАЖДОМ наряде — под топом строго (глубина+кант),
+## под прочей тканью (рукава, пояс, голенища) — достаточно «внутри»:
+## видимой кожи там нет, а fringe-кольца у их кантов машут с конечностями
+## и протыкались тканью на 47–83 мм в Jog/Sprint. Тест скрытости идёт
+## в позе Idle (см. _idle_pose): bind держит руки врозь, и кольцо
+## проймы, закрытое опущенным рукавом, оставалось жить. Остаётся голова,
+## шея и видимые части торса; край среза — под тканью.
+func _cull_hidden(body_arrays: Array, body_skin: Skin,
+		hide_sets: Array, skeleton: Skeleton3D) -> Array:
+	var limb_bones := {}
+	for bone_name: String in ["upperarm_l", "upperarm_r", "thigh_l", "thigh_r"]:
+		var root_bone: int = skeleton.find_bone(bone_name)
+		if root_bone >= 0:
+			_bone_subtree(skeleton, root_bone, limb_bones)
+	var pose := _idle_pose(skeleton)
+	var gear_strict: Array = []
+	var gear_loose: Array = []
+	for sets: Dictionary in hide_sets:
+		gear_strict.append(_hide_index(sets["strict"], true, pose))
+		gear_loose.append(_hide_index(sets["loose"], false, pose))
 	var out: Array = []
+	var dropped := 0
+	var total := 0
 	for arrays in body_arrays:
 		var verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
 		var indices := arrays[Mesh.ARRAY_INDEX] as PackedInt32Array
 		var bones := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
 		var weights := arrays[Mesh.ARRAY_WEIGHTS] as PackedFloat32Array
-		var vw: int = weights.size() / verts.size()
-		var keep_vert := PackedByteArray()
-		keep_vert.resize(verts.size())
+		var vw: int = weights.size() / maxi(verts.size(), 1)
+		var posed := _posed_verts(arrays, body_skin, pose)
+		var drop_vert := PackedByteArray()
+		drop_vert.resize(verts.size())
 		for v: int in verts.size():
-			var s := 0.0
+			total += 1
+			var limb_w := 0.0
 			for k: int in vw:
-				if bone_ok.has(bones[v * vw + k]):
-					s += weights[v * vw + k]
-			keep_vert[v] = 1 if s >= HEAD_WEIGHT else 0
+				if limb_bones.has(bones[v * vw + k]):
+					limb_w += weights[v * vw + k]
+			var hidden: bool = limb_w > LIMB_WEIGHT_MAX
+			if not hidden:
+				for h: int in gear_strict.size():
+					if not (_hidden_in(posed[v], gear_strict[h], true) \
+							or _hidden_in(posed[v], gear_loose[h], false)):
+						hidden = false
+						break
+			drop_vert[v] = 1 if hidden else 0
+			if hidden:
+				dropped += 1
 		var keep_indices := PackedInt32Array()
 		for t: int in indices.size() / 3:
 			var a: int = indices[t * 3]
 			var b: int = indices[t * 3 + 1]
 			var c: int = indices[t * 3 + 2]
-			if keep_vert[a] and keep_vert[b] and keep_vert[c]:
+			if not (drop_vert[a] and drop_vert[b] and drop_vert[c]):
 				keep_indices.append_array(PackedInt32Array([a, b, c]))
 		out.append(compact(arrays, keep_indices))
+	_reports.append("  срез головы: удалено %d из %d вершин тела (%.0f%%)"
+		% [dropped, total, 100.0 * dropped / maxf(total, 1)])
+	# ВРЕМЕННАЯ диагностика кольца проймы: почему вершины зоны выживают.
+	for arrays2 in body_arrays:
+		var posed2 := _posed_verts(arrays2, body_skin, pose)
+		var verts2 := arrays2[Mesh.ARRAY_VERTEX] as PackedVector3Array
+		for v: int in verts2.size():
+			var p: Vector3 = posed2[v]
+			if p.y < 1.28 or p.y > 1.42 or absf(p.x) < 0.05 or absf(p.x) > 0.22:
+				continue
+			var msg := "кольцо v%d (%.3f,%.3f,%.3f):" % [v, p.x, p.y, p.z]
+			for h: int in gear_strict.size():
+				msg += " [%d strict=%s loose=%s]" % [h,
+					_hidden_in(p, gear_strict[h], true),
+					_hidden_in(p, gear_loose[h], false)]
+			print(msg)
+	return out
+
+
+## Кость и все её потомки (рекурсивно) — цепочка конечности целиком.
+func _bone_subtree(skeleton: Skeleton3D, bone: int, out: Dictionary) -> void:
+	out[bone] = true
+	for child: int in skeleton.get_bone_children(bone):
+		_bone_subtree(skeleton, child, out)
+
+
+## Глобальные позы костей в позе Idle (t=0): ротации из клипа anims_ubc,
+## трансляции — рест, как в BodyFitCheck._clip_globals. Срез «по одежде»
+## должен видеть персонажа так же, как игрок и чекер, а не в bind-позе
+## с руками врозь.
+func _idle_pose(skeleton: Skeleton3D) -> Array[Transform3D]:
+	var lib := load("res://assets/third_party/quaternius.com/"
+		+ "universal_animation_library/anims_ubc.res") as AnimationLibrary
+	var anim := lib.get_animation(&"Idle") as Animation
+	var tracks := {}
+	for i: int in anim.get_track_count():
+		if anim.track_get_type(i) != Animation.TYPE_ROTATION_3D:
+			continue
+		var path := anim.track_get_path(i)
+		tracks[str(path).get_slice(":", 1)] = i
+	var out: Array[Transform3D] = []
+	out.resize(skeleton.get_bone_count())
+	for i: int in skeleton.get_bone_count():
+		var rest := skeleton.get_bone_rest(i)
+		var q := rest.basis.get_rotation_quaternion()
+		if tracks.has(skeleton.get_bone_name(i)):
+			q = anim.track_get_key_value(tracks[skeleton.get_bone_name(i)], 0)
+		var local := Transform3D(Basis(q), rest.origin)
+		var parent: int = skeleton.get_bone_parent(i)
+		out[i] = local if parent == -1 else out[parent] * local
+	return out
+
+
+## Вершины поверхности, скиннутые в позу (Σ w·(global·bind)·v, формула
+## рендера, как BodyFitCheck._skinned). Веса у топа уже перенесены с тела,
+## bind-позы берутся из скина самой поверхности.
+func _posed_verts(arrays: Array, skin: Skin,
+		pose: Array[Transform3D]) -> PackedVector3Array:
+	var verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var bones := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
+	var weights := arrays[Mesh.ARRAY_WEIGHTS] as PackedFloat32Array
+	var vw: int = weights.size() / maxi(verts.size(), 1)
+	var bind := {}
+	for i: int in skin.get_bind_count():
+		bind[skin.get_bind_bone(i)] = skin.get_bind_pose(i)
+	var out := PackedVector3Array()
+	out.resize(verts.size())
+	for v: int in verts.size():
+		var acc := Vector3.ZERO
+		var total := 0.0
+		for k: int in vw:
+			var w: float = weights[v * vw + k]
+			if w <= 0.0:
+				continue
+			total += w
+			var bone: int = bones[v * vw + k]
+			acc += (pose[bone] * (bind[bone] as Transform3D)) * verts[v] * w
+		out[v] = acc / maxf(total, 1e-06)
+	return out
+
+
+## Индекс наряда для проверки скрытости: вершины и треугольники ткани
+## в позе Idle (скиннинг каждой поверхности), сетка по AABB и открытые
+## канты (рёбра, встреченные один раз по объединению поверхностей
+## набора). strict=false — канты не строятся (достаточно «внутри»,
+## см. _cull_hidden).
+func _hide_index(surfaces: Array, strict: bool,
+		pose: Array[Transform3D]) -> Dictionary:
+	var verts := PackedVector3Array()
+	var tri := PackedInt32Array()
+	for surface: Dictionary in surfaces:
+		var arrays: Array = surface["arrays"]
+		var base: int = verts.size()
+		verts.append_array(_posed_verts(arrays, surface["skin"], pose))
+		var idx := arrays[Mesh.ARRAY_INDEX] as PackedInt32Array
+		for t: int in idx.size() / 3:
+			for k: int in 3:
+				tri.append(base + idx[t * 3 + k])
+	if not strict:
+		return {"vert": verts, "tri": tri, "rim": PackedInt32Array(),
+			"grid": _build_tri_grid(verts, tri), "strict": false}
+	# Канты: ребро один раз по объединению поверхностей (позиционный ключ);
+	# для проверки запаса нужны только вершины канта.
+	var edge_count := {}
+	for t: int in tri.size() / 3:
+		for e: int in 3:
+			var a := verts[tri[t * 3 + e]]
+			var b := verts[tri[t * 3 + (e + 1) % 3]]
+			edge_count[_edge_key(a, b)] = int(edge_count.get(_edge_key(a, b), 0)) + 1
+	var rim_set := {}
+	for t: int in tri.size() / 3:
+		for e: int in 3:
+			var ia: int = tri[t * 3 + e]
+			var ib: int = tri[t * 3 + (e + 1) % 3]
+			if edge_count[_edge_key(verts[ia], verts[ib])] == 1:
+				rim_set[ia] = true
+				rim_set[ib] = true
+	var rim := PackedInt32Array()
+	for v: int in rim_set.keys():
+		rim.append(v)
+	# Сетка CELL по AABB треугольников.
+	var grid := _build_tri_grid(verts, tri)
+	return {"vert": verts, "tri": tri, "rim": rim, "grid": grid}
+
+
+## Сетка HIDE_CELL по AABB треугольников: ячейка → candidate-треугольники
+## (общая для среза, подгонки и переноса весов).
+func _build_tri_grid(verts: PackedVector3Array, tri: PackedInt32Array) -> Dictionary:
+	var grid := {}
+	for t: int in tri.size() / 3:
+		var a := verts[tri[t * 3]]
+		var b := verts[tri[t * 3 + 1]]
+		var c := verts[tri[t * 3 + 2]]
+		var mn := Vector3(minf(a.x, minf(b.x, c.x)), minf(a.y, minf(b.y, c.y)),
+			minf(a.z, minf(b.z, c.z)))
+		var mx := Vector3(maxf(a.x, maxf(b.x, c.x)), maxf(a.y, maxf(b.y, c.y)),
+			maxf(a.z, maxf(b.z, c.z)))
+		for x: int in range(int(floor(mn.x / HIDE_CELL)), int(floor(mx.x / HIDE_CELL)) + 1):
+			for y: int in range(int(floor(mn.y / HIDE_CELL)), int(floor(mx.y / HIDE_CELL)) + 1):
+				for z: int in range(int(floor(mn.z / HIDE_CELL)), int(floor(mx.z / HIDE_CELL)) + 1):
+					var key: int = (x * 4096 + y) * 4096 + z
+					if not grid.has(key):
+						grid[key] = PackedInt32Array()
+					var cell: PackedInt32Array = grid[key]
+					cell.append(t)
+					grid[key] = cell
+	return grid
+
+
+## Ключ ребра по квантованным координатам концов (порядок не важен).
+func _edge_key(a: Vector3, b: Vector3) -> String:
+	var ka := Vector3i(roundi(a.x * 10000), roundi(a.y * 10000),
+		roundi(a.z * 10000))
+	var kb := Vector3i(roundi(b.x * 10000), roundi(b.y * 10000),
+		roundi(b.z * 10000))
+	if kb < ka:
+		var tmp := ka
+		ka = kb
+		kb = tmp
+	return "%d|%d|%d|%d|%d|%d" % [ka.x, ka.y, ka.z, kb.x, kb.y, kb.z]
+
+
+## Скрыта ли вершина в этом наряде: ближайший треугольник ткани найден
+## (поиск расширяется, пока не встретится ткань), вершина на внутренней
+## стороне; strict — ещё глубина и удалённость от кантов с запасом.
+func _hidden_in(p: Vector3, gear: Dictionary, strict: bool) -> bool:
+	var verts := gear["vert"] as PackedVector3Array
+	var tri := gear["tri"] as PackedInt32Array
+	var best_d := 1e9
+	var best_t := -1
+	var best_q := Vector3.ZERO
+	for reach: float in [HIDE_CELL * 2.0, 0.25, 0.6]:
+		for x: int in range(int(floor((p.x - reach) / HIDE_CELL)),
+				int(floor((p.x + reach) / HIDE_CELL)) + 1):
+			for y: int in range(int(floor((p.y - reach) / HIDE_CELL)),
+					int(floor((p.y + reach) / HIDE_CELL)) + 1):
+				for z: int in range(int(floor((p.z - reach) / HIDE_CELL)),
+						int(floor((p.z + reach) / HIDE_CELL)) + 1):
+					var key: int = (x * 4096 + y) * 4096 + z
+					if not gear["grid"].has(key):
+						continue
+					for t: int in gear["grid"][key] as PackedInt32Array:
+						var q := _closest_on_tri(p, verts[tri[t * 3]],
+							verts[tri[t * 3 + 1]], verts[tri[t * 3 + 2]])
+						var d := p.distance_to(q)
+						if d < best_d:
+							best_d = d
+							best_t = t
+							best_q = q
+		if best_t >= 0:
+			break
+	if best_t < 0:
+		return false
+	var a := verts[tri[best_t * 3]]
+	var b := verts[tri[best_t * 3 + 1]]
+	var c := verts[tri[best_t * 3 + 2]]
+	var n := (b - a).cross(c - a)
+	if n.length_squared() < 1e-12:
+		return false
+	var side: float = (p - best_q).dot(n.normalized())
+	# Наружу одежду держит нормаль треугольника: скрытая вершина — на
+	# внутренней стороне.
+	if side >= 0.0:
+		return false
+	if not strict:
+		return true
+	if best_d < HIDE_DEPTH_MIN:
+		return false
+	for r: int in (gear["rim"] as PackedInt32Array).size():
+		if best_q.distance_to(verts[(gear["rim"] as PackedInt32Array)[r]]) \
+				< HIDE_RIM_CLEAR:
+			return false
+	return true
+
+
+## Ближайшая к точке точка треугольника (Ericson, Real-Time Collision
+## Detection, разбор областей): независимый кламп барицентрических
+## координат выводит точку из плоскости и занижает расстояние в разы.
+func _closest_on_tri(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	var ab := b - a
+	var ac := c - a
+	var ap := p - a
+	var d1: float = ab.dot(ap)
+	var d2: float = ac.dot(ap)
+	if d1 <= 0.0 and d2 <= 0.0:
+		return a
+	var bp := p - b
+	var d3: float = ab.dot(bp)
+	var d4: float = ac.dot(bp)
+	if d3 >= 0.0 and d4 <= d3:
+		return b
+	var vc: float = d1 * d4 - d3 * d2
+	if vc <= 0.0 and d1 >= 0.0 and d3 <= 0.0:
+		return a + ab * (d1 / (d1 - d3))
+	var cp := p - c
+	var d5: float = ab.dot(cp)
+	var d6: float = ac.dot(cp)
+	if d6 >= 0.0 and d5 <= d6:
+		return c
+	var vb: float = d5 * d2 - d1 * d6
+	if vb <= 0.0 and d2 >= 0.0 and d6 <= 0.0:
+		return a + ac * (d2 / (d2 - d6))
+	var va: float = d3 * d6 - d5 * d4
+	if va <= 0.0 and d4 - d3 >= 0.0 and d5 - d6 >= 0.0:
+		return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)))
+	var denom := 1.0 / (va + vb + vc)
+	var v: float = vb * denom
+	var w: float = vc * denom
+	return a + ab * v + ac * w
+
+
+# ---------------------------------------------------------------------------
+# Подгонка топа и перенос весов (Д4)
+# ---------------------------------------------------------------------------
+
+## Индекс тела (bind-поза): вершины и треугольники; кости цепочек
+## drop_names (по весам, как в _cull_hidden) выбрасываются — подгонка
+## меряет зазор до торса (проймы не раздуваются вокруг рук), перенос
+## весов топа берёт торс и ноги. with_weights — нормализованные веса
+## вершин (stride TRANSFER_BONES) для переноса на ткань.
+func _body_index(body_arrays: Array, skeleton: Skeleton3D,
+		drop_names: Array, with_weights: bool) -> Dictionary:
+	var drop_bones := {}
+	for bone_name: String in drop_names:
+		var root_bone: int = skeleton.find_bone(bone_name)
+		if root_bone >= 0:
+			_bone_subtree(skeleton, root_bone, drop_bones)
+	var verts := PackedVector3Array()
+	var tri := PackedInt32Array()
+	var bones_out := PackedInt32Array()
+	var weights_out := PackedFloat32Array()
+	for arrays in body_arrays:
+		var part_verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+		var idx := arrays[Mesh.ARRAY_INDEX] as PackedInt32Array
+		var bones := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
+		var weights := arrays[Mesh.ARRAY_WEIGHTS] as PackedFloat32Array
+		var vw: int = weights.size() / maxi(part_verts.size(), 1)
+		var base := verts.size()
+		verts.append_array(part_verts)
+		var drop := PackedByteArray()
+		drop.resize(part_verts.size())
+		for i: int in part_verts.size():
+			var drop_w := 0.0
+			for k: int in vw:
+				if drop_bones.has(bones[i * vw + k]):
+					drop_w += weights[i * vw + k]
+			drop[i] = 1 if drop_w > LIMB_WEIGHT_MAX else 0
+			if with_weights:
+				var pairs: Array = []
+				for k: int in vw:
+					pairs.append([weights[i * vw + k], bones[i * vw + k]])
+				pairs.sort_custom(func(x: Array, y: Array) -> bool:
+					return x[0] > y[0])
+				var total := 0.0
+				for k: int in mini(TRANSFER_BONES, pairs.size()):
+					total += pairs[k][0]
+				for k: int in TRANSFER_BONES:
+					if k < pairs.size() and total > 0.0:
+						bones_out.append(pairs[k][1])
+						weights_out.append(pairs[k][0] / total)
+					else:
+						bones_out.append(0)
+						weights_out.append(0.0)
+		for t: int in idx.size() / 3:
+			var a: int = base + idx[t * 3]
+			var b: int = base + idx[t * 3 + 1]
+			var c: int = base + idx[t * 3 + 2]
+			if not (drop[a] or drop[b] or drop[c]):
+				tri.append_array(PackedInt32Array([a, b, c]))
+	var out := {"vert": verts, "tri": tri,
+		"grid": _build_tri_grid(verts, tri)}
+	if with_weights:
+		out["bones"] = bones_out
+		out["weights"] = weights_out
+	return out
+
+
+## Ближайший треугольник индекса тела (расширяющийся поиск по сетке):
+## {t, q, d} либо {}.
+func _nearest_body_tri(p: Vector3, index: Dictionary) -> Dictionary:
+	var verts := index["vert"] as PackedVector3Array
+	var tri := index["tri"] as PackedInt32Array
+	var best_d := 1e9
+	var best_t := -1
+	var best_q := Vector3.ZERO
+	for reach: float in [HIDE_CELL * 2.0, 0.25, 0.6]:
+		for x: int in range(int(floor((p.x - reach) / HIDE_CELL)),
+				int(floor((p.x + reach) / HIDE_CELL)) + 1):
+			for y: int in range(int(floor((p.y - reach) / HIDE_CELL)),
+					int(floor((p.y + reach) / HIDE_CELL)) + 1):
+				for z: int in range(int(floor((p.z - reach) / HIDE_CELL)),
+						int(floor((p.z + reach) / HIDE_CELL)) + 1):
+					var key: int = (x * 4096 + y) * 4096 + z
+					if not index["grid"].has(key):
+						continue
+					for t: int in index["grid"][key] as PackedInt32Array:
+						var q := _closest_on_tri(p, verts[tri[t * 3]],
+							verts[tri[t * 3 + 1]], verts[tri[t * 3 + 2]])
+						var d := p.distance_to(q)
+						if d < best_d:
+							best_d = d
+							best_t = t
+							best_q = q
+		if best_t >= 0:
+			break
+	if best_t < 0:
+		return {}
+	return {"t": best_t, "q": best_q, "d": best_d}
+
+
+## Подгонка топа (Д4, комментарий к CLOTH_CLEAR): вершины сдвигаются по
+## своим нормалям до зазора CLOTH_CLEAR до торса, поле смещений
+## сглаживается распространением на соседей с затуханием, у открытых
+## кантов нарастание гасится (своё смещение — обычно ноль: кант дальше
+## от торса, чем CLOTH_CLEAR).
+func _fit_cloth(arrays: Array, fit_body: Dictionary) -> Array:
+	var verts := (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).duplicate()
+	var norms := arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array
+	var idx := arrays[Mesh.ARRAY_INDEX] as PackedInt32Array
+	var body_verts := fit_body["vert"] as PackedVector3Array
+	var body_tri := fit_body["tri"] as PackedInt32Array
+	var needed := PackedFloat32Array()
+	needed.resize(verts.size())
+	for v: int in verts.size():
+		var hit := _nearest_body_tri(verts[v], fit_body)
+		if hit.is_empty():
+			continue
+		var t: int = hit["t"]
+		var a := body_verts[body_tri[t * 3]]
+		var b := body_verts[body_tri[t * 3 + 1]]
+		var c := body_verts[body_tri[t * 3 + 2]]
+		var n := (b - a).cross(c - a)
+		if n.length_squared() < 1e-12:
+			continue
+		# Зазор вдоль нормали тела: >0 — ткань снаружи торса.
+		var gap: float = (verts[v] - hit["q"]).dot(n.normalized())
+		needed[v] = clampf(CLOTH_CLEAR - gap, 0.0, CLOTH_INFLATE_MAX)
+	# Сглаживание: смещение соседа распространяется с затуханием, своё
+	# смещение не уменьшается (зазор обязан держаться всюду).
+	var neigh := _adjacency(idx, verts.size())
+	var cur := needed.duplicate()
+	for pass_i: int in FIT_SMOOTH_PASSES:
+		var next := cur.duplicate()
+		for v: int in verts.size():
+			var m := 0.0
+			for u: int in neigh[v] as PackedInt32Array:
+				m = maxf(m, cur[u])
+			next[v] = maxf(cur[v], m * FIT_SMOOTH_DECAY)
+		cur = next
+	for v: int in _rim_verts_of(idx):
+		cur[v] = needed[v]
+	var moved := 0
+	for v: int in verts.size():
+		if cur[v] > 0.0005:
+			verts[v] += norms[v] * cur[v]
+			moved += 1
+		_fit_max = maxf(_fit_max, cur[v])
+	_fit_moved += moved
+	_fit_total += verts.size()
+	var out := arrays.duplicate()
+	out[Mesh.ARRAY_VERTEX] = verts
+	return out
+
+
+## Перенос весов тела на поверхность MCO-части (Д4, комментарий к
+## TRANSFER_BONES): веса ближайшей точки тела, барицентрическая смесь,
+## топ-4 с нормировкой. Дальше 0.6 м от тела (подолы, свисающие ремни)
+## остаются исходные веса.
+func _transfer_weights(arrays: Array, body: Dictionary) -> Array:
+	var verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var body_verts := body["vert"] as PackedVector3Array
+	var body_tri := body["tri"] as PackedInt32Array
+	var body_bones := body["bones"] as PackedInt32Array
+	var body_weights := body["weights"] as PackedFloat32Array
+	var src_bones := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
+	var src_weights := arrays[Mesh.ARRAY_WEIGHTS] as PackedFloat32Array
+	var vw: int = src_weights.size() / maxi(verts.size(), 1)
+	var bones_out := PackedInt32Array()
+	bones_out.resize(verts.size() * TRANSFER_BONES)
+	var weights_out := PackedFloat32Array()
+	weights_out.resize(verts.size() * TRANSFER_BONES)
+	for v: int in verts.size():
+		var hit := _nearest_body_tri(verts[v], body)
+		var pairs: Array = []
+		if hit.is_empty():
+			_wt_missing += 1
+			for k: int in vw:
+				pairs.append([src_weights[v * vw + k], src_bones[v * vw + k]])
+		else:
+			var t: int = hit["t"]
+			var bary := _bary(body_verts[body_tri[t * 3]],
+				body_verts[body_tri[t * 3 + 1]], body_verts[body_tri[t * 3 + 2]],
+				hit["q"])
+			var acc := {}
+			for k: int in 3:
+				var gv: int = body_tri[t * 3 + k]
+				for j: int in TRANSFER_BONES:
+					var w: float = body_weights[gv * TRANSFER_BONES + j] * bary[k]
+					if w <= 0.0:
+						continue
+					var bone: int = body_bones[gv * TRANSFER_BONES + j]
+					acc[bone] = float(acc.get(bone, 0.0)) + w
+			for bone: int in acc.keys():
+				pairs.append([acc[bone], bone])
+		pairs.sort_custom(func(x: Array, y: Array) -> bool:
+			return x[0] > y[0])
+		var total := 0.0
+		for k: int in mini(TRANSFER_BONES, pairs.size()):
+			total += pairs[k][0]
+		for k: int in TRANSFER_BONES:
+			if k < pairs.size() and total > 0.0:
+				bones_out[v * TRANSFER_BONES + k] = pairs[k][1]
+				weights_out[v * TRANSFER_BONES + k] = pairs[k][0] / total
+	_wt_total += verts.size()
+	var out := arrays.duplicate()
+	out[Mesh.ARRAY_BONES] = bones_out
+	out[Mesh.ARRAY_WEIGHTS] = weights_out
+	return out
+
+
+## Барицентрические координаты точки p в треугольнике abc.
+func _bary(a: Vector3, b: Vector3, c: Vector3, p: Vector3) -> Vector3:
+	var ab := b - a
+	var ac := c - a
+	var ap := p - a
+	var d00 := ab.dot(ab)
+	var d01 := ab.dot(ac)
+	var d11 := ac.dot(ac)
+	var d20 := ap.dot(ab)
+	var d21 := ap.dot(ac)
+	var den := d00 * d11 - d01 * d01
+	if absf(den) < 1e-12:
+		return Vector3(1.0, 0.0, 0.0)
+	var v: float = (d11 * d20 - d01 * d21) / den
+	var w: float = (d00 * d21 - d01 * d20) / den
+	return Vector3(1.0 - v - w, v, w)
+
+
+## Соседство вершин по рёбрам треугольников.
+func _adjacency(idx: PackedInt32Array, count: int) -> Array:
+	var lists: Array = []
+	lists.resize(count)
+	for i: int in count:
+		lists[i] = []
+	for t: int in idx.size() / 3:
+		for e: int in 3:
+			var a: int = idx[t * 3 + e]
+			var b: int = idx[t * 3 + (e + 1) % 3]
+			(lists[a] as Array).append(b)
+			(lists[b] as Array).append(a)
+	var out: Array = []
+	out.resize(count)
+	for i: int in count:
+		var packed := PackedInt32Array()
+		for u: int in lists[i] as Array:
+			packed.append(u)
+		out[i] = packed
+	return out
+
+
+## Вершины открытых кантов поверхности (рёбра одного треугольника,
+## соединение по индексам).
+func _rim_verts_of(idx: PackedInt32Array) -> PackedInt32Array:
+	var count := {}
+	for t: int in idx.size() / 3:
+		for e: int in 3:
+			var a: int = idx[t * 3 + e]
+			var b: int = idx[t * 3 + (e + 1) % 3]
+			var key: int = mini(a, b) * 4294967296 + maxi(a, b)
+			count[key] = int(count.get(key, 0)) + 1
+	var rim := {}
+	for t: int in idx.size() / 3:
+		for e: int in 3:
+			var a: int = idx[t * 3 + e]
+			var b: int = idx[t * 3 + (e + 1) % 3]
+			var key: int = mini(a, b) * 4294967296 + maxi(a, b)
+			if count[key] == 1:
+				rim[a] = true
+				rim[b] = true
+	var out := PackedInt32Array()
+	for v: int in rim.keys():
+		out.append(v)
 	return out
 
 
