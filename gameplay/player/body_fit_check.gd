@@ -30,9 +30,19 @@ extends RefCounted
 
 ## Порог выступания кожи наружу сквозь ткань, м (задание Д4: ~5 мм).
 const POKE_TOL: float = 0.005
-## Дальше этого вершина кожи не считается покрытой: в опорной позе одежда
-## лежит на коже с зазором 0–20 мм, м.
-const COVER_MAX: float = 0.025
+## Дальше этого вершина кожи не считается покрытой: подгонка топа держит
+## зазор CLOTH_CLEAR 12 мм до торса, покрытие с зазором больше — фиктивное
+## (случайная близость шеи к вороту, подола к бедру), в позах такие пары
+## «расходятся» на сантиметры и дают ложный выступ, м.
+const COVER_MAX: float = 0.0125
+## Максимальная суммарная доля весов вершины кожи на цепочках конечностей
+## (upperarm/thigh и потомки): срез пекаря удаляет конечностную кожу
+## (LIMB_WEIGHT_MAX 0.01), но упрощение меша до HEAD_TARGET смешивает
+## вершины у проймы, оставляя доли до ~0.1. Такая кожа — проймовая: она
+## законно движется с рукой, а топ обязан следовать торсу — пара не
+## строится (замер: дельтоид с upperarm 0.09 «выступал» на 19 мм в
+## Walk_Hand, хотя ткань у проймы следовала торсу корректно).
+const LIMB_SHARE_MAX: float = 0.05
 ## Пара не строится у канта ткани (проём ворота/рукава — там кожа видна
 ## законно), м: точка пары дальше от края ткани.
 const RIM_PAIR_MIN: float = 0.02
@@ -148,10 +158,21 @@ static func run(model: CharacterModel, verbose: bool = false) -> Dictionary:
 	var open_total := 0
 	var open_outside := 0
 	var seam_pairs := 0
+	var limb_bones := {}
+	for bone_name: String in ["upperarm_l", "upperarm_r", "thigh_l",
+			"thigh_r"]:
+		var root_bone: int = skel.find_bone(bone_name)
+		if root_bone >= 0:
+			_subtree_bones(skel, root_bone, limb_bones)
 	for node_name: String in skin_of_node.keys():
 		var surf_ids: Array = skin_of_node[node_name]
 		var cat: String = skin_flat[surf_ids[0]]["cat"]
-		# Ткань для пар: своя для шва, вся — для среза.
+		# Ткань для пар: для шва и среза — только «свой» узел. Кожа торса
+		# меряется к ТОПУ: рукава и штаны весятся на конечности (upperarm,
+		# thigh) и законно уезжают от торса при махе — пары торс↔рукав
+		# давали ложный «выступ» до 71 мм в Sprint (кожа у проймы видна,
+		# это не дефект одежды). Топ после переноса весов едет с торсом
+		# одним полем.
 		var only := -1
 		if cat == "seam":
 			var cloth_ids: Array = cloth_of_node.get(node_name, [])
@@ -159,6 +180,16 @@ static func run(model: CharacterModel, verbose: bool = false) -> Dictionary:
 				reasons.append("кожа %s без ткани своего узла" % node_name)
 				continue
 			only = cloth_ids[0]
+		elif cat == "cut":
+			var found := false
+			for cloth_node: String in cloth_of_node.keys():
+				if cloth_node.begins_with("top_"):
+					only = cloth_of_node[cloth_node][0]
+					found = true
+					break
+			if not found:
+				reasons.append("кожа %s без топа" % node_name)
+				continue
 		var open_verts := _open_edge_verts(skin_flat, surf_ids)
 		open_total += open_verts.size()
 		for sf: int in surf_ids:
@@ -168,6 +199,11 @@ static func run(model: CharacterModel, verbose: bool = false) -> Dictionary:
 				# кромки рукава); голое предплечье и кисть у наруча —
 				# случайная близость, не шов.
 				if cat == "seam" and not open_verts.has([sf, v]):
+					continue
+				# Праймовая кожа (доля конечности ≥ LIMB_SHARE_MAX —
+				# см. комментарий к константе) едет с рукой/ногой законно.
+				if cat == "cut" and _limb_share(skin_flat[sf], v,
+						limb_bones) >= LIMB_SHARE_MAX:
 					continue
 				var hit := _nearest_tri(all_vert, tri_vert, tri_surf, grid,
 					pv[v], only, cloth_flat, cat == "cut")
@@ -188,6 +224,13 @@ static func run(model: CharacterModel, verbose: bool = false) -> Dictionary:
 					continue
 				if cat == "cut":
 					# Пара вдали от канта: у проёма ворота кожа видна законно.
+					if _rim_distance(all_vert, rim_by_surf, hit) < RIM_PAIR_MIN:
+						continue
+				elif cat == "seam":
+					# Шов — кожа примыкает к ткани, где та продолжается
+					# (кольцо проймы ↔ верх рукава). Точка у самой кромки
+					# ткани — голое предплечье у манжеты: при взмахе кисть
+					# законно отходит от рукава на сантиметры, это не раскол.
 					if _rim_distance(all_vert, rim_by_surf, hit) < RIM_PAIR_MIN:
 						continue
 				covered_count += 1
@@ -266,6 +309,24 @@ static func run(model: CharacterModel, verbose: bool = false) -> Dictionary:
 
 
 # --- Сбор данных мешей ---
+
+## Кость и все её потомки (цепочка конечности целиком).
+static func _subtree_bones(skel: Skeleton3D, bone: int, out: Dictionary) -> void:
+	out[bone] = true
+	for child: int in skel.get_bone_children(bone):
+		_subtree_bones(skel, child, out)
+
+
+## Суммарный вес вершины кожи на цепочках конечностей (LIMB_SHARE_MAX).
+static func _limb_share(mesh: Dictionary, v: int, limb_bones: Dictionary) -> float:
+	var vw: int = mesh["vw"]
+	var bones := mesh["bones"] as PackedInt32Array
+	var weights := mesh["weights"] as PackedFloat32Array
+	var share := 0.0
+	for k: int in vw:
+		if limb_bones.has(bones[v * vw + k]):
+			share += weights[v * vw + k]
+	return share
 
 ## Данные поверхности: вершины, нормали, индексы, скиннинг (кости+веса
 ## переменной ширины) и bind-позы по кости.

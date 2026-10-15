@@ -67,15 +67,15 @@ const FIT_SMOOTH_DECAY: float = 0.55
 ## Перенос весов (Д4): MCO шьёт одежду по своим весовым полям (топ Ranger
 ## взвешен на clavicle_l/r), кожа UBC — по своим (spine_*); при махе руки
 ## ткань груди уезжала от кожи до 72 мм. На ткань ТОПА переносятся веса
-## ближайшей точки тела UBC без цепочек рук (барицентрическая смесь,
-## топ-4): плечевая ткань садится на грудь, как и оставшаяся кожа, и
-## двигается с ней одним полем; ноги в индексе остаются — подол peasant
-## клеится на бёдра, как шьются юбки. Рукава/штаны/обувь/капюшон весов не
-## меняют: со своей кожей MCO они делят одно авторское поле, перенос по
-## полному телу в bind-позе брал соседние части (рукав — грудь) и
-## расходил швы на 35 мм. Скин топа остаётся MCO: его бинды пересаживают
-## геометрию на скелет UBC (ресты различаются до 24 мм), bind_bone у всех
-## скинов identity — слоты костей совместимы без ремапа.
+## ближайшей точки торса без цепочек рук (барицентрическая смесь, топ-4;
+## ноги в индексе остаются — подол peasant клеится на бёдра, как шьются
+## юбки), на РУКАВА — веса ближайшей вершины кожи рук своего пака (bind
+## совпадает точно; авторское поле MCO шило рукав почти жёстко на плечо
+## и при взмахе отставало от руки на 30 мм). Штаны/обувь/капюшон весов
+## не меняют: со своей кожей MCO они делят одно авторское поле. Скин
+## топа остаётся MCO: его бинды пересаживают геометрию на скелет UBC
+## (ресты различаются до 24 мм), bind_bone у всех скинов identity —
+## слоты костей совместимы без ремапа.
 const TRANSFER_BONES: int = 4
 
 ## Ячейка сетки поиска ткани для среза (м).
@@ -358,7 +358,12 @@ func _bake_gender(gender: String) -> void:
 
 	var body := _collect_body(root)
 	# Индексы тела (bind-позы): подгонка топа — до торса без конечностей;
-	# веса топа — без цепочек рук (с ногами, см. TRANSFER_BONES).
+	# веса топа — барицентрическая смесь по торсу без цепочек рук (с
+	# ногами). Замеры П5.8 Д4 (probe_body_fit, 61 поза × 4 комбинации):
+	# смесь держит выезды кожи ≤17.2 мм, а перенос ближайшей вершиной
+	# (и по торсу, и по полному телу) прилипал к одной «не той» вершине
+	# у ворота/пройм и уносил ткань до 63.7 мм в Sprint — сглаженная
+	# смесь устойчивее на стыке зон влияния разных костей.
 	var fit_body := _body_index(body.body, skeleton,
 		["upperarm_l", "upperarm_r", "thigh_l", "thigh_r"], false)
 	var torso_wt := _body_index(body.body, skeleton,
@@ -396,6 +401,8 @@ func _bake_gender(gender: String) -> void:
 				if skin == null:
 					skin = packed["skin"]
 			if not missing and not arrays.is_empty():
+				if slot == "arms":
+					arrays = _transfer_arms_weights(arrays, mats, skeleton)
 				by_slot[slot] = {"arrays": arrays, "mats": mats, "skin": skin}
 		outfits[outfit] = by_slot
 
@@ -665,20 +672,6 @@ func _cull_hidden(body_arrays: Array, body_skin: Skin,
 		out.append(compact(arrays, keep_indices))
 	_reports.append("  срез головы: удалено %d из %d вершин тела (%.0f%%)"
 		% [dropped, total, 100.0 * dropped / maxf(total, 1)])
-	# ВРЕМЕННАЯ диагностика кольца проймы: почему вершины зоны выживают.
-	for arrays2 in body_arrays:
-		var posed2 := _posed_verts(arrays2, body_skin, pose)
-		var verts2 := arrays2[Mesh.ARRAY_VERTEX] as PackedVector3Array
-		for v: int in verts2.size():
-			var p: Vector3 = posed2[v]
-			if p.y < 1.28 or p.y > 1.42 or absf(p.x) < 0.05 or absf(p.x) > 0.22:
-				continue
-			var msg := "кольцо v%d (%.3f,%.3f,%.3f):" % [v, p.x, p.y, p.z]
-			for h: int in gear_strict.size():
-				msg += " [%d strict=%s loose=%s]" % [h,
-					_hidden_in(p, gear_strict[h], true),
-					_hidden_in(p, gear_loose[h], false)]
-			print(msg)
 	return out
 
 
@@ -1121,6 +1114,110 @@ func _transfer_weights(arrays: Array, body: Dictionary) -> Array:
 	out[Mesh.ARRAY_BONES] = bones_out
 	out[Mesh.ARRAY_WEIGHTS] = weights_out
 	return out
+
+
+## Перенос весов на ткань РУКАВОВ (Д4): MCO шьёт рукава почти жёстко на
+## плечо (замер: lowerarm 0.07 при коже локтя 0.41), и при взмахе рукав
+## отставал от руки на 30 мм. Рукав и кожа рук одного пака шьются на
+## один манекен — bind-позиции совпадают точно, поэтому веса ближайшей
+## точки кожи руки переносятся на ткань (как у топа, но источник — кожа
+## рук СВОЕГО пака, без bind-расхождений UBC↔MCO). Штаны и обувь весов
+## не меняют: там авторские веса и кожа ног согласованы.
+func _transfer_arms_weights(arrays: Array, mats: Array[String],
+		skeleton: Skeleton3D) -> Array:
+	var skin_arrays: Array = []
+	for i: int in mats.size():
+		if MAT_MAP.has(mats[i]) \
+				and String(MAT_MAP[mats[i]]).begins_with("skin_arms_"):
+			skin_arrays.append(arrays[i])
+	if skin_arrays.is_empty():
+		return arrays
+	var arm_wt := _body_index(skin_arrays, skeleton, [], true)
+	for i: int in arrays.size():
+		if MAT_MAP.has(mats[i]) \
+				and String(MAT_MAP[mats[i]]).begins_with("cloth_"):
+			arrays[i] = _transfer_weights_nearest(arrays[i], arm_wt)
+	return arrays
+
+
+## Перенос весов «по ближайшей вершине» (рукава): барицентрическая смесь
+## из _transfer_weights размывает весовое поле — доля lowerarm у ткани
+## выходила 0.54 против 0.41 у кожи, и шов расходился на 21.7 мм в
+## Wave_Hand. Кожа рук и рукав одного пака в bind совпадают точно, поэтому
+## вершина ткани берёт веса БЛИЖАЙШЕЙ вершины кожи как есть — поле
+## сохраняется без размывания (для топа так нельзя: bind UBC↔MCO
+## расходится до 24 мм, там смесь сглаживает).
+func _transfer_weights_nearest(arrays: Array, body: Dictionary) -> Array:
+	var verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var body_verts := body["vert"] as PackedVector3Array
+	var body_bones := body["bones"] as PackedInt32Array
+	var body_weights := body["weights"] as PackedFloat32Array
+	var src_bones := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
+	var src_weights := arrays[Mesh.ARRAY_WEIGHTS] as PackedFloat32Array
+	var vw: int = src_weights.size() / maxi(verts.size(), 1)
+	var cell := 0.02
+	var vgrid := {}
+	for i: int in body_verts.size():
+		var key: int = _vert_cell(body_verts[i], cell)
+		if not vgrid.has(key):
+			vgrid[key] = PackedInt32Array()
+		var bucket: PackedInt32Array = vgrid[key]
+		bucket.append(i)
+		vgrid[key] = bucket
+	var bones_out := PackedInt32Array()
+	bones_out.resize(verts.size() * TRANSFER_BONES)
+	var weights_out := PackedFloat32Array()
+	weights_out.resize(verts.size() * TRANSFER_BONES)
+	for v: int in verts.size():
+		var best := -1
+		var best_d := 1e9
+		for reach: float in [cell * 3.0, 0.2, 0.6]:
+			for x: int in range(int(floor((verts[v].x - reach) / cell)),
+					int(floor((verts[v].x + reach) / cell)) + 1):
+				for y: int in range(int(floor((verts[v].y - reach) / cell)),
+						int(floor((verts[v].y + reach) / cell)) + 1):
+					for z: int in range(int(floor((verts[v].z - reach) / cell)),
+							int(floor((verts[v].z + reach) / cell)) + 1):
+						var key: int = (x * 4096 + y) * 4096 + z
+						if not vgrid.has(key):
+							continue
+						for i: int in vgrid[key] as PackedInt32Array:
+							var d := verts[v].distance_to(body_verts[i])
+							if d < best_d:
+								best_d = d
+								best = i
+			if best >= 0:
+				break
+		var pairs: Array = []
+		if best < 0:
+			_wt_missing += 1
+			for k: int in vw:
+				pairs.append([src_weights[v * vw + k], src_bones[v * vw + k]])
+		else:
+			for j: int in TRANSFER_BONES:
+				var w: float = body_weights[best * TRANSFER_BONES + j]
+				if w > 0.0:
+					pairs.append([w, body_bones[best * TRANSFER_BONES + j]])
+		pairs.sort_custom(func(x: Array, y: Array) -> bool:
+			return x[0] > y[0])
+		var total := 0.0
+		for k: int in mini(TRANSFER_BONES, pairs.size()):
+			total += pairs[k][0]
+		for k: int in TRANSFER_BONES:
+			if k < pairs.size() and total > 0.0:
+				bones_out[v * TRANSFER_BONES + k] = pairs[k][1]
+				weights_out[v * TRANSFER_BONES + k] = pairs[k][0] / total
+	_wt_total += verts.size()
+	var out := arrays.duplicate()
+	out[Mesh.ARRAY_BONES] = bones_out
+	out[Mesh.ARRAY_WEIGHTS] = weights_out
+	return out
+
+
+## Ключ ячейки сетки для точки (перенос весов по ближайшей вершине).
+func _vert_cell(p: Vector3, cell: float) -> int:
+	return (int(floor(p.x / cell)) * 4096 + int(floor(p.y / cell))) * 4096 \
+		+ int(floor(p.z / cell))
 
 
 ## Барицентрические координаты точки p в треугольнике abc.
