@@ -68,17 +68,45 @@ func test_loop_states_play_looped_clips() -> void:
 
 
 func test_set_state_switches_clip() -> void:
-	# Переключение состояния меняет играющий клип у обоих тел.
+	# Переключение состояния меняет играющий клип у обоих тел. Ходьба/бег —
+	# локомоция по фактической скорости (Д3), их проверяет отдельный тест.
 	for gender: int in Appearance.GENDERS:
 		var model := _make(gender)
 		assert_eq(model._playing_clip(), &"Idle",
 			"пол %d: после сборки — покой" % gender)
-		for state: int in [Protocol.AnimState.WALK, Protocol.AnimState.RUN,
-				Protocol.AnimState.SIT, Protocol.AnimState.HANG]:
+		for state: int in [Protocol.AnimState.SIT, Protocol.AnimState.HANG,
+				Protocol.AnimState.FALL]:
 			model.set_state(state)
 			assert_eq(model._playing_clip(),
 				CharacterAnims.clip_for_state(state),
 				"пол %d: состояние %d играет свой клип" % [gender, state])
+
+
+func test_locomotion_follows_speed() -> void:
+	# Д3: ходьба/бег выбирают клип и каденцию по фактической скорости:
+	# медленно — Walk, шаг/лёгкий бег — Jog_Fwd, спринт — Sprint; темп
+	# scale = скорость/natural (стопы не скользят). «За руку» — Walk_Hand
+	# с темпом по скорости пары.
+	var model := _make(0)
+	model.set_state(Protocol.AnimState.RUN)
+	for pair: Array in [[0.5, &"Walk"], [2.5, &"Jog_Fwd"], [6.0, &"Sprint"]]:
+		model.set_locomotion_speed(pair[0])
+		for i: int in 90:  # сглаживание ~10/с: за 1.5 с доходит
+			model._process(1.0 / 60.0)
+		assert_eq(model._playing_clip(), pair[1],
+			"скорость %.1f м/с — клип %s" % [pair[0], pair[1]])
+		var natural: float = CharacterAnims.natural_speed(pair[1])
+		assert_almost_eq(model._player.speed_scale,
+			clampf(pair[0] / natural, CharacterAnims.SPEED_SCALE_MIN,
+				CharacterAnims.SPEED_SCALE_MAX),
+			0.05, "скорость %.1f: темп = скорость/natural" % pair[0])
+	model.set_state(Protocol.AnimState.HOLD_HAND)
+	model.set_locomotion_speed(1.0)
+	for i: int in 90:
+		model._process(1.0 / 60.0)
+	assert_eq(model._playing_clip(), &"Walk_Hand", "за руку — Walk_Hand")
+	assert_almost_eq(model._player.speed_scale, 1.0 / 0.96, 0.05,
+		"за руку: темп по скорости пары")
 
 
 func test_one_shot_returns_to_state() -> void:

@@ -57,6 +57,9 @@ static func hat_part(hat: int, gender: int) -> String:
 	return "%s%s" % [_HAT_PARTS[hat], "mf"[gender]]
 ## Плавный переход между клипами, с.
 const ANIM_BLEND: float = 0.15
+## Сглаживание фактической скорости для каденции ног, 1/с (Д3): разгон и
+## торможение без рывков темпа.
+const LOCO_SMOOTH: float = 10.0
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
@@ -74,6 +77,11 @@ var _scale: float = 1.0
 var _state: int = Protocol.AnimState.IDLE
 ## Сколько ещё играть разовый клип (play_one_shot), с; < 0 — не играет.
 var _one_shot_left: float = -1.0
+## Фактическая горизонтальная скорость для темпа ног (Д3) и её сглаженное
+## отображение, м/с: сглаживание — плавный разгон/торможение каденции без
+## рывков клипа при пересечении порогов (аналог BlendSpace1D на cross-fade).
+var _loco_target: float = 0.0
+var _loco_display: float = 0.0
 
 ## Кэш перекрашенных текстур глаз (индекс палитры → текстура).
 static var _eye_cache: Dictionary = {}
@@ -175,17 +183,30 @@ func set_lod_distance(distance: float) -> void:
 ## прыжка выбираются локально по скорости и касанию земли (player.gd),
 ## ремоуты получают то же состояние в снапшоте. Один и тот же клип не
 ## перезапускается, разовый клип не сбивается кадром состояния (приземление
-## и взмах доигрывают, состояние включится после).
+## и взмах доигрывают, состояние включится после). Для ходьбы/бега/«за
+## руку» клип и темп выбираются по фактической скорости (Д3): клипы Walk/
+## Jog/Sprint переключаются по ближайшей natural-скорости, каденция
+## scale = скорость/natural — стопы едут по земле, а не скользят.
 func set_state(state: int) -> void:
 	_state = state
 	if _one_shot_left > 0.0:
 		return  # разовый клип доигрывает и сам вернёт уже новое состояние
 	if _player == null:
 		return
+	if _is_locomotion(state):
+		_apply_locomotion()
+		return
 	var clip := CharacterAnims.clip_for_state(state)
 	if clip == &"" or _playing_clip() == clip:
 		return
 	_play_clip(clip, 1.0)
+
+
+## Фактическая горизонтальная скорость персонажа, м/с (player.gd — своя
+## velocity, RemotePlayer — по дельтам позиции; «за руку» темп приходит
+## уже по более медленному из пары). Сглаживается и управляет каденцией.
+func set_locomotion_speed(mps: float) -> void:
+	_loco_target = maxf(mps, 0.0)
 
 
 ## Разовая анимация (взмах «Привет!», «тычок», приземление): клип играет
@@ -205,11 +226,35 @@ func play_one_shot(state: int, duration: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if _player == null:
+		return  # внешность ещё не собрана: аниматор появится в setup_appearance
 	# Разовый клип закончился — вернуться к состоянию (сетевому/локальному).
 	if _one_shot_left > 0.0:
 		_one_shot_left -= delta
 		if _one_shot_left <= 0.0:
 			set_state(_state)
+		return
+	if _is_locomotion(_state):
+		_loco_display = lerpf(_loco_display, _loco_target,
+			minf(delta * LOCO_SMOOTH, 1.0))
+		_apply_locomotion()
+
+
+## Применить локомоцию: клип по сглаженной скорости (граница Walk/Jog/
+## Sprint — середины natural), темп scale = скорость/natural.
+func _apply_locomotion() -> void:
+	var clip := &"Walk_Hand" if _state == Protocol.AnimState.HOLD_HAND \
+		else CharacterAnims.locomotion_clip(_loco_display)
+	if _playing_clip() != clip:
+		_play_clip(clip, CharacterAnims.speed_scale(clip, _loco_display))
+	else:
+		_player.speed_scale = CharacterAnims.speed_scale(clip, _loco_display)
+
+
+## Локомоционные состояния: клип и каденция выбираются по скорости.
+func _is_locomotion(state: int) -> bool:
+	return state == Protocol.AnimState.WALK or state == Protocol.AnimState.RUN \
+		or state == Protocol.AnimState.HOLD_HAND
 
 
 ## Покадровое продвижение анимации (съёмка GIF-серий, финал П5.8): при

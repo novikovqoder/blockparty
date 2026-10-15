@@ -51,6 +51,7 @@ const BAKE_CLIPS: Dictionary = {
 	"Idle": "Idle",
 	"Walk": "Walk",
 	"Jog_Fwd": "Jog_Fwd",
+	"Sprint": "Sprint",
 	"Jump_Start": "Jump_Start",
 	"Jump": "Jump_Loop",
 	"Jump_Land": "Jump_Land",
@@ -67,7 +68,7 @@ const BAKE_CLIPS: Dictionary = {
 }
 ## Циклические клипы (покой/перемещение/полёт/вис/сидение/за руку).
 const LOOP_CLIPS: PackedStringArray = [
-	"Idle", "Walk", "Jog_Fwd", "Jump_Loop", "Sitting_Idle",
+	"Idle", "Walk", "Jog_Fwd", "Sprint", "Jump_Loop", "Sitting_Idle",
 	"Hang_Pose", "Walk_Hand",
 ]
 ## Период машущих движений в процедурных клипах, с.

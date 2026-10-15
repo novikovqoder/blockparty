@@ -17,6 +17,8 @@ const HEAD_TOP_Y: float = 1.65
 const NAME_LABEL_Y: float = 2.15
 ## Группа узлов чужих игроков (HangPoint ищет висящих, П5).
 const GROUP: StringName = &"remote_player"
+## Сглаживание оценки скорости, 1/с (как LOCO_SMOOTH у модели).
+const SPEED_SMOOTH: float = 10.0
 
 var peer_id: int = 0
 var player_name: String = ""
@@ -30,6 +32,11 @@ var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
 ## Флаги последнего снапшота (висит, сидит, за руку — раздел 10).
 var _flags: int = 0
+## Оценка скорости по дельтам интерполированной позиции (Д3: темп ног
+## ремоута — по фактической скорости, как у локального игрока).
+var _speed_est: float = 0.0
+var _speed_pos: Vector3 = Vector3.ZERO
+var _speed_msec: int = -1
 
 
 func setup(p_peer_id: int, p_name: String, p_appearance: PackedByteArray = PackedByteArray()) -> void:
@@ -117,12 +124,31 @@ func render(now_msec: int) -> void:
 	if _buffer.is_empty():
 		return
 	var snap := _buffer.sample(now_msec - Protocol.INTERP_DELAY_MS)
-	global_position = Vector3(float(snap["x"]), float(snap["y"]), float(snap["z"]))
+	var pos := Vector3(float(snap["x"]), float(snap["y"]), float(snap["z"]))
+	# Скорость по дельтам позиции (Д3): телепорт буфера (>5 м за кадр,
+	# remote_player.gd шапка) в оценку не попадает.
+	if _speed_msec >= 0 and now_msec > _speed_msec:
+		var dt := (now_msec - _speed_msec) / 1000.0
+		if pos.distance_to(_speed_pos) < 5.0:
+			_speed_est = lerpf(_speed_est,
+				(Vector2(pos.x - _speed_pos.x, pos.z - _speed_pos.z)).length() / dt,
+				minf(dt * SPEED_SMOOTH, 1.0))
+		else:
+			_speed_est = 0.0
+	_speed_pos = pos
+	_speed_msec = now_msec
+	global_position = pos
 	_model.rotation.y = float(snap["yaw"])
 	var anim: int = int(snap["anim"])
 	if anim != _last_anim:
 		_last_anim = anim
 		_visual.set_state(anim)
+	_visual.set_locomotion_speed(_speed_est)
+
+
+## Оцененная горизонтальная скорость, м/с (для темпа «за руку» у пары).
+func speed_estimate() -> float:
+	return _speed_est
 
 
 func _process(_delta: float) -> void:

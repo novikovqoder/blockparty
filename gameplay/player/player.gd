@@ -660,12 +660,33 @@ func _update_animation() -> void:
 		# Пара на ходу — рука вытянута к партнёру (клип Walk_Hand).
 		_set_anim(Protocol.AnimState.HOLD_HAND)
 	elif moving:
-		# Ходьба/бег — по фактической скорости (Д2), не по вводу.
+		# Ходьба/бег — по фактической скорости (Д2/Д3), не по вводу:
+		# сам клип (Walk/Jog/Sprint) и каденцию модель выбирает по скорости.
 		_set_anim(Protocol.AnimState.WALK if hspeed < B.anim_walk_run_speed
 			else Protocol.AnimState.RUN)
 	else:
 		_set_anim(Protocol.AnimState.IDLE)
+	# Темп ног (Д3): фактическая скорость; «за руку» — по более медленному
+	# из пары, чтобы ведомого не тащило быстрее его шагов.
+	var tempo := hspeed
+	if linked and moving:
+		var partner := _hand_partner_speed()
+		if partner >= 0.0:
+			tempo = minf(tempo, partner)
+	visual.set_locomotion_speed(tempo)
 	_was_on_floor = is_on_floor()
+
+
+## Скорость партнёра по руке, м/с; −1 — партнёр недоступен (нет ремоута).
+func _hand_partner_speed() -> float:
+	var peer := _hand_leader_peer if _hand_leader_peer != 0 else _hand_follower_peer
+	if peer == 0:
+		return -1.0
+	for node in get_tree().get_nodes_in_group(RemotePlayer.GROUP):
+		var remote := node as RemotePlayer
+		if remote != null and remote.peer_id == peer:
+			return remote.speed_estimate()
+	return -1.0
 
 
 func _set_anim(state: int) -> void:
