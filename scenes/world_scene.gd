@@ -235,17 +235,43 @@ func _spawn_player() -> void:
 
 ## Прогон AnimSelfCheck на модели локального игрока и выход (--selftest-anim):
 ## полсекунды на успокоение разовых клипов появления (приземление), затем
-## снимки покоя/ходьбы и вердикт.
+## снимки покоя/ходьбы; дальше П5.8 Д1–Д4 — RealismCheck (скольжение
+## стоп, диапазоны рук, посадка одежды) на всех комбинациях пол × наряд.
+## Печатает SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL); гоняется
+## и на экспортированных сборках, чтобы ловить проблемы экспорта.
 func _selftest_anim(visual: CharacterModel) -> void:
 	for i: int in 40:
 		await get_tree().physics_frame
 	var result: Dictionary = await AnimSelfCheck.run(visual, true)
-	if result["ok"]:
+	var reasons: PackedStringArray = PackedStringArray()
+	if not result["ok"]:
+		for reason: String in result["reasons"]:
+			reasons.append(reason)
+	# П5.8 Д1–Д4: реалистичность на всех комбинациях внешности.
+	var model_scene := load("res://gameplay/player/character_model.tscn") \
+		as PackedScene
+	for gender: int in Appearance.GENDERS:
+		for outfit: int in Appearance.OUTFITS.size():
+			var model := model_scene.instantiate() as CharacterModel
+			add_child(model)
+			var ap := Appearance.default_for(gender)
+			ap.top = outfit
+			ap.legs = outfit
+			ap.feet = outfit
+			model.setup_appearance(ap)
+			print("SELFTEST-ANIM: пол %d наряд %s" % [gender,
+				Appearance.OUTFITS[outfit]])
+			var real: Dictionary = await RealismCheck.run(model, true)
+			if not real["ok"]:
+				for reason: String in real["reasons"]:
+					reasons.append(reason)
+			model.queue_free()
+	if reasons.is_empty():
 		print("SELFTEST-ANIM: PASS")
 		get_tree().quit(0)
 		return
 	print("SELFTEST-ANIM: FAIL")
-	for reason: String in result["reasons"]:
+	for reason: String in reasons:
 		print("SELFTEST-ANIM: %s" % reason)
 	get_tree().quit(1)
 
