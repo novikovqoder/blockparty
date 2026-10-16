@@ -12,6 +12,11 @@ extends GutTest
 const MODEL: PackedScene = preload("res://gameplay/player/character_model.tscn")
 ## Верх бюджета треугольников ближнего варианта (раздел «Этап П5.8»).
 const TRI_BUDGET: int = 20000
+## Низ бюджета: после Д4-среза тел «по одежде» (скрытая кожей геометрия
+## удаляется) ближний вариант без убора полегчал до ~11.8 тыс. — нижняя
+## граница опущена с 12 тыс., смысл порога прежний: «не пустой и не
+## низкополигональный».
+const TRI_BUDGET_MIN: int = 11000
 ## Высоты срезов силуэта, м (после подгонки роста): щиколотка, голень,
 ## бедро, пояс, грудь, шея.
 const RAY_HEIGHTS: PackedFloat32Array = [0.05, 0.4, 0.85, 1.05, 1.35, 1.5]
@@ -100,7 +105,7 @@ func _check_budget(model: CharacterModel) -> void:
 			lod += tris
 		else:
 			near += tris
-	assert_between(near, 12000, TRI_BUDGET,
+	assert_between(near, TRI_BUDGET_MIN, TRI_BUDGET,
 		"бюджет ближнего варианта (факт %d)" % near)
 	assert_lt(lod, near, "LOD легче ближнего варианта")
 
