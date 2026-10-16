@@ -82,16 +82,8 @@ const MODELS: Dictionary = {
 		["polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res"],
 		0.5, 3.0, "trunk",
 	],
-	&"rgrass": [
-		"",
-		["polyhaven.com/grass_medium_02/grass_medium_02_lo.res"],
-		0.5, 0.7, "leaf",
-	],
-	&"fern": [
-		"polyhaven.com/fern_02",
-		["fern_02_2k.gltf"],
-		0.6, 2.4, "leaf", "tex",
-	],
+	# П5.9, блок 3: rgrass и fern больше не сканы — процедурные меши
+	# ForestPlants (материал ForestMat), см. PropMeshes.mesh.
 	&"bush": [
 		"kenney.nl/nature-kit",
 		["plant_bush", "plant_bushSmall", "plant_bushDetailed"],

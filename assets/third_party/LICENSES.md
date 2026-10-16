@@ -29,8 +29,6 @@ Animation Library (П5.7–П5.8).
 | rock_09 | Poly Haven | https://polyhaven.com/a/rock_09 | CC0 | 2026-10-11 | `polyhaven.com/rock_09/rock_09_lo.res` |
 | boulder_01 | Poly Haven | https://polyhaven.com/a/boulder_01 | CC0 | 2026-10-11 | `polyhaven.com/boulder_01/boulder_01_lo.res` |
 | dead_tree_trunk | Poly Haven | https://polyhaven.com/a/dead_tree_trunk | CC0 | 2026-10-11 | `polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res` |
-| grass_medium_02 | Poly Haven | https://polyhaven.com/a/grass_medium_02 | CC0 | 2026-10-11 | `polyhaven.com/grass_medium_02/grass_medium_02_lo.res` |
-| fern_02 | Poly Haven | https://polyhaven.com/a/fern_02 | CC0 | 2026-10-11 | `polyhaven.com/fern_02/fern_02_2k.gltf`, `polyhaven.com/fern_02/fern_02.bin`, `polyhaven.com/fern_02/textures/fern_02_arm_2k.jpg`, `polyhaven.com/fern_02/textures/fern_02_diff_2k.jpg`, `polyhaven.com/fern_02/textures/fern_02_nor_gl_2k.jpg` |
 | kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
 | grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
 | rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
@@ -42,6 +40,9 @@ Animation Library (П5.7–П5.8).
 брёвен Леса: скачанные glb децимированы до бюджетов low-poly и запечены в
 `.res` с цветом текстуры в вершинах (`tools/decimate_polyhaven.gd`;
 оригинальные glb в проекте не хранятся, страницы ассетов — в таблице).
+П5.9 (блок 3) заменил фотосканы травы и папоротника процедурными пучками
+`gameplay/world/props/forest_plants.gd` — наборы grass_medium_02 и fern_02
+удалены.
 HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
 смешиваются по времени суток в `assets/shaders/sky.gdshader`.
 Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — исходные

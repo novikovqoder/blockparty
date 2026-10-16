@@ -111,7 +111,7 @@ const SOLID_TYPES: PackedStringArray = [
 ## либо здесь; ничего третьего не бывает.
 const PASS_THROUGH_TYPES: PackedStringArray = [
 	"grass_tuft", "reed", "flower", "pebble", "bush", "fern", "ruin_gate",
-	"rshrub", "rgrass",
+	"rshrub", "rgrass", "rflower", "mrock",
 ]
 ## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
 ## замкнутая петля по земле вокруг дома. Радиус петли, запас от твёрдых
@@ -769,11 +769,11 @@ static func _trees_and_rocks(
 				and absf(gully_along(x, z)) <= GULLY_HALF_LEN - 1.0
 			if on_gully:
 				if h > 0.6 and rng.randf() < 0.35:
-					_prop(props, rng, cell, h, "fern", "leaf", 1)
+					_prop(props, rng, cell, h, "fern", "plain", 1)
 			elif not reserved.has(cell) and h > 0.9 and h < 3.4 \
 					and Vector2(x + 52.0, z + 52.0).length() < 40.0:
 				if rng.randf() < 0.05:
-					_prop(props, rng, cell, h, "fern", "leaf", 1)
+					_prop(props, rng, cell, h, "fern", "plain", 1)
 	# Трава и цветы на лугах (MultiMesh, раздел 16: трава исчезает дальше 40 м).
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
@@ -787,11 +787,21 @@ static func _trees_and_rocks(
 				continue  # площадь — вымощенная, без травы
 			if Vector2(x - 58.0, z + 48.0).length() < 25.0:
 				continue  # терраса руин — камень
-			if Vector2(x + 52.0, z + 52.0).distance_to(forest) < 40.0:
-				# В Лесу (П5.7, блок 2) — сканы кочек Poly Haven, гуще травы
-				# лугов; цветы остаются луговой особенностью.
-				if rng.randf() < 0.35:
-					_prop(props, rng, cell, h, "rgrass", "plain", 1)
+			if Vector2(x, z).distance_to(forest) < 40.0:
+				# П5.9, блок 3: пучки-островки по шуму — густые кочки, между
+				# ними проплешины (не ровный ковёр). Не на тропе и не на
+				# гравии Площади (тропа читается землёй); в пятнах — россыпь
+				# цветов (жёлтые/фиолетовые/белые) и камни во мху. Клетки
+				# Леса не проваливаются в луговую раскладку.
+				if _is_grassy_forest(heights, x, z):
+					var patch: float = _grass_patch(x, z)
+					if patch > 0.05:
+						if rng.randf() < 0.62 * patch:
+							_prop(props, rng, cell, h, "rgrass", "plain", 3)
+						elif rng.randf() < 0.10 * patch:
+							_prop(props, rng, cell, h, "rflower", "plain", 3)
+					if _moss_patch(x, z) > 0.55 and rng.randf() < 0.06:
+						_prop(props, rng, cell, h, "mrock", "plain", 3)
 				continue
 			if rng.randf() < 0.30:
 				_prop(props, rng, cell, h, "grass_tuft", "grass")
@@ -829,6 +839,50 @@ static func _no_trees_near(trees: Dictionary, x: int, z: int, radius: int) -> bo
 			if trees.has(Vector2i(x + dx, z + dz)):
 				return false
 	return true
+
+
+# --- Пятна травы и мха Леса (П5.9, блок 3) ---
+
+## Шум пятен травы (кочки/проплешины) и мха: фиксированные seed — раскладка
+## детерминирована, пятна мха совпадают с покраской земли ForestGround.
+const GRASS_PATCH_SEED: int = 9107
+const GRASS_PATCH_FREQUENCY: float = 0.055
+static var _grass_patch_noise: FastNoiseLite
+static var _moss_patch_noise: FastNoiseLite
+
+
+## Вес пятна травы в точке (0 — проплешина, 1 — гуща).
+static func _grass_patch(x: int, z: int) -> float:
+	if _grass_patch_noise == null:
+		_grass_patch_noise = FastNoiseLite.new()
+		_grass_patch_noise.seed = GRASS_PATCH_SEED
+		_grass_patch_noise.frequency = GRASS_PATCH_FREQUENCY
+	return smoothstep(0.42, 0.78, (_grass_patch_noise.get_noise_2d(x, z) + 1.0) * 0.5)
+
+
+## Вес пятна мха (тот же шум, что красит мох на земле Леса).
+static func _moss_patch(x: int, z: int) -> float:
+	if _moss_patch_noise == null:
+		_moss_patch_noise = FastNoiseLite.new()
+		_moss_patch_noise.seed = ForestGround.MOSS_SEED
+		_moss_patch_noise.frequency = ForestGround.MOSS_FREQUENCY
+	return smoothstep(0.05, 0.75, (_moss_patch_noise.get_noise_2d(x, z) + 1.0) * 0.5)
+
+
+## Клетка леса пригодна для пучков травы: не тропа/гравий (вес < 0.2 —
+## тропа читается землёй), уклон не круче 0.7 (на камне травы нет).
+static func _is_grassy_forest(heights: PackedFloat32Array, x: int, z: int) -> bool:
+	var on_path: float = maxf(
+		ForestGround._path_weight(float(x), float(z)),
+		ForestGround._plaza_weight(float(x), float(z)))
+	if on_path >= 0.2:
+		return false
+	var worst := 0.0
+	for offset: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
+		var h: float = heights[_idx(
+			clampi(x + offset.x, -HALF, HALF), clampi(z + offset.y, -HALF, HALF))]
+		worst = maxf(worst, absf(h - heights[_idx(x, z)]))
+	return worst < 0.7
 
 
 ## Добавить предмет «по клетке»: позиция у точки сетки с лёгким сдвигом,

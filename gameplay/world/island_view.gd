@@ -66,11 +66,17 @@ func _build_props() -> void:
 		var instance := MultiMeshInstance3D.new()
 		instance.name = "Props_" + key.replace(":", "_")
 		instance.multimesh = group.to_multimesh()
-		# Растительность качается на ветру (vfx-fix, блок б); остальные
-		# предметы — общий статичный материал.
-		instance.material_override = LowPolyMat.wind_or_vertex(StringName(type)) \
-			if not PropMeshes.wind_params(StringName(type)).is_empty() else material
-		var range: float = PropMeshes.visibility_range(StringName(type))
+		# Растительность Леса (П5.9) — материалы ForestMat (градиент травы,
+		# ветер, спад густоты от камеры, мох камней); остальная растительность
+		# качается на ветру (vfx-fix, блок б); прочие предметы — статичный.
+		var type_name := StringName(type)
+		if ForestMat.handles(type_name):
+			instance.material_override = ForestMat.for_type(type_name)
+		elif not PropMeshes.wind_params(type_name).is_empty():
+			instance.material_override = LowPolyMat.wind_or_vertex(type_name)
+		else:
+			instance.material_override = material
+		var range: float = PropMeshes.visibility_range(type_name)
 		if range > 0.0:
 			instance.visibility_range_end = range
 			_base_ranges[type] = range
@@ -98,10 +104,12 @@ func _build_colliders() -> void:
 	add_child(body)
 
 
-## «Простая графика» (раздел 15): без травы, мелкие предметы ближе.
+## «Простая графика» (раздел 15): без травы (включая пучки Леса, П5.9),
+## мелкие предметы ближе.
 func set_simple_graphics(simple: bool) -> void:
-	if _props_by_type.has("grass_tuft"):
-		(_props_by_type["grass_tuft"] as MultiMeshInstance3D).visible = not simple
+	for type: String in ["grass_tuft", "rgrass", "rflower"]:
+		if _props_by_type.has(type):
+			(_props_by_type[type] as MultiMeshInstance3D).visible = not simple
 	for type: String in _base_ranges:
 		var instance: MultiMeshInstance3D = _props_by_type[type]
 		instance.visibility_range_end = maxf(25.0, float(_base_ranges[type]) * 0.6) \

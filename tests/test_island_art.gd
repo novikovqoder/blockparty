@@ -17,7 +17,14 @@ const PROP_TYPES: PackedStringArray = [
 	"pebble", "grass_tuft", "flower", "reed", "ruin_block", "ruin_tower",
 	"ruin_gate", "ruin_arch", "ruin_column", "bench", "board", "beacon",
 	"pier_post", "plank_deck", "boat",
-	"rtree_leafy", "rshrub", "rrock", "rlog", "rgrass",
+	"rtree_leafy", "rshrub", "rrock", "rlog", "rgrass", "rflower", "mrock",
+]
+
+## Лесная растительность П5.9 с запечёнными нормалями: трава, папоротник
+## и цветы — Vector3.UP (пучок затеняется как земля, а не как вертикальная
+## стенка), камни во мху — сглаженные (мягкая форма, не фасет).
+const FOREST_BAKED_NORMALS: PackedStringArray = [
+	"rgrass", "rflower", "fern", "mrock",
 ]
 
 ## Кэш данных генератора между тестами (generate() дорогой, ~10 с).
@@ -36,7 +43,8 @@ func _arrays(type: String, variant: int) -> Array:
 
 func test_prop_meshes_have_faces_and_colors() -> void:
 	# Раздел 16: предмет — огранённый меш с цветом в вершинах (без нормалей:
-	# плоское затенение считает шейдер).
+	# плоское затенение считает шейдер). Исключение — лесная растительность
+	# П5.9 (FOREST_BAKED_NORMALS): нормали запечены сознательно.
 	for type: String in PROP_TYPES:
 		var arrays: Array = _arrays(type, 0)
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -47,7 +55,15 @@ func test_prop_meshes_have_faces_and_colors() -> void:
 			(arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size(), 0,
 			"%s: есть грани" % type,
 		)
-		assert_null(arrays[Mesh.ARRAY_NORMAL], "%s: нормали не запечены" % type)
+		if FOREST_BAKED_NORMALS.has(type):
+			var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+			assert_eq(normals.size(), verts.size(), "%s: нормаль каждой вершине" % type)
+			for normal: Vector3 in normals:
+				assert_almost_eq(
+					normal.length(), 1.0, 0.001, "%s: нормали единичные" % type
+				)
+		else:
+			assert_null(arrays[Mesh.ARRAY_NORMAL], "%s: нормали не запечены" % type)
 
 
 func test_prop_meshes_stand_on_ground() -> void:

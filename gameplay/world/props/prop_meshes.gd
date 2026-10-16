@@ -51,6 +51,16 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _boat()
 		"log_bridge":
 			return _log_bridge()
+		# П5.9, блок 3: растительность Леса — процедурные пучки/вайи/цветы
+		# и камни во мху (материалы — ForestMat).
+		"rgrass":
+			return ForestPlants.grass_clump(variant)
+		"fern":
+			return ForestPlants.fern(variant)
+		"rflower":
+			return ForestPlants.flower(variant)
+		"mrock":
+			return RockGen.boulder(variant, 0.22 + 0.05 * (variant % 3), 0.65)
 	push_error("Неизвестный тип предмета: %s" % type)
 	return ArrayMesh.new()
 
@@ -116,8 +126,14 @@ static func visibility_range(type: StringName) -> float:
 		# кенниевские аналоги, деревья видны всегда (силуэт леса издалека).
 		"rshrub":
 			return 70.0
+		# П5.9, блок 3: спад густоты травы делает шейдер (травинки
+		# «садятся» в землю с 40 м), MultiMesh гасится чуть дальше.
 		"rgrass":
-			return 40.0
+			return 60.0
+		"rflower":
+			return 56.0
+		"mrock":
+			return 60.0
 	return 0.0
 
 
@@ -152,12 +168,8 @@ static func wind_params(type: StringName) -> Dictionary:
 				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
 				"wind_direction": Vector2(0.9, 0.4),
 			}
-		"fern":
-			return {
-				"wind_amplitude": 0.05, "wind_freq": 1.3,
-				"wind_weight_base": 0.05, "wind_weight_span": 0.7,
-				"wind_direction": Vector2(0.85, 0.45),
-			}
+		# П5.9, блок 3: ветер rgrass/fern/rflower — в шейдере grass_field
+		# (ForestMat), не общий wind.gdshader.
 		"tree_leafy", "tree_spruce", "tree_giant":
 			return {
 				"wind_amplitude": 0.22, "wind_freq": 0.55,
@@ -178,12 +190,10 @@ static func wind_params(type: StringName) -> Dictionary:
 				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
 				"wind_direction": Vector2(0.9, 0.4),
 			}
-		"rgrass":
-			return {
-				"wind_amplitude": 0.05, "wind_freq": 1.9,
-				"wind_weight_base": 0.02, "wind_weight_span": 0.35,
-				"wind_direction": Vector2(0.85, 0.45),
-			}
+		# П5.9, блок 3: ветер rgrass/fern/rflower — в шейдере grass_field
+		# (ForestMat), не общий wind.gdshader.
+		"rgrass", "rflower", "mrock":
+			return {}
 	return {}
 
 
