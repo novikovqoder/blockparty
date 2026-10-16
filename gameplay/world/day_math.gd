@@ -7,13 +7,9 @@ extends RefCounted
 
 const B: Balance = preload("res://gameplay/balance.tres")
 
-## Палитра неба: верх / горизонт для дня, ночи и тёплой полосы у горизонта
-## на рассвете и закате (раздел 16: мягкие пастельные тона).
-const SKY_TOP_DAY := Color(0.44, 0.64, 0.85)
-const SKY_TOP_NIGHT := Color(0.07, 0.11, 0.21)
-const HORIZON_DAY := Color(0.74, 0.83, 0.9)
-const HORIZON_NIGHT := Color(0.22, 0.27, 0.38)
-const HORIZON_WARM := Color(1.0, 0.62, 0.38)
+## Доля переходов между временами суток (П5.9 блок 6): рассвет перетекает
+## в день за 30 % дневного отрезка, закат в ночь — за 30 % ночного.
+const PHASE_BLEND: float = 0.30
 
 
 ## Доля суток [0, 1): 0 — рассвет, day_share — закат, далее ночь.
@@ -79,24 +75,9 @@ static func warmth(world_time: float) -> float:
 	return 1.0 - clampf(sin(PI * phase_progress(world_time)) * 3.0, 0.0, 1.0)
 
 
-static func sky_top_color(world_time: float) -> Color:
-	return SKY_TOP_NIGHT.lerp(SKY_TOP_DAY, dayness(world_time))
-
-
-static func horizon_color(world_time: float) -> Color:
-	var base: Color = HORIZON_NIGHT.lerp(HORIZON_DAY, dayness(world_time))
-	return base.lerp(HORIZON_WARM, warmth(world_time) * 0.85)
-
-
 ## Энергия ambient-освещения (небо): ночь мягкая и светлая — не ниже 0.16.
 static func ambient_energy(world_time: float) -> float:
 	return 0.16 + 0.36 * dayness(world_time)
-
-
-## Азимут солнца внутри HDRI-панорамы заката (grasslands_sunset,
-## подобран по яркому пятну панорамы, tools/preview_hdri.gd):
-## направление солнца панорамы в мировых осях, atan2(x, z).
-const HDRI_SUN_AZIMUTH := 0.945
 
 
 ## Высота солнца в долях: днём sin(π·прогресса дня) [0..1], ночью —
@@ -108,20 +89,59 @@ static func sun_height(world_time: float) -> float:
 	return h if is_day(world_time) else -h
 
 
-## Смешивание трёх панорам суток (П5.7 блок 3): возврат (день, закат,
-## ночь) от непрерывной высоты солнца. День полный при высоком солнце,
-## у горизонта — тёплая закатная панорама, ночь вступает по мере ухода
-## солнца под горизонт; сумма весов всегда 1, переходы непрерывны.
-static func sky_mixes(world_time: float) -> Vector3:
-	var h := sun_height(world_time)
-	var day := smoothstep(0.05, 0.5, h)
-	var night := smoothstep(0.0, -0.25, h)
-	return Vector3(day, 1.0 - day - night, night)
-
-
-## Поворот HDRI-панорамы (радианы вокруг вертикали), при котором солнце
-## панорамы смотрит туда же, куда игровое: свет, тени и закатное свечение
-## согласованы. Панорама медленно «едет» за солнцем в течение дня.
-static func sky_yaw(world_time: float) -> float:
-	var s := sun_direction(world_time)
-	return HDRI_SUN_AZIMUTH - atan2(s.x, s.z)
+## Веса палитр времён суток (П5.9 блок 6): (рассвет, день, закат, ночь),
+## сумма 1 в любой точке суток. Рассвет — начало суток (доля 0), закат —
+## граница day_share; переходы плавные и непрерывны, включая шов полуночи:
+## конец ночи перетекает в рассвет так же, как рассвет в день. Небо и туман
+## красятся смешением этих весов по VisualPalette.
+static func palette_mixes(world_time: float) -> Vector4:
+	var f := day_fraction(world_time)
+	var day := B.day_share
+	var night := 1.0 - day
+	var dawn_end := day * PHASE_BLEND
+	var day_end := day * (1.0 - PHASE_BLEND)
+	var dusk_end := day + night * PHASE_BLEND
+	var night_end := 1.0 - night * PHASE_BLEND
+	var dawn: float
+	var full_day: float
+	var dusk: float
+	var full_night: float
+	if f < dawn_end:
+		# Рассвет → день.
+		var w := smoothstep(0.0, 1.0, f / dawn_end)
+		dawn = 1.0 - w
+		full_day = w
+		dusk = 0.0
+		full_night = 0.0
+	elif f < day_end:
+		dawn = 0.0
+		full_day = 1.0
+		dusk = 0.0
+		full_night = 0.0
+	elif f < day:
+		# День → закат.
+		var w := smoothstep(0.0, 1.0, (f - day_end) / (day - day_end))
+		dawn = 0.0
+		full_day = 1.0 - w
+		dusk = w
+		full_night = 0.0
+	elif f < dusk_end:
+		# Закат → ночь.
+		var w := smoothstep(0.0, 1.0, (f - day) / (dusk_end - day))
+		dawn = 0.0
+		full_day = 0.0
+		dusk = 1.0 - w
+		full_night = w
+	elif f < night_end:
+		dawn = 0.0
+		full_day = 0.0
+		dusk = 0.0
+		full_night = 1.0
+	else:
+		# Ночь → рассвет (шов суток).
+		var w := smoothstep(0.0, 1.0, (f - night_end) / (1.0 - night_end))
+		dawn = w
+		full_day = 0.0
+		dusk = 0.0
+		full_night = 1.0 - w
+	return Vector4(dawn, full_day, dusk, full_night)

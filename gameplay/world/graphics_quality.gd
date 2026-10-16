@@ -54,10 +54,15 @@ static func tier_from_settings() -> int:
 ## Тени и пост-эффекты по уровню (блок е: постобработка — только HIGH).
 ## Цвет тумана и неба ведёт DayCycle. Viewport (опционально) получает
 ## смещение мипов текстур: SIMPLE сэмплит из мипа 1K (П5.7 блок 7).
+## Луна (опционально, П5.9 блок 6: Sky3D) — те же правила теней, что у
+## солнца: «Простая графика» без теней вовсе.
 static func apply(
-	env: Environment, sun: DirectionalLight3D, tier: int, viewport: Viewport = null
+	env: Environment, sun: DirectionalLight3D, tier: int,
+	viewport: Viewport = null, moon: DirectionalLight3D = null
 ) -> void:
 	sun.shadow_enabled = tier != Tier.SIMPLE
+	if moon != null:
+		moon.shadow_enabled = tier != Tier.SIMPLE
 	if viewport != null:
 		viewport.texture_mipmap_bias = SIMPLE_MIPMAP_BIAS if tier == Tier.SIMPLE else 0.0
 	var high := tier == Tier.HIGH

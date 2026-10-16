@@ -1,8 +1,9 @@
-# Сторонние CC0-ресурсы
+# Сторонние ресурсы (CC0 и MIT)
 
-Правила использования — раздел «Скачивание ресурсов» в CLAUDE.md: только CC0,
-только с разрешённых сайтов, в проекте лежат лишь реально используемые файлы
-(архивы не хранятся). Папки наборов Kenney закрыты `.gdignore`: Godot не
+Правила использования — раздел «Скачивание ресурсов» в CLAUDE.md и план
+доработки графики (docs/VISUAL_PLAN.md): ресурсы только CC0, код аддонов —
+CC0 или MIT (с автором и лицензией), только с разрешённых сайтов, в проекте
+лежат лишь реально используемые файлы (архивы не хранятся). Папки наборов Kenney закрыты `.gdignore`: Godot не
 импортирует эти файлы, их читает напрямую `gameplay/world/props/cc0_meshes.gd`
 при запекании острова (в игре меши уже встроены в `island_art.res`). Папки
 остальных наборов импортируются движком и загружаются в рантайме; извлечённые
@@ -22,9 +23,8 @@ Animation Library (П5.7–П5.8).
 | Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_1K-JPG_Color.jpg` |
 | Bark002 | ambientCG | https://ambientcg.com/view?id=Bark002 | CC0 | 2026-10-16 | `ambientcg.com/Bark002/Bark002_1K-JPG_Color.jpg` |
 | Bark003 | ambientCG | https://ambientcg.com/view?id=Bark003 | CC0 | 2026-10-16 | `ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg` |
-| kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
-| grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
-| rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
+| Sky3D 2.1 | Cory Petkovsek, J. Cuéllar и контрибьюторы | https://github.com/TokisanGames/Sky3D | MIT | 2026-10-16 | `addons/sky_3d/` — небо мира (П5.9 блок 6): атмосферное рассеяние, облака, луна, звёзды; текст лицензий — `addons/sky_3d/LICENSE.txt` и `addons/sky_3d/shaders/LICENSE`. Единственная правка кода аддона: прелоады текстур звёздного неба в `src/SkyDome.gd` перенаправлены на процедурные текстуры проекта (см. следующую строку) — штатные Milkyway.jpg/StarField.jpg аддона (панорама ESO/S. Brunier, CC BY 4.0) в проект НЕ вносились и удалены из копии |
+| Текстуры звёздного неба | сделано для проекта (`tools/make_star_textures.gd`) | — | CC0 (как и весь код проекта) | 2026-10-16 | `assets/visual/sky_starmap.png`, `assets/visual/sky_starfield.png` — процедурная полоса «млечного пути» и россыпь звёзд, детерминированная генерация |
 
 Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
 П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются
@@ -46,8 +46,10 @@ Animation Library (П5.7–П5.8).
 `gameplay/world/props/rock_gen.gd` (искажённая шумом сфера, мох по верхним
 граням красит `assets/shaders/rock_moss.gdshader`) — наборы rock_07,
 rock_09 и boulder_01 удалены.
-HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
-смешиваются по времени суток в `assets/shaders/sky.gdshader`.
+HDRI-панорамы Poly Haven (П5.7, блок 3) удалены в П5.9 (блок 6): небо
+мира теперь рисует аддон Sky3D (атмосферное рассеяние вместо запечённых
+панорам), шейдер `assets/shaders/sky.gdshader` и наборы kloofendal /
+grasslands_sunset / rogland_clear_night исключены из проекта.
 Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — исходные
 скелетные анимации персонажей: `tools/make_ubc_anims.gd` перекладывает клипы
 покоя/ходьбы/бега/прыжков/эмоций с универсального рига UAL на общий с ним

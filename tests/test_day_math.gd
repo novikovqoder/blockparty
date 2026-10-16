@@ -1,9 +1,12 @@
 # Тесты математики цикла дня (раздел 7, этап П2): сутки 20 минут, день 60%,
 # мягкая светлая ночь. Чистые функции DayMath — проверяются периодичность,
 # границы дня/ночи, положение солнца и энергия (числа — в Balance).
+# П5.9 блок 6: небо красит Sky3D смешением палитр времён суток — веса
+# palette_mixes проверяются на сумму, фазы и непрерывность шва полуночи.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
+const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 
 ## Допуск сравнения цветов/плавающих (тонкая математика, не физика).
 const EPS: float = 0.001
@@ -61,12 +64,14 @@ func test_max_sun_elevation() -> void:
 
 func test_night_is_soft_and_bright() -> void:
 	# «Ночь мягкая, светлая» (раздел 7): ambient не гаснет ниже 0.16,
-	# небо не чернеет полностью.
+	# небо не чернеет полностью (П5.9 блок 6: ночное небо — палитра ночи
+	# из VisualPalette, полночь — её чистый вес).
 	for t: float in [B.day_cycle_sec * 0.7, B.day_cycle_sec * 0.9]:
 		assert_gt(DayMath.ambient_energy(t), 0.15, "ambient ночи не ниже 0.16")
-		var top := DayMath.sky_top_color(t)
-		assert_gt(top.v, 0.05, "ночное небо не чёрное")
 	assert_almost_eq(DayMath.ambient_energy(B.day_cycle_sec * 0.7), 0.16, EPS)
+	var midnight := DayMath.palette_mixes(B.day_cycle_sec * 0.8)
+	assert_almost_eq(midnight.w, 1.0, EPS, "полночь — чистая палитра ночи")
+	assert_gt(VPAL.night_sky_top.v, 0.05, "ночное небо не чёрное")
 
 
 func test_dayness_and_warmth() -> void:
@@ -78,65 +83,88 @@ func test_dayness_and_warmth() -> void:
 	assert_almost_eq(DayMath.dayness(B.day_cycle_sec * 0.7), 0.0, EPS, "ночью dayness 0")
 
 
-func test_horizon_warms_at_sunrise() -> void:
-	# У рассвета горизонт теплее полуденного: примесь HORIZON_WARM делает
-	# красный выше синего, полдень — холодный (синий выше красного).
-	var sunrise := DayMath.horizon_color(B.day_cycle_sec * 0.01)
-	var noon := DayMath.horizon_color(B.day_cycle_sec * 0.3)
-	assert_gt(sunrise.r - sunrise.b, 0.0, "рассвет тёплый (r > b)")
-	assert_gt(noon.b - noon.r, 0.0, "полдень холодный (b > r)")
+func test_palette_times_of_day() -> void:
+	# П5.9 блок 6 (раздел 16 «Визуальная цель»): палитры времён суток —
+	# рассвет и закат с тёплыми горизонтами (r > b), день с холодным верхом
+	# (b > r), ночь сине-фиолетовая и не чёрная.
 	assert_gt(
-		(sunrise.r - sunrise.b) - (noon.r - noon.b), 0.0,
-		"рассвет теплее полудня",
+		VPAL.dawn_sky_horizon.r - VPAL.dawn_sky_horizon.b, 0.0,
+		"рассветный горизонт тёплый (r > b)",
+	)
+	assert_gt(
+		VPAL.dusk_sky_horizon.r - VPAL.dusk_sky_horizon.b, 0.0,
+		"закатный горизонт тёплый (r > b)",
+	)
+	assert_gt(
+		VPAL.day_sky_top.b - VPAL.day_sky_top.r, 0.0,
+		"полдень холодный (b > r)",
+	)
+	assert_gt(
+		VPAL.night_sky_top.b - VPAL.night_sky_top.r, 0.0,
+		"ночь сине-фиолетовая (b > r)",
+	)
+	assert_between(
+		VPAL.night_sky_top.v, 0.02, 0.25, "ночь тёмная, но не чёрная"
 	)
 
 
-func test_sky_mixes_sum_to_one_all_day() -> void:
-	# П5.7 блок 3: веса панорам (день, закат, ночь) в сумме дают единицу
-	# в любой точке суток — небо не чернеет и не пересвечивается.
+func test_palette_mixes_sum_to_one_all_day() -> void:
+	# П5.9 блок 6: веса палитр (рассвет, день, закат, ночь) в сумме дают
+	# единицу в любой точке суток — небо не чернеет и не пересвечивается.
 	var step: float = B.day_cycle_sec / 60.0
 	for i: int in range(60):
 		var t: float = step * i
-		var mixes := DayMath.sky_mixes(t)
-		assert_almost_eq(mixes.x + mixes.y + mixes.z, 1.0, EPS,
-			"сумма весов панорам = 1 (t=%.1f)" % t)
-		assert_between(mixes.x, 0.0, 1.0, "вес дня корректен (t=%.1f)" % t)
-		assert_between(mixes.y, 0.0, 1.0, "вес заката корректен (t=%.1f)" % t)
-		assert_between(mixes.z, 0.0, 1.0, "вес ночи корректен (t=%.1f)" % t)
+		var mixes := DayMath.palette_mixes(t)
+		assert_almost_eq(
+			mixes.x + mixes.y + mixes.z + mixes.w, 1.0, EPS,
+			"сумма весов палитр = 1 (t=%.1f)" % t,
+		)
+		assert_between(mixes.x, 0.0, 1.0, "вес рассвета корректен (t=%.1f)" % t)
+		assert_between(mixes.y, 0.0, 1.0, "вес дня корректен (t=%.1f)" % t)
+		assert_between(mixes.z, 0.0, 1.0, "вес заката корректен (t=%.1f)" % t)
+		assert_between(mixes.w, 0.0, 1.0, "вес ночи корректен (t=%.1f)" % t)
 
 
-func test_sky_mixes_phases() -> void:
+func test_palette_mixes_phases() -> void:
 	# Полдень — чистый день, полночь — чистая ночь; закат (0.58 суток,
-	# солнце низко) замешан из тёплой панорамы и нарастающей ночи —
-	# переход плавный, без скачка на границе дня.
-	var noon := DayMath.sky_mixes(B.day_cycle_sec * 0.3)
-	assert_almost_eq(noon.x, 1.0, 0.01, "полдень — панорама дня")
-	assert_almost_eq(noon.z, 0.0, EPS, "ночную панораму не видно")
-	var midnight := DayMath.sky_mixes(B.day_cycle_sec * 0.8)
-	assert_almost_eq(midnight.z, 1.0, EPS, "полночь — панорама ночи")
-	var sunset := DayMath.sky_mixes(B.day_cycle_sec * 0.58)
-	assert_gt(sunset.y, noon.y + 0.1, "закат теплее полудня (dusk_mix вырос)")
-	assert_gt(sunset.y, sunset.x, "закатная панорама сильнее дневной")
-	assert_between(sunset.z, 0.0, 0.9, "закат ещё не ночь (ночь < 0.9)")
+	# солнце низко) замешан из тёплой палитры — переход плавный,
+	# без скачка на границе дня.
+	var noon := DayMath.palette_mixes(B.day_cycle_sec * 0.3)
+	assert_almost_eq(noon.y, 1.0, 0.01, "полдень — палитра дня")
+	assert_almost_eq(noon.w, 0.0, EPS, "ночную палитру не видно")
+	var midnight := DayMath.palette_mixes(B.day_cycle_sec * 0.8)
+	assert_almost_eq(midnight.w, 1.0, EPS, "полночь — палитра ночи")
+	var sunset := DayMath.palette_mixes(B.day_cycle_sec * 0.58)
+	assert_gt(sunset.z, sunset.y + 0.1, "закатная палитра сильнее дневной")
+	assert_between(sunset.w, 0.0, 0.9, "закат ещё не ночь (ночь < 0.9)")
 	# Смешивание непрерывно на границе дня и ночи: шаг 1 % суток меняет
 	# веса мало (нет «щёлка» неба в момент заката).
-	var before := DayMath.sky_mixes(B.day_cycle_sec * (B.day_share - 0.01))
-	var after := DayMath.sky_mixes(B.day_cycle_sec * B.day_share)
-	assert_almost_eq(before.x, 0.0, 0.01, "у границы дня дневная доля ~0")
-	assert_almost_eq(after.x, 0.0, EPS, "за границей дня дневной доли нет")
-	assert_almost_eq(before.z, after.z, 0.01, "ночная доля непрерывна")
+	var before := DayMath.palette_mixes(B.day_cycle_sec * (B.day_share - 0.01))
+	var after := DayMath.palette_mixes(B.day_cycle_sec * B.day_share)
+	assert_almost_eq(before.y, 0.0, 0.01, "у границы дня дневная доля ~0")
+	assert_almost_eq(after.y, 0.0, EPS, "за границей дня дневной доли нет")
+	assert_almost_eq(before.w, after.w, 0.01, "ночная доля непрерывна")
 
 
-func test_sky_yaw_follows_sun() -> void:
-	# Поворот панорамы согласован с азимутом солнца: у полудня и заката
-	# разница поворотов равна разнице азимутов (панорама едет за солнцем).
-	var noon_yaw := DayMath.sky_yaw(B.day_cycle_sec * 0.3)
-	var sunset_yaw := DayMath.sky_yaw(B.day_cycle_sec * 0.58)
-	var noon_dir := DayMath.sun_direction(B.day_cycle_sec * 0.3)
-	var sunset_dir := DayMath.sun_direction(B.day_cycle_sec * 0.58)
-	var dnoon := atan2(noon_dir.x, noon_dir.z)
-	var dsunset := atan2(sunset_dir.x, sunset_dir.z)
+func test_palette_mixes_seam_continuous() -> void:
+	# Шов суток (П5.9 блок 6): полночь лежит внутри плавного перехода
+	# ночь → рассвет, веса непрерывны через границу цикла — нет «щёлка»
+	# неба в момент заворачивания часов.
 	assert_almost_eq(
-		noon_yaw - sunset_yaw, dsunset - dnoon, 0.01,
-		"панорама повёрнута на разницу азимутов солнца",
+		DayMath.palette_mixes(0.0).x, 1.0, EPS,
+		"начало суток — чистая палитра рассвета",
+	)
+	var before_seam := DayMath.palette_mixes(B.day_cycle_sec * (1.0 - 1.0 / 600.0))
+	var after_seam := DayMath.palette_mixes(B.day_cycle_sec * (1.0 / 600.0))
+	assert_almost_eq(
+		before_seam.x + before_seam.w, 1.0, EPS, "у шва только рассвет и ночь"
+	)
+	assert_almost_eq(
+		after_seam.x + after_seam.y, 1.0, EPS, "после шва — рассвет и день"
+	)
+	assert_almost_eq(
+		after_seam.x, before_seam.x, 0.02, "доля рассвета непрерывна через шов"
+	)
+	assert_almost_eq(
+		after_seam.w, before_seam.w, 0.02, "доля ночи непрерывна через шов"
 	)

@@ -50,7 +50,7 @@ func _ready() -> void:
 	add_child(_island)
 	_day_cycle = DayCycle.new()
 	add_child(_day_cycle)
-	_day_cycle.setup($Sun, $WorldEnvironment)
+	_day_cycle.setup($WorldEnvironment/SunLight, $WorldEnvironment)
 	# Атмосферные частицы (vfx-fix, блок г): светлячки, пыльца, листья.
 	_ambient = AmbientParticles.new()
 	add_child(_ambient)
@@ -346,7 +346,8 @@ func _apply_graphics_quality() -> void:
 	# Viewport — для смещения мипов текстур: «Простая графика» сэмплит
 	# 2K-текстуры Леса из мипа 1K (П5.7 блок 7).
 	GraphicsQuality.apply(
-		$WorldEnvironment.environment, $Sun, tier, get_viewport())
+		$WorldEnvironment.environment, $WorldEnvironment/SunLight, tier,
+		get_viewport(), $WorldEnvironment/MoonLight)
 	# Трава и мелкие предметы: «Простая графика» прячет lowpoly-траву
 	# и приближает дальность предметов. Метод существовал с П4.5, но
 	# не вызывался (найдено в П5.7 блоке 7).
@@ -438,8 +439,8 @@ func _screenshot_tour() -> void:
 	if OS.get_environment("SHOT_LAB") == "1":
 		_day_cycle.set_process(false)
 		var env := $WorldEnvironment.environment as Environment
-		$Sun.light_energy = OS.get_environment("SHOT_SUN").to_float()
-		$Sun.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
+		$WorldEnvironment/SunLight.light_energy = OS.get_environment("SHOT_SUN").to_float()
+		$WorldEnvironment/SunLight.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
 		env.ambient_light_energy = OS.get_environment("SHOT_AMB").to_float()
 		if not OS.get_environment("SHOT_DENSITY").is_empty():
 			env.fog_density = OS.get_environment("SHOT_DENSITY").to_float()

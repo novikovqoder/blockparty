@@ -1,29 +1,14 @@
 [gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scenes/world_scene.gd" id="1_world"]
-[ext_resource type="Shader" path="res://assets/shaders/sky.gdshader" id="2_sky"]
-[ext_resource type="Texture2D" uid="uid://cqsvkpgs4cgxd" path="res://assets/third_party/polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr" id="3_hdri_day"]
-[ext_resource type="Texture2D" uid="uid://cxeonhaqph48h" path="res://assets/third_party/polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr" id="4_hdri_dusk"]
-[ext_resource type="Texture2D" uid="uid://c4d3gpaj203lw" path="res://assets/third_party/polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr" id="5_hdri_night"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/Sky3D.gd" id="2_sky3d"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/SkyDome.gd" id="3_skydome"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/TimeOfDay.gd" id="4_tod"]
+[ext_resource type="Shader" path="res://addons/sky_3d/shaders/SkyMaterial.gdshader" id="5_sky"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_1"]
-shader = ExtResource("2_sky")
-shader_parameter/top_color = Color(0.42, 0.63, 0.85, 1)
-shader_parameter/horizon_color = Color(0.72, 0.83, 0.9, 1)
-shader_parameter/ground_color = Color(0.32, 0.42, 0.48, 1)
-shader_parameter/sun_direction = Vector3(0, 1, 0)
-shader_parameter/sun_color = Color(1, 0.95, 0.85, 1)
-shader_parameter/cloud_color = Color(1, 1, 1, 1)
-shader_parameter/cloud_cover = 0.38
-shader_parameter/cloud_speed = 0.004
-shader_parameter/hdri_day = ExtResource("3_hdri_day")
-shader_parameter/hdri_dusk = ExtResource("4_hdri_dusk")
-shader_parameter/hdri_night = ExtResource("5_hdri_night")
-shader_parameter/hdri_mix = 1.0
-shader_parameter/day_mix = 1.0
-shader_parameter/dusk_mix = 0.0
-shader_parameter/night_mix = 0.0
-shader_parameter/sky_yaw = 0.0
+shader = ExtResource("5_sky")
+shader_parameter/ground_color = Color(0.378, 0.406, 0.394, 1)
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("SkyMaterial_1")
@@ -53,8 +38,38 @@ script = ExtResource("1_world")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1")
+script = ExtResource("2_sky3d")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
+[node name="SunLight" type="DirectionalLight3D" parent="WorldEnvironment"]
 light_energy = 0.3
 shadow_enabled = true
 shadow_blur = 1.4
+
+[node name="MoonLight" type="DirectionalLight3D" parent="WorldEnvironment"]
+light_color = Color(0.663, 0.725, 0.902, 1)
+light_energy = 0.22
+shadow_enabled = true
+
+[node name="SkyDome" type="Node" parent="WorldEnvironment"]
+script = ExtResource("3_skydome")
+sun_light_color = Color(1, 0.945, 0.839, 1)
+sun_horizon_light_color = Color(1, 0.518, 0.322, 1)
+sun_light_energy = 0.3
+sun_disk_color = Color(1, 0.518, 0.322, 1)
+moon_color = Color(0.747, 0.794, 0.926, 1)
+moon_light_color = Color(0.663, 0.725, 0.902, 1)
+moon_light_energy = 0.22
+atm_day_tint = Color(0.496, 0.718, 1, 1)
+atm_horizon_light_tint = Color(1, 0.548, 0.366, 1)
+atm_night_tint = Color(0.26, 0.383, 1, 1)
+ground_color = Color(0.378, 0.406, 0.394, 1)
+clouds_night_color = Color(0.11, 0.138, 0.25, 1)
+fog_visible = false
+sun_light_path = NodePath("../SunLight")
+moon_light_path = NodePath("../MoonLight")
+
+[node name="TimeOfDay" type="Node" parent="WorldEnvironment"]
+script = ExtResource("4_tod")
+game_time_enabled = false
+editor_time_enabled = false
+dome_path = NodePath("../SkyDome")
