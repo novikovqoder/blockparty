@@ -87,19 +87,30 @@ func test_paint_is_deterministic() -> void:
 	assert_eq(b1.get_data(), b2.get_data(), "карта края воспроизводима")
 
 
-func test_material_textures_and_shader() -> void:
-	# Все десять текстур ambientCG подключены, шейдер — лесная земля.
+func test_material_colors_and_shader() -> void:
+	# П5.9: земля — цветовые пятна из палитры (без фототекстур), шейдер —
+	# лесная земля; цвета совпадают с assets/visual_palette.tres.
 	var material := ForestGround.make_material(ART)
 	assert_eq(
 		material.shader.resource_path,
 		"res://assets/shaders/forest_ground.gdshader",
 		"материал на шейдере forest_ground")
-	for slot: String in ["litter", "wet", "moss", "rock", "path"]:
-		for kind: String in ["albedo", "normal"]:
-			var texture: Texture2D = material.get_shader_parameter(
-				slot + "_" + kind)
-			assert_not_null(texture, "%s_%s подключена" % [slot, kind])
-			assert_gt(texture.get_width(), 1024, "%s_%s — 2K-набор" % [slot, kind])
+	const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
+	for pair: Array in [
+		["litter_color", VPAL.ground_litter],
+		["litter_dark_color", VPAL.ground_litter_dark],
+		["wet_color", VPAL.ground_wet],
+		["moss_color", VPAL.ground_moss],
+		["rock_color", VPAL.ground_rock],
+		["path_color", VPAL.ground_path],
+	]:
+		var color: Color = material.get_shader_parameter(pair[0])
+		assert_almost_eq(
+			color.r, (pair[1] as Color).r, 0.001, "%s из палитры (r)" % pair[0])
+		assert_almost_eq(
+			color.g, (pair[1] as Color).g, 0.001, "%s из палитры (g)" % pair[0])
+		assert_almost_eq(
+			color.b, (pair[1] as Color).b, 0.001, "%s из палитры (b)" % pair[0])
 	assert_not_null(
 		material.get_shader_parameter("weight_map"), "карта весов в материале")
 	assert_not_null(
