@@ -22,9 +22,6 @@ Animation Library (П5.7–П5.8).
 | Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_1K-JPG_Color.jpg` |
 | Bark002 | ambientCG | https://ambientcg.com/view?id=Bark002 | CC0 | 2026-10-16 | `ambientcg.com/Bark002/Bark002_1K-JPG_Color.jpg` |
 | Bark003 | ambientCG | https://ambientcg.com/view?id=Bark003 | CC0 | 2026-10-16 | `ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg` |
-| rock_07 | Poly Haven | https://polyhaven.com/a/rock_07 | CC0 | 2026-10-11 | `polyhaven.com/rock_07/rock_07_lo.res` |
-| rock_09 | Poly Haven | https://polyhaven.com/a/rock_09 | CC0 | 2026-10-11 | `polyhaven.com/rock_09/rock_09_lo.res` |
-| boulder_01 | Poly Haven | https://polyhaven.com/a/boulder_01 | CC0 | 2026-10-11 | `polyhaven.com/boulder_01/boulder_01_lo.res` |
 | kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
 | grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
 | rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
@@ -45,6 +42,10 @@ Animation Library (П5.7–П5.8).
 и dead_tree_trunk удалены, вместо них кора — текстуры ambientCG (таблица
 выше). Код EZ-Tree переписан на GDScript по чтению исходников, файлы
 оригинала в проекте не хранятся.
+П5.9 (блок 5) заменил фотосканы крупных камней Леса процедурными глыбами
+`gameplay/world/props/rock_gen.gd` (искажённая шумом сфера, мох по верхним
+граням красит `assets/shaders/rock_moss.gdshader`) — наборы rock_07,
+rock_09 и boulder_01 удалены.
 HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
 смешиваются по времени суток в `assets/shaders/sky.gdshader`.
 Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — исходные

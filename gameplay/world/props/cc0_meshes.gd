@@ -37,15 +37,8 @@ const MODELS: Dictionary = {
 	# П5.9, блок 4: деревья, кусты и валежник Леса (rtree_leafy, rshrub,
 	# tree_giant, rlog) больше не сканы — процедурный генератор TreeGen
 	# (порт EZ-Tree), см. PropMeshes.mesh. Сканы Poly Haven удалены.
-	&"rrock": [
-		"",
-		[
-			"polyhaven.com/rock_07/rock_07_lo.res",
-			"polyhaven.com/rock_09/rock_09_lo.res",
-			"polyhaven.com/boulder_01/boulder_01_lo.res",
-		],
-		0.6, 1.0, "stone",
-	],
+	# П5.9, блок 5: глыбы подлеска (rrock, сканы rock_07/rock_09/
+	# boulder_01) тоже процедурные — RockGen.boulder, мох красит ForestMat.
 	# П5.9, блок 3: rgrass и fern больше не сканы — процедурные меши
 	# ForestPlants (материал ForestMat), см. PropMeshes.mesh.
 	&"bush": [

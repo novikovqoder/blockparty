@@ -67,6 +67,11 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return ForestPlants.flower(variant)
 		"mrock":
 			return RockGen.boulder(variant, 0.22 + 0.05 * (variant % 3), 0.65)
+		# П5.9, блок 5: крупные глыбы подлеска — тот же генератор, что
+		# камешки mrock, покрупнее и площе; мох по верхним граням красит
+		# ForestMat (rock_moss.gdshader), как у mrock.
+		"rrock":
+			return RockGen.boulder(variant, 0.7 + 0.16 * (variant % 3), 0.62)
 	push_error("Неизвестный тип предмета: %s" % type)
 	return ArrayMesh.new()
 
@@ -185,7 +190,7 @@ static func wind_params(type: StringName) -> Dictionary:
 		# (ветер волнами по миру — общий с травой); трава и цветы — в
 		# grass_field (ForestMat).
 		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
-		"etree_giant", "dead_log", "rgrass", "rflower", "mrock":
+		"etree_giant", "dead_log", "rgrass", "rflower", "mrock", "rrock":
 			return {}
 	return {}
 

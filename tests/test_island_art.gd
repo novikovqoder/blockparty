@@ -25,7 +25,7 @@ const PROP_TYPES: PackedStringArray = [
 ## и цветы — Vector3.UP (пучок затеняется как земля, а не как вертикальная
 ## стенка), камни во мху — сглаженные (мягкая форма, не фасет).
 const FOREST_BAKED_NORMALS: PackedStringArray = [
-	"rgrass", "rflower", "fern", "mrock",
+	"rgrass", "rflower", "fern", "mrock", "rrock",
 ]
 
 ## Процедурные деревья и валежник Леса (П5.9, блок 4): нормали запечены
