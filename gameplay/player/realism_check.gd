@@ -20,6 +20,10 @@
 #       расхождение в разы), остаток задокументирован в STATUS.md.
 #     Сценарий приземления (Д2): LAND ≤ land_time, через 0.3 с — бег
 #     с каденцией по фактической скорости.
+#     Физический сценарий приземления (Д2, этап 0): прыжок на бегу/шагу
+#     с зажатым движением и 2 с после касания — поза ленда при скорости
+#     не играется вовсе (бленд в локомоцию ≤ ANIM_BLEND, покой — только
+#     при ≈0); приземление в стойку позу ленда сохраняет.
 #  2) руки в пределах (Д1): на позах всех клипов библиотеки углы локтя
 #     (плечо–локоть–запястье) и кисти (локоть–запястье–палец) не выходят
 #     за анатомические диапазоны — до фикса Д1 aim без ролла выкручивало
@@ -385,6 +389,148 @@ static func _land_then_run(model: CharacterModel, skel: Skeleton3D,
 			% [scale, CharacterAnims.speed_scale(
 				CharacterAnims.locomotion_clip(B.run_speed), B.run_speed)])
 	return reasons
+
+
+# --- Приземление с зажатым движением (Д2, этап 0) ---
+
+## Сценарий владельца на ФИЗИЧЕСКОМ игроке (не статичной модели): движение
+## зажато, прыжок, движение не отпускать, 2 с после приземления. До этапа 0
+## поза ленда (статичный присед) играла land_time ≈ 0.2 с при беге 6.5 м/с —
+## тело проезжало ~1.3 м со скольжением; проверка требует: при приземлении
+## с горизонтальной скоростью ленд не играется ни кадра — с кадра касания
+## модель блендится в локомоцию по фактической скорости (смена клипа
+## мгновенна, кросс-фейд ANIM_BLEND = 0.15 с), покой — только при ≈ 0.
+## mode: "run" (W), "walk" (W+Shift — шаг), "still" (прыжок на месте:
+## поза ленда обязана сохраниться — скольжения при ≈ 0 нет).
+## Вызывают GUT-тест (test_landing_anim, чистая площадка) и --selftest-anim
+## (реальный остров: направление бега выбирается raycast'ом — самое
+## свободное из 8, чтобы не упереться в постройку/дерево).
+static func check_landing_blend(player: Player, mode: String = "run",
+		verbose: bool = false) -> Dictionary:
+	var reasons: PackedStringArray = PackedStringArray()
+	var metrics := {}
+	var hz: int = Engine.physics_ticks_per_second
+	var hold_move: bool = mode != "still"
+	if hold_move:
+		_face_clear_direction(player)
+		Input.action_press("move_forward")
+		if mode == "walk":
+			Input.action_press("walk")
+		var target: float = B.walk_speed if mode == "walk" else B.run_speed
+		for i: int in int(0.6 * hz):
+			await player.get_tree().physics_frame
+		var pre: float = _player_hspeed(player)
+		metrics["%s_pre_jump_mps" % mode] = pre
+		if pre < target * 0.7:
+			reasons.append(
+				"%s: до прыжка не разогнался до 70%% скорости (%.2f из %.1f м/с — препятствие на пути?)"
+				% [mode, pre, target])
+	# Прыжок и полёт: буфер ввода ловит кадр; ждём отрыва, затем касания.
+	Input.action_press("jump")
+	await player.get_tree().physics_frame
+	Input.action_release("jump")
+	var airborne := false
+	for i: int in int(0.8 * hz):
+		await player.get_tree().physics_frame
+		if not player.is_on_floor():
+			airborne = true
+		elif airborne:
+			break
+	if not airborne:
+		reasons.append("%s: не оторвался от земли за 0.8 с" % mode)
+		_release_move(hold_move)
+		return {"ok": false, "reasons": reasons, "metrics": metrics}
+	# 2 с после касания, покадрово: клип модели против фактической скорости.
+	var land_frames := 0
+	var bad_frames := 0
+	var first_loco_s: float = -1.0
+	for i: int in int(2.0 * hz):
+		await player.get_tree().physics_frame
+		var clip := _model_clip(player.visual)
+		var hs := _player_hspeed(player)
+		if clip == "Jump_Land":
+			land_frames += 1
+		if not hold_move or hs <= B.anim_idle_speed + 0.1:
+			continue
+		var loco: bool = clip == "Walk" or clip == "Jog_Fwd" \
+			or clip == "Sprint"
+		if clip == "Jump_Land" or clip == "Idle" or not loco:
+			bad_frames += 1
+			if bad_frames <= 3:
+				reasons.append(
+					"%s: кадр %d после касания — %s при скорости %.2f м/с (поза ленда/покой едет по земле = скольжение)"
+					% [mode, i + 1, clip, hs])
+		elif first_loco_s < 0.0:
+			first_loco_s = float(i + 1) / hz
+	metrics["%s_land_pose_frames" % mode] = land_frames
+	metrics["%s_bad_clip_frames" % mode] = bad_frames
+	if mode == "still":
+		# Прыжок на месте: приземление почти без скорости — поза ленда
+		# уместна и обязана сохраниться (чекер этапа 0 её не выпилил).
+		if land_frames == 0:
+			reasons.append(
+				"still: поза ленда не играется при приземлении в стойку (скорость ≈ 0) — регресс одного лишь ленда")
+	else:
+		metrics["%s_first_locomotion_s" % mode] = first_loco_s
+		if land_frames > 0:
+			reasons.append(
+				"%s: поза ленда играется при приземлении на ходу: %d кадров (~%.2f с) — статичный присед едет по земле"
+				% [mode, land_frames, float(land_frames) / hz])
+		if first_loco_s < 0.0 or first_loco_s > CharacterModel.ANIM_BLEND:
+			reasons.append(
+				"%s: бленд в локомоцию дольше ANIM_BLEND %.2f с: %.2f с"
+				% [mode, CharacterModel.ANIM_BLEND, maxf(first_loco_s, 0.0)])
+	_release_move(hold_move)
+	if verbose:
+		for key: String in metrics:
+			print("  %s = %s" % [key, metrics[key]])
+	return {"ok": reasons.is_empty(), "reasons": reasons,
+		"metrics": metrics}
+
+
+## Горизонтальная скорость игрока, м/с.
+static func _player_hspeed(player: Player) -> float:
+	return Vector2(player.velocity.x, player.velocity.z).length()
+
+
+## Клип, играющий на модели (без имени библиотеки), «-» — ничего.
+static func _model_clip(model: CharacterModel) -> String:
+	if model._player == null or model._player.current_animation.is_empty():
+		return "-"
+	var parts := (model._player.current_animation as String).split("/")
+	return parts[parts.size() - 1]
+
+
+static func _release_move(hold_move: bool) -> void:
+	Input.action_release("move_forward")
+	if hold_move and Input.is_action_pressed("walk"):
+		Input.action_release("walk")
+
+
+## Повернуть камеру игрока в самое свободное из 8 направлений (по
+## горизонтальным raycast'ам на высоте щиколотки и груди — ловят и
+## камни, и стены): W бежит от камеры, сценарий не упрётся в постройку.
+static func _face_clear_direction(player: Player) -> void:
+	var space := player.get_world_3d().direct_space_state
+	var best_dir := Vector3(0.0, 0.0, -1.0)
+	var best_clear := -1.0
+	for k: int in 8:
+		var ang: float = TAU * float(k) / 8.0
+		var dir := Vector3(sin(ang), 0.0, cos(ang))
+		var clear := 14.0
+		for height: float in [0.3, 1.2]:
+			var from := player.global_position + Vector3.UP * height
+			var query := PhysicsRayQueryParameters3D.create(from,
+				from + dir * 14.0, player.collision_mask,
+				[player.get_rid()])
+			var hit := space.intersect_ray(query)
+			if not hit.is_empty():
+				clear = minf(clear,
+					(hit["position"] as Vector3).distance_to(from))
+		if clear > best_clear:
+			best_clear = clear
+			best_dir = dir
+	player.camera.rotation.y = atan2(-best_dir.x, -best_dir.z)
 
 
 # --- Руки в пределах (Д1) ---

@@ -247,6 +247,14 @@ func _selftest_anim(visual: CharacterModel) -> void:
 	if not result["ok"]:
 		for reason: String in result["reasons"]:
 			reasons.append(reason)
+	# Приземление с зажатым движением (Д2, этап 0): физический сценарий
+	# на локальном игроке — бег, прыжок, 2 с после касания; блокирующий.
+	print("SELFTEST-ANIM: приземление на бегу (сценарий Д2 этапа 0)")
+	var landing: Dictionary = await RealismCheck.check_landing_blend(
+		_player, "run", true)
+	if not landing["ok"]:
+		for reason: String in landing["reasons"]:
+			reasons.append(reason)
 	# П5.8 Д1–Д4: реалистичность на всех комбинациях внешности.
 	var model_scene := load("res://gameplay/player/character_model.tscn") \
 		as PackedScene

@@ -642,14 +642,18 @@ func in_water() -> bool:
 # --- Модель и анимации ---
 
 func _update_animation() -> void:
+	var hspeed := Vector2(velocity.x, velocity.z).length()
 	if not _was_on_floor and is_on_floor():
-		# Приземление короткое (Д2): сразу после него — локомоция по
-		# фактической скорости, длинная поза не скользит по земле.
-		visual.play_one_shot(Protocol.AnimState.LAND, B.land_time)
+		# Приземление (Д2, этап 0): поза ленда — статичный присед, при
+		# скорости она едет по земле = то самое скольжение после прыжка.
+		# На ходу/бегу ленд не играем вовсе — сразу локомоция по фактической
+		# скорости кросс-фейдом ANIM_BLEND (0.15 с); Jump_Land остаётся
+		# приземлению почти в стойку (скорость ≈ anim_idle_speed).
+		if hspeed <= B.anim_idle_speed:
+			visual.play_one_shot(Protocol.AnimState.LAND, B.land_time)
 		# Облачко пыли при приземлении (раздел 16); частицы в мировых
 		# координатах — эмиттер едет вместе с игроком, пыль остаётся на месте.
 		Fx.puff(self, Vector3(0.0, 0.06, 0.0), Color(0.86, 0.8, 0.7), 10, 0.12, 1.1)
-	var hspeed := Vector2(velocity.x, velocity.z).length()
 	var moving := hspeed > B.anim_idle_speed
 	var linked := _hand_leader_peer != 0 or _hand_follower_peer != 0
 	if _in_water:
