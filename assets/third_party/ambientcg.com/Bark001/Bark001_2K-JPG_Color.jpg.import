@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c5nmwi7bkwh3w"
-path="res://.godot/imported/Bark001_1K-JPG_Color.jpg-839b9a2d9d8a15d5baf701e11d7de1eb.ctex"
+uid="uid://vyigqop7j1bg"
+path="res://.godot/imported/Bark001_2K-JPG_Color.jpg-4be0e419d7cff4479a10525b9862898d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/third_party/ambientcg.com/Bark001/Bark001_1K-JPG_Color.jpg"
-dest_files=["res://.godot/imported/Bark001_1K-JPG_Color.jpg-839b9a2d9d8a15d5baf701e11d7de1eb.ctex"]
+source_file="res://assets/third_party/ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg"
+dest_files=["res://.godot/imported/Bark001_2K-JPG_Color.jpg-4be0e419d7cff4479a10525b9862898d.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

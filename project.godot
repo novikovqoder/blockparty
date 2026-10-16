@@ -130,3 +130,4 @@ pause={
 [rendering]
 
 renderer/rendering_method="forward_plus"
+textures/default_filters/anisotropic_filtering_level=16

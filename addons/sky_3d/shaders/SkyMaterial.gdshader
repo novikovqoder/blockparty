@@ -34,7 +34,7 @@ uniform vec3 atm_sun_partial_mie_phase = vec3(0.36, 1.64, 1.6);
 
 group_uniforms moon;
 uniform vec4 moon_color: source_color = vec4(1.0);
-uniform sampler2D moon_texture: source_color, repeat_disable;
+uniform sampler2D moon_texture: source_color, filter_linear, repeat_disable;
 uniform vec3 moon_texture_alignment = vec3(7.0, 1.4, 4.8);
 uniform bool moon_texture_flip_u;
 uniform bool moon_texture_flip_v;
@@ -47,7 +47,7 @@ uniform vec3 atm_moon_partial_mie_phase = vec3(0.36, 1.64, 1.6);
 
 group_uniforms star_map;
 uniform vec4 starmap_color: source_color = vec4(0.71, 0.71, 0.71, 0.855);
-uniform sampler2D starmap_texture: source_color;
+uniform sampler2D starmap_texture: source_color, filter_linear;
 uniform bool starmap_flip_u = false;
 uniform bool starmap_flip_v = false;
 uniform vec3 starmap_alignment = vec3(2.68288, -0.25891, 0.40101);
@@ -57,10 +57,10 @@ uniform float star_tilt = 0.0; // For tilting the sky according to observer lati
 
 group_uniforms star_field;
 uniform vec4 star_field_color: source_color = vec4(1.0);
-uniform sampler2D star_field_texture: source_color;
+uniform sampler2D star_field_texture: source_color, filter_linear;
 uniform float star_scintillation = 0.75;
 uniform float star_scintillation_speed = 0.01;
-uniform sampler2D noise_tex: source_color;
+uniform sampler2D noise_tex: source_color, filter_linear;
 
 /* Sky alignment values for a star map that is in galactic coordinates. Works for most star maps.
 X: 2.6555
@@ -86,7 +86,7 @@ uniform float cirrus_size = 1.0;
 uniform vec2 cirrus_uv = vec2(0.16, 0.11);
 uniform vec2 cirrus_position1 = vec2(0.0);
 uniform vec2 cirrus_position2 = vec2(0.0);
-uniform sampler2D cirrus_texture;
+uniform sampler2D cirrus_texture: filter_linear;
 
 group_uniforms cumulus_clouds;
 uniform bool cumulus_visible = true;
@@ -98,7 +98,7 @@ uniform float cumulus_noise_freq = 2.7;
 uniform float cumulus_sky_tint_fade = 0.0;
 uniform float cumulus_size = 0.5;
 uniform vec2 cumulus_position = vec2(0.0);
-uniform sampler2D cumulus_texture;
+uniform sampler2D cumulus_texture: filter_linear;
 uniform vec3 cumulus_partial_mie_phase = vec3(0.95756, 1.04244, 0.412);
 uniform float cumulus_mie_intensity = 1.0;
 

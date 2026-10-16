@@ -485,6 +485,10 @@ static func _eye_texture(index: int) -> ImageTexture:
 			var v := maxf(maxf(c.r, c.g), c.b)
 			img.set_pixel(x, y, Color.from_hsv(target.h,
 				target_s * mask, v, c.a))
+	# Перекраска правит только базовый уровень — мип-мапы (планка качества
+	# П5.9) перегенерируются, иначе цвет глаз на дистанции уходит к исходному.
+	if img.has_mipmaps():
+		img.generate_mipmaps()
 	var texture := ImageTexture.create_from_image(img)
 	_eye_cache[index] = texture
 	return texture

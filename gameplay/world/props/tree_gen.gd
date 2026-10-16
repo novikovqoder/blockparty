@@ -20,6 +20,16 @@ const CANOPY_SHADER: Shader = preload("res://assets/shaders/canopy.gdshader")
 const BILLBOARD_SHADER: Shader = \
 	preload("res://assets/shaders/tree_billboard.gdshader")
 
+## Файлы коры ambientcg (CC0). У Bark001 сет «1K» — 512×1024, ниже планки
+## качества П5.9 (короткая сторона ≥1024), поэтому взят 2K-сет (1024×2048);
+## uv_divider компенсирует плотность UV, чтобы тексель на метр не менялся
+## (2K-текстура вдвое выше — масштаб UV вдвое меньше).
+const BARK_FILES: Dictionary = {
+	&"Bark001": {"suffix": "_2K-JPG_Color.jpg", "uv_divider": 4.0},
+	&"Bark002": {"suffix": "_1K-JPG_Color.jpg", "uv_divider": 2.0},
+	&"Bark003": {"suffix": "_1K-JPG_Color.jpg", "uv_divider": 2.0},
+}
+
 ## Пресеты в юнитах EZ-Tree (оригинальные pine_large/oak_medium/aspen_small/
 ## bush_1 с подрезкой под бюджет игры), target_height — нормировка в метры.
 ## texture_scale: x — число оборотов текстуры по окружности, y — плотность
@@ -716,12 +726,19 @@ static func _bark_material(options: Dictionary) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.roughness = 1.0
 	material.vertex_color_use_as_albedo = true
-	var texture_path := "res://assets/third_party/ambientcg.com/%s/%s_1K-JPG_Color.jpg" \
-		% [options["bark"]["texture"], options["bark"]["texture"]]
+	# Планка качества П5.9: мип-мапы + анизотропная фильтрация текстур.
+	material.texture_filter = \
+		BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var bark_name: String = options["bark"]["texture"]
+	var file: Dictionary = BARK_FILES.get(StringName(bark_name),
+		BARK_FILES[&"Bark002"])
+	var texture_path := "res://assets/third_party/ambientcg.com/%s/%s%s" \
+		% [bark_name, bark_name, file["suffix"]]
 	if ResourceLoader.exists(texture_path):
 		material.albedo_texture = load(texture_path)
 		material.uv1_scale = Vector3(
-			1.0, float(options["bark"]["texture_scale"].y) * 0.5, 1.0)
+			1.0, float(options["bark"]["texture_scale"].y)
+				/ float(file["uv_divider"]), 1.0)
 		material.albedo_color = options["_bark_tint"]
 	return material
 
