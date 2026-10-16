@@ -99,11 +99,12 @@ const LOOKOUT_TOP_H: float = 10.0
 ## Типы предметов с коллизией (рецепт формы — в prop_meshes.gd).
 ## ruin_gate — только рама: проём закрывает узел RuinGate (П5, раздел 9.2).
 const SOLID_TYPES: PackedStringArray = [
-	"tree_leafy", "tree_spruce", "tree_giant", "boulder", "rock_pillar",
+	"tree_leafy", "tree_spruce", "boulder", "rock_pillar",
 	"rock_wall", "ruin_block", "ruin_tower", "ruin_arch", "ruin_column",
 	"bench", "log_bridge", "board", "beacon", "pier_post",
 	"plank_deck", "boat",
-	"rtree_leafy", "rrock", "rlog",
+	"etree_pine", "etree_oak", "etree_aspen", "etree_giant",
+	"rrock", "dead_log",
 ]
 ## Предметы раскладки без коллизии (vfx-fix, баг 2): мелкая растительность
 ## проходима, рама ruin_gate — по задумке (проём закрывает RuinGate).
@@ -111,7 +112,7 @@ const SOLID_TYPES: PackedStringArray = [
 ## либо здесь; ничего третьего не бывает.
 const PASS_THROUGH_TYPES: PackedStringArray = [
 	"grass_tuft", "reed", "flower", "pebble", "bush", "fern", "ruin_gate",
-	"rshrub", "rgrass", "rflower", "mrock",
+	"etree_bush", "rgrass", "rflower", "mrock",
 ]
 ## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
 ## замкнутая петля по земле вокруг дома. Радиус петли, запас от твёрдых
@@ -528,11 +529,11 @@ static func _forest_landmarks(
 			if gully_across(x, z) <= GULLY_HALF_W + 1.0 \
 					and absf(gully_along(x, z)) <= GULLY_HALF_LEN:
 				reserved[Vector2i(x, z)] = true
-	# Огромное дерево (~11 м, П5.7 блок 2): децимированный скан island_tree_01
-	# с крупным бюджетом — нормировкой поднят до высоты ориентира; цвет коры
-	# и листвы из текстуры скана (тон kind "plain" — только яркость).
+	# Гигант лесной поляны (~14 м, П5.9 блок 4): процедурный дуб-исполин
+	# EZ-Tree — раскидистая крона-ориентир (тон kind "plain" — только
+	# вариация яркости).
 	var giant_h: float = heights[_idx(GIANT_CELL.x, GIANT_CELL.y)]
-	_add_prop(props, rng, &"tree_giant",
+	_add_prop(props, rng, &"etree_giant",
 		Vector3(GIANT_CELL.x + 0.5, giant_h, GIANT_CELL.y + 0.5),
 		rng.randf_range(-0.1, 0.1), Vector3.ONE * rng.randf_range(0.95, 1.05),
 		"plain", 1)
@@ -724,29 +725,27 @@ static func _trees_and_rocks(
 			var grassy: bool = h > 0.9 and h < 16.0
 			var d_forest: float = Vector2(x, z).distance_to(forest)
 			var in_hills: bool = Vector2(x + 58.0, z - 42.0).length() < 42.0
-			# Лес (П5.7, блок 2): внутри радиуса 40 м — реалистичные сканы
-			# Poly Haven (децимация, цвет из текстуры — тон kind "plain",
-			# только вариация яркости). Подлесок — сканы кустов, редкие
-			# брёвна и камни; ели остались в кольце 40–56 м (переход
-			# к стилю лугов).
+			# Лес (П5.9, блок 4): внутри радиуса 40 м — процедурные деревья
+			# EZ-Tree: хвойные основой, лиственные (дуб, осина) рощами по
+			# шуму пород _forest_kind. Подлесок — кусты, редкие валежники
+			# и камни; ели — в кольце 40–56 м (переход к лугам).
 			if d_forest < 40.0 and grassy:
 				if rng.randf() < 0.07 and _no_trees_near(trees, x, z, 2):
 					trees[cell] = true
-					_prop(props, rng, cell, h, "rtree_leafy", "plain", 3)
+					_prop(props, rng, cell, h, _forest_kind(x, z), "plain", 3)
 				elif rng.randf() < 0.022:
-					_prop(props, rng, cell, h, "rshrub", "plain", 3)
+					_prop(props, rng, cell, h, "etree_bush", "plain", 3)
 				elif rng.randf() < 0.006:
-					_prop(props, rng, cell, h, "rlog", "plain", 1)
+					_prop(props, rng, cell, h, "dead_log", "plain", 1)
 				elif rng.randf() < 0.004:
 					_prop(props, rng, cell, h, "rrock", "plain", 3)
 			# Редкие деревья вокруг леса (не на площади). П5.8, часть A:
-			# старые low-poly деревья с границы Леса убраны — кольцо
-			# перехода тоже занимает реалистичный скан (реже и шире
-			# отступ: дерево крупнее кенниевского).
+			# кольцо перехода занимает хвойное (крупнее кенниевских елей,
+			# отступ шире).
 			elif d_forest < 56.0 and Vector2(x, z - 4.0).length() > 20.0 and grassy:
 				if rng.randf() < 0.007 and _no_trees_near(trees, x, z, 4):
 					trees[cell] = true
-					_prop(props, rng, cell, h, "rtree_leafy", "plain", 3)
+					_prop(props, rng, cell, h, "etree_pine", "plain", 3)
 			# Холмы: валуны повыше, редкие ели, камни у вершин.
 			elif in_hills and h > 4.0:
 				if rng.randf() < 0.012:
@@ -867,6 +866,25 @@ static func _moss_patch(x: int, z: int) -> float:
 		_moss_patch_noise.seed = ForestGround.MOSS_SEED
 		_moss_patch_noise.frequency = ForestGround.MOSS_FREQUENCY
 	return smoothstep(0.05, 0.75, (_moss_patch_noise.get_noise_2d(x, z) + 1.0) * 0.5)
+
+
+## Порода дерева Леса (П5.9, блок 4): хвойные основой (~60 %), лиственные
+## рощами — дуб и осина пятнами крупного шума (не вразброс). Выбор по
+## координатам клетки, а не rng: поток rng раскладки не меняется.
+const FOREST_KIND_SEED: int = 9301
+static var _forest_kind_noise: FastNoiseLite
+
+static func _forest_kind(x: int, z: int) -> String:
+	if _forest_kind_noise == null:
+		_forest_kind_noise = FastNoiseLite.new()
+		_forest_kind_noise.seed = FOREST_KIND_SEED
+		_forest_kind_noise.frequency = 0.03
+	var kind := (_forest_kind_noise.get_noise_2d(x, z) + 1.0) * 0.5
+	if kind < 0.60:
+		return "etree_pine"
+	if kind < 0.85:
+		return "etree_oak"
+	return "etree_aspen"
 
 
 ## Клетка леса пригодна для пучков травы: не тропа/гравий (вес < 0.2 —

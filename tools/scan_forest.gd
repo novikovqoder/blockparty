@@ -31,10 +31,10 @@ func _scan() -> void:
 		counts[type] = counts.get(type, 0) + 1
 		if type == "log_bridge":
 			bridge_y = (prop["pos"] as Vector3).y
-		if type == "tree_giant":
+		if type == "etree_giant":
 			giant = prop["pos"]
 	print("мостик y=%.2f (настил %.2f), гигант %s" % [bridge_y, bridge_y + 0.45, giant])
-	for type: String in ["fern", "log", "tree_giant", "log_bridge", "tree_leafy"]:
+	for type: String in ["fern", "dead_log", "etree_giant", "etree_pine", "etree_oak", "etree_aspen", "etree_bush", "log_bridge", "tree_leafy"]:
 		print("%s: %d" % [type, counts.get(type, 0)])
 
 

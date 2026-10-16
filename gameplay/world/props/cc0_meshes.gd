@@ -29,41 +29,14 @@ const MODELS: Dictionary = {
 		["tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_small"],
 		3.8, 1.7, "trunk",
 	],
-	# Гигант лесной поляны — тот же скан island_tree_01, но с большим бюджетом
-	# децимации (см. tools/decimate_polyhaven.gd): нормировка до ~11 м высоты.
-	&"tree_giant": [
-		"polyhaven.com/island_tree_01",
-		["island_tree_01_giant.res"],
-		11.0, 11.0, "trunk",
-	],
 	&"tree_spruce": [
 		"kenney.nl/nature-kit",
 		["tree_pineRoundA", "tree_pineDefaultA", "tree_pineSmallA"],
 		3.2, 2.1, "trunk",
 	],
-	# Реалистичные деревья Леса (П5.7, блок 2): децимированные сканы Poly Haven
-	# (tools/decimate_polyhaven.gd) — цвет уже запечён в вершины, поэтому
-	# IslandGen даёт им kind "plain" (без зонального уклона). Набор в записи
-	# пуст: варианты лежат в разных папках наборов, файл — путь от
-	# polyhaven.com/.
-	&"rtree_leafy": [
-		"",
-		[
-			"polyhaven.com/island_tree_01/island_tree_01_lo.res",
-			"polyhaven.com/island_tree_02/island_tree_02_lo.res",
-			"polyhaven.com/island_tree_03/island_tree_03_lo.res",
-		],
-		6.0, 4.0, "trunk",
-	],
-	&"rshrub": [
-		"",
-		[
-			"polyhaven.com/shrub_02/shrub_02_lo.res",
-			"polyhaven.com/shrub_03/shrub_03_lo.res",
-			"polyhaven.com/shrub_04/shrub_04_lo.res",
-		],
-		0.9, 1.4, "leaf",
-	],
+	# П5.9, блок 4: деревья, кусты и валежник Леса (rtree_leafy, rshrub,
+	# tree_giant, rlog) больше не сканы — процедурный генератор TreeGen
+	# (порт EZ-Tree), см. PropMeshes.mesh. Сканы Poly Haven удалены.
 	&"rrock": [
 		"",
 		[
@@ -72,15 +45,6 @@ const MODELS: Dictionary = {
 			"polyhaven.com/boulder_01/boulder_01_lo.res",
 		],
 		0.6, 1.0, "stone",
-	],
-	# Валежник Леса: скан лежачего ствола (исходник 3.05 × 0.29 м) —
-	# нормировка вытягивает до 3.0 м при толщине 0.28. Второй вариант
-	# не нужен: поворот вокруг Y и масштаб IslandGen дают вариативность.
-	# Этот же меш — настил мостика через овраг (_log_bridge).
-	&"rlog": [
-		"",
-		["polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res"],
-		0.5, 3.0, "trunk",
 	],
 	# П5.9, блок 3: rgrass и fern больше не сканы — процедурные меши
 	# ForestPlants (материал ForestMat), см. PropMeshes.mesh.

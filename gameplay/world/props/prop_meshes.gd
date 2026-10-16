@@ -51,6 +51,12 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _boat()
 		"log_bridge":
 			return _log_bridge()
+		# Деревья и валежник Леса (П5.9, блок 4) — порт генератора EZ-Tree:
+		# кора и крона двумя поверхностями с запечёнными материалами,
+		# уровни детализации — TreeGen.build_set (IslandArt/IslandView).
+		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
+		"etree_giant", "dead_log":
+			return TreeGen.build_set(type, variant)["mesh"]
 		# П5.9, блок 3: растительность Леса — процедурные пучки/вайи/цветы
 		# и камни во мху (материалы — ForestMat).
 		"rgrass":
@@ -65,21 +71,20 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 	return ArrayMesh.new()
 
 
-## Мостик из брёвен через лесной овраг (П5.7, блок 2): девять сканов
-## Poly Haven «rlog» (лежачий ствол 3.0 × 0.28 м) в ряд с шагом 0.55 вдоль
-## Z; бревно длинной стороной уже вдоль X (перестраховочный swap по AABB
-## оставлен). Все брёвна склеены в одну поверхность — как у прочих групп
-## предметов (IslandArt ждёт меш с одним surface). Низ моста — в origin,
-## лёгкое чередование высоты — вручную заданное, без rng.
+## Мостик из брёвен через лесной овраг (П5.7, блок 2): девять лежачих
+## стволов «dead_log» (П5.9, блок 4 — процедурный изогнутый ствол,
+## 3.0 × 0.28 м) в ряд с шагом 0.55 вдоль Z; бревно длинной стороной уже
+## вдоль X (перестраховочный swap по AABB оставлен). Все брёвна склеены
+## в одну поверхность — как у прочих групп предметов (IslandArt ждёт меш
+## с одним surface). Низ моста — в origin, лёгкое чередование высоты —
+## вручную заданное, без rng.
 static func _log_bridge() -> ArrayMesh:
 	var verts := PackedVector3Array()
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
 	var drift := [0.0, -0.02, 0.015, -0.015, 0.02]
 	for i: int in 9:
-		var log := Cc0Meshes.mesh(&"rlog", 0)
-		if log == null:
-			continue
+		var log: ArrayMesh = TreeGen.build_set(&"dead_log", 0)["mesh"]
 		var arrays: Array = log.surface_get_arrays(0)
 		var log_verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var aabb := log.get_aabb()
@@ -124,8 +129,8 @@ static func visibility_range(type: StringName) -> float:
 			return 50.0
 		# Реалистичные сканы Леса (П5.7, блок 2): кусты и кочки — как их
 		# кенниевские аналоги, деревья видны всегда (силуэт леса издалека).
-		"rshrub":
-			return 70.0
+		# П5.9, блок 4: деревья Леса (etree_*) видны всегда — дальний план
+		# держат уровни детализации IslandView._build_tree_lods.
 		# П5.9, блок 3: спад густоты травы делает шейдер (травинки
 		# «садятся» в землю с 40 м), MultiMesh гасится чуть дальше.
 		"rgrass":
@@ -170,29 +175,17 @@ static func wind_params(type: StringName) -> Dictionary:
 			}
 		# П5.9, блок 3: ветер rgrass/fern/rflower — в шейдере grass_field
 		# (ForestMat), не общий wind.gdshader.
-		"tree_leafy", "tree_spruce", "tree_giant":
+		"tree_leafy", "tree_spruce":
 			return {
 				"wind_amplitude": 0.22, "wind_freq": 0.55,
 				"wind_weight_base": 1.6, "wind_weight_span": 3.5,
 				"wind_direction": Vector2(0.85, 0.45),
 			}
-		# Реалистичные сканы Леса (П5.7, блок 2): крона выше и массивнее
-		# кенниевской — качание чуть шире и начинается выше.
-		"rtree_leafy":
-			return {
-				"wind_amplitude": 0.26, "wind_freq": 0.5,
-				"wind_weight_base": 2.0, "wind_weight_span": 3.2,
-				"wind_direction": Vector2(0.85, 0.45),
-			}
-		"rshrub":
-			return {
-				"wind_amplitude": 0.06, "wind_freq": 1.1,
-				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
-				"wind_direction": Vector2(0.9, 0.4),
-			}
-		# П5.9, блок 3: ветер rgrass/fern/rflower — в шейдере grass_field
-		# (ForestMat), не общий wind.gdshader.
-		"rgrass", "rflower", "mrock":
+		# П5.9: деревья/валежник Леса качаются шейдером canopy.gdshader
+		# (ветер волнами по миру — общий с травой); трава и цветы — в
+		# grass_field (ForestMat).
+		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
+		"etree_giant", "dead_log", "rgrass", "rflower", "mrock":
 			return {}
 	return {}
 
@@ -206,6 +199,10 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(maxf(scale.x, 0.05), maxf(scale.y, 0.05), maxf(scale.z, 0.05))
 		"tree_leafy", "tree_spruce":
 			return Vector3(0.7 * scale.x, 2.8 * scale.y, 0.7 * scale.x)
+		# Деревья Леса (П5.9, блок 4): стволы EZ-Tree тоньше сканов — коробка
+		# уже; коллизия до высоты кроны не нужна (игрок ниже ветвей).
+		"etree_pine", "etree_oak", "etree_aspen":
+			return Vector3(0.55 * scale.x, 2.6 * scale.y, 0.55 * scale.x)
 		"boulder":
 			return Vector3(1.1 * scale.x, 0.6 * scale.y, 1.1 * scale.x)
 		"rock_pillar":
@@ -226,19 +223,16 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(1.9, 4.4, 1.9) * scale.x
 		"boat":
 			return Vector3(1.3, 0.5, 2.35)
-		# П5.7, блок 2: гигант — толстый ствол без кроны; валежник — лежачий
-		# ствол (длина по X до поворота yaw); мостик — настил из девяти
-		# трёхметровых брёвен (_log_bridge), толщина одного бревна.
-		"tree_giant":
-			return Vector3(1.5, 8.0, 1.5) * scale.x
-		"rlog":
+		# Гигант (П5.9, блок 4): дуб-исполин — толстый ствол без кроны;
+		# валежник — лежачий ствол (длина по X до поворота yaw); мостик —
+		# настил из девяти трёхметровых брёвен (_log_bridge), толщина
+		# одного бревна.
+		"etree_giant":
+			return Vector3(1.9, 9.0, 1.9) * scale.x
+		"dead_log":
 			return Vector3(3.0, 0.28, 0.5) * Vector3(scale.x, scale.y, scale.x)
 		"log_bridge":
 			return Vector3(3.0 * scale.x, 0.28 * scale.y, 4.95 * scale.z)
-		# Реалистичные сканы Леса (П5.7, блок 2): стволы сканов тоньше
-		# кенниевских — коробка уже; валежник rlog — в общем блоке выше.
-		"rtree_leafy":
-			return Vector3(0.6 * scale.x, 3.2 * scale.y, 0.6 * scale.x)
 		"rrock":
 			return Vector3(0.85 * scale.x, 0.5 * scale.y, 0.85 * scale.x)
 	return Vector3.ZERO

@@ -19,16 +19,12 @@ Animation Library (П5.7–П5.8).
 | Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_ubc.res` — 19 скелетных клипов, переложенных с универсального рига UAL на риг Universal Base Characters (`tools/make_ubc_anims.gd`; линейки Quaternius Universal делят один риг); исходные glb наборов и архивы в репозитории не хранятся |
 | Universal Base Characters (Standard) | Quaternius | https://quaternius.com/packs/universalbasecharacters.html | CC0 | 2026-10-12 | `quaternius.com/universal_base_characters/baked/` — риг 65 костей (тела Superhero Male/Female, глаза, брови) и причёски (Long, Buns, Buzzed, BuzzedFemale, SimpleParted, Beard), запечённые `tools/make_ubc_characters.gd` в сцены `ubc_male.res`/`ubc_female.res` (срез головы, меши + `_lod1` + скины, материалы, текстуры — кожа обесцвечена под палитры); исходные gltf и архивы в репозитории не хранятся |
 | Modular Character Outfits — Fantasy (Standard) | Quaternius | https://quaternius.com/packs/modularcharacteroutfits.html | CC0 | 2026-10-12 | внутри `quaternius.com/universal_base_characters/baked/` — модульная одежда Peasant/Ranger (верх, руки, низ, обувь, капюшон) из частей Male/Female, собранная тем же запеканием в `meshes/` и сцены `ubc_*.res`; исходные gltf и архивы в репозитории не хранятся |
-| island_tree_01 | Poly Haven | https://polyhaven.com/a/island_tree_01 | CC0 | 2026-10-11 | `polyhaven.com/island_tree_01/island_tree_01_lo.res`, `polyhaven.com/island_tree_01/island_tree_01_giant.res` |
-| island_tree_02 | Poly Haven | https://polyhaven.com/a/island_tree_02 | CC0 | 2026-10-11 | `polyhaven.com/island_tree_02/island_tree_02_lo.res` |
-| island_tree_03 | Poly Haven | https://polyhaven.com/a/island_tree_03 | CC0 | 2026-10-11 | `polyhaven.com/island_tree_03/island_tree_03_lo.res` |
-| shrub_02 | Poly Haven | https://polyhaven.com/a/shrub_02 | CC0 | 2026-10-11 | `polyhaven.com/shrub_02/shrub_02_lo.res` |
-| shrub_03 | Poly Haven | https://polyhaven.com/a/shrub_03 | CC0 | 2026-10-11 | `polyhaven.com/shrub_03/shrub_03_lo.res` |
-| shrub_04 | Poly Haven | https://polyhaven.com/a/shrub_04 | CC0 | 2026-10-11 | `polyhaven.com/shrub_04/shrub_04_lo.res` |
+| Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_1K-JPG_Color.jpg` |
+| Bark002 | ambientCG | https://ambientcg.com/view?id=Bark002 | CC0 | 2026-10-16 | `ambientcg.com/Bark002/Bark002_1K-JPG_Color.jpg` |
+| Bark003 | ambientCG | https://ambientcg.com/view?id=Bark003 | CC0 | 2026-10-16 | `ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg` |
 | rock_07 | Poly Haven | https://polyhaven.com/a/rock_07 | CC0 | 2026-10-11 | `polyhaven.com/rock_07/rock_07_lo.res` |
 | rock_09 | Poly Haven | https://polyhaven.com/a/rock_09 | CC0 | 2026-10-11 | `polyhaven.com/rock_09/rock_09_lo.res` |
 | boulder_01 | Poly Haven | https://polyhaven.com/a/boulder_01 | CC0 | 2026-10-11 | `polyhaven.com/boulder_01/boulder_01_lo.res` |
-| dead_tree_trunk | Poly Haven | https://polyhaven.com/a/dead_tree_trunk | CC0 | 2026-10-11 | `polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res` |
 | kloofendal_48d_partly_cloudy_puresky | Poly Haven | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 | 2026-10-11 | `polyhaven.com/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr` |
 | grasslands_sunset | Poly Haven | https://polyhaven.com/a/grasslands_sunset | CC0 | 2026-10-11 | `polyhaven.com/grasslands_sunset/grasslands_sunset_2k.hdr` |
 | rogland_clear_night | Poly Haven | https://polyhaven.com/a/rogland_clear_night | CC0 | 2026-10-11 | `polyhaven.com/rogland_clear_night/rogland_clear_night_2k.hdr` |
@@ -43,6 +39,12 @@ Animation Library (П5.7–П5.8).
 П5.9 (блок 3) заменил фотосканы травы и папоротника процедурными пучками
 `gameplay/world/props/forest_plants.gd` — наборы grass_medium_02 и fern_02
 удалены.
+П5.9 (блок 4) заменил фотосканы деревьев, кустов и валежника портом
+генератора EZ-Tree (MIT, © Dan Greenheck, github.com/dgreenheck/ez-tree) —
+`gameplay/world/props/tree_gen.gd`; наборы island_tree_01–03, shrub_02–04
+и dead_tree_trunk удалены, вместо них кора — текстуры ambientCG (таблица
+выше). Код EZ-Tree переписан на GDScript по чтению исходников, файлы
+оригинала в проекте не хранятся.
 HDRI-панорамы Poly Haven (П5.7, блок 3) — небо мира: день/закат/ночь
 смешиваются по времени суток в `assets/shaders/sky.gdshader`.
 Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — исходные

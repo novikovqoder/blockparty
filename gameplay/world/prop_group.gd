@@ -10,18 +10,24 @@ extends Resource
 
 ## Меш-эталон группы (PropMeshes/Cc0Meshes, «ногами» в origin).
 @export var mesh: Mesh
+## Дальние уровни детализации деревьев (П5.9, блок 4): [LOD1, LOD2] —
+## тот же скелет с прореженными секциями и листьями (материалы в мешах).
+@export var lods: Array[Mesh] = []
+## «Картинка» дальнего плана: плоский силуэт, разворачиваемый на камеру.
+@export var billboard: Mesh
 ## Трансформы экземпляров: поворот по yaw, масштаб, позиция на рельефе.
 @export var transforms: Array[Transform3D] = []
 ## Тон зоны для каждого экземпляра (шейдер lowpoly умножает на цвет вершин).
 @export var colors: PackedColorArray = PackedColorArray()
 
 
-## Собрать MultiMesh группы в рантайме (IslandView._build_props).
-func to_multimesh() -> MultiMesh:
+## Собрать MultiMesh группы в рантайме (IslandView._build_props);
+## mesh_override — дальний уровень детализации дерева вместо эталона.
+func to_multimesh(mesh_override: Mesh = null) -> MultiMesh:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
-	mm.mesh = mesh
+	mm.mesh = mesh_override if mesh_override != null else mesh
 	mm.instance_count = transforms.size()
 	for i: int in transforms.size():
 		mm.set_instance_transform(i, transforms[i])

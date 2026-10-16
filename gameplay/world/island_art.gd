@@ -39,6 +39,13 @@ static func build(data: Dictionary) -> IslandArt:
 		var group: Dictionary = groups[key]
 		var baked := PropGroup.new()
 		baked.mesh = PropMeshes.mesh(group["type"], group["variant"])
+		# Деревья Леса (П5.9, блок 4): дальние уровни детализации и плоская
+		# «картинка» — из того же скелета (TreeGen кэширует набор).
+		if TreeGen.PRESETS.has(group["type"]):
+			var set: Dictionary = TreeGen.build_set(
+				group["type"], group["variant"])
+			baked.lods = set["lods"]
+			baked.billboard = set["billboard"]
 		for prop: Dictionary in group["props"]:
 			var scale: Vector3 = prop["scale"]
 			var basis := Basis(Vector3.UP, float(prop["yaw"])) * Basis().scaled(scale)

@@ -63,6 +63,12 @@ func _build_props() -> void:
 	for key: String in art.prop_groups:
 		var type := String(key.split(":")[0])
 		var group: PropGroup = art.prop_groups[key]
+		# Деревья Леса (П5.9, блок 4): уровни детализации и «картинка»
+		# дальнего плана — отдельные MultiMesh на дистанционных диапазонах;
+		# материалы запечены в меши (кора + крона), override не ставится.
+		if not group.lods.is_empty():
+			_build_tree_lods(key, type, group)
+			continue
 		var instance := MultiMeshInstance3D.new()
 		instance.name = "Props_" + key.replace(":", "_")
 		instance.multimesh = group.to_multimesh()
@@ -82,6 +88,36 @@ func _build_props() -> void:
 			_base_ranges[type] = range
 		add_child(instance)
 		_props_by_type[type] = instance
+
+
+## Деревья по уровням дальности (раздел 16): полная модель до 45 м, LOD1 —
+## до 90, LOD2 — до 130, дальше — плоский силуэт на камеру (до 220 м:
+## практически всегда виден, но не рендерится через весь остров). Диапазоны
+## перекрываются загибом (margin 6 м) — переключения без «мигания».
+func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
+	var levels: Array = [
+		{"mesh": group.mesh, "begin": 0.0, "end": 45.0, "shadow": true},
+		{"mesh": group.lods[0], "begin": 45.0, "end": 90.0, "shadow": true},
+		{"mesh": group.lods[1], "begin": 90.0, "end": 130.0, "shadow": false},
+		{"mesh": group.billboard, "begin": 130.0, "end": 220.0, "shadow": false},
+	]
+	for index: int in levels.size():
+		var level: Dictionary = levels[index]
+		var instance := MultiMeshInstance3D.new()
+		instance.name = "Props_%s_%s_lod%d" % [
+			type, key.get_slice(":", 1), index]
+		instance.multimesh = group.to_multimesh(level["mesh"])
+		instance.visibility_range_begin = float(level["begin"])
+		instance.visibility_range_end = float(level["end"])
+		instance.visibility_range_begin_margin = 6.0
+		instance.visibility_range_end_margin = 6.0
+		instance.cast_shadow = \
+			GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			if level["shadow"] \
+			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(instance)
+		if index == 0:
+			_props_by_type[type] = instance
 
 
 ## Коллизии предметов: бокс с нижней гранью в точке предмета.

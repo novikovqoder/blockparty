@@ -32,10 +32,12 @@ func test_generation_is_deterministic() -> void:
 	)
 	# Хеш закреплён: непреднамеренное изменение генератора уронит этот тест
 	# (намеренное — требует обновить константу и перегенерировать остров).
-	# П5.9, блок 3: хеш обновлён сознательно — раскладка травы Леса стала
-	# пятнами по шуму (rgrass), добавлены rflower и mrock, тон fern — plain;
-	# высоты, тропы, POI и механики не менялись.
-	assert_eq(first_hash, 1100192458, "хеш острова совпадает с сгенерированной сценой")
+	# П5.9, блок 4: хеш обновлён сознательно — деревья/кусты/валежник Леса
+	# теперь процедурные (EZ-Tree): имена типов пропсов сменились
+	# rtree_leafy/rshrub/rlog/tree_giant → etree_pine/oak/aspen/bush/giant
+	# и dead_log, гигант подрос до ~14 м. Поток rng не менялся:
+	# высоты, тропы, POI и механики прежние, детерминизм — тестом выше.
+	assert_eq(first_hash, 2518214528, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_heightmap_fully_covered() -> void:
@@ -130,7 +132,7 @@ func test_forest_landmarks_giant_tree_and_gully_bridge() -> void:
 	var ferns := 0
 	for prop: Dictionary in data["props"]:
 		match String(prop["type"]):
-			"tree_giant":
+			"etree_giant":
 				giants += 1
 				var pos: Vector3 = prop["pos"]
 				assert_almost_eq(
