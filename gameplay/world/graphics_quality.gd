@@ -40,6 +40,11 @@ const SIMPLE_MIPMAP_BIAS: float = 1.0
 ## Доля обычной дистанции LOD персонажей в «Простой графике» (П5.7 блок 7):
 ## облегчённые копии включаются заметно ближе (18 м → ~8 м).
 const CHARACTER_LOD_FACTOR: float = 0.45
+## Сглаживание «Высокого качества» (планка качества П5.9): MSAA 4x плюс
+## FXAA — края без «лесенок» (TAA недоступен в Compatibility-рендерере,
+## на котором снимаются серверные скриншоты). Обычный и простой уровни —
+## без AA: планка требует сглаживания именно в «Высоком качестве».
+const AA_MSAA_HIGH: int = Viewport.MSAA_4X
 
 
 ## Активный уровень из настроек (экран настроек — П8; dev-флаги — Dev).
@@ -65,6 +70,11 @@ static func apply(
 		moon.shadow_enabled = tier != Tier.SIMPLE
 	if viewport != null:
 		viewport.texture_mipmap_bias = SIMPLE_MIPMAP_BIAS if tier == Tier.SIMPLE else 0.0
+		viewport.msaa_3d = AA_MSAA_HIGH if tier == Tier.HIGH \
+			else Viewport.MSAA_DISABLED
+		viewport.screen_space_aa = (
+			Viewport.SCREEN_SPACE_AA_FXAA if tier == Tier.HIGH
+			else Viewport.SCREEN_SPACE_AA_DISABLED)
 	var high := tier == Tier.HIGH
 	env.ssao_enabled = high
 	if high:

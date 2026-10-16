@@ -390,6 +390,15 @@ func _screenshot_tour() -> void:
 	if OS.get_environment("SHOT_SIMPLE") == "1":
 		Settings.simple_graphics = true
 		_apply_graphics_quality()
+	# SHOT_FPS=секунды — замер FPS (П5.9 блок 9): прожить в мире N секунд
+	# (после SHOT_FPS_WAIT ожидания входа ботов), собрать кадровые интервалы
+	# и напечатать статистику FPS-PROBE. Зона — --dev-spawn, режим графики —
+	# флаги --simple-graphics / --high-quality; игрок и камера обычные.
+	if not OS.get_environment("SHOT_FPS").is_empty():
+		await _fps_probe(
+			maxf(5.0, OS.get_environment("SHOT_FPS").to_float()))
+		get_tree().quit()
+		return
 	# SHOT_P57=1 — тур П5.7: только Лес с фиксированных точек (день и закат,
 	# снимки «было — стало» реалистичной переделки), без общих облётов.
 	# SHOT_FRACTION=0..1 — снять в другой точке суток (например, ночь).
@@ -752,6 +761,8 @@ func _shot_p58_series(camera: Camera3D) -> void:
 	match clip_name:
 		"run":
 			seconds = 5.0
+		"forest_walk":
+			seconds = 10.0
 	if not OS.get_environment("SHOT_SECONDS").is_empty():
 		seconds = clampf(
 			OS.get_environment("SHOT_SECONDS").to_float(), 2.0, 12.0)
@@ -784,6 +795,10 @@ func _shot_p58_series(camera: Camera3D) -> void:
 			await _record_series(camera, "clip_walk", frames,
 				func(_i: int, t: float) -> void:
 					_walk_frame(camera, model, t))
+		"forest_walk":
+			await _record_series(camera, "clip_forest_walk", frames,
+				func(_i: int, t: float) -> void:
+					_forest_walk_frame(camera, model, t, seconds))
 		"run":
 			await _record_series(camera, "clip_run", frames,
 				func(_i: int, t: float) -> void:
@@ -863,6 +878,42 @@ func _walk_frame(camera: Camera3D, model: CharacterModel, t: float) -> void:
 	model.advance_preview(1.0 / SHOT_SERIES_FPS)
 	camera.global_position = Vector3(0.0, ground + 1.35, CLIP_CAM_Z)
 	camera.look_at(model.global_position + Vector3.UP * 1.0, Vector3.UP)
+
+
+## Прогулка по Лесу (П5.9 блок 8, GIF «прогулка по Лесу»): модель идёт
+## от опушки к Площади вглубь леса по кривой Безье между точками 1–3 тура
+## П5.7 (хорда ~26 м за 10 с ≈ темп ходьбы). Камера следует сзади-сбоку.
+const FOREST_WALK_P0 := Vector2(-36.0, -44.0)
+const FOREST_WALK_P1 := Vector2(-50.0, -54.0)
+const FOREST_WALK_P2 := Vector2(-60.0, -64.0)
+
+
+## Точка пути Леса на доле u [0, 1] (Безье по XZ, высота — рельеф).
+func _forest_walk_at(u: float) -> Vector3:
+	var p := FOREST_WALK_P0 * (1.0 - u) * (1.0 - u) \
+		+ FOREST_WALK_P1 * 2.0 * u * (1.0 - u) \
+		+ FOREST_WALK_P2 * u * u
+	return Vector3(p.x, _ground_at(p), p.y)
+
+
+func _forest_walk_frame(
+		camera: Camera3D, model: CharacterModel, t: float, seconds: float
+) -> void:
+	var u := clampf(t / seconds, 0.0, 1.0)
+	var pos := _forest_walk_at(u)
+	var ahead := _forest_walk_at(minf(u + 0.02, 1.0))
+	var tangent := (ahead - pos)
+	tangent.y = 0.0
+	tangent = tangent.normalized()
+	model.global_position = pos
+	model.rotation.y = atan2(tangent.x, tangent.z)
+	model.set_state(Protocol.AnimState.WALK)
+	model.advance_preview(1.0 / SHOT_SERIES_FPS)
+	# Сзади-сбоку: позади по пути, на метр правее, взгляд чуть вперёд модели.
+	var right := tangent.cross(Vector3.UP).normalized()
+	camera.global_position = _forest_walk_at(maxf(u - 0.06, 0.0)) \
+		+ Vector3.UP * 1.5 + right * 1.1
+	camera.look_at(pos + Vector3.UP * 1.15 + tangent * 0.6, Vector3.UP)
 
 
 ## Бег по кругу вокруг костра (run_speed 6.5, радиус за лавками): модель
@@ -1038,6 +1089,65 @@ func _snap(camera: Camera3D, file_name: String) -> void:
 	var path: String = Dev.shot_dir.path_join(file_name)
 	image.save_png(path)
 	Log.info("Скриншот сохранён: " + path, "World")
+
+
+## Замер FPS (П5.9 блок 9, SHOT_FPS): ждём SHOT_FPS_WAIT (по умолчанию 8 с)
+## входа других участников (боты подключаются через ~1 с после старта),
+## затем seconds секунд копим кадровые интервалы и печатаем статистику:
+## среднее/медиана/минимум FPS, число участников в мире и нагрузку кадра.
+## Числа на llvmpipe относительные — сравнение режимов, а не абсолют.
+func _fps_probe(seconds: float) -> void:
+	var wait := 8.0
+	if not OS.get_environment("SHOT_FPS_WAIT").is_empty():
+		wait = maxf(0.0, OS.get_environment("SHOT_FPS_WAIT").to_float())
+	await get_tree().create_timer(wait).timeout
+	var players_in_world := 0
+	for peer_id: int in Net.players.keys():
+		if bool(Net.players[peer_id].get("in_world", false)):
+			players_in_world += 1
+	var tier := GraphicsQuality.tier_from_settings()
+	var tier_name := "NORMAL"
+	match tier:
+		GraphicsQuality.Tier.SIMPLE:
+			tier_name = "SIMPLE"
+		GraphicsQuality.Tier.HIGH:
+			tier_name = "HIGH"
+	print("FPS-PROBE: start seconds=%s players_in_world=%d quality=%s"
+		% [str(seconds), players_in_world, tier_name])
+	var deltas: Array[float] = []
+	var prev_usec := Time.get_ticks_usec()
+	var deadline_usec := prev_usec + int(seconds * 1_000_000.0)
+	while Time.get_ticks_usec() < deadline_usec:
+		await get_tree().process_frame
+		var now_usec := Time.get_ticks_usec()
+		var frame_ms := float(now_usec - prev_usec) / 1000.0
+		prev_usec = now_usec
+		if frame_ms > 0.0 and frame_ms < 1000.0:
+			deltas.append(frame_ms)
+	print("FPS-PROBE: zone=%s frames=%d primitives=%d draw_calls=%d"
+		% [_island.zone_name_at(_player.global_position), deltas.size(),
+			get_viewport().get_render_info(
+				Viewport.RENDER_INFO_TYPE_VISIBLE,
+				Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME),
+			get_viewport().get_render_info(
+				Viewport.RENDER_INFO_TYPE_VISIBLE,
+				Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME)])
+	if deltas.is_empty():
+		print("FPS-PROBE: FAIL — нет кадров")
+		return
+	var sorted_ms := deltas.duplicate()
+	sorted_ms.sort()
+	var total_ms := 0.0
+	for ms: float in deltas:
+		total_ms += ms
+	var median_ms: float = sorted_ms[sorted_ms.size() / 2]
+	var worst_ms: float = sorted_ms[sorted_ms.size() - 1]
+	# p95 по кадрам (не по времени): устойчивее к одиночным выбросам.
+	var p95_ms: float = sorted_ms[mini(
+		sorted_ms.size() - 1, int(roundf(sorted_ms.size() * 0.95)))]
+	print("FPS-PROBE: avg=%.1f median=%.1f p95=%.1f min=%.1f worst_ms=%.0f"
+		% [1000.0 / (total_ms / deltas.size()), 1000.0 / median_ms,
+			1000.0 / p95_ms, 1000.0 / worst_ms, worst_ms])
 
 
 func _shot_zone(camera: Camera3D, zone: String, sunset: bool) -> void:
