@@ -1,55 +1,44 @@
-# Житель острова (П5.5): NPC на модели CharacterModel того же персонажа в
+# Житель острова: NPC на модели CharacterModel того же персонажа в
 # нейтральном цвете песка (не из 6 цветов игроков — не путать с людьми).
-# Стоит на месте; когда игрок подходит ближе quest_npc_wave_range — машет
-# (Тимьян сидит и не встаёт). Значок над головой: «!» — задание доступно,
-# «…» — идёт, ничего — выполнено сегодня. E — диалог (QuestDialog
-# открывается сигналом EventBus). Подмена жителя табличкой при совпадении
+# Стоит на месте; когда игрок подходит ближе WAVE_RANGE — машет
+# (Тимьян сидит и не встаёт). П5.9 переделка П4: задания жителей удалены —
+# житель не интерактивен (без значка «!» и диалога), осталась живая
+# реакция на подход игрока. Подмена жителя табличкой при совпадении
 # с персонажем игрока убрана (П5.8): внешность игрока теперь редактируется
 # свободно, совпадений с жителями больше не бывает.
 class_name Townsfolk
-extends Interactable
+extends Node3D
 
 const B: Balance = preload("res://gameplay/balance.tres")
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Группа жителей (хост валидирует дистанцию диалога по узлам группы).
+## Группа жителей (спавн и тесты находят их по группе).
 const TOWNSFOLK_GROUP: StringName = &"townsfolk"
 ## Нейтральный цвет жителей: тёплый песок, вне player_colors.
 const NPC_COLOR: Color = Color("d9c3a0")
 ## Пауза между взмахами одному и тому же игроку, с.
 const WAVE_COOLDOWN: float = 5.0
-## Значки над головой: доступно / идёт.
-const BADGE_AVAILABLE: String = "!"
-const BADGE_ACTIVE: String = "…"
+## Дистанция, с которой житель машет при подходе игрока, м.
+const WAVE_RANGE: float = 6.0
 ## Радиус капсулы-коллизии жителя, м; высота — до макушки модели
 ## (CharacterModel.HEAD_TOP_Y). Как у игрока: точка опоры у ступней,
 ## центр капсулы на половине высоты. Тело на слое 1 — его чувствует маска
-## игрока (collision_mask = 1), сквозь жителя не пройти; Area3D самого
-## узла остаётся триггером подсказки «E».
+## игрока (collision_mask = 1), сквозь жителя не пройти.
 const COLLISION_RADIUS: float = 0.35
 
 ## Номер персонажа (0 Финн, 1 Луми, 2 Тимьян — как CharacterModel).
 @export var character: int = 0
-## Идентификатор задания жителя.
-@export var quest_id: String = ""
 ## Тимьян сидит у костра (поза SIT, под ним пень).
 @export var sitting: bool = false
 
 var _model: CharacterModel
-var _badge: Label3D
 var _wave_cooldown: float = 0.0
 
 
 func _ready() -> void:
-	super()
 	add_to_group(TOWNSFOLK_GROUP)
-	use_radius = B.quest_npc_use_radius
-	EventBus.quest_state.connect(_on_quest_state)
 	_build_model()
 	_build_collision()
-	_build_badge()
-	# Хост-офлайн: применяем сразу своё состояние (клиент получит rpc).
-	_on_quest_state(Net.quests.state())
 
 
 func _process(delta: float) -> void:
@@ -58,29 +47,9 @@ func _process(delta: float) -> void:
 		return
 	if sitting or _model == null or not _model.visible:
 		return
-	if _nearest_player_distance() <= B.quest_npc_wave_range:
+	if _nearest_player_distance() <= WAVE_RANGE:
 		_wave_cooldown = WAVE_COOLDOWN
 		_model.play_one_shot(Protocol.AnimState.WAVE, 2.0)
-
-
-## «E — поговорить».
-func hint_key() -> String:
-	return "HINT_TALK"
-
-
-func use(_player: Node3D) -> void:
-	EventBus.quest_talk_requested.emit(quest_id)
-
-
-## Применить состояние заданий от хоста: значок над головой.
-func _on_quest_state(state: Dictionary) -> void:
-	var quest: Variant = state.get(quest_id)
-	var stage: int = QuestAuthority.DONE
-	if quest is Dictionary:
-		stage = int(quest["stage"])
-	_badge.text = BADGE_AVAILABLE if stage == QuestAuthority.AVAILABLE \
-		else BADGE_ACTIVE
-	_badge.visible = stage != QuestAuthority.DONE
 
 
 ## Ближайший игрок (свой и чужие) — для взмаха при подходе.
@@ -96,7 +65,7 @@ func _nearest_player_distance() -> float:
 
 
 ## Физическая форма жителя (баг vfx-fix): капсула по габариту модели,
-## нижняя точка у ступней — Area3D самого узла остаётся триггером «E».
+## нижняя точка у ступней.
 func _build_collision() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Body"
@@ -133,19 +102,3 @@ func _build_model() -> void:
 		material.albedo_color = PAL.trunk
 		stump.material_override = material
 		add_child(stump)
-
-
-## Значок «!» / «…» над головой.
-func _build_badge() -> void:
-	_badge = Label3D.new()
-	_badge.name = "Badge"
-	_badge.text = BADGE_AVAILABLE
-	_badge.font_size = 44
-	_badge.outline_size = 6
-	_badge.modulate = PAL.coin
-	_badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_badge.no_depth_test = true
-	_badge.fixed_size = false
-	_badge.pixel_size = 0.004
-	_badge.position = Vector3(0.0, CharacterModel.HEAD_TOP_Y + 0.55, 0.0)
-	add_child(_badge)

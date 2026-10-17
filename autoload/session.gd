@@ -1,14 +1,11 @@
 # Состояние мира и сессии игрока (разделы 7, 10, 13 SPEC): вход и выход
 # (мир открыт постоянно, финиша нет), часы мира world_time по часам хоста
-# (Net), время сессии и монеты за пребывание. Замена состоянию забега v1.
+# (Net) и время сессии. Замена состоянию забега v1.
 # Не делает: сохранение между сессиями (Save — П8), историю встреч (П7).
 extends Node
 
 ## Простой бот для нагрузочных тестов (--bot; ходьба по острову — этап П3).
 var bot: bool = false
-## Автопрогон задания жителя (--quest-bot, П5.5): телепорты вместо ходьбы,
-## прогулочный бот при этом не включается.
-var quest_bot: bool = false
 ## Самопроверка анимаций персонажа (--selftest-anim, возврат П5.8): после
 ## входа в мир гоняет AnimSelfCheck на модели локального игрока, печатает
 ## SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL).
@@ -22,22 +19,17 @@ var in_world: bool = false
 var world_time: float = 0.0
 ## Время текущего пребывания в мире, с (экран «Встречи», лог плейтеста).
 var session_time: float = 0.0
-## Монеты, собранные за текущее пребывание в мире.
-var world_coins: int = 0
 
 
 func _ready() -> void:
 	bot = Dev.bot
-	quest_bot = Dev.quest_bot
 	selftest_anim = Dev.selftest_anim
 	spawn_zone = Dev.spawn_zone
 	if bot:
 		Log.info("Режим бота включён", "Session")
-	if quest_bot:
-		Log.info("Режим автопрогона заданий включён", "Session")
 	if selftest_anim:
 		Log.info("Режим самопроверки анимаций включён", "Session")
-	if bot or quest_bot:
+	if bot:
 		if DisplayServer.get_name() == "headless":
 			# Нагрузочные прогоны: без ограничения FPS копии игры на сервере
 			# без экрана съедают по ядру процессора каждая.
@@ -63,7 +55,6 @@ func enter_world() -> void:
 	in_world = true
 	world_time = Net.world_time_sec()
 	session_time = 0.0
-	world_coins = 0
 	EventBus.world_entered.emit()
 	Log.info("Вход в мир (world_time=%.1f с)" % world_time, "Session")
 
@@ -73,14 +64,5 @@ func leave_world() -> void:
 	if not in_world:
 		return
 	in_world = false
-	Log.info(
-		"Выход из мира: %.1f с, монет=%d" % [session_time, world_coins],
-		"Session",
-	)
+	Log.info("Выход из мира: %.1f с" % session_time, "Session")
 	EventBus.world_left.emit(session_time)
-
-
-## Начислить монеты (мобы, монеты острова, кооп-награды) и оповестить HUD.
-func add_world_coins(amount: int) -> void:
-	world_coins += amount
-	EventBus.world_coins_changed.emit(world_coins)

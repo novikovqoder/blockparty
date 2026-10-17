@@ -22,7 +22,7 @@ func test_hello_bytes_survive_roster_roundtrip() -> void:
 		"байты внешности прошли через запись ростера")
 	var parsed := WorldState.unpack(WorldState.pack({
 		"world_epoch_msec": 1000, "players": entries,
-		"dead_mobs": [], "taken_coins": [],
+		"dead_mobs": [],
 	}))
 	var restored: PackedByteArray = parsed["players"][0]["appearance"]
 	var ap := Appearance.from_bytes(restored)
@@ -73,6 +73,8 @@ func test_local_slot_carries_editor_appearance() -> void:
 	assert_true(ap.same(ap.validated()), "внешность из save уже валидна")
 
 
-func test_protocol_version_is_4() -> void:
-	assert_eq(Protocol.PROTOCOL_VERSION, 4,
-		"внешность байтами — версия протокола 4")
+func test_protocol_version_is_5() -> void:
+	# 5 — П5.9 переделка (мир без монет/заданий/маяков); внешность байтами
+	# индексов осталась от 4.
+	assert_eq(Protocol.PROTOCOL_VERSION, 5,
+		"мир без монет/заданий/маяков — версия протокола 5")

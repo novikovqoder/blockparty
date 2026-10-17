@@ -75,8 +75,8 @@ func _refresh() -> void:
 			Net.peer_count(),
 			Net.mode,
 		],
-		"world_time %.1f s | session %.1f s | coins %d" % [
-			Session.world_time, Session.session_time, Session.world_coins,
+		"world_time %.1f s | session %.1f s" % [
+			Session.world_time, Session.session_time,
 		],
 		"pos %s | zone %s" % [pos_text, zone_text],
 		"net ↑%.1f ↓%.1f КБ/с | in world %d" % [

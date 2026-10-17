@@ -1,5 +1,5 @@
 # Птица (раздел 8 SPEC): кружит над лесом и холмами на высоте 2–4 м, один
-# удар — падает и даёт монету, возрождается через 180 с (Balance). Машет
+# удар — падает, возрождается через 180 с (Balance). Машет
 # крыльями (визуал — от часов мира, детерминировано). Модель (раздел 16):
 # огранённое тело-призма, треугольные крылья, общий шейдер lowpoly.
 class_name Bird
@@ -21,10 +21,6 @@ func _apply_motion(world_time: float) -> void:
 
 func position_at(world_time: float) -> Vector3:
 	return MobMotion.bird_position(motion, world_time)
-
-
-func reward() -> int:
-	return B.bird_reward
 
 
 func hitbox_size() -> Vector3:
@@ -58,7 +54,7 @@ func _build() -> void:
 	beak.top_radius = 0.0
 	beak.bottom_radius = 0.05
 	beak.height = 0.2
-	_lowpoly(beak, Vector3(0, 0.06, 0.45), PAL.coin, _model, Vector3(PI / 2.0, 0, 0))
+	_lowpoly(beak, Vector3(0, 0.06, 0.45), PAL.gold, _model, Vector3(PI / 2.0, 0, 0))
 	# Хвост — треугольный веер.
 	var tail := PrismMesh.new()
 	tail.size = Vector3(0.3, 0.05, 0.3)

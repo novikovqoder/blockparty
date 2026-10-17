@@ -5,11 +5,11 @@
 #     высот, меши чанков рельефа, MultiMesh предметов, боксы коллизий;
 #   gameplay/world/island.tscn    — остров целиком: IslandView (визуал из
 #     island_art.res), вода (море и озеро), расщелина с HangPoint, камни
-#     духа, костёр, 60 статичных монет, мобы, ограждения края;
+#     духа, костёр, мобы, ограждения края;
 #   assets/island_map.png         — вид сверху для карты (M).
 # По сети мир не передаётся: сцена одинакова у всех. Повторный запуск даёт
 # тот же результат (тест — на хеш высот и предметов IslandGen.island_hash).
-# Скрипты нод (мобы, монеты, вода) подключаются load()-ом во время работы,
+# Скрипты нод (мобы, вода) подключаются load()-ом во время работы,
 # а не на этапе разбора: они ссылаются на автолоады (Session, EventBus),
 # которые в режиме «--script» регистрируются позже загрузки этого файла.
 extends SceneTree
@@ -27,13 +27,10 @@ const GATE_SCRIPT: String = "res://gameplay/activities/ruin_gate.gd"
 const PLATE_SCRIPT: String = "res://gameplay/activities/ruin_plate.gd"
 const CHEST_SCRIPT: String = "res://gameplay/activities/ruin_chest.gd"
 const LADDER_SCRIPT: String = "res://gameplay/activities/lookout_ladder.gd"
-const BEACON_SCRIPT: String = "res://gameplay/activities/beacon.gd"
-const BOARD_SCRIPT: String = "res://gameplay/activities/beacon_board.gd"
 const SEAT_SCRIPT: String = "res://gameplay/activities/campfire_seat.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
-const STARFALL_SCRIPT: String = "res://gameplay/world/starfall.gd"
-const COIN_SCRIPT: String = "res://gameplay/world/coin_pickup.gd"
+const FOLK_SCRIPT: String = "res://gameplay/world/townsfolk.gd"
 const BIRD_SCRIPT: String = "res://gameplay/mobs/bird.gd"
 const CRITTER_SCRIPT: String = "res://gameplay/mobs/critter.gd"
 const FIREFLY_SCRIPT: String = "res://gameplay/mobs/golden_firefly.gd"
@@ -42,8 +39,8 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 
 func _init() -> void:
-	# Первый кадр: автолоады (Session, EventBus) уже в дереве — скрипты мобов
-	# и монет компилируются при load() с готовыми глобальными именами.
+	# Первый кадр: автолоады (Session, EventBus) уже в дереве — скрипты нод
+	# компилируются при load() с готовыми глобальными именами.
 	await create_timer(0.01).timeout
 	_generate()
 	quit()
@@ -78,9 +75,8 @@ func _generate() -> void:
 		return
 
 	_render_map(data)
-	print("Остров: предметов %d, монет %d, мобов %d, хеш %d, %.1f с" % [
+	print("Остров: предметов %d, мобов %d, хеш %d, %.1f с" % [
 		(data["props"] as Array).size(),
-		(data["coins"] as Array).size(),
 		(data["mobs"] as Array).size(),
 		hash_value,
 		(Time.get_ticks_msec() - started) / 1000.0,
@@ -89,7 +85,7 @@ func _generate() -> void:
 
 
 ## Собрать дерево острова (без входа в SceneTree — _ready нод не выполняется,
-## визуал мобов/монет/камней строится в игре, в сцену попадает статика).
+## визуал мобов/камней строится в игре, в сцену попадает статика).
 @warning_ignore("unsafe_method_access")
 func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 	var root: Node = load(ISLAND_SCRIPT).new()
@@ -164,22 +160,6 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 		ladder.name = "LookoutLadder%d" % (i + 1)
 		ladder.position = (data["poi"]["lookouts"] as Array)[i]["center"]
 		root.add_child(ladder)
-	# Маяки мирового события (раздел 7): узлы у башен-предметов «beacon»,
-	# порядок имён Beacon1..5 — как _beacons у IslandGen. Доска прогресса —
-	# на площади, Звездопад — менеджер звёзд.
-	for i: int in (data["beacons"] as Array).size():
-		var beacon: Node3D = load(BEACON_SCRIPT).new()
-		beacon.name = "Beacon%d" % (i + 1)
-		beacon.position = (data["beacons"] as Array)[i]
-		root.add_child(beacon)
-	var board: Label3D = load(BOARD_SCRIPT).new()
-	board.name = "BeaconBoard"
-	board.position = (data["poi"]["campfire"] as Dictionary)["board"] \
-		+ Vector3(0.0, 0.0, 0.05)
-	root.add_child(board)
-	var starfall: Node3D = load(STARFALL_SCRIPT).new()
-	starfall.name = "Starfall"
-	root.add_child(starfall)
 	var stones: Array = data["stones"]
 	for i: int in stones.size():
 		var stone: Node3D = load(STONE_SCRIPT).new()
@@ -189,6 +169,17 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 	var campfire: Node3D = load(CAMPFIRE_SCRIPT).new()
 	campfire.position = data["poi"]["campfire"]["center"]
 	root.add_child(campfire)
+	# Жители (Финн, Луми, Тимьян): детерминированная раскладка FolkLayout,
+	# порядок имён Folk1..3 — как npc_spots. Модель строится в игре (_ready).
+	var folk_spots: Array[Dictionary] = FolkLayout.npc_spots(art)
+	for i: int in folk_spots.size():
+		var folk: Node3D = load(FOLK_SCRIPT).new()
+		folk.name = "Folk%d" % (i + 1)
+		folk.character = int(folk_spots[i]["character"])
+		folk.sitting = bool(folk_spots[i]["sitting"])
+		folk.position = folk_spots[i]["pos"]
+		folk.rotation.y = float(folk_spots[i]["yaw"])
+		root.add_child(folk)
 	# Места у костра (раздел 9.6): маркеры на лавках площади, порядок имён
 	# Seat1..Seat8 — как benches у IslandGen; сидящий смотрит на костёр.
 	var fire_center: Vector3 = data["poi"]["campfire"]["center"]
@@ -201,14 +192,7 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 		seat.seat_index = i
 		root.add_child(seat)
 
-	# Статичные монеты (ровно 60) и мобы — траектории в параметрах.
-	var coins: Array = data["coins"]
-	for i: int in coins.size():
-		var coin: Area3D = load(COIN_SCRIPT).new()
-		coin.name = "Coin%d" % (i + 1)
-		coin.spawn_id = i + 1
-		coin.position = coins[i]
-		root.add_child(coin)
+	# Мобы — траектории в параметрах.
 	for mob: Dictionary in data["mobs"]:
 		root.add_child(_mob_node(mob))
 

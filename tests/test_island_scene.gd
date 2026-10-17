@@ -1,13 +1,12 @@
 # Интеграционные тесты сцены острова (этапы П2/П4.5): island.tscn
 # соответствует данным IslandGen — рельеф и предметы из запечённого
-# island_art.res (IslandView), в сцене 60 монет и все мобы, персонаж стоит
-# на земле во всех зонах (--dev-spawn), монета подбирается касанием, удар
-# игрока убивает моба. Сцена коммитится — по сети не передаётся.
+# island_art.res (IslandView), в сцене все мобы и три жителя, персонаж стоит
+# на земле во всех зонах (--dev-spawn), удар игрока убивает моба.
+# Сцена коммитится — по сети не передаётся.
 extends GutTest
 
 const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
 const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
-const B: Balance = preload("res://gameplay/balance.tres")
 
 ## Кэш данных генератора между тестами (generate() дорогой, ~10 с).
 static var _gen_cache: Dictionary = {}
@@ -53,22 +52,15 @@ func test_baked_art_matches_generator() -> void:
 func test_scene_contents() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
-	var coins := 0
-	var coin_ids: Dictionary = {}
 	var birds := 0
 	var critters := 0
 	var fireflies := 0
 	var water := 0
 	var markers := 0
-	var beacons := 0
-	var starfall := 0
-	var board := 0
+	var folk := 0
 	var seats := 0
 	for child: Node in island.get_children():
-		if child is CoinPickup:
-			coins += 1
-			coin_ids[(child as CoinPickup).spawn_id] = true
-		elif child is Bird:
+		if child is Bird:
 			birds += 1
 		elif child is Critter:
 			critters += 1
@@ -78,30 +70,17 @@ func test_scene_contents() -> void:
 			water += 1
 		elif child is HangArea:
 			markers = (child as HangArea).point_positions().size()
-		elif child is Beacon:
-			beacons += 1
-		elif child is Starfall:
-			starfall += 1
-		elif child is BeaconBoard:
-			board += 1
+		elif child is Townsfolk:
+			folk += 1
 		elif child is CampfireSeat:
 			seats += 1
-	assert_eq(coins, B.static_coins, "ровно 60 статичных монет")
-	assert_eq(coin_ids.size(), coins, "spawn_id монет уникальны")
 	assert_eq(birds, 8, "птиц")
 	assert_eq(critters, 6, "зверьков")
 	assert_eq(fireflies, 3, "светлячков")
 	assert_eq(water, 2, "море и озеро")
 	assert_gt(markers, 0, "в расщелине есть HangPoint")
-	assert_eq(beacons, 5, "пять маяков (раздел 7)")
-	assert_eq(starfall, 1, "менеджер Звездопада")
-	assert_eq(board, 1, "доска прогресса маяков")
+	assert_eq(folk, 3, "три жителя (Финн, Луми, Тимьян)")
 	assert_eq(seats, 8, "восемь мест у костра (раздел 9.6)")
-	assert_eq(
-		(island.get_node("BeaconBoard") as BeaconBoard).text,
-		tr("BOARD_BEACONS") % [0, 5],
-		"доска показывает 0 / 5",
-	)
 	assert_eq(island.zones.size(), 6, "шесть зон")
 	assert_eq(
 		island.spawn_zones.size(), 6,
@@ -211,23 +190,6 @@ func test_player_stands_in_every_spawn_zone() -> void:
 	player.queue_free()
 
 
-func test_static_coin_collected_by_touch() -> void:
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
-	var coin := island.get_node("Coin1") as CoinPickup
-	var player := PLAYER.instantiate() as Player
-	island.add_child(player)
-	player.global_position = coin.position + Vector3(0.0, 0.2, 0.0)
-	var coins_before: int = Session.world_coins
-	for i: int in range(60):
-		await get_tree().physics_frame
-		if not coin.visible:
-			break
-	assert_false(coin.visible, "монета скрыта после подбора")
-	assert_eq(Session.world_coins, coins_before + B.coin_reward, "+1 монета касанием")
-	player.queue_free()
-
-
 func test_player_attack_kills_bird() -> void:
 	var world := Node3D.new()
 	add_child_autofree(world)
@@ -257,7 +219,6 @@ func test_player_attack_kills_bird() -> void:
 	var bird_pos := MobMotion.bird_position(bird.motion, Session.world_time)
 	player.global_position = bird_pos + Vector3(0.0, -0.8, -0.9)
 	await get_tree().physics_frame
-	var coins_before: int = Session.world_coins
 	var killed: Array[int] = []
 	EventBus.mob_killed.connect(
 		func(id: int, _killers: Array, _respawn: float) -> void: killed.append(id),
@@ -269,7 +230,6 @@ func test_player_attack_kills_bird() -> void:
 		if not bird.visible:
 			break
 	assert_false(bird.visible, "птица исчезла после удара")
-	assert_eq(Session.world_coins, coins_before + B.bird_reward, "+1 монета за птицу")
 	assert_eq(killed, [99], "событие mob_killed с spawn_id")
 	player.queue_free()
 
@@ -284,7 +244,5 @@ func test_firefly_survives_single_hit() -> void:
 		"center": Vector3(0.0, 2.0, 0.0), "drift": 1.0, "period": 5.0, "phase": 0.0,
 	}
 	world.add_child(firefly)
-	var coins_before: int = Session.world_coins
 	firefly.take_hit()
 	assert_true(firefly.visible, "светлячок жив после одного удара")
-	assert_eq(Session.world_coins, coins_before, "монет не начислено")

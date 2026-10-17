@@ -66,37 +66,6 @@ func test_campfire_blocks_player() -> void:
 	_assert_solid_body(fire, "костёр", Campfire.HEARTH_RADIUS)
 
 
-func test_mint_patch_solid_while_visible() -> void:
-	# Мята: коллизия есть, собранный пучок её выключает.
-	var mint := MintPatch.new()
-	add_child_autofree(mint)
-	_assert_solid_body(mint, "мята", MintPatch.MINT_RADIUS)
-	mint._on_quest_state({
-		Protocol.QUEST_THYME: {
-			"stage": QuestAuthority.ACTIVE, "steps": [0, 0, 0, 0, 0],
-		},
-	})
-	assert_true(mint.visible, "активное задание: мята видна")
-	mint._on_quest_state({
-		Protocol.QUEST_THYME: {
-			"stage": QuestAuthority.ACTIVE, "steps": [1, 0, 0, 0, 0],
-		},
-	})
-	assert_false(mint.visible, "собранный пучок скрыт")
-
-
-func test_trail_flag_pole_is_solid() -> void:
-	var flag := TrailFlag.new()
-	add_child_autofree(flag)
-	_assert_solid_body(flag, "веха", TrailFlag.POLE_RADIUS)
-
-
-func test_quest_beacon_pole_is_solid() -> void:
-	var beacon := QuestBeacon.new()
-	add_child_autofree(beacon)
-	_assert_solid_body(beacon, "квестовый маяк", QuestBeacon.POLE_RADIUS)
-
-
 func test_ruin_chest_is_solid() -> void:
 	var chest := RuinChest.new()
 	add_child_autofree(chest)

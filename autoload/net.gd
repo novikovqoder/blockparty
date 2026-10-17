@@ -2,9 +2,9 @@
 # Steam — лобби-миры раздела 11: владелец лобби становится хостом),
 # ростер мира и синхронизация часов мира. Мир открыт для входа в любой
 # момент: rpc_hello добавляет игрока и сразу получает world_state (часы,
-# игроки, мёртвые мобы, собранные монеты). Снапшоты движения идут 20 Гц
-# через хост, хост пересылает их с AOI-фильтром по расстоянию; мобы и
-# монеты решает хост (HostAuthority). Выход хоста закрывает мир у всех.
+# игроки, мёртвые мобы). Снапшоты движения идут 20 Гц
+# через хост, хост пересылает их с AOI-фильтром по расстоянию; мобы
+# решает хост (HostAuthority). Выход хоста закрывает мир у всех.
 # В одиночной игре без сети Net сам исполняет роль хоста — те же события
 # EventBus.
 # Не делает: голос (П6).
@@ -30,15 +30,10 @@ var world_epoch_msec: int = 0
 ## Передаётся в world_state: у гостей часы те же.
 var world_time_offset_sec: float = 0.0
 
-## Авторитет хоста: мёртвые мобы и собранные монеты с временем возрождения.
+## Авторитет хоста: мёртвые мобы с временем возрождения.
 var authority := HostAuthority.new()
 ## Авторитет хоста: активности и социальные механики П5 (разделы 7, 9).
 var activity := ActivityAuthority.new()
-## Авторитет хоста: задания жителей (П5.5).
-var quests := QuestAuthority.new()
-## Предыдущее состояние заданий для дельта-логов rpc_quest_state (пусто —
-## первый пакет ещё не приходил; сбрасывается вместе с quests.clear()).
-var _quests_logged: Dictionary = {}
 ## Связи «за руку» (раздел 9.5): leader → follower; заполняется rpc_hand_link
 ## у всех одинаково — для скорости цепочки (раздел 17) и HUD.
 var hand_links: Dictionary = {}
@@ -97,8 +92,6 @@ func _ready() -> void:
 				_start_world_clock()
 				authority.clear()
 				activity.clear()
-				quests.clear()
-				_quests_logged.clear()
 				hand_links.clear()
 				_aoi.clear()
 				_peer_pos.clear()
@@ -161,8 +154,6 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		_start_world_clock()
 		authority.clear()
 		activity.clear()
-		quests.clear()
-		_quests_logged.clear()
 		hand_links.clear()
 		_aoi.clear()
 		_peer_pos.clear()
@@ -325,21 +316,17 @@ func rpc_hello(player_name: String, appearance: PackedByteArray) -> void:
 	)
 	_broadcast_roster()
 	# Полное состояние мира одним пакетом: часы, ростер с флагами «в мире»,
-	# мёртвые мобы и собранные монеты с временем возрождения (раздел 10).
+	# мёртвые мобы с временем возрождения (раздел 10).
 	authority.prune(world_time_sec())
 	var state := {
 		"world_epoch_msec": world_epoch_msec,
 		"world_time_offset_sec": world_time_offset_sec,
 		"players": _roster_entries(),
 		"dead_mobs": authority.dead_mob_entries(),
-		"taken_coins": authority.taken_coin_entries(),
 		"activities": {
 			"ruins": activity.ruins_state(),
 			"ladders": activity.ladders_state(),
-			"beacons": activity.beacons_state(),
-			"stars_taken": activity.stars_taken_state(),
 			"seats": activity.seats_state(),
-			"quests": quests.state(),
 		},
 	}
 	_send(func() -> void: rpc_id(sender, "rpc_world_state", WorldState.pack(state)), false)
@@ -369,7 +356,7 @@ func rpc_roster_update(entries: Array) -> void:
 
 
 ## Полное состояние мира новому игроку (раздел 10): применяет часы, ростер
-## и расписание мобов/монет. Сцена мира, если уже загружена, применит его
+## и расписание мобов. Сцена мира, если уже загружена, применит его
 ## сразу; иначе — по готовности через replay_world_state().
 @rpc("authority", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
 func rpc_world_state(data: PackedByteArray) -> void:
@@ -388,13 +375,12 @@ func rpc_world_state(data: PackedByteArray) -> void:
 		fresh[int(entry["peer_id"])] = slot
 	players = fresh
 	var dead: Array = state["dead_mobs"]
-	var taken: Array = state["taken_coins"]
 	Log.info(
-		"Состояние мира получено: world_time=%.1f с, игроков=%d, мёртвых мобов=%d, собранных монет=%d"
-		% [world_time_sec(), players.size(), dead.size(), taken.size()], "Net"
+		"Состояние мира получено: world_time=%.1f с, игроков=%d, мёртвых мобов=%d"
+		% [world_time_sec(), players.size(), dead.size()], "Net"
 	)
 	if Session.in_world:
-		EventBus.world_state_applied.emit(dead, taken)
+		EventBus.world_state_applied.emit(dead)
 		_apply_activities(state)
 
 
@@ -403,7 +389,7 @@ func rpc_world_state(data: PackedByteArray) -> void:
 func replay_world_state() -> void:
 	if last_world_state.is_empty():
 		return
-	EventBus.world_state_applied.emit(last_world_state["dead_mobs"], last_world_state["taken_coins"])
+	EventBus.world_state_applied.emit(last_world_state["dead_mobs"])
 	_apply_activities(last_world_state)
 
 
@@ -531,7 +517,7 @@ func _send_own_snapshot(delta: float) -> void:
 		_send(func() -> void: rpc_id(1, "rpc_snapshot", data), true)
 
 
-# --- Авторитет хоста: мобы и монеты (разделы 8, 10) ---
+# --- Авторитет хоста: мобы (разделы 8, 10) ---
 
 ## Удар по мобу (раздел 8): клиент видит попадание, хост проверяет
 ## дистанцию до 2.5 м с допуском на пинг, перезарядку и что моб жив.
@@ -574,13 +560,13 @@ func _handle_mob_hit(killer_peer: int, spawn_id: int, client_world_time: float) 
 		"Моб %d убит игроком %d, возрождение %.0f с"
 		% [spawn_id, killer_peer, float(event["respawn_at"]) - client_world_time], "Net"
 	)
-	_broadcast_mob_killed(spawn_id, [killer_peer], mob.reward(), float(event["respawn_at"]))
+	_broadcast_mob_killed(spawn_id, [killer_peer], float(event["respawn_at"]))
 
 
 ## Удар по золотому светлячку (раздел 8): дистанцию и перезарядку проверяет
 ## authority.hit_allowed, пару ударов — activity.try_firefly_hit. Первый
 ## удар открывает окно (событие ослабления), второй от другого игрока
-## в окне убивает: 8 монет каждому из двоих. Одиночка в мире (раздел 9.4,
+## в окне убивает. Одиночка в мире (раздел 9.4,
 ## запасной путь) убивает светлячка одним ударом.
 func _handle_firefly_hit(
 	killer_peer: int, mob: GoldenFirefly, world_time: float, killer_pos: Vector3
@@ -600,15 +586,14 @@ func _handle_firefly_hit(
 		var respawn_at: float = float(event["respawn_at"])
 		authority.mark_mob_dead(mob.spawn_id, respawn_at)
 		Log.info(
-			"Светлячок %d убит (%s), по %d монет, возрождение %.0f с"
+			"Светлячок %d убит (%s), возрождение %.0f с"
 			% [
 				mob.spawn_id,
 				", ".join(killers.map(func(p: int) -> String: return str(p))),
-				B.firefly_reward,
 				respawn_at - world_time,
 			], "Net"
 		)
-		_broadcast_mob_killed(mob.spawn_id, killers, B.firefly_reward, respawn_at)
+		_broadcast_mob_killed(mob.spawn_id, killers, respawn_at)
 		return
 	Log.info(
 		"Светлячок %d ослаблен игроком %d на %.0f с" % [mob.spawn_id, killer_peer, B.firefly_window],
@@ -617,54 +602,20 @@ func _handle_firefly_hit(
 	_broadcast_firefly_weakened(mob.spawn_id, int(event["weakened"]), float(event["until"]))
 
 
-## Хост подтвердил убийство моба всем (раздел 8): killers — кому награда
-## (светлячка убивают двое), монеты — каждому из списка.
+## Хост подтвердил убийство моба всем (раздел 8): killers — кто убил
+## (светлячка убивают двое).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_mob_killed(spawn_id: int, killers: Array, coins: int, respawn_at: float) -> void:
+func rpc_mob_killed(spawn_id: int, killers: Array, respawn_at: float) -> void:
 	EventBus.mob_killed.emit(spawn_id, killers, respawn_at)
-	if killers.has(local_peer_id):
-		Session.add_world_coins(coins)
 
 
-## Касание монеты (раздел 10: «кто первый — того и монета»).
-func request_coin_collect(spawn_id: int, client_world_time: float) -> void:
-	if is_host():
-		_handle_coin_collect(local_peer_id, spawn_id, client_world_time)
-	else:
-		_send(
-			func() -> void: rpc_id(1, "rpc_collect_coin", spawn_id, client_world_time), false
-		)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_collect_coin(spawn_id: int, client_world_time: float) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_coin_collect(multiplayer.get_remote_sender_id(), spawn_id, client_world_time)
-
-
-func _handle_coin_collect(collector_peer: int, spawn_id: int, world_time: float) -> void:
-	var event := authority.try_take_coin(spawn_id, collector_peer, world_time, B.coin_respawn_sec)
-	if event.is_empty():
-		return
-	_broadcast_coin_taken(spawn_id, collector_peer, B.coin_reward, float(event["respawn_at"]))
-
-
-## Хост подтвердил подбор монеты всем (раздел 10).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_coin_taken(spawn_id: int, collector_peer: int, coins: int, respawn_at: float) -> void:
-	EventBus.coin_collected.emit(spawn_id, collector_peer, respawn_at)
-	if collector_peer == local_peer_id:
-		Session.add_world_coins(coins)
-
-
-func _broadcast_mob_killed(spawn_id: int, killers: Array, coins: int, respawn_at: float) -> void:
+func _broadcast_mob_killed(spawn_id: int, killers: Array, respawn_at: float) -> void:
 	if is_networked():
 		_send(
-			func() -> void: rpc_mob_killed.rpc(spawn_id, killers, coins, respawn_at), false
+			func() -> void: rpc_mob_killed.rpc(spawn_id, killers, respawn_at), false
 		)
 	else:
-		rpc_mob_killed(spawn_id, killers, coins, respawn_at)
+		rpc_mob_killed(spawn_id, killers, respawn_at)
 
 
 ## Хост разослал ослабление светлячка (раздел 8): узел мигает ярче,
@@ -716,19 +667,6 @@ func rpc_boosted(jumper_peer: int, base_peer: int) -> void:
 	EventBus.player_boosted.emit(base_peer, jumper_peer)
 
 
-func _broadcast_coin_taken(spawn_id: int, collector_peer: int, coins: int, respawn_at: float) -> void:
-	Log.info(
-		"Монета %d собрана (peer %d, +%d, возрождение %.0f с)"
-		% [spawn_id, collector_peer, coins, respawn_at], "Net"
-	)
-	if is_networked():
-		_send(
-			func() -> void: rpc_coin_taken.rpc(spawn_id, collector_peer, coins, respawn_at), false
-		)
-	else:
-		rpc_coin_taken(spawn_id, collector_peer, coins, respawn_at)
-
-
 # --- Кооп-механики П5 (раздел 9; исходы подтверждает хост) ---
 
 ## Помощник удержал E у точки, где висит target (раздел 9.1): просим хост
@@ -772,15 +710,13 @@ func _handle_pull(helper_peer: int, target_peer: int) -> void:
 	_broadcast_pulled(helper_peer, target_peer)
 
 
-## Хост подтвердил вытягивание (раздел 9.1): анимации у обоих, монеты
-## помощнику, событие для Interactions (у каждого клиента свои очки).
+## Хост подтвердил вытягивание (раздел 9.1): анимации у обоих,
+## событие для Interactions (у каждого клиента свои очки).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
 func rpc_pulled(helper_peer: int, target_peer: int) -> void:
 	EventBus.player_pulled.emit(helper_peer, target_peer)
 	if target_peer == local_peer_id and _local_player != null:
 		_local_player.pulled_up()
-	if helper_peer == local_peer_id:
-		Session.add_world_coins(B.pull_reward)
 
 
 func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
@@ -953,7 +889,6 @@ func _handle_sit(peer: int, seat_index: int) -> void:
 		return
 	Log.info("Игрок %d сел у костра (место %d)" % [peer, seat_index + 1], "Net")
 	_broadcast_seats()
-	_try_finish_thyme(seat)
 
 
 ## Игрок пошевелился сидя (раздел 9.6: любое движение — встать).
@@ -1002,257 +937,6 @@ func _campfire_seats() -> Array[CampfireSeat]:
 		func(a: CampfireSeat, b: CampfireSeat) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
 	)
 	return seats
-
-
-# --- Задания жителей (П5.5; состояние решает хост) ---
-
-## E у жителя или таблички-записки: просим хоста взять задание.
-func request_quest_take(quest_id: String) -> void:
-	if is_host():
-		_handle_quest_take(local_peer_id, quest_id)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_quest_take", quest_id), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_quest_take(quest_id: String) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_quest_take(multiplayer.get_remote_sender_id(), quest_id)
-
-
-## Проверка хоста: задание существует, просящий стоит у этого жителя
-## (радиус по горизонтали и окно высоты, как у лавок). Взять может любой
-## игрок (не только первый); состояние уходит всем одним пакетом.
-func _handle_quest_take(peer: int, quest_id: String) -> void:
-	if not _near_townsfolk(peer, quest_id):
-		return
-	if quests.take(quest_id, peer, day_index()):
-		_broadcast_quest_state()
-
-
-## Действие шага задания (П5.5): подбор мяты, веха, квестовый маяк —
-## узел сам вызывал удержание E, хост проверяет дистанцию до узла.
-func request_quest_action(quest_id: String, kind: String, index: int) -> void:
-	if is_host():
-		_handle_quest_action(local_peer_id, quest_id, kind, index)
-	else:
-		_send(
-			func() -> void: rpc_id(1, "rpc_quest_action", quest_id, kind, index), false
-		)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_quest_action(quest_id: String, kind: String, index: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_quest_action(multiplayer.get_remote_sender_id(), quest_id, kind, index)
-
-
-## Проверка хоста: узел этого шага существует (виден по группе и индексу)
-## и просящий рядом с ним. Последний шаг Луми и Финна завершает задание:
-## награда участникам и всем в радиусе финала.
-func _handle_quest_action(peer: int, quest_id: String, kind: String, index: int) -> void:
-	var node := _quest_node(kind, index)
-	if node == null or not _peer_near_quest_node(peer, node):
-		return
-	if not quests.do_step(quest_id, index, peer):
-		return
-	Log.info("Задание «%s»: шаг %d выполнен (peer %d)" % [quest_id, index + 1, peer], "Net")
-	# Последний шаг Луми и Финна завершает задание у узла. Тимьян — нет:
-	# собранная мята ждёт финала у костра (посадка, _try_finish_thyme),
-	# иначе задание закрылось бы у пучка в Лесу и компания у огня
-	# не получила бы награду.
-	if quest_id != Protocol.QUEST_THYME and quests.steps_done(quest_id):
-		_finish_quest(quest_id, node.global_position)
-	else:
-		_broadcast_quest_state()
-
-
-## Финал у последнего узла (Луми, Финн): участники + все в радиусе
-## quest_final_radius от узла; награда каждому по quest_reward_base.
-## Тимьян завершается отдельно — посадкой у костра (_try_finish_thyme).
-func _finish_quest(quest_id: String, center: Vector3) -> void:
-	var around := ActivityAuthority.peers_in_radius(
-		_world_player_entries(), center, B.quest_final_radius
-	)
-	var event := quests.finish(quest_id, day_index(), around)
-	if event.is_empty():
-		return
-	var peers: Array = event["peers"]
-	var coins: Array[int] = []
-	for _peer: int in peers:
-		coins.append(B.quest_reward_base)
-	var extra: Dictionary = {"mini_starfall": quest_id == Protocol.QUEST_LUMI}
-	_broadcast_quest_state()
-	_broadcast_quest_reward(quest_id, peers, coins, extra)
-
-
-## Финал «Вечернего чая» (П5.5): мята собрана и игрок сел у костра —
-## задание выполнено. Участники + все в радиусе костра; бонус монет —
-## за каждого ДРУГОГО сидящего (у каждого свой, раздел 13 не нужен:
-## очки посчитает Interactions по общему событию).
-func _try_finish_thyme(seat: CampfireSeat) -> void:
-	if not quests.is_active(Protocol.QUEST_THYME) \
-			or not quests.steps_done(Protocol.QUEST_THYME):
-		return
-	var seated: Array[int] = []
-	for peer: int in activity.seats_state():
-		if peer != 0 and not seated.has(peer):
-			seated.append(peer)
-	var around := ActivityAuthority.peers_in_radius(
-		_world_player_entries(), seat.face_target, B.quest_campfire_radius
-	)
-	var event := quests.finish(Protocol.QUEST_THYME, day_index(), around)
-	if event.is_empty():
-		return
-	var peers: Array = event["peers"]
-	var coins: Array[int] = []
-	for peer: int in peers:
-		var others := 0
-		for seated_peer: int in seated:
-			if seated_peer != peer:
-				others += 1
-		coins.append(QuestAuthority.thyme_reward(others, B))
-	_broadcast_quest_state()
-	_broadcast_quest_reward(Protocol.QUEST_THYME, peers, coins, {"seated": seated})
-
-
-## Хост разослал состояние заданий (П5.5): значки жителей, мята, вехи,
-## квестовые маяки, HUD-трекер и открытый диалог читают его одинаково.
-## Дельта с предыдущего пакета логируется — взятие (кем), прогресс шагов
-## и финал видны в логах ВСЕХ копий (e2e: tools/quest_e2e.sh).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_quest_state(state: Dictionary) -> void:
-	_log_quest_delta(state)
-	EventBus.quest_state.emit(state)
-
-
-## Журнал «задание изменилось» из разницы состояний: кем взято — новый
-## участник в peers. До первого пакета база — «всё доступно»: взятие видно
-## и у подключившегося раньше события, и в перезаходе (leave_world чистит
-## базу вместе с миром).
-func _log_quest_delta(state: Dictionary) -> void:
-	for id: String in Protocol.QUEST_IDS:
-		var fresh: Variant = state.get(id)
-		if fresh is not Dictionary:
-			continue
-		var quest: Dictionary = fresh
-		var old: Dictionary = _quests_logged.get(id, {})
-		var old_stage: int = int(old.get("stage", QuestAuthority.AVAILABLE))
-		var stage: int = int(quest["stage"])
-		var peers: Array = quest["peers"]
-		var old_peers: Array = old.get("peers", [])
-		if stage == QuestAuthority.ACTIVE and old_stage == QuestAuthority.AVAILABLE:
-			var taker: int = 0
-			for peer: int in peers:
-				if not old_peers.has(peer):
-					taker = peer
-			if taker != 0:
-				Log.info("Задание «%s» взято игроком %d" % [id, taker], "Net")
-			else:
-				Log.info("Задание «%s» взято" % id, "Net")
-		var steps: Array = quest["steps"]
-		if steps != old.get("steps", []) and stage == QuestAuthority.ACTIVE:
-			var done := 0
-			for value: int in steps:
-				done += value
-			Log.info("Задание «%s»: прогресс %d/%d" % [id, done, steps.size()], "Net")
-		if stage == QuestAuthority.DONE and old_stage != QuestAuthority.DONE:
-			Log.info("Задание «%s» выполнено" % id, "Net")
-		_quests_logged[id] = quest.duplicate(true)
-
-
-func _broadcast_quest_state() -> void:
-	var state := quests.state()
-	if is_networked():
-		_send(func() -> void: rpc_quest_state.rpc(state), false)
-	else:
-		rpc_quest_state(state)
-
-
-## Хост разослал награду задания (П5.5): монеты начисляет себе каждый
-## участник на своём клиенте, очки «Встреч» — Interactions, эффекты
-## финалов — QuestSystem (extra: мини-звездопад, сидящие у костра).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_quest_reward(quest_id: String, peers: Array, coins: Array, extra: Dictionary) -> void:
-	# Награда логируется на ВСЕХ копиях (e2e), не только у участников.
-	var parts: PackedStringArray = []
-	for i: int in peers.size():
-		parts.append("%d:+%d" % [int(peers[i]), int(coins[i]) if i < coins.size() else 0])
-	Log.info(
-		"Задание «%s»: награда каждому участнику — %s" % [quest_id, " ".join(parts)],
-		"Net"
-	)
-	EventBus.quest_reward.emit(quest_id, peers, coins, extra)
-	if peers.has(local_peer_id):
-		var mine := 0
-		for i: int in peers.size():
-			if int(peers[i]) == local_peer_id and i < coins.size():
-				mine = int(coins[i])
-		Session.add_world_coins(mine)
-
-
-func _broadcast_quest_reward(
-	quest_id: String, peers: Array, coins: Array[int], extra: Dictionary
-) -> void:
-	if is_networked():
-		_send(
-			func() -> void: rpc_quest_reward.rpc(quest_id, peers, coins, extra), false
-		)
-	else:
-		rpc_quest_reward(quest_id, peers, coins, extra)
-
-
-## Житель задания рядом с просящим (радиус по горизонтали и окно высоты);
-## quest_id сверяем по узлу Townsfolk. Табличка-записка того же задания
-## стоит на месте скрытого жителя и проходит ту же проверку.
-func _near_townsfolk(peer: int, quest_id: String) -> bool:
-	var peer_pos: Vector3 = _peer_position(peer)
-	if peer_pos == _POS_UNKNOWN:
-		return false
-	for node in get_tree().get_nodes_in_group(Townsfolk.TOWNSFOLK_GROUP):
-		var folk := node as Townsfolk
-		if folk == null or folk.quest_id != quest_id:
-			continue
-		var flat := peer_pos - folk.global_position
-		flat.y = 0.0
-		if flat.length() <= folk.use_radius + B.mob_hit_slack \
-				and absf(peer_pos.y - folk.global_position.y) <= B.beacon_use_window:
-			return true
-	return false
-
-
-## Узел шага рядом с просящим: дистанция по горизонтали и окно высоты
-## (как у маяков, раздел 7).
-func _peer_near_quest_node(peer: int, node: Interactable) -> bool:
-	var peer_pos: Vector3 = _peer_position(peer)
-	if peer_pos == _POS_UNKNOWN:
-		return false
-	var flat := peer_pos - node.global_position
-	flat.y = 0.0
-	return flat.length() <= node.use_radius + B.mob_hit_slack \
-		and absf(peer_pos.y - node.global_position.y) <= B.beacon_use_window
-
-
-## Узел шага по типу и индексу (остров у всех одинаковый, раскладка
-## детерминирована — индексы совпадают на всех копиях).
-func _quest_node(kind: String, index: int) -> Interactable:
-	var group: StringName = &""
-	match kind:
-		Protocol.QUEST_KIND_MINT:
-			group = MintPatch.MINT_GROUP
-		Protocol.QUEST_KIND_BEACON:
-			group = QuestBeacon.QBEACON_GROUP
-		Protocol.QUEST_KIND_FLAG:
-			group = TrailFlag.FLAG_GROUP
-		_:
-			return null
-	for node in get_tree().get_nodes_in_group(group):
-		var interactable := node as Interactable
-		if interactable != null and interactable.get("index") == index:
-			return interactable
-	return null
 
 
 # --- Эмоции (раздел 9.7; хост фильтрует по расстоянию) ---
@@ -1355,118 +1039,6 @@ func _broadcast_ladder(index: int, active: bool, expires_at: float) -> void:
 		rpc_ladder(index, active, expires_at)
 
 
-# --- Маяки и Звездопад (раздел 7) ---
-
-## Нажатие E у маяка (раздел 7): пара зажигает в пределах 3 с, одиночке
-## (один в мире) хватает удержания 8 с — клиент уже держал E.
-func request_beacon_light(index: int) -> void:
-	if is_host():
-		_handle_beacon_light(local_peer_id, index)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_beacon_light", index), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_beacon_light(index: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_beacon_light(multiplayer.get_remote_sender_id(), index)
-
-
-## Проверка хоста (раздел 7): просящий стоит у этого маяка (радиус узла
-## и окно высоты). Зажигание — событие всем; очки и монеты — на клиентах.
-func _handle_beacon_light(peer: int, index: int) -> void:
-	var beacons := _beacon_nodes()
-	if index < 0 or index >= beacons.size():
-		return
-	var peer_pos: Vector3 = _peer_position(peer)
-	var beacon := beacons[index]
-	if peer_pos != _POS_UNKNOWN:
-		var flat := peer_pos - beacon.global_position
-		flat.y = 0.0
-		var near := flat.length() <= beacon.use_radius + B.mob_hit_slack \
-			and absf(peer_pos.y - beacon.global_position.y) <= B.beacon_use_window
-		if not near:
-			return
-	var event := activity.try_beacon_light(index, peer, world_time_sec(), in_world_count(), B)
-	if event.is_empty():
-		return
-	var lighters: Array[int] = event["lighters"]
-	Log.info(
-		"Маяк %d зажжён (peer %s)%s"
-		% [
-			index + 1,
-			", ".join(lighters.map(func(p: int) -> String: return str(p))),
-			" — Звездопад!" if event.has("starfall_started_at") else "",
-		],
-		"Net",
-	)
-	_broadcast_beacons(lighters, float(event.get("starfall_started_at", -1.0)))
-
-
-## Хост разослал состояние маяков (раздел 7): узлы рисуют лучи, доска —
-## прогресс, монеты и очки — зажёгшим последний (Interactions).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_beacons(lit: Array, lighters: Array, starfall_started_at: float) -> void:
-	EventBus.beacons_state.emit(lit, lighters, starfall_started_at)
-	if starfall_started_at >= 0.0:
-		EventBus.toast_requested.emit("TOAST_STARFALL")
-	if lighters.has(local_peer_id):
-		Session.add_world_coins(B.beacon_reward)
-
-
-func _broadcast_beacons(lighters: Array, starfall_started_at: float) -> void:
-	var state := activity.beacons_state()
-	if starfall_started_at >= 0.0:
-		state["starfall_started_at"] = starfall_started_at
-	var lit: Array = state["lit"]
-	if is_networked():
-		_send(
-			func() -> void: rpc_beacons.rpc(lit, lighters, float(state["starfall_started_at"])),
-			false,
-		)
-	else:
-		rpc_beacons(lit, lighters, float(state["starfall_started_at"]))
-
-
-## Касание звезды Звездопада (раздел 7): «кто первый» — решает хост.
-func request_star_collect(index: int) -> void:
-	if is_host():
-		_handle_star_collect(local_peer_id, index)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_collect_star", index), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_collect_star(index: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_star_collect(multiplayer.get_remote_sender_id(), index)
-
-
-func _handle_star_collect(peer: int, index: int) -> void:
-	var event := activity.try_take_star(index, peer, world_time_sec(), B)
-	if event.is_empty():
-		return
-	Log.info("Звезда %d подобрана (peer %d)" % [index, peer], "Net")
-	_broadcast_star_taken(index, peer)
-
-
-## Хост подтвердил подбор звезды: звезда исчезает у всех, монета — собравшему.
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_star_taken(index: int, collector_peer: int) -> void:
-	EventBus.star_taken.emit(index, collector_peer)
-	if collector_peer == local_peer_id:
-		Session.add_world_coins(B.star_reward)
-
-
-func _broadcast_star_taken(index: int, collector_peer: int) -> void:
-	if is_networked():
-		_send(func() -> void: rpc_star_taken.rpc(index, collector_peer), false)
-	else:
-		rpc_star_taken(index, collector_peer)
-
-
 # --- Тик активностей хоста (раздел 9: плиты и зоны по снапшотам) ---
 
 ## Периодическая проверка активностей хостом: кто стоит на плитах руин,
@@ -1485,11 +1057,8 @@ func _tick_activities() -> void:
 	var anyone_at_gate := false
 	if gate != null:
 		anyone_at_gate = _anyone_in_radius(entries, gate.global_position, B.gate_near_radius)
-	# День выполнения «Короткой тропы» (П5.5): соло-таймер ворот быстрее.
-	var gate_wait: float = B.quest_gate_open_wait \
-		if quests.done_today(Protocol.QUEST_FINN, day_index()) else -1.0
 	var event := activity.update_ruins_gate(
-		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B, gate_wait
+		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B
 	)
 	if not event.is_empty():
 		_open_ruins_event(event, entries)
@@ -1518,51 +1087,18 @@ func _tick_activities() -> void:
 	if not ladder_event.is_empty():
 		Log.info("Лестница смотровой %d скрылась (60 с истекли)" % [int(ladder_event["index"]) + 1], "Net")
 		_broadcast_ladder(int(ladder_event["index"]), false, -1.0)
-	# Цикл маяков (раздел 7): конец Звездопада и гашение через 15 минут —
-	# маяки тухнут всем, цикл можно начинать снова.
-	activity.setup_beacons(_beacon_nodes().size())
-	var beacon_event := activity.update_beacons(world_time_sec(), B)
-	if not beacon_event.is_empty():
-		if beacon_event.has("starfall_ended"):
-			Log.info("Звездопад закончился (маяки погаснут через %d с)" % int(B.beacon_reset_sec), "Net")
-		else:
-			Log.info("Маяки погасли (15 минут после Звездопада) — цикл заново", "Net")
-			_broadcast_beacons([], -1.0)
-	# Задания жителей (П5.5): смена игрового дня возвращает выполненные
-	# задания в «доступно» — значки «!» и диалоги оживают у всех.
-	if quests.day_rollover(day_index()):
-		Log.info("Новый день: задания жителей снова доступны", "Net")
-		_broadcast_quest_state()
 
 
-## Индекс игрового дня (одни сутки — day_cycle_sec; задания снова доступны
-## со следующего дня, П5.5).
-func day_index() -> int:
-	return int(world_time_sec() / B.day_cycle_sec)
-
-
-## Событие ворот руин от authority: лог, награда сундука в момент открытия
-## и рассылка состояния всем.
+## Событие ворот руин от authority: лог и рассылка состояния всем.
 func _open_ruins_event(event: Dictionary, entries: Array[Dictionary]) -> void:
 	var openers: Array[int] = event.get("openers", [])
-	var reward_peers: Array[int] = []
 	if event.has("opened"):
-		# Награда сундука — в момент открытия ворот (раздел 8): каждому
-		# в радиусе 10 м от сундука.
-		var chest := _first_node(RuinChest.GROUP)
-		if chest != null:
-			reward_peers = ActivityAuthority.peers_in_radius(
-				entries, chest.global_position, B.chest_radius
-			)
-		Log.info(
-			"Ворота руин открыты (%s), сундук: награда %d игрокам"
-			% ["плиты" if not openers.is_empty() else "запасной путь", reward_peers.size()],
-			"Net",
-		)
+		var how: String = "плиты" if not openers.is_empty() else "запасной путь"
+		Log.info("Ворота руин открыты (%s)" % how, "Net")
 	elif event.has("closed"):
 		Log.info("Ворота руин закрылись (10 минут истекли), сундук сброшен", "Net")
 	var state := activity.ruins_state()
-	_broadcast_ruins(bool(state["gate_open"]), state["plates"], openers, reward_peers)
+	_broadcast_ruins(bool(state["gate_open"]), state["plates"], openers)
 
 
 ## Все игроки в мире: {peer, pos, floor} — позиции и флаг «на земле»
@@ -1633,18 +1169,6 @@ func _lookout_ladders() -> Array[LookoutLadder]:
 	return ladders
 
 
-## Маяки в порядке имени узла (Beacon1..5 — как _beacons у IslandGen).
-func _beacon_nodes() -> Array[Beacon]:
-	var beacons: Array[Beacon] = []
-	for node in get_tree().get_nodes_in_group(Beacon.BEACON_GROUP):
-		if node is Beacon:
-			beacons.append(node as Beacon)
-	beacons.sort_custom(
-		func(a: Beacon, b: Beacon) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
-	)
-	return beacons
-
-
 func _first_node(group: StringName) -> Node3D:
 	for node in get_tree().get_nodes_in_group(group):
 		if node is Node3D:
@@ -1653,25 +1177,21 @@ func _first_node(group: StringName) -> Node3D:
 
 
 ## Хост разослал состояние ворот руин (раздел 9.2): узлы рисуют плиту/плиты/
-## крышку сундука, очки Interactions — участникам плит, монеты — reward_peers.
+## крышку сундука, очки Interactions — участникам плит.
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_ruins(open: bool, plates: Array, openers: Array, reward_peers: Array) -> void:
-	EventBus.ruins_state.emit(open, plates, openers, reward_peers)
-	if reward_peers.has(local_peer_id):
-		Session.add_world_coins(B.chest_reward)
+func rpc_ruins(open: bool, plates: Array, openers: Array) -> void:
+	EventBus.ruins_state.emit(open, plates, openers)
 
 
-func _broadcast_ruins(
-	open: bool, plates: Array, openers: Array, reward_peers: Array
-) -> void:
+func _broadcast_ruins(open: bool, plates: Array, openers: Array) -> void:
 	if is_networked():
-		_send(func() -> void: rpc_ruins.rpc(open, plates, openers, reward_peers), false)
+		_send(func() -> void: rpc_ruins.rpc(open, plates, openers), false)
 	else:
-		rpc_ruins(open, plates, openers, reward_peers)
+		rpc_ruins(open, plates, openers)
 
 
 ## Применить активности из world_state (вход в любой момент, раздел 10):
-## открытые ворота и сундук — без повторной награды и очков, висящие
+## открытые ворота и сундук — без повторных очков, висящие
 ## лестницы — узлы рисуют сразу.
 func _apply_activities(state: Dictionary) -> void:
 	var activities: Dictionary = state.get("activities", {})
@@ -1683,25 +1203,14 @@ func _apply_activities(state: Dictionary) -> void:
 			bool(ruins.get("gate_open", false)),
 			ruins.get("plates", []),
 			[],
-			[],
 		)
 	for ladder: Dictionary in activities.get("ladders", []):
 		EventBus.ladder_state.emit(
 			int(ladder.get("index", -1)), true, float(ladder.get("until", -1.0))
 		)
-	var beacons: Dictionary = activities.get("beacons", {})
-	if not beacons.is_empty():
-		EventBus.beacons_state.emit(
-			beacons.get("lit", []), [], float(beacons.get("starfall_started_at", -1.0))
-		)
-	for index: int in activities.get("stars_taken", []):
-		EventBus.star_taken.emit(index, 0)
 	var seats: Array = activities.get("seats", [])
 	if not seats.is_empty():
 		EventBus.campfire_seats.emit(seats)
-	var quests_state: Dictionary = activities.get("quests", {})
-	if not quests_state.is_empty():
-		EventBus.quest_state.emit(quests_state)
 
 
 ## Ping часов: клиент раз в секунду.
@@ -1801,8 +1310,6 @@ func _teardown_network() -> void:
 	hand_links.clear()
 	authority.clear()
 	activity.clear()
-	quests.clear()
-	_quests_logged.clear()
 	_activity_accum = 0.0
 	if was_steam:
 		# Раздел 11: выход из мира — выход из лобби (Rich Presence очищается).

@@ -1,7 +1,6 @@
-# HUD мира (раздел 15 SPEC): монеты (П2 — их уже можно собирать), название
-# зоны при переходе (П2), панель «Висит» с таймером у края расщелины,
-# уведомления «игрок вошёл/покинул мир» (П3). Мини-индикатор маяков, иконка
-# микрофона и подсказки взаимодействия — П5–П6.
+# HUD мира (раздел 15 SPEC): название зоны при переходе (П2), панель «Висит»
+# с таймером у края расщелины, уведомления «игрок вошёл/покинул мир» (П3).
+# Иконка микрофона и подсказки взаимодействия — П5–П6.
 # Весь текст — через tr() и i18n/strings.csv (правило проекта).
 class_name WorldHud
 extends CanvasLayer
@@ -14,7 +13,6 @@ const ZONE_HINT_TIME: float = 3.0
 
 var _panel: PanelContainer
 var _label: Label
-var _coins: Label
 var _zone: Label
 var _zone_left: float = 0.0
 var _toast: Label
@@ -33,7 +31,6 @@ func _ready() -> void:
 	EventBus.player_hang_updated.connect(_on_hang_updated)
 	EventBus.player_hang_ended.connect(_on_hang_ended)
 	EventBus.player_respawned.connect(_on_hang_ended)
-	EventBus.world_coins_changed.connect(_on_coins_changed)
 	EventBus.peer_joined_world.connect(_on_peer_joined)
 	EventBus.peer_left.connect(_on_peer_left)
 	EventBus.interaction_hint.connect(_on_interaction_hint)
@@ -83,15 +80,6 @@ func _build() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.add_child(_panel)
-	# Монеты: слева сверху (раздел 15 — минималистичный HUD).
-	_coins = Label.new()
-	_coins.position = Vector2(20, 14)
-	_coins.add_theme_font_size_override("font_size", 20)
-	_coins.add_theme_color_override("font_color", PAL.coin)
-	_coins.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_coins.add_theme_constant_override("outline_size", 4)
-	root.add_child(_coins)
-	_on_coins_changed(Session.world_coins)
 	# Название зоны: по центру сверху, показывается при переходе (П2).
 	_zone = Label.new()
 	UiLayout.center_top(_zone, Vector2(200, 30), 12.0)
@@ -127,7 +115,7 @@ func _build() -> void:
 	_hint_hold.min_value = 0.0
 	_hint_hold.max_value = 1.0
 	_hint_hold.show_percentage = false
-	_hint_hold.modulate = PAL.coin
+	_hint_hold.modulate = PAL.gold
 	_hint_hold.hide()
 	root.add_child(_hint_hold)
 	# Приглашение «за руку» (раздел 9.5): над подсказкой E, с обратным
@@ -135,7 +123,7 @@ func _build() -> void:
 	_invite = Label.new()
 	UiLayout.center_bottom(_invite, Vector2(400, 26), 128.0)
 	_invite.add_theme_font_size_override("font_size", 19)
-	_invite.add_theme_color_override("font_color", PAL.coin)
+	_invite.add_theme_color_override("font_color", PAL.gold)
 	_invite.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_invite.add_theme_constant_override("outline_size", 4)
 	_invite.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -190,10 +178,6 @@ func show_zone(zone_name: String) -> void:
 	_zone.text = tr("ZONE_%s" % zone_name.to_upper())
 	_zone.show()
 	_zone_left = ZONE_HINT_TIME
-
-
-func _on_coins_changed(total: int) -> void:
-	_coins.text = tr("HUD_COINS") % total
 
 
 func _on_hang_started(time_left: float) -> void:

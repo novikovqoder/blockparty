@@ -101,7 +101,7 @@ func _process(delta: float) -> void:
 
 # --- Панель настроек (строится кодом из списков Appearance) ---
 
-## Стиль панели — как у esc_menu/quest_dialog: тёмная плашка с углами.
+## Стиль панели — как у esc_menu: тёмная плашка с углами.
 func _style_panel() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = PAL.hud_panel

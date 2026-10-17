@@ -45,7 +45,7 @@ extends Resource
 @export var planks: Color = Color("d9b077")
 @export var ruin_brick: Color = Color("aeb9c2")
 @export var ruin_dark: Color = Color("6e7686")
-@export var beacon_glow: Color = Color("ffe08a")
+@export var lamp_glow: Color = Color("ffe08a")
 ## Цветы на лугах (кластеры MultiMesh).
 @export var flowers: PackedColorArray = [
 	Color("ff8fa3"), Color("ffd166"), Color("c3f584"), Color("bda7ff"),
@@ -66,7 +66,7 @@ extends Resource
 @export var critter: Color = Color("e8955c")
 @export var firefly: Color = Color("ffef9e")
 @export var fire: Color = Color("ff9a3d")
-@export var coin: Color = Color("ffd166")
+@export var gold: Color = Color("ffd166")
 
 @export_group("HUD")
 @export var hud_text: Color = Color("1d3557")

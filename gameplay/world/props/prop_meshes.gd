@@ -8,7 +8,7 @@
 # координат (origin у земли): позиция предмета из IslandGen — точка на
 # рельефе. Деревья, кусты, трава, цветы, камни, брёвна и колонны руин —
 # CC0-модели kenney.nl (перекраска и нормировка — cc0_meshes.gd), здесь
-# остались только конструкции: стены, башни, маяк, пирс, лодки, постройки
+# остались только конструкции: стены, башни, пирс, лодки, постройки
 # площади.
 #
 # Два типа размеров: «метровые» (rock_wall, ruin_block, plank_deck,
@@ -39,10 +39,6 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _ruin_tower()
 		"ruin_gate":
 			return _ruin_gate()
-		"board":
-			return _board()
-		"beacon":
-			return _beacon()
 		"pier_post":
 			return _pier_post()
 		"plank_deck":
@@ -437,10 +433,6 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(0.95, 1.4, 0.95) * scale.x
 		"bench":
 			return Vector3(1.9, 0.55, 0.7)
-		"board":
-			return Vector3(1.5, 1.6, 0.55)
-		"beacon":
-			return Vector3(1.9, 4.4, 1.9) * scale.x
 		"boat":
 			return Vector3(1.3, 0.5, 2.35)
 		# Гигант (П5.9, блок 4): дуб-исполин — толстый ствол без кроны;
@@ -529,34 +521,6 @@ static func _ruin_gate() -> ArrayMesh:
 
 
 # --- Площадь и постройки --
-
-## Доска мирового события: помост на двух ногах.
-static func _board() -> ArrayMesh:
-	var parts: Array = [
-		_box(Vector3(0.1, 1.3, 0.5), PAL.trunk, Vector3(-0.55, 0.65, 0)),
-		_box(Vector3(0.1, 1.3, 0.5), PAL.trunk, Vector3(0.55, 0.65, 0)),
-		_box(Vector3(1.35, 0.85, 0.07), PAL.planks, Vector3(0, 1.15, 0)),
-		_box(Vector3(1.45, 0.12, 0.14), PAL.planks.darkened(0.1),
-			Vector3(0, 1.62, 0)),
-	]
-	return _merge(parts)
-
-
-## Маяк (раздел 7): постамент, колонна, фонарь с тёмной «лампой»
-## (зажигание — П5) и пирамидальной крышей.
-static func _beacon() -> ArrayMesh:
-	var stone: Color = PAL.zone_stone[0]
-	return _merge([
-		_cyl(0.85, 0.95, 0.7, 6, stone.darkened(0.1), Vector3(0, 0.35, 0)),
-		_cyl(0.42, 0.5, 2.4, 6, stone, Vector3(0, 1.9, 0)),
-		_box(Vector3(0.78, 0.7, 0.78), stone.lerp(Color.WHITE, 0.12),
-			Vector3(0, 3.45, 0)),
-		# Стекло фонаря чуть выступает из фонаря; до П5 — не светится.
-		_box(Vector3(0.52, 0.42, 0.52), PAL.beacon_glow.darkened(0.45),
-			Vector3(0, 3.45, 0)),
-		# Крыша-пирамида: 4-гранный конус, повёрнут гранями к боксу.
-		_cyl(0.02, 0.62, 0.55, 4, stone.darkened(0.05), Vector3(0, 4.07, 0), PI / 4.0),
-	])
 
 
 ## Свая пирса/опора моста («метровый» тип): гранёный столб единичной

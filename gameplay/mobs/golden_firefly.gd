@@ -42,10 +42,6 @@ func position_at(world_time: float) -> Vector3:
 	return MobMotion.firefly_position(motion, world_time)
 
 
-func reward() -> int:
-	return B.firefly_reward
-
-
 func respawn_sec() -> float:
 	return B.firefly_respawn_sec
 

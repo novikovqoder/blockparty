@@ -59,50 +59,31 @@ func test_attack_cooldown_rate_limits() -> void:
 		"после перезарядки — можно")
 
 
-func test_coin_first_request_wins() -> void:
-	var authority := HostAuthority.new()
-	var first := authority.try_take_coin(41, 3, 500.0, B.coin_respawn_sec)
-	assert_eq(int(first["spawn_id"]), 41)
-	assert_almost_eq(float(first["respawn_at"]), 500.0 + B.coin_respawn_sec, EPS)
-	var second := authority.try_take_coin(41, 4, 500.05, B.coin_respawn_sec)
-	assert_eq(second, {}, "второй запрос на ту же монету отклонён")
-
-
 func test_prune_drops_respawned_entries() -> void:
 	var authority := HostAuthority.new()
 	_kill(authority, 1, 2, 100.0, Vector3.ZERO, Vector3(0, 0, 1))
-	authority.try_take_coin(2, 3, 100.0, B.coin_respawn_sec)
 	authority.prune(100.0 + B.mob_respawn_sec - 0.01)
 	assert_eq(authority.dead_mobs.size(), 1, "моб ещё мёртв")
 	authority.prune(100.0 + B.mob_respawn_sec)
 	assert_eq(authority.dead_mobs.size(), 0, "возрождённый моб убран из состояния")
-	assert_eq(authority.taken_coins.size(), 1, "монета ещё не возродилась (300 с)")
-	authority.prune(100.0 + B.coin_respawn_sec)
-	assert_eq(authority.taken_coins.size(), 0)
 
 
 func test_entries_feed_world_state() -> void:
 	# Словари для WorldState.pack: поздно вошедший видит тех же мёртвых
-	# мобов и подобранные монеты с одинаковым временем возрождения.
+	# мобов с одинаковым временем возрождения.
 	var authority := HostAuthority.new()
 	_kill(authority, 3, 2, 100.0, Vector3.ZERO, Vector3(0, 0, 1))
-	authority.try_take_coin(41, 3, 120.0, B.coin_respawn_sec)
 	var dead: Array = authority.dead_mob_entries()
-	var taken: Array = authority.taken_coin_entries()
 	assert_eq(dead.size(), 1)
 	assert_eq(int(dead[0]["spawn_id"]), 3)
 	assert_almost_eq(float(dead[0]["respawn_at"]), 100.0 + B.mob_respawn_sec, EPS)
-	assert_eq(taken.size(), 1)
-	assert_eq(int(taken[0]["spawn_id"]), 41)
 
 
 func test_clear_resets_world() -> void:
 	var authority := HostAuthority.new()
 	_kill(authority, 1, 2, 100.0, Vector3.ZERO, Vector3(0, 0, 1))
-	authority.try_take_coin(2, 3, 100.0, B.coin_respawn_sec)
 	authority.clear()
 	assert_eq(authority.dead_mobs.size(), 0)
-	assert_eq(authority.taken_coins.size(), 0)
 
 
 func test_hit_allowed_checks_and_records_cooldown() -> void:

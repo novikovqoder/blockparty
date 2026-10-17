@@ -22,7 +22,7 @@ func _build() -> void:
 	solid.size = SOLID_SIZE
 	SolidBody.add(self, solid, Vector3(0.0, SOLID_SIZE.y * 0.5, 0.0))
 	_add_box(Vector3(1.0, 0.4, 1.0), Vector3(0.0, 0.2, 0.0), PAL.stone, 0.0)
-	_add_box(Vector3(0.5, 0.5, 0.5), Vector3(0.0, 0.65, 0.0), PAL.beacon_glow, 1.5)
+	_add_box(Vector3(0.5, 0.5, 0.5), Vector3(0.0, 0.65, 0.0), PAL.lamp_glow, 1.5)
 
 
 func _add_box(size: Vector3, position: Vector3, color: Color, glow: float) -> void:

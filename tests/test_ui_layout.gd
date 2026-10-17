@@ -3,8 +3,8 @@
 # ширина меняется с аспектом окна, и позиции, захардкоженные под 1280 × 720
 # (тем более вместе с якорем 0.5), уводят панель в угол. Проверяем чистый
 # расчёт на родителе-контейнере разных размеров (1280×720, 1920×1080,
-# 1600×900, 1280×1024) и факт «панель в центре вьюпорта» у реальных окон
-# (EscMenu, QuestDialog) и правый край трекера.
+# 1600×900, 1280×1024) и факт «панель в центре вьюпорта» у реального окна
+# (EscMenu).
 extends GutTest
 
 
@@ -72,10 +72,9 @@ func test_edge_layouts_follow_parent_size() -> void:
 			0.01, "метка со смещением от центра")
 
 
-## Реальные окна: панель меню Esc и панель диалога заданий — в центре
-## видимой области (раньше якорь 0.5 плюс абсолютные офсеты уводили панель
-## в правый нижний угол).
-func test_esc_menu_and_quest_dialog_panels_centered() -> void:
+## Реальное окно: панель меню Esc — в центре видимой области (раньше якорь
+## 0.5 плюс абсолютные офсеты уводили панель в правый нижний угол).
+func test_esc_menu_panel_centered() -> void:
 	var viewport_center := get_viewport().get_visible_rect().size * 0.5
 	var menu := EscMenu.new()
 	add_child_autofree(menu)
@@ -87,37 +86,6 @@ func test_esc_menu_and_quest_dialog_panels_centered() -> void:
 	assert_almost_eq(
 		menu_panel.global_position.y + menu_panel.size.y * 0.5,
 		viewport_center.y, 0.5, "меню Esc в центре по y")
-
-	var dialog := QuestDialog.new()
-	add_child_autofree(dialog)
-	var dialog_panel := _first_panel(dialog)
-	assert_not_null(dialog_panel, "панель диалога построена")
-	assert_almost_eq(
-		dialog_panel.global_position.x + dialog_panel.size.x * 0.5,
-		viewport_center.x, 0.5, "диалог заданий в центре по x")
-	assert_almost_eq(
-		dialog_panel.global_position.y + dialog_panel.size.y * 0.5,
-		viewport_center.y, 0.5, "диалог заданий в центре по y")
-
-
-## Строки трекера заданий прижаты к правому краю видимой области.
-func test_quest_tracker_lines_at_right_edge() -> void:
-	var width := get_viewport().get_visible_rect().size.x
-	var tracker := QuestTracker.new()
-	add_child_autofree(tracker)
-	EventBus.quest_state.emit({
-		Protocol.QUEST_THYME: {
-			"stage": QuestAuthority.ACTIVE, "steps": [1, 0, 0, 0, 0],
-		},
-	})
-	var labels: Array = tracker.find_children("*", "Label", true, false)
-	assert_gt(labels.size(), 0, "строки трекера построены")
-	for label: Label in labels:
-		if not label.visible:
-			continue
-		assert_almost_eq(
-			label.global_position.x + label.size.x + QuestTracker.MARGIN,
-			width, 0.5, "строка у правого края")
 
 
 func _first_panel(layer: CanvasLayer) -> PanelContainer:

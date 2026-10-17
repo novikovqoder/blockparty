@@ -1,13 +1,9 @@
-# Сундук в руинах (раздел 8 SPEC): закрыт, пока закрыты ворота; награду
-# (10 монет каждому в радиусе 10 м) хост выдаёт в момент открытия ворот,
-# узел только рисует откинутую крышку и тёплое свечение внутри.
+# Сундук в руинах (раздел 8 SPEC): закрыт, пока закрыты ворота; открывается
+# вместе с ними, узел рисует откинутую крышку и тёплое свечение внутри.
 class_name RuinChest
 extends Node3D
 
 const PAL: Palette = preload("res://assets/palette.tres")
-
-## Группа узлов сундуков (хост берёт центр радиуса награды).
-const GROUP: StringName = &"ruin_chest"
 
 ## Корпус сундука, м.
 const BODY_SIZE: Vector3 = Vector3(0.95, 0.55, 0.6)
@@ -21,12 +17,11 @@ var _open: bool = false
 
 
 func _ready() -> void:
-	add_to_group(GROUP)
 	EventBus.ruins_state.connect(_on_ruins_state)
 	_build_chest()
 
 
-func _on_ruins_state(open: bool, _plates: Array, _openers: Array, _reward: Array) -> void:
+func _on_ruins_state(open: bool, _plates: Array, _openers: Array) -> void:
 	set_open(open)
 
 

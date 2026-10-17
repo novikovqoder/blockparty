@@ -1,8 +1,8 @@
 # Локальное сохранение user://save.json: внешность игрока (редактор
-# П5.8, часть B), счётчики выполненных заданий жителей (П5.5, на будущее
-# для «Встреч» П7). Монеты, косметика и блок-лист допишутся на своих этапах.
+# П5.8, часть B). Косметика и блок-лист допишутся на своих этапах.
 # Файл маленький и правится руками: значения вне диапазона молча
-# превращаются в дефолтные, битый файл равен отсутствию.
+# превращаются в дефолтные, битый файл равен отсутствию. Поля старых
+# версий (quests_done и другие) молча игнорируются.
 extends Node
 
 const PATH: String = "user://save.json"
@@ -29,20 +29,6 @@ func load_appearance() -> Appearance:
 			bytes.append(clampi(int(value), 0, 255))
 		return Appearance.from_bytes(bytes).validated()
 	return Appearance.default_for(0)
-
-
-## Счётчик выполненных заданий жителей (П5.5): +1 по id задания.
-func bump_quest_done(quest_id: String) -> void:
-	var data := _read_all()
-	var counts: Dictionary = data.get("quests_done", {})
-	counts[quest_id] = int(counts.get(quest_id, 0)) + 1
-	data["quests_done"] = counts
-	_write_all(data)
-
-
-## Сколько раз выполнено задание с этим id.
-func quest_done_count(quest_id: String) -> int:
-	return int(_read_all().get("quests_done", {}).get(quest_id, 0))
 
 
 func _write_all(data: Dictionary) -> void:

@@ -48,6 +48,6 @@ func _make_material() -> StandardMaterial3D:
 	material.albedo_color = PAL.ruin_dark
 	material.roughness = 1.0
 	material.emission_enabled = true
-	material.emission = PAL.beacon_glow
+	material.emission = PAL.lamp_glow
 	material.emission_energy_multiplier = 0.0
 	return material

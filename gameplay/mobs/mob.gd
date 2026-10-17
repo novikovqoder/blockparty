@@ -81,7 +81,7 @@ func _on_mob_killed(killed_id: int, _killers: Array, respawn_at: float) -> void:
 
 
 ## Вход в идущий мир (раздел 10): расписание мёртвых мобов — из world_state.
-func _on_world_state(dead_mobs: Array, _taken_coins: Array) -> void:
+func _on_world_state(dead_mobs: Array) -> void:
 	for entry: Dictionary in dead_mobs:
 		if int(entry["spawn_id"]) == spawn_id:
 			_respawn_at = maxf(_respawn_at, float(entry["respawn_at"]))
@@ -96,10 +96,6 @@ func _revive() -> void:
 ## Цвет «пуфа» частиц при смерти (переопределяют подвиды).
 func poof_color() -> Color:
 	return Color.WHITE
-
-
-func reward() -> int:
-	return 1
 
 
 func respawn_sec() -> float:

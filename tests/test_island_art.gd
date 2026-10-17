@@ -16,7 +16,7 @@ const PROP_TYPES: PackedStringArray = [
 	"tree_leafy", "tree_spruce", "bush", "fern",
 	"log_bridge", "boulder", "rock_pillar", "rock_wall",
 	"pebble", "grass_tuft", "flower", "reed", "ruin_block", "ruin_tower",
-	"ruin_gate", "ruin_arch", "ruin_column", "bench", "board", "beacon",
+	"ruin_gate", "ruin_arch", "ruin_column", "bench",
 	"pier_post", "plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant",
 	"dead_log", "rrock", "rgrass", "rflower", "riris", "mrock",

@@ -1,11 +1,11 @@
 # Сериализация состояния мира для входа в любой момент (раздел 10 SPEC):
 # хост отправляет rpc_world_state одним надёжным пакетом — эпоху часов мира,
 # состав игроков (ник, внешность байтами индексов редактора П5.8, флаг
-# «в мире»), мёртвых мобов и подобранные монеты с временем возрождения
-# по world_time. Поздно вошедший клиент применяет пакет и сразу видит то же,
+# «в мире») и мёртвых мобов с временем возрождения по world_time.
+# Поздно вошедший клиент применяет пакет и сразу видит то же,
 # что остальные. Формат (little endian): u32 эпоха, u8 n × {i32 peer,
 # u8 len, имя utf8, u8 в мире, 9 байтов внешности (Appearance.to_bytes)},
-# u16 n × {u16 spawn_id, f32 respawn_at} — мобы, затем монеты. Чистые
+# u16 n × {u16 spawn_id, f32 respawn_at} — мобы. Чистые
 # функции без узлов — обязательный тест раздела 18 «без потерь».
 class_name WorldState
 extends RefCounted
@@ -16,7 +16,7 @@ const NAME_MAX_CHARS: int = 20
 
 ## Собрать состояние в байты. Словарь: {world_epoch_msec: int,
 ## players: [{peer_id, name, in_world, appearance: PackedByteArray}],
-## dead_mobs: [{spawn_id, respawn_at}], taken_coins: [{spawn_id, respawn_at}]}.
+## dead_mobs: [{spawn_id, respawn_at}]}.
 static func pack(state: Dictionary) -> PackedByteArray:
 	var buffer := StreamPeerBuffer.new()
 	buffer.big_endian = false
@@ -39,12 +39,7 @@ static func pack(state: Dictionary) -> PackedByteArray:
 	for entry: Dictionary in dead_mobs:
 		buffer.put_u16(int(entry["spawn_id"]) & 0xFFFF)
 		buffer.put_float(float(entry["respawn_at"]))
-	var taken_coins: Array = state.get("taken_coins", [])
-	buffer.put_u16(mini(taken_coins.size(), 0xFFFF))
-	for entry: Dictionary in taken_coins:
-		buffer.put_u16(int(entry["spawn_id"]) & 0xFFFF)
-		buffer.put_float(float(entry["respawn_at"]))
-	# Активности П5 (разделы 7, 9: ворота руин; дальше — маяки и костёр):
+	# Активности П5 (разделы 7, 9: ворота руин; дальше — костёр):
 	# произвольный словарь в конце пакета, старые клиенты его игнорируют.
 	var activities: Dictionary = state.get("activities", {})
 	buffer.put_u8(1 if not activities.is_empty() else 0)
@@ -62,7 +57,6 @@ static func unpack(data: PackedByteArray) -> Dictionary:
 		"world_epoch_msec": buffer.get_u32(),
 		"players": [],
 		"dead_mobs": [],
-		"taken_coins": [],
 	}
 	var player_count: int = buffer.get_u8()
 	for i: int in player_count:
@@ -83,12 +77,6 @@ static func unpack(data: PackedByteArray) -> Dictionary:
 	var mob_count: int = buffer.get_u16()
 	for i: int in mob_count:
 		state["dead_mobs"].append({
-			"spawn_id": buffer.get_u16(),
-			"respawn_at": buffer.get_float(),
-		})
-	var coin_count: int = buffer.get_u16()
-	for i: int in coin_count:
-		state["taken_coins"].append({
 			"spawn_id": buffer.get_u16(),
 			"respawn_at": buffer.get_float(),
 		})

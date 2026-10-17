@@ -74,14 +74,6 @@ func _ready() -> void:
 	add_child(_debug)
 	_debug.watch_player(_player)
 	_debug.watch_island(_island)
-	# Задания жителей (П5.5): узлы на острове и диалог жителя. QuestSystem
-	# берёт арт у Island — поэтому после острова; слушатели сети — в _wire_network.
-	var quest_system := QuestSystem.new()
-	_island.add_child(quest_system)
-	add_child(QuestDialog.new())
-	# Трекер активных заданий справа сверху (раздел 15); карту (M) точками
-	# целей подписывает сама IslandMap.
-	add_child(QuestTracker.new())
 	if Dev.debug_collisions:
 		_draw_debug_collisions(_island)
 	_wire_network()
@@ -219,12 +211,6 @@ func _spawn_player() -> void:
 			if node is Node3D:
 				targets.append((node as Node3D).global_position)
 		_player.set_bot_targets(targets)
-	# Автопрогон задания жителя (П5.5): клиент проходит «Вечерний чай»,
-	# хост стоит у костра — e2e-сверка логов в tools/quest_e2e.sh.
-	if Session.quest_bot:
-		var quest_bot := QuestBot.new()
-		add_child(quest_bot)
-		quest_bot.setup(_player)
 	# Самопроверка анимаций (--selftest-anim, возврат П5.8): позы и
 	# скиннинг модели локального игрока в запущенном мире — печатает
 	# SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL); гоняется и на

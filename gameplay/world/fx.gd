@@ -1,5 +1,5 @@
 # Малые эффекты мира (раздел 16 SPEC): однократные частицы — облачко пыли
-# при приземлении, блёстки при подборе монеты, «пуф» при смерти моба, круги
+# при приземлении, «пуф» при смерти моба, круги
 # на воде при входе в неё; постоянные — искры костра. Все эффекты —
 # процедурные GPUParticles3D и примитивы (правило проекта: без ассетов).
 # Ноды однократных эффектов освобождают себя после проигрывания; частицы
@@ -26,20 +26,6 @@ static func puff(
 	process.initial_velocity_max = speed
 	process.gravity = Vector3(0, -2.0, 0)
 	process.scale_max = size * 8.0
-
-
-## Блёстки вверх (монета, светлячок): искры с лёгким разлётом.
-static func sparkle(
-	parent: Node3D, pos: Vector3, color: Color, amount: int = 14,
-) -> void:
-	var fx := _one_shot(parent, pos, amount, 0.7, color, 0.07)
-	var process := fx.process_material as ParticleProcessMaterial
-	process.direction = Vector3.UP
-	process.spread = 55.0
-	process.initial_velocity_min = 1.0
-	process.initial_velocity_max = 2.2
-	process.gravity = Vector3(0, -4.0, 0)
-	process.scale_max = 0.5
 
 
 ## Постоянные искры костра (раздел 16): тёплые угольки вверх, нода

@@ -6,34 +6,11 @@ class_name Protocol
 extends RefCounted
 
 ## Версия протокола: миры с другой версией не показываются (раздел 10).
-## 4 — внешность игрока байтами индексов вместо номера персонажа (П5.8);
-## 3 — задания жителей (П5.5); 2 — открытый 3D-мир (ТЗ v2); 1–3 — версии
+## 5 — мир без монет/заданий/маяков (переделка П5.9); 4 — внешность игрока
+## байтами индексов вместо номера персонажа (П5.8); 3 — задания жителей
+## (П5.5, удалены); 2 — открытый 3D-мир (ТЗ v2); 1–3 — версии
 ## 2D-прототипа.
-const PROTOCOL_VERSION: int = 4
-
-# --- Задания жителей (П5.5) ---
-
-## Идентификаторы трёх заданий (по жителю, раздел «Общие правила»).
-const QUEST_THYME: String = "thyme_tea"
-const QUEST_LUMI: String = "lumi_beacons"
-const QUEST_FINN: String = "finn_trail"
-## Все задания мира — в стабильном порядке (порядок HUD-трекера).
-const QUEST_IDS: PackedStringArray = [QUEST_THYME, QUEST_LUMI, QUEST_FINN]
-
-## Вид шага задания в rpc_quest_action: подобрать мяту, зажечь квестовый
-## маяк, поставить веху.
-const QUEST_KIND_MINT: String = "mint"
-const QUEST_KIND_BEACON: String = "beacon"
-const QUEST_KIND_FLAG: String = "flag"
-
-## id → ключ строки HUD-трекера (i18n) и вид шагов-целей: трекер пишет
-## «Мята: 3/5», карта (M) рисует точки несделанных шагов по группам узлов
-## (та же привязка kind → группа, что у Net._quest_node).
-const QUEST_TRACK: Dictionary = {
-	QUEST_THYME: {"key": "QUEST_TRACK_MINT", "kind": QUEST_KIND_MINT},
-	QUEST_LUMI: {"key": "QUEST_TRACK_BEACONS", "kind": QUEST_KIND_BEACON},
-	QUEST_FINN: {"key": "QUEST_TRACK_FLAGS", "kind": QUEST_KIND_FLAG},
-}
+const PROTOCOL_VERSION: int = 5
 
 ## Максимум игроков в мире; код должен работать до MAX_PLAYERS_HARD (раздел 10).
 const MAX_PLAYERS: int = 12

@@ -6,8 +6,8 @@
 # строит terrain.gd из той же карты; крутые перепады ≥ 0.9 м на метр —
 # непроходимые стены, их прикрывают предметы-призмы (prop_meshes.gd):
 # уступ получает чистую вертикальную стену, а не «лестницу» рельефа.
-# Предметы раскладываются по правилам зон тем же seed; зоны, POI, монеты
-# (ровно 60), точки мобов и камни духа сохраняют расположение кубической
+# Предметы раскладываются по правилам зон тем же seed; зоны, POI,
+# точки мобов и камни духа сохраняют расположение кубической
 # версии (П0–П4).
 class_name IslandGen
 extends RefCounted
@@ -101,7 +101,7 @@ const LOOKOUT_TOP_H: float = 10.0
 const SOLID_TYPES: PackedStringArray = [
 	"tree_leafy", "tree_spruce", "boulder", "rock_pillar",
 	"rock_wall", "ruin_block", "ruin_tower", "ruin_arch", "ruin_column",
-	"bench", "log_bridge", "board", "beacon", "pier_post",
+	"bench", "log_bridge", "pier_post",
 	"plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_giant",
 	"rrock", "dead_log",
@@ -140,8 +140,8 @@ const CRITTER_ROUTE_SAMPLE: float = 0.025
 
 ## Полные данные острова (детерминированы): heights (карта высот, м),
 ## props (предметы: тип, позиция, поворот, масштаб, вариант, тон), tint
-## (подсказки цвета рельефа), water, hang, stones, spawn_zones, beacons,
-## coins (ровно 60), mobs, poi, bounds.
+## (подсказки цвета рельефа), water, hang, stones, spawn_zones, mobs, poi,
+## bounds.
 static func generate() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED_VALUE
@@ -177,7 +177,6 @@ static func generate() -> Dictionary:
 	var spawns: Dictionary = {}
 	var reserved: Dictionary = _points_of_interest(heights, stones, spawns)
 	_forest_landmarks(heights, props, reserved)
-	var beacons: Array[Vector3] = _beacons(heights, props, reserved)
 	_trees_and_rocks(heights, props, rng, reserved)
 	_crevasse_walls(props, rng)
 	_lookout_walls(props, rng)
@@ -185,7 +184,7 @@ static func generate() -> Dictionary:
 	_bridges(props, rng)
 	var ruins: Dictionary = _ruins(heights, props, rng)
 	var pier: Dictionary = _pier_and_boats(heights, props)
-	var fire: Dictionary = _campfire_and_board(heights, props)
+	var fire: Dictionary = _campfire(heights, props)
 	var lookouts: Array = []
 	for center: Vector2i in LOOKOUTS:
 		lookouts.append({
@@ -193,8 +192,6 @@ static func generate() -> Dictionary:
 		})
 	data["stones"] = stones
 	data["spawn_zones"] = spawns
-	data["beacons"] = beacons
-	data["coins"] = _coins(heights, props, ruins, pier, rng)
 	data["mobs"] = _mobs(heights, props, rng)
 	data["hang"] = _hang()
 	data["poi"] = {"ruins": ruins, "pier": pier, "campfire": fire, "lookouts": lookouts}
@@ -214,8 +211,6 @@ static func island_hash(data: Dictionary) -> int:
 			h, String(prop["type"]), prop["pos"], prop["yaw"],
 			prop["scale"], int(prop["variant"]), prop["tint"],
 		])
-	for coin: Vector3 in data["coins"]:
-		h = hash([h, coin])
 	for mob: Dictionary in data["mobs"]:
 		h = hash([h, mob])
 	return h
@@ -516,7 +511,7 @@ static func _carve_forest_gully(heights: PackedFloat32Array) -> void:
 ## Ориентиры Леса (SPEC 2.5, блок 2 П5.7): поляна с огромным деревом и
 ## овраг с мостиком из брёвен. Собраны вручную (координаты фиксированы),
 ## генерация от них детерминирована; rng — свой поток, чтобы правки леса
-## не двигали маяки, и наоборот. Клетки поляны и русла резервируются:
+## не двигали ориентиры, и наоборот. Клетки поляны и русла резервируются:
 ## на поляне не растут деревья, в русле — только папоротники (_trees_and_rocks).
 static func _forest_landmarks(
 		heights: PackedFloat32Array, props: Array, reserved: Dictionary) -> void:
@@ -683,29 +678,6 @@ static func _ensure_land(heights: PackedFloat32Array, cell: Vector2i, min_h: flo
 			var target: float = lerpf(h0, min_h, fall)
 			var i: int = _idx(x, z)
 			heights[i] = maxf(heights[i], target)
-
-
-## Пять маяков (раздел 7): по одному у зон; зажигание — П5, здесь башни
-## (предмет «beacon», лампа в башне тёмная — луч появится на П5).
-static func _beacons(
-	heights: PackedFloat32Array, props: Array, reserved: Dictionary
-) -> Array[Vector3]:
-	var cells: Array[Vector2i] = [
-		Vector2i(-60, -40), Vector2i(42, -48), Vector2i(-58, 22),
-		Vector2i(62, 44), Vector2i(-14, 76),
-	]
-	var rng := rng_static()
-	var beacons: Array[Vector3] = []
-	for cell: Vector2i in cells:
-		_ensure_land(heights, cell, 1.5)
-		for dx: int in range(-1, 2):
-			for dz: int in range(-1, 2):
-				reserved[cell + Vector2i(dx, dz)] = true
-		var pos := Vector3(cell.x + 0.5, heights[_idx(cell.x, cell.y)], cell.y + 0.5)
-		beacons.append(pos)
-		_add_prop(props, rng, &"beacon", pos, rng.randf_range(-0.1, 0.1),
-			Vector3.ONE * rng.randf_range(0.95, 1.05), "stone", 1)
-	return beacons
 
 
 # --- Деревья, камни, трава, цветы ---
@@ -1254,9 +1226,9 @@ static func _pier_and_boats(heights: PackedFloat32Array, props: Array) -> Dictio
 	}
 
 
-## Костёр на площади: каменное кольцо, лавки вокруг, доска события севернее.
+## Костёр на площади: каменное кольцо и лавки вокруг.
 ## Сидение и огонь-логика — П5; здесь геометрия и позиции (площадь — PLAZA_H).
-static func _campfire_and_board(heights: PackedFloat32Array, props: Array) -> Dictionary:
+static func _campfire(heights: PackedFloat32Array, props: Array) -> Dictionary:
 	var fire := Vector2i(0, 2)
 	var ring_rng := rng_static()
 	for i: int in range(8):
@@ -1274,12 +1246,9 @@ static func _campfire_and_board(heights: PackedFloat32Array, props: Array) -> Di
 		_add_prop(props, ring_rng, &"bench",
 			Vector3(bench.x, PLAZA_H, bench.y), yaw, Vector3.ONE, "plain", 1)
 		benches.append(Vector3(bench.x, PLAZA_H + 0.45, bench.y))
-	_add_prop(props, ring_rng, &"board",
-		Vector3(0.5, PLAZA_H, -5.5), 0.0, Vector3.ONE, "plain", 1)
 	return {
 		"center": Vector3(0.5, PLAZA_H, 2.5),
 		"benches": benches,
-		"board": Vector3(0.5, PLAZA_H + 1.0, -5.5),
 	}
 
 
@@ -1289,148 +1258,6 @@ static func rng_static() -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED_VALUE + 17
 	return rng
-
-
-# --- Монеты (ровно 60, раздел 8) ---
-
-static func _coins(
-	heights: PackedFloat32Array, props: Array, ruins: Dictionary, pier: Dictionary,
-	rng: RandomNumberGenerator,
-) -> Array[Vector3]:
-	var coins: Array[Vector3] = []
-	# Смотровые: по 4 на площадке 2 × 2 м (верх LOOKOUT_TOP_H).
-	for center: Vector2i in LOOKOUTS:
-		for offset: Vector2 in [
-			Vector2(0.65, 0.0), Vector2(-0.65, 0.0),
-			Vector2(0.0, 0.65), Vector2(0.0, -0.65),
-		]:
-			coins.append(Vector3(
-				float(center.x) + offset.x, LOOKOUT_TOP_H + 0.35,
-				float(center.y) + offset.y
-			))
-	# Мостки: по 6 вдоль каждой переправы (настил BRIDGE_DECK_H).
-	for bx: int in BRIDGE_X:
-		for i: int in range(6):
-			var z: int = CREVASSE_Z0 - 1 + i * 2
-			coins.append(Vector3(bx + 0.5, BRIDGE_DECK_H + 0.3, z + 0.5))
-	# Вершины холмов: высокие точки зоны; порог снижается, пока кандидатов
-	# не хватит на 14 монет (ровно 60 — критерий этапа).
-	var peaks: Array[Vector3] = []
-	var threshold: float = 18.0
-	while threshold > 6.0:
-		peaks = _hills_cells_above(heights, threshold)
-		if peaks.size() >= 40:
-			break
-		threshold -= 2.0
-	coins += _pick_spaced(peaks, 14, rng, coins)
-	# Руины: внутри стен (терраса RUINS_H).
-	var inside: Array[Vector3] = []
-	var rect: Rect2 = ruins["inside_rect"]
-	for x: int in range(int(rect.position.x), int(rect.position.x + rect.size.x)):
-		for z: int in range(int(rect.position.y), int(rect.position.y + rect.size.y)):
-			inside.append(Vector3(x + 0.5, RUINS_H + 0.35, z + 0.5))
-	coins += _pick_spaced(inside, 8, rng, coins)
-	# Лес: поляны без деревьев.
-	var occupied := _prop_columns(props)
-	var clearings: Array[Vector3] = []
-	for z: int in range(-HALF, HALF + 1):
-		for x: int in range(-HALF, HALF + 1):
-			var cell := Vector2i(x, z)
-			if occupied.has(cell):
-				continue
-			var h: float = heights[_idx(x, z)]
-			if h <= 0.9:
-				continue
-			if Vector2(x + 52.0, z + 52.0).length() < 40.0:
-				clearings.append(Vector3(x + 0.5, h + 0.35, z + 0.5))
-	coins += _pick_spaced(clearings, 6, rng, coins)
-	# Пирс и лодочки.
-	coins.append(Vector3(5.5, 1.35, 71.5))
-	coins.append(Vector3(6.5, 1.35, 71.5))
-	for boat: Vector3 in pier["boats"]:
-		coins.append(boat + Vector3(0.0, 0.15, 0.0))
-	return coins
-
-
-## Точки зоны холмов не ниже порога (кандидаты монет на вершинах).
-static func _hills_cells_above(heights: PackedFloat32Array, threshold: float) -> Array[Vector3]:
-	var cells: Array[Vector3] = []
-	for z: int in range(-HALF, HALF + 1):
-		for x: int in range(-HALF, HALF + 1):
-			var h: float = heights[_idx(x, z)]
-			if h >= threshold and Vector2(x + 58.0, z - 42.0).length() < 42.0:
-				cells.append(Vector3(x + 0.5, h + 0.35, z + 0.5))
-	return cells
-
-
-## Детерминированный выбор n элементов (Fisher–Yates по RNG).
-static func _pick(source: Array[Vector3], n: int, rng: RandomNumberGenerator) -> Array[Vector3]:
-	var picked: Array[Vector3] = []
-	var count: int = mini(n, source.size())
-	if count == 0:
-		return picked
-	var pool: Array[Vector3] = source.duplicate()
-	for i: int in range(count):
-		var j: int = rng.randi_range(i, pool.size() - 1)
-		var tmp: Vector3 = pool[i]
-		pool[i] = pool[j]
-		pool[j] = tmp
-		picked.append(pool[i])
-	return picked
-
-
-## Минимальный разлёт монет по горизонтали, м: монета вершины не ложится
-## вплотную к смотровой площадке — иначе игрок собирает две одним касанием
-## (доработка П5.9: ровно +coin_reward за касание, пары читаются на экране).
-const MIN_COIN_SPACING: float = 2.5
-
-
-## Выбор n точек с разлётом: не ближе MIN_COIN_SPACING ни к уже собранным
-## монетам (keep_away), ни друг к другу. Пул перемешивается целиком —
-## разрежённые кандидаты набираются из всего пула, а не из первых n
-## (иначе вершинная монета добором ложилась на смотровую площадку).
-## Если разрежённых не хватает и после этого — добор без ограничения:
-## ровно 60 монет (критерий этапа) важнее идеального разлёта.
-static func _pick_spaced(
-		source: Array[Vector3], n: int, rng: RandomNumberGenerator,
-		keep_away: Array[Vector3],
-) -> Array[Vector3]:
-	var pool: Array[Vector3] = source.duplicate()
-	for i: int in range(pool.size() - 1):
-		var j: int = rng.randi_range(i, pool.size() - 1)
-		var tmp: Vector3 = pool[i]
-		pool[i] = pool[j]
-		pool[j] = tmp
-	var picked: Array[Vector3] = []
-	for coin: Vector3 in pool:
-		if picked.size() >= n:
-			break
-		var spaced_out := true
-		for other: Vector3 in keep_away + picked:
-			if Vector2(coin.x, coin.z).distance_to(
-					Vector2(other.x, other.z)) < MIN_COIN_SPACING:
-				spaced_out = false
-				break
-		if spaced_out:
-			picked.append(coin)
-	for coin: Vector3 in pool:
-		if picked.size() >= n:
-			break
-		if not picked.has(coin):
-			picked.append(coin)
-	return picked
-
-
-## Клетки, занятые предметами (монеты туда не ставим).
-static func _prop_columns(props: Array) -> Dictionary:
-	var occupied: Dictionary = {}
-	for prop: Dictionary in props:
-		var pos: Vector3 = prop["pos"]
-		var type := String(prop["type"])
-		if type == "grass_tuft" or type == "flower" or type == "pebble":
-			continue
-		occupied[Vector2i(int(floor(pos.x)), int(floor(pos.z)))] = true
-	return occupied
 
 
 # --- Мобы (раздел 8; траектории — чистые функции в mob_motion.gd) ---

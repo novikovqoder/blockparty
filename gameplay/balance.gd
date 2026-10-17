@@ -1,7 +1,7 @@
 # Числа геймплея (разделы 5, 13 SPEC): движение персонажа, камера, подсадка
 # на голову, удар, очки взаимодействий. Все числа геймплея живут здесь
 # (правило проекта), сетевые — в net/protocol.gd. Единицы: метры и секунды.
-# Заполняется по этапам: мир, мобы и монеты — П2, кооп-механики — П5.
+# Заполняется по этапам: мир и мобы — П2, кооп-механики — П5.
 class_name Balance
 extends Resource
 
@@ -74,8 +74,6 @@ extends Resource
 ## Удержание E для вытягивания, с — базовое для всех (характеристики
 ## убраны, П5.8 часть D: игроки равны).
 @export var pull_hold_time: float = 0.5
-## Монет помощнику за вытягивание (раздел 8: «помощь из расщелины — 3»).
-@export var pull_reward: int = 3
 
 @export_group("За руку (раздел 9.5)")
 ## Радиус, в котором F берёт ближайшего игрока за руку, м.
@@ -129,10 +127,6 @@ extends Resource
 @export var gate_near_radius: float = 4.5
 ## Открытые ворота и сундук сбрасываются через это время, с (раздел 8: 10 мин).
 @export var gate_reset_sec: float = 600.0
-## Монет из сундука каждому игроку в радиусе chest_radius в момент открытия.
-@export var chest_reward: int = 10
-## Радиус награды сундука, м.
-@export var chest_radius: float = 10.0
 ## Период проверки активностей хостом (плиты, зоны), с.
 @export var activity_tick: float = 0.1
 
@@ -143,31 +137,6 @@ extends Resource
 @export var ladder_top_window: float = 1.2
 ## Радиус от центра смотровой для «поднявшийся», м.
 @export var ladder_top_radius: float = 3.5
-
-@export_group("Маяки и Звездопад (раздел 7)")
-## Окно между нажатиями E двух разных игроков, зажигающими маяк, с.
-@export var beacon_pair_window: float = 3.0
-## Запасной путь при малом онлайне: удержание E в одиночку, с.
-@export var beacon_solo_hold: float = 8.0
-## Монет каждому из зажёгших маяк (раздел 8: «зажигание маяка — 3»).
-@export var beacon_reward: int = 3
-## Проверка хоста «у маяка»: окно высоты игрока над узлом, м.
-@export var beacon_use_window: float = 3.0
-## Длительность Звездопада (все 5 маяков зажжены), с.
-@export var starfall_duration: float = 120.0
-## Новая звезда падает каждые столько секунд.
-@export var star_interval: float = 1.5
-## Падение звезды с высоты star_spawn_height до земли, с.
-@export var star_fall_time: float = 6.0
-## Звезда лежит на земле и исчезает через столько секунд после рождения
-## (падение + лежание; хватать надо успеть).
-@export var star_lifetime: float = 12.0
-## Высота, с которой падают звёзды, м.
-@export var star_spawn_height: float = 35.0
-## Монет за звезду Звездопада (раздел 8).
-@export var star_reward: int = 1
-## Маяки гаснут через столько секунд после конца Звездопада, с (15 мин).
-@export var beacon_reset_sec: float = 900.0
 
 @export_group("Удар (раздел 5)")
 ## Зона взмаха перед персонажем, м.
@@ -240,22 +209,9 @@ extends Resource
 @export var mob_respawn_sec: float = 180.0
 ## Возрождение золотого светлячка, с.
 @export var firefly_respawn_sec: float = 300.0
-## Монет за птицу / зверька (по одному удару).
-@export var bird_reward: int = 1
-@export var critter_reward: int = 1
 ## Золотой светлячок «на двоих» (раздел 8): окно между ударами двух
 ## разных игроков, с.
 @export var firefly_window: float = 3.0
-## Монет каждому из двоих, убивших светлячка.
-@export var firefly_reward: int = 8
-
-@export_group("Монеты острова (раздел 8)")
-## Статичных монет на острове (SPEC: ровно 60 — тест).
-@export var static_coins: int = 60
-## Возрождение собранной монеты, с.
-@export var coin_respawn_sec: float = 300.0
-## Монет за монету острова.
-@export var coin_reward: int = 1
 
 @export_group("Боты (раздел 18: бродят между POI и иногда прыгают)")
 ## Пауза бота на точке интереса перед следующей целью, с.
@@ -290,8 +246,6 @@ extends Resource
 ## Каждые 30 с у костра и лимит.
 @export var pts_campfire: float = 3.0
 @export var pts_campfire_max: float = 12.0
-## Вместе зажгли маяк.
-@export var pts_beacon_lit: float = 6.0
 ## Вместе открыли ворота руин.
 @export var pts_gate_open: float = 6.0
 ## Подсадил меня / я подсадил его.
@@ -301,39 +255,3 @@ extends Resource
 ## Ответная эмоция в течение 5 с и лимит.
 @export var pts_emote_reply: float = 2.0
 @export var pts_emote_reply_max: float = 6.0
-
-# --- Задания жителей (П5.5) ---
-
-## Радиус E у жителя и дистанция, с которой он машет при подходе.
-@export var quest_npc_use_radius: float = 2.0
-@export var quest_npc_wave_range: float = 6.0
-## Радиус, в котором второй игрок ускоряет удержание маяка вдвое.
-@export var quest_hold_helper_radius: float = 3.0
-## Удержание E: квестовый маяк и веха, с.
-@export var quest_beacon_hold: float = 2.0
-@export var quest_flag_hold: float = 1.0
-## Базовая награда заданий: монет каждому участнику.
-@export var quest_reward_base: int = 10
-## «Вечерний чай»: +2 за каждого ДРУГОГО сидящего у костра, потолок бонуса.
-@export var quest_thyme_bonus_per_other: int = 2
-@export var quest_thyme_bonus_max: int = 10
-## Радиус финала Тимьяна от центра костра (сесть или стоять рядом).
-@export var quest_campfire_radius: float = 8.0
-## Радиус финала Луми и Финна от последнего объекта задания.
-@export var quest_final_radius: float = 8.0
-## Светлячки финала Тимьяна: длительность, базовое число и за каждого сидящего.
-@export var quest_firefly_duration: float = 30.0
-@export var quest_firefly_base: int = 10
-@export var quest_firefly_per_seated: int = 4
-## Мини-звездопад финала Луми, с.
-@export var quest_starfall_mini_duration: float = 20.0
-## Тропа финала Финна: сколько секунд лента «проступает», с.
-@export var quest_trail_fade_in: float = 1.5
-## Ворота руин в день выполнения «Короткой тропы»: соло-таймер, с
-## (обычный gate_open_wait — 60, в черновике ТЗ названо «45»).
-@export var quest_gate_open_wait: float = 20.0
-## Очки «Встреч» за совместно выполненное задание (каждому за каждого).
-@export var pts_quest_done: float = 6.0
-## Мята: минимальная высота земли (не пляж) и минимальный разнос пучков, м.
-@export var quest_mint_min_height: float = 1.5
-@export var quest_mint_spacing: float = 8.0

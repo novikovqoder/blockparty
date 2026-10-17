@@ -15,13 +15,11 @@ const KIND_PULL_GOT: String = "pull_got"        # он вытянул меня �
 const KIND_PULL_GAVE: String = "pull_gave"      # я вытянул его
 const KIND_HAND_HELD: String = "hand_held"      # держались за руку (каждые 30 с)
 const KIND_CAMPFIRE: String = "campfire"        # сидели рядом у костра (30 с)
-const KIND_BEACON_LIT: String = "beacon_lit"    # вместе зажгли маяк
 const KIND_GATE_OPEN: String = "gate_open"      # вместе открыли ворота руин
 const KIND_BOOST_GOT: String = "boost_got"      # он подсадил меня на уступ
 const KIND_BOOST_GAVE: String = "boost_gave"    # я подсадил его
 const KIND_FIREFLY: String = "firefly"          # вместе поймали золотого светлячка
 const KIND_EMOTE_REPLY: String = "emote_reply"  # ответная эмоция в течение 5 с
-const KIND_QUEST_DONE: String = "quest_done"    # вместе выполнили задание жителя (П5.5)
 
 ## peer_id -> суммарные очки.
 var _scores: Dictionary = {}
@@ -42,10 +40,8 @@ func _ready() -> void:
 	EventBus.ruins_state.connect(_on_ruins_state)
 	EventBus.mob_killed.connect(_on_mob_killed)
 	EventBus.player_boosted.connect(_on_player_boosted)
-	EventBus.beacons_state.connect(_on_beacons_state)
 	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.campfire_seats.connect(_on_campfire_seats)
-	EventBus.quest_reward.connect(_on_quest_reward)
 	EventBus.world_entered.connect(reset)
 
 
@@ -115,7 +111,7 @@ func _on_player_pulled(helper_peer: int, target_peer: int) -> void:
 
 ## Ворота руин открыты плитами (раздел 9.2): очки каждому участнику за
 ## каждого другого. Запасной путь одиночки очков не даёт (открывший один).
-func _on_ruins_state(open: bool, _plates: Array, openers: Array, _reward: Array) -> void:
+func _on_ruins_state(open: bool, _plates: Array, openers: Array) -> void:
 	if not open or not openers.has(Net.local_peer_id):
 		return
 	for opener: int in openers:
@@ -140,28 +136,6 @@ func _on_player_boosted(base_peer: int, jumper_peer: int) -> void:
 		add_points(base_peer, KIND_BOOST_GOT, B.pts_boost, Session.world_time)
 	if base_peer == Net.local_peer_id:
 		add_points(jumper_peer, KIND_BOOST_GAVE, B.pts_boost, Session.world_time)
-
-
-## Маяк зажжён парой (раздел 7): очки каждому участнику за другого.
-## Соло-зажигание (запасной путь) lighters из одного — очков не даёт.
-func _on_beacons_state(_lit: Array, lighters: Array, _starfall_started_at: float) -> void:
-	if not lighters.has(Net.local_peer_id) or lighters.size() < 2:
-		return
-	for lighter: int in lighters:
-		if lighter != Net.local_peer_id:
-			add_points(lighter, KIND_BEACON_LIT, B.pts_beacon_lit, Session.world_time)
-
-
-## Задание жителя выполнено (П5.5): очки каждому участнику за каждого
-## другого — как у ворот и маяков; соло-прохождение очков не даёт.
-func _on_quest_reward(
-	_quest_id: String, peers: Array, _coins: Array, _extra: Dictionary
-) -> void:
-	if not peers.has(Net.local_peer_id) or peers.size() < 2:
-		return
-	for peer: int in peers:
-		if peer != Net.local_peer_id:
-			add_points(peer, KIND_QUEST_DONE, B.pts_quest_done, Session.world_time)
 
 
 ## Записать событие взаимодействия с другим игроком (at_world_time — с).

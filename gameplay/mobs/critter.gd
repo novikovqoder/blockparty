@@ -1,5 +1,5 @@
 # Зверёк (раздел 8 SPEC): бродит замкнутым маршрутом по земле (луг у площади
-# и берег озера), один удар — «испуган», даёт монету, возрождается через 180 с
+# и берег озера), один удар — «испуган», возрождается через 180 с
 # (Balance). Маршрут и скорость — из данных острова, траектория чистая.
 # Модель (раздел 16): округлый, сглаженный, с длинными ушами — как
 # персонажи-«мармеладки», обычный материал.
@@ -18,10 +18,6 @@ func _apply_motion(world_time: float) -> void:
 
 func position_at(world_time: float) -> Vector3:
 	return MobMotion.critter_position(motion, world_time)
-
-
-func reward() -> int:
-	return B.critter_reward
 
 
 func hitbox_size() -> Vector3:

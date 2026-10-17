@@ -52,8 +52,8 @@ func _process(delta: float) -> void:
 
 func _glow() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_color = PAL.coin
+	material.albedo_color = PAL.gold
 	material.emission_enabled = true
-	material.emission = PAL.coin
+	material.emission = PAL.gold
 	material.emission_energy_multiplier = 2.2
 	return material
