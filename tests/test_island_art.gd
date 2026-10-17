@@ -106,6 +106,22 @@ func test_prop_meshes_stand_on_ground() -> void:
 		assert_gt(max_y, 0.12, "%s: предмет выше земли" % type)
 
 
+func test_log_bridge_is_real_logs() -> void:
+	# П5.9 переделка, П3: мостик — настоящие круглые брёвна: настил
+	# ~3.1 × 2.6 м из семи брёвен в ряд, перила выше настила, низ моста
+	# в origin; брёвна круглые (бок + пятаки), не плоские пластины.
+	var arrays := _arrays("log_bridge", 0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	assert_gt(verts.size(), 500, "брёвна круглые, с пятаками")
+	var aabb := AABB(verts[0], Vector3.ZERO)
+	for vertex: Vector3 in verts:
+		aabb = aabb.expand(vertex)
+	assert_almost_eq(aabb.size.x, 3.1, 0.05, "длина мостика — бревно 3.1 м")
+	assert_between(aabb.size.z, 2.6, 3.0, "ряд семи брёвен шириной ~2.8 м")
+	assert_between(aabb.size.y, 0.8, 1.1, "перила выше настила")
+	assert_gt(aabb.position.y, -0.05, "низ моста в origin")
+
+
 func test_prop_meshes_deterministic() -> void:
 	# Детерминизм визуала: сеед меша — от (тип, вариант), не от порядка
 	# вызовов; один и тот же меш собирается одинаково.

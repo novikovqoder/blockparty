@@ -88,8 +88,9 @@ func test_paint_is_deterministic() -> void:
 
 
 func test_material_colors_and_shader() -> void:
-	# П5.9: земля — цветовые пятна из палитры (без фототекстур), шейдер —
-	# лесная земля; цвета совпадают с assets/visual_palette.tres.
+	# П5.9 переделка, П2: земля — текстуры травы/грунта CC0 по схеме демо
+	# (смешивание — симплекс в шейдере), оверлеи — цвета палитры; карты
+	# весов, края и нормалей рельефа запечены ForestGround.
 	var material := ForestGround.make_material(ART)
 	assert_eq(
 		material.shader.resource_path,
@@ -97,8 +98,6 @@ func test_material_colors_and_shader() -> void:
 		"материал на шейдере forest_ground")
 	const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 	for pair: Array in [
-		["litter_color", VPAL.ground_litter],
-		["litter_dark_color", VPAL.ground_litter_dark],
 		["wet_color", VPAL.ground_wet],
 		["moss_color", VPAL.ground_moss],
 		["rock_color", VPAL.ground_rock],
@@ -111,10 +110,43 @@ func test_material_colors_and_shader() -> void:
 			color.g, (pair[1] as Color).g, 0.001, "%s из палитры (g)" % pair[0])
 		assert_almost_eq(
 			color.b, (pair[1] as Color).b, 0.001, "%s из палитры (b)" % pair[0])
-	assert_not_null(
-		material.get_shader_parameter("weight_map"), "карта весов в материале")
-	assert_not_null(
-		material.get_shader_parameter("border_map"), "карта края в материале")
+	for uniform_name: String in ["grass_tex", "dirt_tex", "dirt_normal",
+			"weight_map", "border_map", "relief_normal"]:
+		assert_not_null(
+			material.get_shader_parameter(uniform_name),
+			"%s в материале" % uniform_name)
+
+
+func test_gully_path_is_erased() -> void:
+	# П5.9 переделка, П3: в русле оврага тропы нет — утоптанная земля
+	# по дну читалась коричневой лентой поперёк склонов. Подход к мостику
+	# (точка на тропе в паре метров от русла) остаётся тропой.
+	var weights := ForestGround._weights_image(ART)
+	assert_almost_eq(
+		_pixel(weights, IslandGen.GULLY_MID.x, IslandGen.GULLY_MID.y)[
+			ForestGround.CH_PATH],
+		0.0, 0.05, "дно русла — без тропы")
+	assert_gt(
+		_pixel(weights, -43.6, -39.2)[ForestGround.CH_PATH], 0.5,
+		"подход к мостику — тропа")
+
+
+func test_relief_normals_bend_on_gully_walls() -> void:
+	# П5.9 переделка, П3: карта честных нормалей рельефа из карты высот —
+	# на стенках оврага нормали заметно наклонены (сглаженное поле
+	# заменяет сглаживание «к вертикали»: белая огранка low-poly граней
+	# исчезает, объём остаётся), вдали от оврага поле почти вертикально.
+	var normals := ForestGround._relief_image(ART)
+	var min_up := 1.0
+	for z: int in range(-52, -39):
+		for x: int in range(-54, -42):
+			min_up = minf(min_up, normals.get_pixel(x + 128, z + 128).g * 2.0 - 1.0)
+	assert_lt(min_up, 0.8, "на склонах оврага нормали наклонены")
+	var flat_min := 1.0
+	for z: int in range(-110, -100):
+		for x: int in range(-90, -80):
+			flat_min = minf(flat_min, normals.get_pixel(x + 128, z + 128).g * 2.0 - 1.0)
+	assert_gt(flat_min, 0.75, "лесные склоны вдали от оврага — мягкие")
 
 
 func test_island_uses_forest_material() -> void:

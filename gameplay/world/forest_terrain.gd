@@ -82,6 +82,7 @@ static func make_material(art: IslandArt) -> ShaderMaterial:
 	material.set_shader_parameter("dirt_normal", DIRT_NORMAL)
 	material.set_shader_parameter("weight_map", _weights_texture(art))
 	material.set_shader_parameter("border_map", _border_texture(art))
+	material.set_shader_parameter("relief_normal", _relief_texture(art))
 	return material
 
 
@@ -105,6 +106,14 @@ static func _weights_image(art: IslandArt) -> Image:
 			# Тропа и гравий Площади — один слот утоптанной земли.
 			var w_plaza: float = _plaza_weight(wx, wz)
 			var w_path: float = maxf(_path_weight(wx, wz), w_plaza)
+			# П5.9 переделка, П3: в русле оврага тропа гасится — утоптанная
+			# земля по дну читалась коричневой лентой поперёк склонов. Дно
+			# красят свои веса (камень стенок, влага низины), подходы
+			# к мостику остаются тропой до самого настила.
+			w_path *= smoothstep(
+				IslandGen.GULLY_HALF_W + 0.5,
+				IslandGen.GULLY_HALF_W + 1.5,
+				IslandGen.gully_across(roundi(wx), roundi(wz)))
 			# Край сектора гасит оверлеи: у границы — чистая тонированная
 			# подстилка цветом соседней зоны. Вымощенная Площадь не гасится:
 			# она и есть соседняя зона, гравий лежит до самого края,
@@ -137,6 +146,36 @@ static func _weights_texture(art: IslandArt) -> ImageTexture:
 
 static func _border_texture(art: IslandArt) -> ImageTexture:
 	return ImageTexture.create_from_image(_border_image(art))
+
+
+## Карта честных нормалей рельефа (П5.9 переделка, П3): сглаженные нормали
+## склонов из карты высот конечными разностями (шаг сетки 1 м):
+## n = normalize(h(x−1,z) − h(x+1,z), 2, h(x,z−1) − h(x,z+1)). В шейдере
+## она заменяет сглаживание «к вертикали»: на крутых стенках оврага
+## нормаль смотрит поперёк склона — белая огранка больших low-poly граней
+## исчезает, объём рельефа остаётся. Кодируется как n·0.5+0.5 (данные,
+## не цвет — без source_color); мип-мапы усредняют дальние склоны.
+static func _relief_image(art: IslandArt) -> Image:
+	var image := Image.create_empty(SECTOR_M, SECTOR_M, false, Image.FORMAT_RGB8)
+	for z: int in SECTOR_M:
+		for x: int in SECTOR_M:
+			var left: float = art.heights[
+				z * IslandGen.POINTS + maxi(x - 1, 0)]
+			var right: float = art.heights[
+				z * IslandGen.POINTS + mini(x + 1, SECTOR_M - 1)]
+			var north: float = art.heights[
+				maxi(z - 1, 0) * IslandGen.POINTS + x]
+			var south: float = art.heights[
+				mini(z + 1, SECTOR_M - 1) * IslandGen.POINTS + x]
+			var n := Vector3(left - right, 2.0, north - south).normalized()
+			image.set_pixel(x, z, Color(
+				0.5 + n.x * 0.5, 0.5 + n.y * 0.5, 0.5 + n.z * 0.5))
+	image.generate_mipmaps()
+	return image
+
+
+static func _relief_texture(art: IslandArt) -> ImageTexture:
+	return ImageTexture.create_from_image(_relief_image(art))
 
 
 ## Максимальный тангенс уклона в точке по соседям карты высот (кламп на краях).

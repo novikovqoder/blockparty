@@ -58,7 +58,7 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant":
 			return EzTreeMeshes.build_set(type, variant)["mesh"]
 		# Валежник (П5.9, переделка): CC0-бревно kenney (локальная
-		# библиотека) с корой ambientcg — как мостик через овраг.
+		# библиотека) с корой ambientcg — той же, что у мостика через овраг.
 		"dead_log":
 			return _dead_log(variant)
 		# П5.9, блок 3: растительность Леса — процедурные пучки/вайи/цветы
@@ -104,51 +104,137 @@ static func _dead_log(variant: int) -> ArrayMesh:
 	return mesh
 
 
-## Мостик из брёвен через лесной овраг (П5.7; переделка П5.9): семь
-## лежачих брёвен kenney (CC0, ~3.1 м — растяжка log_large по длине)
-## в ряд с шагом 0.7 вдоль Z; низ моста — в origin, лёгкое чередование
-## высоты — вручную заданное, без rng. Одна поверхность с корой.
+## Мостик из настоящих брёвен через лесной овраг (П5.7; переделка П5.9,
+## П3): семь круглых брёвен-цилиндров с пятаками лежат впритык поперёк
+## русла, по краям — перила из тонких кряжей на наклонных стойках.
+## Диаметры, перекосы и высоты — вручную заданные таблицы (брёвна «из
+## разных деревьев», мостик собран вручную), без rng. Кора — ambientcg
+## Bark001 (CC0, та же, что у деревьев), UV — «метры поверхности»
+## (окружность и длина делятся на тайл 1 м), тон брёвен — COLOR.
+## Низ моста — в origin, ось моста — X, перила — вдоль X по краям Z.
 static func _log_bridge() -> ArrayMesh:
-	var path := "res://assets/third_party/kenney.nl/nature-kit/log_large.glb"
-	var doc := GLTFDocument.new()
-	var state := GLTFState.new()
-	if doc.append_from_file(path, state) != OK:
-		push_error("Не читается бревно kenney: " + path)
-		return ArrayMesh.new()
-	var scene := doc.generate_scene(state)
-	var log := _merge_log_surfaces(scene, Vector3(3.1, 0.45, 0.6))
-	scene.free()
-
-	var verts: PackedVector3Array = log[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = log[Mesh.ARRAY_NORMAL]
-	var uvs: PackedVector2Array = log[Mesh.ARRAY_TEX_UV]
-	var indices: PackedInt32Array = log[Mesh.ARRAY_INDEX]
-	var bridge_verts := PackedVector3Array()
-	var bridge_normals := PackedVector3Array()
-	var bridge_uvs := PackedVector2Array()
-	var bridge_indices := PackedInt32Array()
-	var drift := [0.0, -0.03, 0.02, -0.02, 0.03, 0.0, -0.02]
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	# Настил: бревно 3.1 м, ряд из семи с шагом 0.37 (диаметры ~0.34 —
+	# щели настоящего ряда). drift — волна высот, tilt — перекос концов,
+	# tints — тон коры.
+	var radii: Array[float] = [0.170, 0.178, 0.165, 0.172, 0.169, 0.175, 0.166]
+	var drift: Array[float] = [0.012, -0.006, 0.016, 0.0, -0.012, 0.006, -0.004]
+	var tilt: Array[float] = [0.010, -0.008, 0.012, -0.005, 0.009, -0.011, 0.006]
+	var tints: Array[float] = [0.94, 1.02, 0.97, 1.04, 0.95, 1.00, 0.98]
+	var length: float = 3.1
 	for i: int in 7:
-		var dy: float = drift[i % drift.size()]
-		var dz: float = (i - 3) * 0.7
-		var base: int = bridge_verts.size()
-		for v: int in verts.size():
-			bridge_verts.append(
-				Vector3(verts[v].x, verts[v].y + dy, verts[v].z + dz))
-			bridge_normals.append(normals[v] if v < normals.size() else Vector3.UP)
-			bridge_uvs.append(uvs[v])
-		for index: int in indices:
-			bridge_indices.append(base + index)
+		var z: float = (float(i) - 3.0) * 0.37
+		var y: float = radii[i] + drift[i]
+		_log_limb(verts, normals, uvs, colors, indices,
+			Vector3(-length * 0.5, y + tilt[i], z),
+			Vector3(length * 0.5, y - tilt[i], z),
+			radii[i], tints[i])
+	# Перила: с обеих сторон стойка-кряж (чуть наклонена наружу) и
+	# поручень-жердь поверх, тоном темнее настила — старое дерево.
+	for side: int in [-1, 1]:
+		for x_at: float in [-1.05, 1.05]:
+			_log_limb(verts, normals, uvs, colors, indices,
+				Vector3(x_at, 0.04, side * 1.30),
+				Vector3(x_at, 0.88, side * 1.36),
+				0.055, 0.88)
+		_log_limb(verts, normals, uvs, colors, indices,
+			Vector3(-1.5, 0.86, side * 1.35),
+			Vector3(1.5, 0.86, side * 1.35),
+			0.05, 0.90)
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = bridge_verts
-	arrays[Mesh.ARRAY_NORMAL] = bridge_normals
-	arrays[Mesh.ARRAY_TEX_UV] = bridge_uvs
-	arrays[Mesh.ARRAY_INDEX] = bridge_indices
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	mesh.surface_set_material(0, _log_bark_material())
+	var material := _log_bark_material()
+	# UV мостика уже в метрах поверхности (тайл коры 1 × 1 м — бревно
+	# ближе к игроку, чем стволы деревьев, кора читается плотнее).
+	material.set_shader_parameter("uv_scale", Vector2.ONE)
+	mesh.surface_set_material(0, material)
 	return mesh
+
+
+## Бревно-цилиндр между двумя точками: 10 боковых граней, оба торца
+## закрыты «пятаками» светлее боков (спил). UV в метрах: u — длина
+## пройденной дуги окружности, v — путь вдоль оси (тайл коры — 1 м,
+## шов оборота дублированной вершиной не рвётся). Тон — COLOR (tint),
+## нормали боков радиальные, пятаков — вдоль оси. Пишет в переданные
+## массивы — мостик собирается одной поверхностью.
+static func _log_limb(
+		verts: PackedVector3Array, normals: PackedVector3Array,
+		uvs: PackedVector2Array, colors: PackedColorArray,
+		indices: PackedInt32Array,
+		from: Vector3, to: Vector3, radius: float, tint: float) -> void:
+	const RADIAL: int = 10
+	const TILE_M: float = 1.0
+	var axis: Vector3 = (to - from).normalized()
+	var length: float = from.distance_to(to)
+	var helper := Vector3(0.0, 1.0, 0.0) if absf(axis.y) < 0.9 \
+		else Vector3(1.0, 0.0, 0.0)
+	var right: Vector3 = axis.cross(helper).normalized()
+	var up: Vector3 = axis.cross(right).normalized()
+	var circumference: float = TAU * radius
+	# Боковая поверхность: два кольца по RADIAL + 1 вершину.
+	var side: int = verts.size()
+	for ring: int in 2:
+		var center: Vector3 = from.lerp(to, float(ring))
+		for k: int in RADIAL + 1:
+			var angle: float = TAU * float(k) / float(RADIAL)
+			var dir: Vector3 = right * cos(angle) + up * sin(angle)
+			verts.append(center + dir * radius)
+			normals.append(dir)
+			uvs.append(Vector2(
+				circumference * float(k) / float(RADIAL) / TILE_M,
+				length * float(ring) / TILE_M))
+			colors.append(Color(tint, tint, tint))
+	# Порядок вершин — наружу (нормаль треугольника от оси): с cull_back
+	# вывернутая грань невидима снаружи.
+	for ring: int in 1:
+		for k: int in RADIAL:
+			var a: int = side + ring * (RADIAL + 1) + k
+			var b: int = a + RADIAL + 1
+			indices.append(a)
+			indices.append(a + 1)
+			indices.append(b)
+			indices.append(b)
+			indices.append(a + 1)
+			indices.append(b + 1)
+	# Пятаки: центр + веер по кольцу, нормаль вдоль оси, тон светлее
+	# (спил дерева); UV — плоские метры поперёк торца.
+	for end: int in 2:
+		var cap: int = verts.size()
+		var center: Vector3 = to if end == 1 else from
+		var facing: Vector3 = axis if end == 1 else -axis
+		verts.append(center)
+		normals.append(facing)
+		uvs.append(Vector2.ZERO)
+		colors.append(Color(tint * 1.2, tint * 1.14, tint * 1.06))
+		for k: int in RADIAL:
+			var angle: float = TAU * float(k) / float(RADIAL)
+			var dir: Vector3 = right * cos(angle) + up * sin(angle)
+			verts.append(center + dir * radius)
+			normals.append(facing)
+			uvs.append(Vector2(
+				radius * cos(angle) / TILE_M, radius * sin(angle) / TILE_M))
+			colors.append(Color(tint * 1.2, tint * 1.14, tint * 1.06))
+		# Пятак to — веер по кругу, пятак from — тот же веер зеркально
+		# (нормаль торца наружу от бревна).
+		for k: int in RADIAL:
+			indices.append(cap)
+			if end == 1:
+				indices.append(cap + 1 + k)
+				indices.append(cap + 1 + (k + 1) % RADIAL)
+			else:
+				indices.append(cap + 1 + (k + 1) % RADIAL)
+				indices.append(cap + 1 + k)
 
 
 ## Поверхности сцены GLB в один набор массивов с UV и нормалями (кора
@@ -359,8 +445,7 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(1.3, 0.5, 2.35)
 		# Гигант (П5.9, блок 4): дуб-исполин — толстый ствол без кроны;
 		# валежник — лежачий ствол (длина по X до поворота yaw); мостик —
-		# настил из девяти трёхметровых брёвен (_log_bridge), толщина
-		# одного бревна.
+		# ряд семи брёвен (_log_bridge), толщина настила с перилами.
 		"etree_giant":
 			return Vector3(1.9, 9.0, 1.9) * scale.x
 		"dead_log":

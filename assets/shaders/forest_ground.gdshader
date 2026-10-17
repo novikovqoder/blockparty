@@ -16,8 +16,9 @@
 // камень на склонах, влага в низинах, пятна мха, тропа и Площадь) и
 // мягкий край сектора (border_map: RGB — цвет соседнего low-poly чанка,
 // A — вес края; шва на границе Леса нет).
-// Свет: внутри — мягкий wrap-Ламберт и сглаженная к вертикали нормаль,
-// у края — в точности та же toon-модель и плоская нормаль соседних чанков.
+// Свет: внутри — мягкий wrap-Ламберт и нормаль карты высот (сглаженные
+// склоны оврага без огранки), у края — та же toon-модель и плоская
+// нормаль соседних low-poly чанков.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_lambert,
 	specular_schlick_ggx;
@@ -50,8 +51,16 @@ uniform float normal_strength = 1.0;
 uniform sampler2D weight_map : filter_linear_mipmap_anisotropic;
 uniform sampler2D border_map : source_color, filter_linear_mipmap_anisotropic;
 
-// Сглаживание огранки рельефа: 0 — плоские грани, 1 — шары.
-uniform float soften = 0.55;
+// Карта честных нормалей рельефа (П5.9 переделка, П3): ForestGround печёт
+// её из карты высот конечными разностями, кодировка n·0.5+0.5 (данные,
+// не цвет — без source_color). На крутых стенках оврага нормаль смотрит
+// поперёк склона — сглаженное поле нормалей заменяет сглаживание
+// «к вертикали», белая огранка больших low-poly граней исчезает.
+uniform sampler2D relief_normal : filter_linear_mipmap_anisotropic;
+
+// Сглаживание огранки рельефа: 0 — плоские грани меша, 1 — честная
+// нормаль карты высот.
+uniform float soften = 0.7;
 // Блик влажной земли (грубость и сила).
 uniform float wet_roughness = 0.45;
 uniform float wet_specular = 0.03;
@@ -144,10 +153,13 @@ void fragment() {
 	ALBEDO = albedo;
 	ROUGHNESS = mix(mix(0.95, wet_roughness, clamp(w.g, 0.0, 1.0)), 0.95, border.a);
 
-	// Нормаль: плоская грань рельефа, сглаженная к вертикали (мягкий
-	// объём), у самой границы — в точности плоская грань соседа.
+	// Нормаль: плоская грань рельефа, сглаженная честным полем нормалей
+	// из карты высот (карта мировая — переводится в видовой базис), у
+	// самой границы — в точности плоская грань соседа.
 	vec3 flat_n = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
-	NORMAL = normalize(mix(flat_n, vec3(0.0, 1.0, 0.0), soften * (1.0 - edge_w)));
+	vec3 relief_n = normalize((VIEW_MATRIX * vec4(
+		texture(relief_normal, sector_uv).xyz * 2.0 - 1.0, 0.0)).xyz);
+	NORMAL = normalize(mix(flat_n, relief_n, soften * (1.0 - edge_w)));
 	// Рельеф грунта — нормали polyhaven (OpenGL Y+), сила как в демо.
 	NORMAL_MAP = texture(dirt_normal, uv / tile_m).rgb;
 	NORMAL_MAP_DEPTH = normal_strength * (1.0 - edge_w);
