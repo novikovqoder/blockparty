@@ -3166,6 +3166,12 @@ world_collisions, ui_layout, transport, appearance_net). Полный GUT: 37
 (пресет «Linux», настройки ресурсов как у Windows): --selftest-anim — PASS,
 код возврата 0.
 
+**Сборка (финал):** в обоих пресетах экспорта exclude_filter дополнен
+builds/* — до этого в pck вшивался девелоперский мусор из res://builds/
+(пробы, скриншоты этапов, ual_probe 15 МБ, сравнения): exe 351→215 МБ,
+zip 252→123 МБ; рантайм res://builds не использует, ual_probe остаётся
+для tools/make_ubc_anims.gd в редакторе.
+
 **Отличия сцены от исходников демо EZ-Tree (по коду и настройкам):**
 
 - Деревья: генератор и LOD те же (пресеты ez-tree, defaultLODLevels), но
