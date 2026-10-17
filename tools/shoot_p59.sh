@@ -46,9 +46,10 @@ stills() {
   log="$(realpath -m "$RAW")/stills_$tag.log"
   mkdir -p "$dir" "$(dirname "$log")"
   echo "=== $tag: съёмка ($envs ${extra:+$extra})"
-  # timeout 2700: «Высокое качество» (MSAA 4x) на llvmpipe — до ~5 мин
-  # на кадр после доработок 1-5, полный тур из 10 кадров в 900 с не влезал.
-  (cd "$root" && env $envs timeout 2700 xvfb-run -a godot --path . \
+  # timeout 7200: «Высокое качество» (MSAA 4x) на llvmpipe — до ~12 мин
+  # на кадр после доработок 1-5 (замер: 475–739 с), тур из 8 кадров
+  # в 2700 с не влезал — прогоны обрывались на 2-3 кадре.
+  (cd "$root" && env $envs timeout 7200 xvfb-run -a godot --path . \
       res://scenes/world_scene.tscn --resolution "$RES_STILL" \
       --rendering-driver opengl3 -- --shot-dir="$dir" $extra \
       >"$log" 2>&1) \
@@ -104,9 +105,12 @@ phase() {
   cp "$dir/spot_check.png" "$png"
 }
 
+# Канон набора П5.7: 5 дневных + 3 закатных кадра. Закатные точки 4/5 и
+# диагностические кропы _L/_R из блока 8 ч.1 убраны (лишние ракурсы);
+# 8 пар «было — стало» закрывают материал этапа.
 P57_NAMES=()
 for i in 1 2 3 4 5; do P57_NAMES+=("p57_forest_day_$i.png"); done
-for i in 1 2 3 4 5; do P57_NAMES+=("p57_forest_sunset_$i.png"); done
+for i in 1 2 3; do P57_NAMES+=("p57_forest_sunset_$i.png"); done
 P58_NAMES=(p58_crew_forest_day.png p58_crew_campfire_evening.png
   p58_folks_plaza.png p58_folk_finn.png p58_folk_lumi.png
   p58_folk_thyme.png)
@@ -123,22 +127,32 @@ have_in after "${P57_NAMES[@]}" \
   || stills . "SHOT_P57=1" after --high-quality
 
 # 3) Точки П5.8: было (p5.8-realism-v2) — стало (visual-overhaul).
-have_in before "${P58_NAMES[@]}" \
-  || stills "$P58_WT" "SHOT_CREW=1 SHOT_FOLK=1" before
-have_in after "${P58_NAMES[@]}" \
-  || stills . "SHOT_CREW=1 SHOT_FOLK=1" after --high-quality
+# Опционально (P59_WITH_P58=1): кадры персонажей уже сданы в
+# docs/screenshots/P5.8/, для П5.9 материал этапа — только Лес.
+if [ "${P59_WITH_P58:-0}" = "1" ]; then
+  have_in before "${P58_NAMES[@]}" \
+    || stills "$P58_WT" "SHOT_CREW=1 SHOT_FOLK=1" before
+  have_in after "${P58_NAMES[@]}" \
+    || stills . "SHOT_CREW=1 SHOT_FOLK=1" after --high-quality
+fi
 
 # 4) Лес в 4 времена суток (середины фаз DayMath: 0.09/0.30/0.58/0.80;
 #    день и закат совпадают с кадром точки 1 «стало»).
-phase dawn 0.09
+# День и закат — копии кадра точки 1 «стало» (тот же вид и фаза), cp -n
+# ДО phase: иначе phase sunset снял бы дубль и cp -n уже не сработал.
 cp -n "$OUT/after/p57_forest_day_1.png" "$OUT/p59_forest_day.png"
-phase sunset 0.58
 cp -n "$OUT/after/p57_forest_sunset_1.png" "$OUT/p59_forest_sunset.png"
+phase dawn 0.09
+phase sunset 0.58
 phase night 0.80
 
 # 5) Склейки «было | стало» (пересобираются всегда).
 mkdir -p "$OUT/compare"
-for name in "${P57_NAMES[@]}" "${P58_NAMES[@]}"; do
+COMPARE_NAMES=("${P57_NAMES[@]}")
+if [ "${P59_WITH_P58:-0}" = "1" ]; then
+  COMPARE_NAMES+=("${P58_NAMES[@]}")
+fi
+for name in "${COMPARE_NAMES[@]}"; do
   python3 tools/make_compare.py "$OUT/before/$name" "$OUT/after/$name" \
     -o "$OUT/compare/$name"
 done

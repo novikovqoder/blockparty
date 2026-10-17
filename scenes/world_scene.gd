@@ -411,7 +411,7 @@ func _screenshot_tour() -> void:
 	# камне. pitch, град (минус — вниз): верх глыбы иначе в кадр не попасть.
 	if not OS.get_environment("SHOT_SPOT").is_empty():
 		var parts := OS.get_environment("SHOT_SPOT").split(",")
-		_set_day_fraction(shot_fraction)
+		_freeze_day_fraction(shot_fraction)
 		var spot := Vector2(parts[0].to_float(), parts[1].to_float())
 		var ground := _ground_at(spot)
 		var eye := Vector3(spot.x, ground + 1.5, spot.y)
@@ -458,7 +458,7 @@ func _screenshot_tour() -> void:
 		await _shot_p58_series(camera)
 		get_tree().quit()
 		return
-	_set_day_fraction(shot_fraction)
+	_freeze_day_fraction(shot_fraction)
 	if OS.get_environment("SHOT_NOFOG") == "1":
 		($WorldEnvironment.environment as Environment).fog_enabled = false
 	# SHOT_LAB=1 — лаборатория света в контексте мира: DayCycle выключен,
@@ -490,6 +490,25 @@ func _screenshot_tour() -> void:
 func _set_day_fraction(fraction: float) -> void:
 	var elapsed := maxf(0.0, float(Net.host_time_now_msec() - Net.world_epoch_msec) / 1000.0)
 	Net.world_time_offset_sec = fraction * B.day_cycle_sec - elapsed
+
+
+## Поставить и ЗАМОРОЗИТЬ долю суток на время снимка: DayCycle ведёт купол
+## по Session.world_time, а те текут от реальных часов — кадр на llvmpipe
+## рендерится минутами, и к моменту захвата фаза уезжала на четверть суток
+## («день» снимался ночью, П5.9 блок 8). Останавливаем цикл, ставим фазу и
+## применяем её к куполу напрямую: ждать кадр, пока цикл применит сам,
+## нельзя — на медленном рендере ожидание уводило фазу ещё на ~100 с.
+func _freeze_day_fraction(fraction: float) -> void:
+	_day_cycle.set_process(false)
+	_set_day_fraction(fraction)
+	# Session.world_time — выборка часов раз в тик: после сдвига offset она
+	# ещё держит старое время, и купол применялся бы не той фазы. Точим
+	# вручную и подаём тот же фокус тумана, что и _process мира (игрок).
+	Session.world_time = Net.world_time_sec()
+	_day_cycle.set_fog_focus(_player.global_position)
+	_day_cycle.apply_now()
+	Log.info("FREEZE-DBG fraction=%.3f world_time=%.1f"
+		% [fraction, Session.world_time], "World")
 
 
 ## Ракурсы персонажа: высота глаз 1.5 м, взгляд вперёд (модель игрока
@@ -552,7 +571,12 @@ const P57_FOREST_YAWS: Array[float] = [223.0, 45.0, 270.0, 180.0, 210.0]
 
 
 func _shot_p57_forest(camera: Camera3D) -> void:
+	# Долю суток замораживаем перед КАЖДЫМ кадром: сутки длятся day_cycle_sec
+	# реального времени, кадр на llvmpipe рендерится минуты — при одной
+	# установке на серию время уезжало на полсуток и «день» снимался ночью
+	# (П5.9, блок 8).
 	for i: int in P57_FOREST_POINTS.size():
+		_freeze_day_fraction(SHOT_DAY_FRACTION)
 		var ground := _ground_at(P57_FOREST_POINTS[i])
 		var eye := Vector3(P57_FOREST_POINTS[i].x, ground + 1.5, P57_FOREST_POINTS[i].y)
 		var yaw := deg_to_rad(P57_FOREST_YAWS[i])
@@ -560,9 +584,8 @@ func _shot_p57_forest(camera: Camera3D) -> void:
 		camera.global_position = eye
 		camera.look_at(look, Vector3.UP)
 		await _snap(camera, "p57_forest_day_%d.png" % (i + 1))
-	_set_day_fraction(SHOT_SUNSET_FRACTION)
-	await get_tree().create_timer(0.4).timeout
 	for i: int in P57_FOREST_POINTS.size():
+		_freeze_day_fraction(SHOT_SUNSET_FRACTION)
 		var ground := _ground_at(P57_FOREST_POINTS[i])
 		var eye := Vector3(P57_FOREST_POINTS[i].x, ground + 1.5, P57_FOREST_POINTS[i].y)
 		var yaw := deg_to_rad(P57_FOREST_YAWS[i])
@@ -1103,6 +1126,7 @@ func _snap(camera: Camera3D, file_name: String) -> void:
 				Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME,
 			),
 		], "World")
+	Log.info("SNAP-DBG %s world_time=%.1f" % [file_name, Session.world_time], "World")
 	var image := get_viewport().get_texture().get_image()
 	var path: String = Dev.shot_dir.path_join(file_name)
 	image.save_png(path)
