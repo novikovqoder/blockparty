@@ -28,7 +28,7 @@ func _ready() -> void:
 	_build_panel()
 
 
-func _on_ruins_state(open: bool, _plates: Array, _openers: Array, _reward: Array) -> void:
+func _on_ruins_state(open: bool, _plates: Array, _openers: Array) -> void:
 	set_open(open)
 
 

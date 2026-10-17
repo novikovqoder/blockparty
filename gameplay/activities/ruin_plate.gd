@@ -32,7 +32,7 @@ func _ready() -> void:
 	_build_plate()
 
 
-func _on_ruins_state(_open: bool, plates: Array, _openers: Array, _reward: Array) -> void:
+func _on_ruins_state(_open: bool, plates: Array, _openers: Array) -> void:
 	if _index < plates.size():
 		set_pressed(int(plates[_index]) != 0)
 

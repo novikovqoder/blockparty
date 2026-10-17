@@ -112,7 +112,7 @@ gameplay/
 ├─ player/        # player.tscn (CharacterBody3D), контроллер, камера, 3D-модель, remote-интерполяция
 ├─ world/         # island.tscn, terrain/ (чанки рельефа), props/ (деревья, камни, руины), POI-сцены
 ├─ mobs/          # bird, critter, golden_firefly
-├─ activities/    # beacon, pressure_plate, ruin_gate, chest, crevasse, campfire_seat, lookout
+├─ activities/    # pressure_plate, ruin_gate, chest, crevasse, campfire_seat, lookout
 ├─ social/        # emote_bubble, hand_link, nameplate
 └─ balance.tres   # все числа геймплея
 scenes/

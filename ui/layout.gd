@@ -53,7 +53,7 @@ static func center_top(node: Control, size: Vector2, margin: float) -> void:
 
 
 ## Узел фиксированного размера у правого края: отступ margin влево,
-## верх узла на top от верхнего края (строки трекера заданий).
+## верх узла на top от верхнего края (строки уведомлений).
 static func top_right(
 	node: Control, size: Vector2, margin: float, top: float
 ) -> void:

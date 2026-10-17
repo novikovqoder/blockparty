@@ -146,6 +146,19 @@ func test_save_roundtrip_and_invalid_becomes_default() -> void:
 	file.close()
 	assert_true(Save.load_appearance().same(Appearance.default_for(0)),
 		"мусор в поле внешности → дефолт")
+	# П5.9 переделка П4: сохранение до удаления монет/заданий — лишние поля
+	# молча игнорируются, внешность читается.
+	var old := ap.validated()
+	file = FileAccess.open(Save.PATH, FileAccess.WRITE)
+	file.store_string(JSON.stringify({
+		"coins": 148, "quests_done": ["beacon", "mint"], "appearance": [
+			old.gender, old.hair, old.top, old.legs, old.feet,
+			old.hat, old.hair_color, old.skin, old.eye_color,
+		],
+	}))
+	file.close()
+	assert_true(Save.load_appearance().same(old),
+		"старый формат с монетами/заданиями грузится, внешность цела")
 	if backup.is_empty():
 		DirAccess.open("user://").remove("save.json")
 	else:
