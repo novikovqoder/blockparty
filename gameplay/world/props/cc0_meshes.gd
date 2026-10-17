@@ -34,9 +34,10 @@ const MODELS: Dictionary = {
 		["tree_pineRoundA", "tree_pineDefaultA", "tree_pineSmallA"],
 		3.2, 2.1, "trunk",
 	],
-	# П5.9, блок 4: деревья, кусты и валежник Леса (rtree_leafy, rshrub,
-	# tree_giant, rlog) больше не сканы — процедурный генератор TreeGen
-	# (порт EZ-Tree), см. PropMeshes.mesh. Сканы Poly Haven удалены.
+	# П5.9, блок 4 → переделка: деревья Леса (etree_*) больше не сканы —
+	# их генерирует сам ez-tree (~/eztree_gen → GLB, см. EzTreeMeshes);
+	# валежник dead_log — брёвна kenney ниже с корой ambientcg. Сканы
+	# Poly Haven удалены.
 	# П5.9, блок 5: глыбы подлеска (rrock, сканы rock_07/rock_09/
 	# boulder_01) тоже процедурные — RockGen.boulder, мох красит ForestMat.
 	# П5.9, блок 3: rgrass и fern больше не сканы — процедурные меши

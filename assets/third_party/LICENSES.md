@@ -23,6 +23,7 @@ Animation Library (П5.7–П5.8).
 | Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg` (сет «1K» у Bark001 — 512×1024, ниже планки качества П5.9; взят 2K-сет из локальной библиотеки) |
 | Bark002 | ambientCG | https://ambientcg.com/view?id=Bark002 | CC0 | 2026-10-16 | `ambientcg.com/Bark002/Bark002_1K-JPG_Color.jpg` |
 | Bark003 | ambientCG | https://ambientcg.com/view?id=Bark003 | CC0 | 2026-10-16 | `ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg` |
+| ez-tree | Dan Greenheck | https://github.com/dgreenheck/ez-tree | MIT | 2026-10-17 | `assets/visual/trees/models/` — 60 GLB (пресеты Pine/Oak/Aspen/Ash/Bush с вариациями seed, по три уровня детализации), сгенерированные самим ez-tree конвейером вне репозитория (~/eztree_gen); `assets/visual/trees/leaves/{ash,aspen,oak,pine}.png` — из `src/app/public/textures/leaves/` репозитория; текст лицензии — `assets/visual/trees/LICENSE-ez-tree.txt` |
 | Sky3D 2.1 | Cory Petkovsek, J. Cuéllar и контрибьюторы | https://github.com/TokisanGames/Sky3D | MIT | 2026-10-16 | `addons/sky_3d/` — небо мира (П5.9 блок 6): атмосферное рассеяние, облака, луна, звёзды; текст лицензий — `addons/sky_3d/LICENSE.txt` и `addons/sky_3d/shaders/LICENSE`. Правки кода аддона: (1) прелоады текстур звёздного неба в `src/SkyDome.gd` перенаправлены на процедурные текстуры проекта (см. следующую строку) — штатные Milkyway.jpg/StarField.jpg аддона (панорама ESO/S. Brunier, CC BY 4.0) в проект НЕ вносились и удалены из копии; (2) в `shaders/SkyMaterial.gdshader` шести сэмплерам (луна, звёзды, шум, облака) добавлен явный хинт `filter_linear` — планка качества П5.9 (никаких фильтров Nearest без явного объявления) |
 | Текстуры звёздного неба | сделано для проекта (`tools/make_star_textures.gd`) | — | CC0 (как и весь код проекта) | 2026-10-16 | `assets/visual/sky_starmap.png`, `assets/visual/sky_starfield.png` — процедурная полоса «млечного пути» и россыпь звёзд, детерминированная генерация |
 
@@ -36,12 +37,15 @@ Animation Library (П5.7–П5.8).
 П5.9 (блок 3) заменил фотосканы травы и папоротника процедурными пучками
 `gameplay/world/props/forest_plants.gd` — наборы grass_medium_02 и fern_02
 удалены.
-П5.9 (блок 4) заменил фотосканы деревьев, кустов и валежника портом
-генератора EZ-Tree (MIT, © Dan Greenheck, github.com/dgreenheck/ez-tree) —
-`gameplay/world/props/tree_gen.gd`; наборы island_tree_01–03, shrub_02–04
-и dead_tree_trunk удалены, вместо них кора — текстуры ambientCG (таблица
-выше). Код EZ-Tree переписан на GDScript по чтению исходников, файлы
-оригинала в проекте не хранятся.
+П5.9 (блок 4) заменил фотосканы деревьев, кустов и валежника процедурным
+портом генератора EZ-Tree; переделка П5.9 убрала порт — деревья генерирует
+сам ez-tree (MIT, © Dan Greenheck, github.com/dgreenheck/ez-tree) в
+Node.js-конвейере вне репозитория (пресеты Pine/Oak/Aspen/Ash/Bush с
+вариациями seed, экспорт GLB в `assets/visual/trees/`, чтение —
+`gameplay/world/props/eztree_meshes.gd`). Наборы island_tree_01–03,
+shrub_02–04 и dead_tree_trunk удалены; кора — текстуры ambientCG (таблица
+выше), текстуры листвы — из репозитория ez-tree (MIT). Валежник и мостик —
+брёвна kenney с корой ambientcg. Исходники ez-tree в проекте не хранятся.
 П5.9 (блок 5) заменил фотосканы крупных камней Леса процедурными глыбами
 `gameplay/world/props/rock_gen.gd` (искажённая шумом сфера, мох по верхним
 граням красит `assets/shaders/rock_moss.gdshader`) — наборы rock_07,

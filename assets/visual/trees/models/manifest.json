@@ -1,0 +1,1542 @@
+[
+  {
+    "name": "pine_large_v0",
+    "preset": "Pine Large",
+    "kind": "conifer",
+    "seed": 148895,
+    "bark": {
+      "type": "Bark003",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "pine",
+      "billboard": "double",
+      "alphaTest": 0.3,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "pine_large_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 12192,
+        "leafTris": 7200,
+        "aabb": {
+          "min": [
+            -23.099851608276367,
+            0,
+            -25.463777542114258
+          ],
+          "max": [
+            24.055925369262695,
+            68.35794067382812,
+            23.708772659301758
+          ]
+        }
+      },
+      {
+        "file": "pine_large_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 4048,
+        "leafTris": 3600,
+        "aabb": {
+          "min": [
+            -23.15291404724121,
+            0,
+            -24.139142990112305
+          ],
+          "max": [
+            22.226970672607422,
+            69.12117004394531,
+            22.371660232543945
+          ]
+        }
+      },
+      {
+        "file": "pine_large_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 1212,
+        "leafTris": 1800,
+        "aabb": {
+          "min": [
+            -23.03983497619629,
+            0,
+            -24.187397003173828
+          ],
+          "max": [
+            22.35243797302246,
+            68.69989776611328,
+            22.33709716796875
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "pine_large_v1",
+    "preset": "Pine Large",
+    "kind": "conifer",
+    "seed": 253624,
+    "bark": {
+      "type": "Bark003",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "pine",
+      "billboard": "double",
+      "alphaTest": 0.3,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "pine_large_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 12192,
+        "leafTris": 7200,
+        "aabb": {
+          "min": [
+            -21.2101993560791,
+            0,
+            -21.73920249938965
+          ],
+          "max": [
+            18.726442337036133,
+            68.51982879638672,
+            24.62364387512207
+          ]
+        }
+      },
+      {
+        "file": "pine_large_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 4048,
+        "leafTris": 3600,
+        "aabb": {
+          "min": [
+            -20.679122924804688,
+            0,
+            -21.791702270507812
+          ],
+          "max": [
+            19.525409698486328,
+            69.2791519165039,
+            24.687318801879883
+          ]
+        }
+      },
+      {
+        "file": "pine_large_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 1212,
+        "leafTris": 1800,
+        "aabb": {
+          "min": [
+            -20.643217086791992,
+            0,
+            -21.942520141601562
+          ],
+          "max": [
+            18.499067306518555,
+            68.8727798461914,
+            24.213220596313477
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "pine_medium_v0",
+    "preset": "Pine Medium",
+    "kind": "conifer",
+    "seed": 118706,
+    "bark": {
+      "type": "Bark003",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "pine",
+      "billboard": "double",
+      "alphaTest": 0.3,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "pine_medium_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 10032,
+        "leafTris": 9840,
+        "aabb": {
+          "min": [
+            -14.72819709777832,
+            0,
+            -14.08340835571289
+          ],
+          "max": [
+            14.735861778259277,
+            50.86573791503906,
+            14.454005241394043
+          ]
+        }
+      },
+      {
+        "file": "pine_medium_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 3328,
+        "leafTris": 4920,
+        "aabb": {
+          "min": [
+            -14.283477783203125,
+            0,
+            -13.837193489074707
+          ],
+          "max": [
+            14.479519844055176,
+            51.11425018310547,
+            14.663360595703125
+          ]
+        }
+      },
+      {
+        "file": "pine_medium_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 996,
+        "leafTris": 2460,
+        "aabb": {
+          "min": [
+            -14.375908851623535,
+            0,
+            -13.910942077636719
+          ],
+          "max": [
+            14.292298316955566,
+            51.194549560546875,
+            14.457489967346191
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "pine_medium_v1",
+    "preset": "Pine Medium",
+    "kind": "conifer",
+    "seed": 223435,
+    "bark": {
+      "type": "Bark003",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "pine",
+      "billboard": "double",
+      "alphaTest": 0.3,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "pine_medium_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 10032,
+        "leafTris": 9840,
+        "aabb": {
+          "min": [
+            -16.1450252532959,
+            0,
+            -15.030865669250488
+          ],
+          "max": [
+            16.29143524169922,
+            51.392635345458984,
+            15.55855941772461
+          ]
+        }
+      },
+      {
+        "file": "pine_medium_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 3328,
+        "leafTris": 4920,
+        "aabb": {
+          "min": [
+            -16.574586868286133,
+            0,
+            -14.515573501586914
+          ],
+          "max": [
+            15.958436965942383,
+            51.294212341308594,
+            15.973331451416016
+          ]
+        }
+      },
+      {
+        "file": "pine_medium_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 996,
+        "leafTris": 2460,
+        "aabb": {
+          "min": [
+            -16.660499572753906,
+            0,
+            -14.593819618225098
+          ],
+          "max": [
+            16.027313232421875,
+            50.75555419921875,
+            16.05835723876953
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "pine_small_v0",
+    "preset": "Pine Small",
+    "kind": "conifer",
+    "seed": 116473,
+    "bark": {
+      "type": "Bark003",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "pine",
+      "billboard": "double",
+      "alphaTest": 0.3,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "pine_small_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 11112,
+        "leafTris": 7644,
+        "aabb": {
+          "min": [
+            -10.159993171691895,
+            -1.3959177732467651,
+            -9.300470352172852
+          ],
+          "max": [
+            8.789562225341797,
+            40.54961013793945,
+            8.37780475616455
+          ]
+        }
+      },
+      {
+        "file": "pine_small_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 3688,
+        "leafTris": 3824,
+        "aabb": {
+          "min": [
+            -10.079532623291016,
+            -1.7096885442733765,
+            -9.474894523620605
+          ],
+          "max": [
+            8.425292015075684,
+            40.983482360839844,
+            8.551729202270508
+          ]
+        }
+      },
+      {
+        "file": "pine_small_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 1104,
+        "leafTris": 1912,
+        "aabb": {
+          "min": [
+            -10.163562774658203,
+            -1.752695918083191,
+            -9.38212776184082
+          ],
+          "max": [
+            8.410088539123535,
+            40.7797966003418,
+            8.604562759399414
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "oak_medium_v0",
+    "preset": "Oak Medium",
+    "kind": "leafy",
+    "seed": 140458,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 1,
+        "y": 10
+      },
+      "tint": 16774097,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "oak",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14013901
+    },
+    "lods": [
+      {
+        "file": "oak_medium_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 3166,
+        "leafTris": 10640,
+        "aabb": {
+          "min": [
+            -24.685510635375977,
+            0,
+            -26.475788116455078
+          ],
+          "max": [
+            25.165151596069336,
+            71.76815032958984,
+            24.731029510498047
+          ]
+        }
+      },
+      {
+        "file": "oak_medium_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 1374,
+        "leafTris": 5320,
+        "aabb": {
+          "min": [
+            -24.600101470947266,
+            0,
+            -27.477916717529297
+          ],
+          "max": [
+            25.733713150024414,
+            72.89545440673828,
+            24.283376693725586
+          ]
+        }
+      },
+      {
+        "file": "oak_medium_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 1122,
+        "leafTris": 2660,
+        "aabb": {
+          "min": [
+            -24.55085563659668,
+            0,
+            -25.74944305419922
+          ],
+          "max": [
+            25.571794509887695,
+            72.12611389160156,
+            24.510372161865234
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "oak_medium_v1",
+    "preset": "Oak Medium",
+    "kind": "leafy",
+    "seed": 245187,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 1,
+        "y": 10
+      },
+      "tint": 16774097,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "oak",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14013901
+    },
+    "lods": [
+      {
+        "file": "oak_medium_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 3166,
+        "leafTris": 10640,
+        "aabb": {
+          "min": [
+            -22.678491592407227,
+            0,
+            -22.337583541870117
+          ],
+          "max": [
+            25.89197540283203,
+            70.20960235595703,
+            24.040861129760742
+          ]
+        }
+      },
+      {
+        "file": "oak_medium_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 1374,
+        "leafTris": 5320,
+        "aabb": {
+          "min": [
+            -23.711769104003906,
+            0,
+            -21.141281127929688
+          ],
+          "max": [
+            26.32447624206543,
+            71.17973327636719,
+            25.189794540405273
+          ]
+        }
+      },
+      {
+        "file": "oak_medium_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 1122,
+        "leafTris": 2660,
+        "aabb": {
+          "min": [
+            -23.918424606323242,
+            0,
+            -20.938365936279297
+          ],
+          "max": [
+            26.527549743652344,
+            69.80767822265625,
+            25.41958236694336
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "oak_large_v0",
+    "preset": "Oak Large",
+    "kind": "leafy",
+    "seed": 128128,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 1,
+        "y": 10
+      },
+      "tint": 16774097,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "oak",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14013901
+    },
+    "lods": [
+      {
+        "file": "oak_large_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 12006,
+        "leafTris": 10560,
+        "aabb": {
+          "min": [
+            -44.63402557373047,
+            0,
+            -47.297054290771484
+          ],
+          "max": [
+            45.041465759277344,
+            108.14818572998047,
+            39.056121826171875
+          ]
+        }
+      },
+      {
+        "file": "oak_large_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 3960,
+        "leafTris": 5280,
+        "aabb": {
+          "min": [
+            -44.76230239868164,
+            0,
+            -49.13991928100586
+          ],
+          "max": [
+            45.112571716308594,
+            109.7990951538086,
+            39.634056091308594
+          ]
+        }
+      },
+      {
+        "file": "oak_large_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 2724,
+        "leafTris": 2640,
+        "aabb": {
+          "min": [
+            -44.24009323120117,
+            0,
+            -47.11294937133789
+          ],
+          "max": [
+            45.47526931762695,
+            110.12928009033203,
+            39.881229400634766
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "oak_large_v1",
+    "preset": "Oak Large",
+    "kind": "leafy",
+    "seed": 232857,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 1,
+        "y": 10
+      },
+      "tint": 16774097,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "oak",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14013901
+    },
+    "lods": [
+      {
+        "file": "oak_large_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 12006,
+        "leafTris": 10560,
+        "aabb": {
+          "min": [
+            -45.035614013671875,
+            0,
+            -34.2548713684082
+          ],
+          "max": [
+            35.859439849853516,
+            105.37973022460938,
+            45.94496536254883
+          ]
+        }
+      },
+      {
+        "file": "oak_large_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 3960,
+        "leafTris": 5280,
+        "aabb": {
+          "min": [
+            -46.6388053894043,
+            0,
+            -33.61795425415039
+          ],
+          "max": [
+            36.652156829833984,
+            107.36297607421875,
+            47.24474334716797
+          ]
+        }
+      },
+      {
+        "file": "oak_large_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 2724,
+        "leafTris": 2640,
+        "aabb": {
+          "min": [
+            -44.40300750732422,
+            0,
+            -33.8623046875
+          ],
+          "max": [
+            36.96861267089844,
+            106.44163513183594,
+            47.50469970703125
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "aspen_medium_v0",
+    "preset": "Aspen Medium",
+    "kind": "leafy",
+    "seed": 122749,
+    "bark": {
+      "type": "Bark002",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "aspen",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 16775778
+    },
+    "lods": [
+      {
+        "file": "aspen_medium_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 5088,
+        "leafTris": 2112,
+        "aabb": {
+          "min": [
+            -17.09558868408203,
+            0,
+            -13.051074981689453
+          ],
+          "max": [
+            14.871829986572266,
+            71.5789794921875,
+            17.072826385498047
+          ]
+        }
+      },
+      {
+        "file": "aspen_medium_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 1538,
+        "leafTris": 1056,
+        "aabb": {
+          "min": [
+            -15.195244789123535,
+            0,
+            -13.981561660766602
+          ],
+          "max": [
+            15.590182304382324,
+            72.75102996826172,
+            17.36260414123535
+          ]
+        }
+      },
+      {
+        "file": "aspen_medium_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 672,
+        "leafTris": 528,
+        "aabb": {
+          "min": [
+            -15.259289741516113,
+            0,
+            -12.788973808288574
+          ],
+          "max": [
+            15.556092262268066,
+            72.12663269042969,
+            16.884464263916016
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "aspen_medium_v1",
+    "preset": "Aspen Medium",
+    "kind": "leafy",
+    "seed": 227478,
+    "bark": {
+      "type": "Bark002",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "aspen",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 16775778
+    },
+    "lods": [
+      {
+        "file": "aspen_medium_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 5088,
+        "leafTris": 2112,
+        "aabb": {
+          "min": [
+            -9.63893985748291,
+            0,
+            -14.26660442352295
+          ],
+          "max": [
+            15.05019474029541,
+            71.08557891845703,
+            16.289642333984375
+          ]
+        }
+      },
+      {
+        "file": "aspen_medium_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 1538,
+        "leafTris": 1056,
+        "aabb": {
+          "min": [
+            -9.6410493850708,
+            0,
+            -15.0820894241333
+          ],
+          "max": [
+            15.52570629119873,
+            70.06743621826172,
+            17.297269821166992
+          ]
+        }
+      },
+      {
+        "file": "aspen_medium_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 672,
+        "leafTris": 528,
+        "aabb": {
+          "min": [
+            -9.193138122558594,
+            0,
+            -14.251082420349121
+          ],
+          "max": [
+            15.500595092773438,
+            70.11922454833984,
+            16.743867874145508
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "aspen_small_v0",
+    "preset": "Aspen Small",
+    "kind": "leafy",
+    "seed": 141059,
+    "bark": {
+      "type": "Bark002",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "aspen",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 16775778
+    },
+    "lods": [
+      {
+        "file": "aspen_small_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 2496,
+        "leafTris": 1120,
+        "aabb": {
+          "min": [
+            -7.458118915557861,
+            0,
+            -10.141339302062988
+          ],
+          "max": [
+            7.173643112182617,
+            38.24370193481445,
+            8.100722312927246
+          ]
+        }
+      },
+      {
+        "file": "aspen_small_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 734,
+        "leafTris": 560,
+        "aabb": {
+          "min": [
+            -8.344313621520996,
+            0,
+            -10.776463508605957
+          ],
+          "max": [
+            6.431752681732178,
+            39.09687042236328,
+            9.038607597351074
+          ]
+        }
+      },
+      {
+        "file": "aspen_small_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 312,
+        "leafTris": 280,
+        "aabb": {
+          "min": [
+            -7.939502716064453,
+            0,
+            -10.288246154785156
+          ],
+          "max": [
+            6.37343168258667,
+            39.26750183105469,
+            8.662923812866211
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "aspen_small_v1",
+    "preset": "Aspen Small",
+    "kind": "leafy",
+    "seed": 245788,
+    "bark": {
+      "type": "Bark002",
+      "textureScale": {
+        "x": 1,
+        "y": 1
+      },
+      "tint": 16777215,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "aspen",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 16775778
+    },
+    "lods": [
+      {
+        "file": "aspen_small_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 2496,
+        "leafTris": 1120,
+        "aabb": {
+          "min": [
+            -5.7836761474609375,
+            0,
+            -10.261557579040527
+          ],
+          "max": [
+            7.197476863861084,
+            38.058197021484375,
+            9.286565780639648
+          ]
+        }
+      },
+      {
+        "file": "aspen_small_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 734,
+        "leafTris": 560,
+        "aabb": {
+          "min": [
+            -6.784406661987305,
+            0,
+            -11.020026206970215
+          ],
+          "max": [
+            8.246017456054688,
+            39.13857650756836,
+            9.426981925964355
+          ]
+        }
+      },
+      {
+        "file": "aspen_small_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 312,
+        "leafTris": 280,
+        "aabb": {
+          "min": [
+            -6.351143836975098,
+            0,
+            -9.295305252075195
+          ],
+          "max": [
+            8.45572566986084,
+            39.170345306396484,
+            9.62911605834961
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "ash_medium_v0",
+    "preset": "Ash Medium",
+    "kind": "leafy",
+    "seed": 141059,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "ash",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "ash_medium_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 9120,
+        "leafTris": 10880,
+        "aabb": {
+          "min": [
+            -29.86843490600586,
+            0,
+            -33.600276947021484
+          ],
+          "max": [
+            31.81394386291504,
+            83.3725814819336,
+            32.01034164428711
+          ]
+        }
+      },
+      {
+        "file": "ash_medium_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 3126,
+        "leafTris": 5440,
+        "aabb": {
+          "min": [
+            -30.02576446533203,
+            0,
+            -34.71144104003906
+          ],
+          "max": [
+            32.74834442138672,
+            84.10877227783203,
+            31.701061248779297
+          ]
+        }
+      },
+      {
+        "file": "ash_medium_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 1436,
+        "leafTris": 2720,
+        "aabb": {
+          "min": [
+            -29.30840301513672,
+            0,
+            -34.933677673339844
+          ],
+          "max": [
+            32.93522262573242,
+            84.2560043334961,
+            31.804555892944336
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "ash_medium_v1",
+    "preset": "Ash Medium",
+    "kind": "leafy",
+    "seed": 245788,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "ash",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 16777215
+    },
+    "lods": [
+      {
+        "file": "ash_medium_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 9120,
+        "leafTris": 10880,
+        "aabb": {
+          "min": [
+            -30.872318267822266,
+            0,
+            -24.085174560546875
+          ],
+          "max": [
+            26.08611488342285,
+            76.5164566040039,
+            29.24087905883789
+          ]
+        }
+      },
+      {
+        "file": "ash_medium_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 3126,
+        "leafTris": 5440,
+        "aabb": {
+          "min": [
+            -31.742748260498047,
+            0,
+            -24.83285903930664
+          ],
+          "max": [
+            27.094806671142578,
+            77.43348693847656,
+            29.884607315063477
+          ]
+        }
+      },
+      {
+        "file": "ash_medium_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 1436,
+        "leafTris": 2720,
+        "aabb": {
+          "min": [
+            -31.916833877563477,
+            0,
+            -24.081993103027344
+          ],
+          "max": [
+            27.342296600341797,
+            76.46543884277344,
+            30.01335334777832
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "bush_1_v0",
+    "preset": "Bush 1",
+    "kind": "bush",
+    "seed": 150319,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "ash",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14745557
+    },
+    "lods": [
+      {
+        "file": "bush_1_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 8880,
+        "leafTris": 4992,
+        "aabb": {
+          "min": [
+            -12.570085525512695,
+            -0.6347026824951172,
+            -19.412595748901367
+          ],
+          "max": [
+            21.280561447143555,
+            26.558401107788086,
+            13.325282096862793
+          ]
+        }
+      },
+      {
+        "file": "bush_1_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 2988,
+        "leafTris": 2496,
+        "aabb": {
+          "min": [
+            -12.676156997680664,
+            -1.6772438287734985,
+            -19.234060287475586
+          ],
+          "max": [
+            20.981786727905273,
+            27.41180419921875,
+            14.162569999694824
+          ]
+        }
+      },
+      {
+        "file": "bush_1_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 1494,
+        "leafTris": 1248,
+        "aabb": {
+          "min": [
+            -12.838048934936523,
+            -1.18538498878479,
+            -19.37726402282715
+          ],
+          "max": [
+            20.382261276245117,
+            27.583648681640625,
+            13.972697257995605
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "bush_1_v1",
+    "preset": "Bush 1",
+    "kind": "bush",
+    "seed": 255048,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "ash",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14745557
+    },
+    "lods": [
+      {
+        "file": "bush_1_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 8880,
+        "leafTris": 4992,
+        "aabb": {
+          "min": [
+            -16.181751251220703,
+            -0.1017477884888649,
+            -11.170805931091309
+          ],
+          "max": [
+            14.239022254943848,
+            28.382495880126953,
+            18.149843215942383
+          ]
+        }
+      },
+      {
+        "file": "bush_1_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 2988,
+        "leafTris": 2496,
+        "aabb": {
+          "min": [
+            -17.052927017211914,
+            -0.5017667412757874,
+            -11.64709758758545
+          ],
+          "max": [
+            14.301082611083984,
+            29.409358978271484,
+            18.748788833618164
+          ]
+        }
+      },
+      {
+        "file": "bush_1_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 1494,
+        "leafTris": 1248,
+        "aabb": {
+          "min": [
+            -17.28079605102539,
+            -0.7000027298927307,
+            -10.050993919372559
+          ],
+          "max": [
+            14.344324111938477,
+            28.786008834838867,
+            18.96721839904785
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "bush_2_v0",
+    "preset": "Bush 2",
+    "kind": "bush",
+    "seed": 150319,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "aspen",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14745557
+    },
+    "lods": [
+      {
+        "file": "bush_2_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 3352,
+        "leafTris": 1408,
+        "aabb": {
+          "min": [
+            -12.084253311157227,
+            -0.04491987079381943,
+            -11.578139305114746
+          ],
+          "max": [
+            16.16021728515625,
+            30.418758392333984,
+            11.750776290893555
+          ]
+        }
+      },
+      {
+        "file": "bush_2_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 1050,
+        "leafTris": 704,
+        "aabb": {
+          "min": [
+            -13.15272045135498,
+            -0.027470652014017105,
+            -12.42891788482666
+          ],
+          "max": [
+            17.194639205932617,
+            31.39354133605957,
+            12.494214057922363
+          ]
+        }
+      },
+      {
+        "file": "bush_2_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 534,
+        "leafTris": 352,
+        "aabb": {
+          "min": [
+            -12.35118293762207,
+            -0.027470652014017105,
+            -12.599074363708496
+          ],
+          "max": [
+            17.40152359008789,
+            31.614910125732422,
+            12.642901420593262
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "bush_2_v1",
+    "preset": "Bush 2",
+    "kind": "bush",
+    "seed": 255048,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "aspen",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 14745557
+    },
+    "lods": [
+      {
+        "file": "bush_2_v1_lod0.glb",
+        "distance": 0,
+        "branchTris": 3352,
+        "leafTris": 1408,
+        "aabb": {
+          "min": [
+            -13.598579406738281,
+            -0.0323958620429039,
+            -15.324732780456543
+          ],
+          "max": [
+            14.116599082946777,
+            29.896806716918945,
+            15.643731117248535
+          ]
+        }
+      },
+      {
+        "file": "bush_2_v1_lod1.glb",
+        "distance": 100,
+        "branchTris": 1050,
+        "leafTris": 704,
+        "aabb": {
+          "min": [
+            -14.462010383605957,
+            -0.021910062059760094,
+            -16.05692481994629
+          ],
+          "max": [
+            14.87415885925293,
+            30.982830047607422,
+            16.722240447998047
+          ]
+        }
+      },
+      {
+        "file": "bush_2_v1_lod2.glb",
+        "distance": 250,
+        "branchTris": 534,
+        "leafTris": 352,
+        "aabb": {
+          "min": [
+            -14.182428359985352,
+            -0.021910062059760094,
+            -15.673343658447266
+          ],
+          "max": [
+            14.69518756866455,
+            31.200035095214844,
+            16.937942504882812
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "bush_3_v0",
+    "preset": "Bush 3",
+    "kind": "bush",
+    "seed": 136072,
+    "bark": {
+      "type": "Bark001",
+      "textureScale": {
+        "x": 0.5,
+        "y": 5
+      },
+      "tint": 13552830,
+      "flatShading": false
+    },
+    "leaves": {
+      "type": "pine",
+      "billboard": "double",
+      "alphaTest": 0.5,
+      "tint": 10339327
+    },
+    "lods": [
+      {
+        "file": "bush_3_v0_lod0.glb",
+        "distance": 0,
+        "branchTris": 13674,
+        "leafTris": 2496,
+        "aabb": {
+          "min": [
+            -17.939931869506836,
+            -1.6746915578842163,
+            -14.651558876037598
+          ],
+          "max": [
+            21.524911880493164,
+            19.226490020751953,
+            15.696183204650879
+          ]
+        }
+      },
+      {
+        "file": "bush_3_v0_lod1.glb",
+        "distance": 100,
+        "branchTris": 5394,
+        "leafTris": 1248,
+        "aabb": {
+          "min": [
+            -18.979581832885742,
+            -2.7302355766296387,
+            -15.698016166687012
+          ],
+          "max": [
+            22.127838134765625,
+            20.116825103759766,
+            16.862001419067383
+          ]
+        }
+      },
+      {
+        "file": "bush_3_v0_lod2.glb",
+        "distance": 250,
+        "branchTris": 2892,
+        "leafTris": 624,
+        "aabb": {
+          "min": [
+            -19.187511444091797,
+            -1.4005913734436035,
+            -15.907307624816895
+          ],
+          "max": [
+            22.306547164916992,
+            20.33429527282715,
+            16.11091423034668
+          ]
+        }
+      }
+    ]
+  }
+]

@@ -51,12 +51,16 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _boat()
 		"log_bridge":
 			return _log_bridge()
-		# Деревья и валежник Леса (П5.9, блок 4) — порт генератора EZ-Tree:
-		# кора и крона двумя поверхностями с запечёнными материалами,
-		# уровни детализации — TreeGen.build_set (IslandArt/IslandView).
-		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
-		"etree_giant", "dead_log":
-			return TreeGen.build_set(type, variant)["mesh"]
+		# Деревья Леса (П5.9, переделка) — сгенерированы самим EZ-Tree
+		# (~/eztree_gen → GLB в assets/visual/trees): две поверхности
+		# (кора + листва) с запечёнными материалами, уровни детализации —
+		# EzTreeMeshes.build_set (IslandArt/IslandView).
+		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant":
+			return EzTreeMeshes.build_set(type, variant)["mesh"]
+		# Валежник (П5.9, переделка): CC0-бревно kenney (локальная
+		# библиотека) с корой ambientcg — как мостик через овраг.
+		"dead_log":
+			return _dead_log(variant)
 		# П5.9, блок 3: растительность Леса — процедурные пучки/вайи/цветы
 		# и камни во мху (материалы — ForestMat).
 		"rgrass":
@@ -79,44 +83,164 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 	return ArrayMesh.new()
 
 
-## Мостик из брёвен через лесной овраг (П5.7, блок 2): девять лежачих
-## стволов «dead_log» (П5.9, блок 4 — процедурный изогнутый ствол,
-## 3.0 × 0.28 м) в ряд с шагом 0.55 вдоль Z; бревно длинной стороной уже
-## вдоль X (перестраховочный swap по AABB оставлен). Все брёвна склеены
-## в одну поверхность — как у прочих групп предметов (IslandArt ждёт меш
-## с одним surface). Низ моста — в origin, лёгкое чередование высоты —
-## вручную заданное, без rng.
+## Валежник Леса (П5.9, переделка): CC0-брёвна kenney.nl (nature-kit,
+## log/log_large — настоящие модели из локальной библиотеки) с корой
+## ambientcg по UV. Бревно лежит длинной стороной вдоль X, низ — в origin.
+## Вариант — какая из двух моделей и лёгкий поворот вокруг оси.
+static func _dead_log(variant: int) -> ArrayMesh:
+	var file := "log_large.glb" if variant % 2 == 0 else "log.glb"
+	var path := "res://assets/third_party/kenney.nl/nature-kit".path_join(file)
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		push_error("Не читается бревно kenney: " + path)
+		return ArrayMesh.new()
+	var scene := doc.generate_scene(state)
+	var arrays := _merge_log_surfaces(scene, Vector3(2.4, 0.45, 0.6))
+	scene.free()
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _log_bark_material())
+	return mesh
+
+
+## Мостик из брёвен через лесной овраг (П5.7; переделка П5.9): семь
+## лежачих брёвен kenney (CC0, ~3.1 м — растяжка log_large по длине)
+## в ряд с шагом 0.7 вдоль Z; низ моста — в origin, лёгкое чередование
+## высоты — вручную заданное, без rng. Одна поверхность с корой.
 static func _log_bridge() -> ArrayMesh:
-	var verts := PackedVector3Array()
-	var colors := PackedColorArray()
-	var indices := PackedInt32Array()
-	var drift := [0.0, -0.02, 0.015, -0.015, 0.02]
-	for i: int in 9:
-		var log: ArrayMesh = TreeGen.build_set(&"dead_log", 0)["mesh"]
-		var arrays: Array = log.surface_get_arrays(0)
-		var log_verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var aabb := log.get_aabb()
-		if aabb.size.z > aabb.size.x:
-			for v: int in log_verts.size():
-				var swapped := log_verts[v]
-				log_verts[v] = Vector3(swapped.z, swapped.y, swapped.x)
+	var path := "res://assets/third_party/kenney.nl/nature-kit/log_large.glb"
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		push_error("Не читается бревно kenney: " + path)
+		return ArrayMesh.new()
+	var scene := doc.generate_scene(state)
+	var log := _merge_log_surfaces(scene, Vector3(3.1, 0.45, 0.6))
+	scene.free()
+
+	var verts: PackedVector3Array = log[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = log[Mesh.ARRAY_NORMAL]
+	var uvs: PackedVector2Array = log[Mesh.ARRAY_TEX_UV]
+	var indices: PackedInt32Array = log[Mesh.ARRAY_INDEX]
+	var bridge_verts := PackedVector3Array()
+	var bridge_normals := PackedVector3Array()
+	var bridge_uvs := PackedVector2Array()
+	var bridge_indices := PackedInt32Array()
+	var drift := [0.0, -0.03, 0.02, -0.02, 0.03, 0.0, -0.02]
+	for i: int in 7:
 		var dy: float = drift[i % drift.size()]
-		var dz: float = (i - 4) * 0.55
+		var dz: float = (i - 3) * 0.7
+		var base: int = bridge_verts.size()
+		for v: int in verts.size():
+			bridge_verts.append(
+				Vector3(verts[v].x, verts[v].y + dy, verts[v].z + dz))
+			bridge_normals.append(normals[v] if v < normals.size() else Vector3.UP)
+			bridge_uvs.append(uvs[v])
+		for index: int in indices:
+			bridge_indices.append(base + index)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = bridge_verts
+	arrays[Mesh.ARRAY_NORMAL] = bridge_normals
+	arrays[Mesh.ARRAY_TEX_UV] = bridge_uvs
+	arrays[Mesh.ARRAY_INDEX] = bridge_indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _log_bark_material())
+	return mesh
+
+
+## Поверхности сцены GLB в один набор массивов с UV и нормалями (кора
+## освещается по нормалям kenney-модели), нормированный на target (длина
+## вдоль X × толщина × ширина, м) и опущенный на землю. Если модель длиннее
+## по Z — координаты меняются местами (бревно ложится длинной стороной
+## вдоль X); нормали при неравномерном масштабе делятся на покомпонентный
+## scale (обратная транспонированная диагональной матрицы) и нормируются.
+static func _merge_log_surfaces(root: Node, target: Vector3) -> Array:
+	var parts: Array = []
+	_collect_log_surfaces(root, Transform3D.IDENTITY, parts)
+	var min_v := Vector3(INF, INF, INF)
+	var max_v := Vector3(-INF, -INF, -INF)
+	for arrays: Array in parts:
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for v: Vector3 in verts:
+			min_v = min_v.min(v)
+			max_v = max_v.max(v)
+	var size := max_v - min_v
+	var swap_xz: bool = size.z > size.x
+	var length: float = maxf(size.x, size.z)
+	var scale := Vector3(
+		target.x / maxf(length, 0.001),
+		target.y / maxf(size.y, 0.001),
+		target.z / maxf(minf(size.x, size.z), 0.001))
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for arrays: Array in parts:
+		var part_verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var part_normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var part_uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
 		var base: int = verts.size()
-		for v: int in log_verts.size():
-			verts.append(Vector3(
-				log_verts[v].x, log_verts[v].y + dy, log_verts[v].z + dz))
-		colors.append_array(arrays[Mesh.ARRAY_COLOR])
-		for index: int in arrays[Mesh.ARRAY_INDEX]:
+		for v: int in part_verts.size():
+			var local := Vector3(
+				part_verts[v].x - min_v.x,
+				part_verts[v].y - min_v.y,
+				part_verts[v].z - min_v.z)
+			var normal: Vector3 = part_normals[v] if v < part_normals.size() \
+				else Vector3.UP
+			if swap_xz:
+				local = Vector3(local.z, local.y, local.x)
+				normal = Vector3(normal.z, normal.y, normal.x)
+			verts.append(local * scale)
+			normals.append(
+				Vector3(normal.x / scale.x, normal.y / scale.y, normal.z / scale.z).normalized())
+			uvs.append(part_uvs[v])
+		var part_indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		for index: int in part_indices:
 			indices.append(base + index)
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
-	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
+	return arrays
+
+
+static func _collect_log_surfaces(node: Node, parent_xf: Transform3D, parts: Array) -> void:
+	var xf: Transform3D = parent_xf * node.transform if node is Node3D else parent_xf
+	if node is MeshInstance3D:
+		var mesh: Mesh = (node as MeshInstance3D).mesh
+		if mesh != null:
+			for surface: int in mesh.get_surface_count():
+				var arrays: Array = mesh.surface_get_arrays(surface)
+				if arrays.is_empty() \
+						or mesh.surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES:
+					continue
+				var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+				if verts.is_empty() or not (arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array):
+					continue
+				for v: int in verts.size():
+					verts[v] = xf * verts[v]
+					if v < normals.size():
+						normals[v] = (xf.basis * normals[v]).normalized()
+				parts.append(arrays)
+	for child: Node in node.get_children():
+		_collect_log_surfaces(child, xf, parts)
+
+
+## Кора брёвен: та же текстура ambientcg, что у деревьев ez-tree
+## (Bark001, CC0), чуть плотнее тайлинг; свет — как у коры деревьев.
+static func _log_bark_material() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://assets/shaders/tree_bark.gdshader")
+	material.set_shader_parameter("bark_tex", preload(
+		"res://assets/third_party/ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg"))
+	material.set_shader_parameter("uv_scale", Vector2(2.0, 1.0))
+	return material
 
 
 ## Радиус видимости MultiMesh предмета, м (0 — без ограничения;
@@ -191,9 +315,9 @@ static func wind_params(type: StringName) -> Dictionary:
 				"wind_weight_base": 1.6, "wind_weight_span": 3.5,
 				"wind_direction": Vector2(0.85, 0.45),
 			}
-		# П5.9: деревья/валежник Леса качаются шейдером canopy.gdshader
-		# (ветер волнами по миру — общий с травой); трава и цветы — в
-		# grass_field (ForestMat).
+		# П5.9, переделка: деревья Леса — ветер листвы в canopy.gdshader
+		# (формула ez-tree), ветви и валежник неподвижны (как в демо);
+		# трава и цветы — в grass_field (ForestMat).
 		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
 		"etree_giant", "dead_log", "rgrass", "rflower", "riris", "mrock", "rrock":
 			return {}
@@ -240,9 +364,9 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 		"etree_giant":
 			return Vector3(1.9, 9.0, 1.9) * scale.x
 		"dead_log":
-			return Vector3(3.0, 0.28, 0.5) * Vector3(scale.x, scale.y, scale.x)
+			return Vector3(2.4, 0.45, 0.6) * Vector3(scale.x, scale.y, scale.x)
 		"log_bridge":
-			return Vector3(3.0 * scale.x, 0.28 * scale.y, 4.95 * scale.z)
+			return Vector3(3.1, 0.45, 4.8)
 		"rrock":
 			return Vector3(0.85 * scale.x, 0.5 * scale.y, 0.85 * scale.x)
 	return Vector3.ZERO

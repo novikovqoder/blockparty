@@ -63,9 +63,9 @@ func _build_props() -> void:
 	for key: String in art.prop_groups:
 		var type := String(key.split(":")[0])
 		var group: PropGroup = art.prop_groups[key]
-		# Деревья Леса (П5.9, блок 4): уровни детализации и «картинка»
-		# дальнего плана — отдельные MultiMesh на дистанционных диапазонах;
-		# материалы запечены в меши (кора + крона), override не ставится.
+		# Деревья Леса (П5.9, переделка): уровни детализации ez-tree —
+		# отдельные MultiMesh на дистанционных диапазонах; материалы
+		# запечены в меши (кора + листва), override не ставится.
 		if not group.lods.is_empty():
 			_build_tree_lods(key, type, group)
 			continue
@@ -91,15 +91,15 @@ func _build_props() -> void:
 
 
 ## Деревья по уровням дальности (раздел 16): полная модель до 45 м, LOD1 —
-## до 90, LOD2 — до 130, дальше — плоский силуэт на камеру (до 220 м:
-## практически всегда виден, но не рендерится через весь остров). Диапазоны
-## перекрываются загибом (margin 6 м) — переключения без «мигания».
+## до 90, LOD2 (как в демо ez-tree — прореженные секции и одиночные
+## карточки листьев) — до 220 м: практически всегда виден, но дальше
+## растворяется в дымке. Диапазоны перекрываются загибом (margin 6 м) —
+## переключения без «мигания».
 func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 	var levels: Array = [
 		{"mesh": group.mesh, "begin": 0.0, "end": 45.0, "shadow": true},
 		{"mesh": group.lods[0], "begin": 45.0, "end": 90.0, "shadow": true},
-		{"mesh": group.lods[1], "begin": 90.0, "end": 130.0, "shadow": false},
-		{"mesh": group.billboard, "begin": 130.0, "end": 220.0, "shadow": false},
+		{"mesh": group.lods[1], "begin": 90.0, "end": 220.0, "shadow": false},
 	]
 	for index: int in levels.size():
 		var level: Dictionary = levels[index]

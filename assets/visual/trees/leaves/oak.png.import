@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dbj4hqobfymcv"
-path="res://.godot/imported/needle_cluster.png-34f450d337563640d9c4c2bfa3cdd0f9.ctex"
+uid="uid://bewd6xbq1vu30"
+path="res://.godot/imported/oak.png-d1666b1b90900e92cbfa696c315a5b36.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/visual/needle_cluster.png"
-dest_files=["res://.godot/imported/needle_cluster.png-34f450d337563640d9c4c2bfa3cdd0f9.ctex"]
+source_file="res://assets/visual/trees/leaves/oak.png"
+dest_files=["res://.godot/imported/oak.png-d1666b1b90900e92cbfa696c315a5b36.ctex"]
 
 [params]
 

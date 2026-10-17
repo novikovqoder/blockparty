@@ -532,10 +532,11 @@ static func _forest_landmarks(
 			if gully_across(x, z) <= GULLY_HALF_W + 1.0 \
 					and absf(gully_along(x, z)) <= GULLY_HALF_LEN:
 				reserved[Vector2i(x, z)] = true
-	# Гигант лесной поляны (~14 м, П5.9 блок 4): процедурный дуб-исполин
-	# EZ-Tree — раскидистая крона-ориентир (тон kind "plain" — только
-	# вариация яркости).
-	var giant_h: float = heights[_idx(GIANT_CELL.x, GIANT_CELL.y)]
+	# Гигант лесной поляны (~30 м, П5.9 переделка): дуб-исполин ez-tree
+	# (oak_large) — раскидистая крона-ориентир (тон kind "plain" — только
+	# вариация яркости); посадка по рельефу с утоплением комля.
+	var giant_h: float = ground_height(
+		heights, GIANT_CELL.x + 0.5, GIANT_CELL.y + 0.5) - 0.15
 	_add_prop(props, rng, &"etree_giant",
 		Vector3(GIANT_CELL.x + 0.5, giant_h, GIANT_CELL.y + 0.5),
 		rng.randf_range(-0.1, 0.1), Vector3.ONE * rng.randf_range(0.95, 1.05),
@@ -740,9 +741,10 @@ static func _trees_and_rocks(
 			if d_forest < 40.0 and grassy:
 				if rng.randf() < 0.07 and _no_trees_near(trees, x, z, 2):
 					trees[cell] = true
-					_prop(props, rng, cell, h, _forest_kind(x, z), "plain", 3)
+					_prop(props, rng, cell, h, _forest_kind(x, z), "plain",
+						_forest_variants(_forest_kind(x, z)), heights)
 				elif rng.randf() < 0.022:
-					_prop(props, rng, cell, h, "etree_bush", "plain", 3)
+					_prop(props, rng, cell, h, "etree_bush", "plain", 5, heights)
 				elif rng.randf() < 0.006:
 					_prop(props, rng, cell, h, "dead_log", "plain", 1)
 				elif rng.randf() < 0.004:
@@ -755,7 +757,7 @@ static func _trees_and_rocks(
 			elif d_forest < 56.0 and Vector2(x, z - 4.0).length() > 20.0 and grassy:
 				if rng.randf() < 0.007 and _no_trees_near(trees, x, z, 4):
 					trees[cell] = true
-					_prop(props, rng, cell, h, "etree_pine", "plain", 3)
+					_prop(props, rng, cell, h, "etree_pine", "plain", 5, heights)
 			# Холмы: валуны повыше, редкие ели, камни у вершин.
 			elif in_hills and h > 4.0:
 				if rng.randf() < 0.012:
@@ -967,6 +969,12 @@ static func _forest_kind(x: int, z: int) -> String:
 	return "etree_aspen"
 
 
+## Число вариантов вида дерева (ассеты ez-tree в EzTreeMeshes.ASSETS).
+static func _forest_variants(type: String) -> int:
+	var list: Array = EzTreeMeshes.ASSETS.get(StringName(type), [])
+	return maxi(1, list.size())
+
+
 ## Клетка леса пригодна для пучков травы: не тропа/гравий (вес < 0.2 —
 ## тропа читается землёй), уклон не круче 0.7 (на камне травы нет).
 static func _is_grassy_forest(heights: PackedFloat32Array, x: int, z: int) -> bool:
@@ -989,11 +997,18 @@ static func _is_grassy_forest(heights: PackedFloat32Array, x: int, z: int) -> bo
 static func _prop(
 	props: Array, rng: RandomNumberGenerator, cell: Vector2i, h: float,
 	type: String, kind: String, variants: int = 3,
+	heights: PackedFloat32Array = PackedFloat32Array(),
 ) -> void:
 	var scale: float = rng.randf_range(0.8, 1.2)
 	var pos := Vector3(
 		cell.x + rng.randf_range(-0.3, 0.3), h, cell.y + rng.randf_range(-0.3, 0.3)
 	)
+	# Деревья стоят на рельефе в фактической точке (джиттер сдвигает с
+	# узла сетки — на склоне высота угла клетки отличается до ~0.3 м);
+	# корневая часть чуть утоплена, чтобы основание ствола не висело.
+	if type.begins_with("etree_") and not heights.is_empty():
+		pos.y = ground_height(heights, pos.x, pos.z) \
+			- clampf(0.08 * scale, 0.05, 0.2)
 	_add_prop(props, rng, StringName(type), pos, rng.randf_range(0.0, TAU),
 		Vector3(scale, scale * rng.randf_range(0.9, 1.15), scale), kind, variants)
 
