@@ -64,6 +64,12 @@ atm_horizon_light_tint = Color(1, 0.548, 0.366, 1)
 atm_night_tint = Color(0.26, 0.383, 1, 1)
 ground_color = Color(0.378, 0.406, 0.394, 1)
 clouds_night_color = Color(0.11, 0.138, 0.25, 1)
+; Облака мягче дефолтов Sky3D: при coverage 0.55 и absorption 2.0 плотное
+; кучевое пятно в секторе северо-востока уходило в почти чёрный провал
+; (кадры тура П5.7, точка 2). Меньше покрытие — реже сплошная тьма,
+; ниже поглощение — низ облака читается светло-серым, а не угольным.
+cumulus_coverage = 0.38
+cumulus_absorption = 1.2
 fog_visible = false
 sun_light_path = NodePath("../SunLight")
 moon_light_path = NodePath("../MoonLight")

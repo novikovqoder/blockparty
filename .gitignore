@@ -25,3 +25,7 @@ assets/incoming/
 
 # Лог фототура (временный артефакт прогонов)
 .tour.log
+
+# Godot создаёт .import для каждого png в res://, включая скриншоты
+# документации docs/screenshots/ — служебный мусор, в git не кладём.
+docs/screenshots/**/*.import

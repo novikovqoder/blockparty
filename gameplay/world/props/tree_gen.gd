@@ -17,8 +17,17 @@ extends RefCounted
 
 const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 const CANOPY_SHADER: Shader = preload("res://assets/shaders/canopy.gdshader")
+const BARK_SHADER: Shader = preload("res://assets/shaders/tree_bark.gdshader")
 const BILLBOARD_SHADER: Shader = \
 	preload("res://assets/shaders/tree_billboard.gdshader")
+const LEAF_CLUSTER: Texture2D = \
+	preload("res://assets/visual/leaf_cluster.png")
+const NEEDLE_CLUSTER: Texture2D = \
+	preload("res://assets/visual/needle_cluster.png")
+
+## Усиление ветра пресетов (доработка под эталон: кроны и ветки колышутся
+## заметно, амплитуда видима с расстояния, а не лёгкая рябь).
+const WIND_GAIN: float = 2.4
 
 ## Файлы коры ambientcg (CC0). У Bark001 сет «1K» — 512×1024, ниже планки
 ## качества П5.9 (короткая сторона ≥1024), поэтому взят 2K-сет (1024×2048);
@@ -649,11 +658,14 @@ static func _mesh_leaf(
 			Vector3(half, 0.0, 0.0), Vector3(half, size, 0.0),
 		]
 		var flat_normal: Vector3 = quat * Vector3.BACK
+		# UV: черешок — низ карточки (v=0), кончик листа — верх (v=1);
+		# гроздь текстуры привязана к черешку (листья растут от ветки).
 		for corner: int in 4:
 			var offset: Vector3 = quat * (q_yaw * corners[corner])
 			_append(buffers, origin + offset,
 				(flat_normal + offset).normalized(), color,
-				Vector2(float(corner in [1, 2]), float(corner in [0, 1])))
+				Vector2(float(corner == 2 or corner == 3),
+					float(corner == 0 or corner == 3)))
 		buffers.indices.append_array(
 			[base, base + 1, base + 2, base, base + 2, base + 3])
 		base += 4
@@ -720,38 +732,39 @@ static func _billboard_mesh(
 
 # --- Материалы ---
 
-## Кора: CC0-текстура ambientcg (third_party), тайлинг по UV меша
-## (wraps по окружности), плотнее по вертикали; тон — вершинный/инстанс.
-static func _bark_material(options: Dictionary) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.roughness = 1.0
-	material.vertex_color_use_as_albedo = true
-	# Планка качества П5.9: мип-мапы + анизотропная фильтрация текстур.
-	material.texture_filter = \
-		BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+## Кора: CC0-текстура ambientcg (third_party) в шейдере tree_bark —
+## тайлинг по UV меша (wraps по окружности), плотнее по вертикали, тон —
+## вершинный/инстанс; качание ветром синхронно с кроной.
+static func _bark_material(options: Dictionary) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = BARK_SHADER
 	var bark_name: String = options["bark"]["texture"]
 	var file: Dictionary = BARK_FILES.get(StringName(bark_name),
 		BARK_FILES[&"Bark002"])
 	var texture_path := "res://assets/third_party/ambientcg.com/%s/%s%s" \
 		% [bark_name, bark_name, file["suffix"]]
 	if ResourceLoader.exists(texture_path):
-		material.albedo_texture = load(texture_path)
-		material.uv1_scale = Vector3(
+		material.set_shader_parameter("bark_tex", load(texture_path))
+		material.set_shader_parameter("uv_scale", Vector2(
 			1.0, float(options["bark"]["texture_scale"].y)
-				/ float(file["uv_divider"]), 1.0)
-		material.albedo_color = options["_bark_tint"]
+				/ float(file["uv_divider"])))
+	material.set_shader_parameter("wind_amplitude",
+		float(options["leaves"]["wind"]) * WIND_GAIN)
 	return material
 
 
-## Крона: мягкий wrap-свет, просвет солнца сквозь листву, качание
-## ветром от мировой позиции (параметры — из пресета).
+## Крона: карточки-грозди с альфа-текстурой (листья читаются по краям,
+## между ними прозрачные «дыры»), мягкий wrap-свет, просвет солнца
+## сквозь листву, качание ветром от мировой позиции (параметры — из
+## пресета). Хвойные — веточка с иглами, лиственные — гроздь листьев.
 static func _canopy_material(options: Dictionary) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = CANOPY_SHADER
-	var shape := 1.0 if options["leaves"]["shape"] == "needle" else 0.0
-	material.set_shader_parameter("needle_shape", shape)
+	material.set_shader_parameter("cluster_tex",
+		NEEDLE_CLUSTER if options["leaves"]["shape"] == "needle"
+		else LEAF_CLUSTER)
 	material.set_shader_parameter("wind_amplitude",
-		float(options["leaves"]["wind"]))
+		float(options["leaves"]["wind"]) * WIND_GAIN)
 	return material
 
 
@@ -762,7 +775,7 @@ static func _billboard_material(
 	material.shader = BILLBOARD_SHADER
 	material.set_shader_parameter("tree_height", height)
 	material.set_shader_parameter("wind_amplitude",
-		float(options["leaves"]["wind"]))
+		float(options["leaves"]["wind"]) * WIND_GAIN)
 	return material
 
 
