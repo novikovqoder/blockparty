@@ -46,14 +46,17 @@ stills() {
   log="$(realpath -m "$RAW")/stills_$tag.log"
   mkdir -p "$dir" "$(dirname "$log")"
   echo "=== $tag: съёмка ($envs ${extra:+$extra})"
-  (cd "$root" && env $envs timeout 900 xvfb-run -a godot --path . \
+  # timeout 2700: «Высокое качество» (MSAA 4x) на llvmpipe — до ~5 мин
+  # на кадр после доработок 1-5, полный тур из 10 кадров в 900 с не влезал.
+  (cd "$root" && env $envs timeout 2700 xvfb-run -a godot --path . \
       res://scenes/world_scene.tscn --resolution "$RES_STILL" \
       --rendering-driver opengl3 -- --shot-dir="$dir" $extra \
       >"$log" 2>&1) \
     || { tail -5 "$log"; return 1; }
 }
 
-# Серия кадров → GIF: gif <серия> <подкаталог-кадров> <имя-gif> [env].
+# Серия кадров → GIF: gif <серия> <подкаталог-кадров> <имя-gif> [env]
+# [секунды клипа 2–12; пусто — 6].
 gif() {
   local series="$1" sub="$2" stem="$3" envs="${4:-}"
   local dir="$RAW/$series"
@@ -66,9 +69,13 @@ gif() {
   else
     echo "=== съёмка $series"
     mkdir -p "$dir"
-    env $envs timeout 1800 xvfb-run -a godot --path . \
-      res://scenes/world_scene.tscn --resolution "$RES_GIF" \
-      --rendering-driver opengl3 -- --shot-dir="$dir" --high-quality \
+    # Обычный уровень, не --high-quality: на llvmpipe MSAA 4x учетверяет
+    # кадр (~67 с при 14 тыс. предметов — клип не влезал в таймаут), а
+    # SSAO/объёмный туман Compatibility и так пропускает; на 480×270
+    # разницы со «Высоким» в GIF нет. Статичные кадры — в «Высоком».
+    env $envs SHOT_SECONDS="${5:-}" timeout 3600 xvfb-run -a godot \
+      --path . res://scenes/world_scene.tscn --resolution "$RES_GIF" \
+      --rendering-driver opengl3 -- --shot-dir="$dir" \
       >"$dir.log" 2>&1 \
       || { tail -5 "$dir.log"; return 1; }
   fi
@@ -76,7 +83,8 @@ gif() {
     --out "$OUT/$stem.gif"
 }
 
-# Кадр Леса в фазе суток: phase <имя> <фракция суток> — точка 1 тура П5.7.
+# Кадр Леса в фазе суток: phase <имя> <фракция суток> — точка 1 тура П5.7
+# (одиночный кадр SHOT_SPOT: полный тур ради одной фазы — лишние ~40 мин).
 phase() {
   local name="$1" fraction="$2"
   local png="$OUT/p59_forest_$name.png"
@@ -88,12 +96,12 @@ phase() {
   echo "=== фаза $name (доля суток $fraction)"
   rm -rf "$dir"
   mkdir -p "$dir"
-  env SHOT_P57=1 SHOT_FRACTION="$fraction" \
-    timeout 900 xvfb-run -a godot --path . res://scenes/world_scene.tscn \
+  env SHOT_SPOT="-52,-52,223" SHOT_FRACTION="$fraction" \
+    timeout 1200 xvfb-run -a godot --path . res://scenes/world_scene.tscn \
       --resolution "$RES_STILL" --rendering-driver opengl3 \
       -- --shot-dir="$dir" --high-quality >"$RAW/phase_$name.log" 2>&1 \
     || { tail -5 "$RAW/phase_$name.log"; return 1; }
-  cp "$dir/p57_forest_day_1.png" "$png"
+  cp "$dir/spot_check.png" "$png"
 }
 
 P57_NAMES=()
@@ -105,8 +113,8 @@ P58_NAMES=(p58_crew_forest_day.png p58_crew_campfire_evening.png
 
 # 1) GIF-клипы: прогулка по Лесу (актёр 0, 10 с) и пролёт камеры.
 gif forest_walk clip_forest_walk clip_forest_walk \
-  "SHOT_CLIP=forest_walk SHOT_ACTOR=0"
-gif fly_forest fly_forest clip_forest_fly "SHOT_FLY=1"
+  "SHOT_CLIP=forest_walk SHOT_ACTOR=0" 8
+gif fly_forest fly_forest clip_forest_fly "SHOT_FLY=1" 6
 
 # 2) Точки П5.7: было (main) — стало (visual-overhaul).
 have_in before "${P57_NAMES[@]}" \
