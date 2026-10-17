@@ -10,15 +10,18 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_lambert,
 
 uniform vec3 rock_color : source_color = vec3(0.51, 0.53, 0.54);
 uniform vec3 moss_color : source_color = vec3(0.36, 0.45, 0.25);
-// Склон верхней грани, где начинается мох (по мировой нормали Y).
-uniform float moss_start = 0.30;
-uniform float moss_full = 0.70;
-// Размах крупных пятен мха и мелкой рваной кромки. Пятна ~1 м (доработка
-// под эталон): масштаб 0.35 давал пятно в три метра — глыба целиком
-// попадала в одно значение шума и мох либо заливал её, либо пропадал.
-uniform float moss_patch_scale = 1.1;
-uniform float moss_edge_scale = 2.2;
-// Сила пятен (0 — мох ровно по нормали).
+// Доля мха на отвесных боках: с высоты глаз (1.5 м) у приплюснутого
+// купола виден почти только бок — верхняя грань занимает ничтожную долю
+// экрана. Поэтому мох не «шапка вверх», а островки по всей видимой
+// поверхности, лишь гуще к верху.
+uniform float moss_side_density = 0.6;
+// Масштаб островков мха и мелкой рваной кромки, пятна на метр поверхности.
+// Островки ~0.17 м (эталон): на боку глыбы радиусом ~0.9 м читаются
+// 5–10 отдельных точек мха; кромка в 2.5 раза мельче пятна — рваный край.
+uniform float moss_patch_scale = 6.0;
+uniform float moss_edge_scale = 14.0;
+// Густота пятен (0 — голый камень, 1 — почти сплошной мох): сдвигает
+// порог шума пятен. mrock — редко, rrock — заметно.
 uniform float moss_patch_strength = 0.35;
 // Блик мокрого камня.
 uniform float rock_roughness = 0.65;
@@ -50,12 +53,19 @@ void vertex() {
 }
 
 void fragment() {
+	// Мох — островки с резкой кромкой по всей видимой поверхности
+	// (эталон: точки мха на 10–25% камня, не сплошная шапка и не
+	// серо-зелёная смазань): порог по крупному шуму, мелкий шум рвёт
+	// край, наклон лишь гущает пятна кверху и разрежает бока.
 	float up = world_normal.y;
-	float patch = vnoise(world_pos.xz * moss_patch_scale) - 0.5;
-	float edge = vnoise(world_pos.xz * moss_edge_scale) - 0.5;
-	float moss = smoothstep(
-		moss_start, moss_full,
-		up + (patch * moss_patch_strength + edge * 0.15) * (moss_full - moss_start) * 2.0);
+	float slope = mix(moss_side_density, 1.0, smoothstep(0.1, 0.65, up));
+	float patch = vnoise(world_pos.xz * moss_patch_scale);
+	float edge = vnoise(world_pos.xz * moss_edge_scale);
+	float bias = 0.71 - 0.3 * moss_patch_strength;
+	float spots = smoothstep(
+		bias - 0.03, bias + 0.03,
+		patch + 0.15 * (edge - 0.5) + 0.15 * (up - 0.5));
+	float moss = slope * spots;
 	ALBEDO = mix(rock_color, moss_color, moss) * COLOR.rgb;
 	ROUGHNESS = mix(rock_roughness, 0.9, moss);
 }

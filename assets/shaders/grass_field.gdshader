@@ -40,9 +40,11 @@ void vertex() {
 	blade_t = UV.y;
 	tint = COLOR.rgb;
 
-	// Ветер: вес растёт к кончику, порыв — волна по миру.
+	// Ветер: вес растёт к кончику, порыв — волна по миру. Длина волны ~28 м
+	// (доработка под эталон: прежние ~90 м в кадре читались как ровное
+	// качание — гребень не было видно); бежит ~5 м/с — перекат по поляне.
 	float weight = blade_t * blade_t;
-	float gust = 0.55 + 0.45 * sin(world.x * 0.07 + world.z * 0.05 + TIME * 0.9);
+	float gust = 0.55 + 0.45 * sin(world.x * 0.22 + world.z * 0.16 + TIME * 1.1);
 	float phase = world.x * 0.9 + world.z * 0.7;
 	vec2 sway = wind_direction * (
 		sin(TIME * wind_freq + phase)

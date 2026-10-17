@@ -76,6 +76,8 @@ extends Resource
 
 @export_group("Камни Леса")
 ## Глыба.
-@export var rock_rock: Color = Color("83868a")
-## Мох на верхних гранях.
-@export var rock_moss: Color = Color("5b7440")
+@export var rock_rock: Color = Color("8d8880")
+## Мох на камнях (островками по видимой поверхности). Доработка под
+## эталон: светлее и желтее (#6f8f4a) — прежний тёмный 5b7440 сливался
+## с камнем, пятна не читались.
+@export var rock_moss: Color = Color("6f8f4a")

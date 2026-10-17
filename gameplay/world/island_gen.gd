@@ -846,16 +846,20 @@ static func _trees_and_rocks(
 	var flower_rng := RandomNumberGenerator.new()
 	flower_rng.seed = STONE_FLOWER_SEED
 	for cell: Vector2i in stone_cells:
-		# Крупные глыбы — по три акцента, мшистые камешки — пара, но не у
-		# каждого: цветы должны собираться у камней, а не рассыпаться ковром.
-		var tries: int = 3 if big_stones.has(cell) else 2
+		# Крупные глыбы — по пять акцентов, мшистые камешки — пара, но не у
+		# каждого: цветы должны собираться у камней, а не рассыпаться ковром
+		# (доработка: три акцента при Split 55/45 давали ~1.6 ириса —
+		# эталонная «гроздь» у глыбы не собиралась).
+		var tries: int = 5 if big_stones.has(cell) else 2
 		if not big_stones.has(cell) and flower_rng.randf() > 0.5:
 			continue
 		var start_angle: float = flower_rng.randf_range(0.0, TAU)
 		for t: int in tries:
 			var ang: float = start_angle + TAU * float(t) / float(tries) \
 				+ flower_rng.randf_range(-0.3, 0.3)
-			var ring: float = flower_rng.randf_range(0.6, 1.25)
+			# Кольцо ужато к камню (0.4–0.95 м): из 5 акцентов в кадр у
+			# глыбы попадает гроздь, а не одиночная точка поодаль.
+			var ring: float = flower_rng.randf_range(0.4, 0.95)
 			var spot := Vector2(
 				cell.x + 0.5 + cos(ang) * ring, cell.y + 0.5 + sin(ang) * ring)
 			var spot_cell := Vector2i(floori(spot.x), floori(spot.y))
@@ -865,8 +869,15 @@ static func _trees_and_rocks(
 			if fh <= 0.9 or fh >= 16.0 \
 					or not _is_grassy_forest(heights, spot_cell.x, spot_cell.y):
 				continue
-			var iris: bool = flower_rng.randf() < 0.55
-			var scale: float = flower_rng.randf_range(0.9, 1.15)
+			# Сплит в пользу жёлтых (0.45): в кадре у глыбы ирисы собираются
+			# в гроздь и без перевеса, а жёлтая «точка» цвета — самый
+			# читаемый акцент эталона.
+			var iris: bool = flower_rng.randf() < 0.45
+			# Жёлтый цветок у камня крупнее лесного (доработка под эталон):
+			# обычные лепестки 0.07 м тонули в кочках и дымке — акцент не
+			# читался; 1.8–2.3 даёт «точку» цвета. Ирис выше травы: 1.1–1.4.
+			var scale: float = flower_rng.randf_range(1.1, 1.4) \
+				if iris else flower_rng.randf_range(1.8, 2.3)
 			_add_prop(
 				props, flower_rng, &"riris" if iris else &"rflower",
 				Vector3(spot.x, fh, spot.y), flower_rng.randf_range(0.0, TAU),
