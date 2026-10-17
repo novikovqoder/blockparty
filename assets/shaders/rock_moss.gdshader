@@ -11,10 +11,12 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_lambert,
 uniform vec3 rock_color : source_color = vec3(0.51, 0.53, 0.54);
 uniform vec3 moss_color : source_color = vec3(0.36, 0.45, 0.25);
 // Склон верхней грани, где начинается мох (по мировой нормали Y).
-uniform float moss_start = 0.35;
-uniform float moss_full = 0.75;
-// Размах крупных пятен мха и мелкой рваной кромки.
-uniform float moss_patch_scale = 0.35;
+uniform float moss_start = 0.30;
+uniform float moss_full = 0.70;
+// Размах крупных пятен мха и мелкой рваной кромки. Пятна ~1 м (доработка
+// под эталон): масштаб 0.35 давал пятно в три метра — глыба целиком
+// попадала в одно значение шума и мох либо заливал её, либо пропадал.
+uniform float moss_patch_scale = 1.1;
 uniform float moss_edge_scale = 2.2;
 // Сила пятен (0 — мох ровно по нормали).
 uniform float moss_patch_strength = 0.35;

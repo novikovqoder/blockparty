@@ -112,7 +112,7 @@ const SOLID_TYPES: PackedStringArray = [
 ## либо здесь; ничего третьего не бывает.
 const PASS_THROUGH_TYPES: PackedStringArray = [
 	"grass_tuft", "reed", "flower", "pebble", "bush", "fern", "ruin_gate",
-	"etree_bush", "rgrass", "rflower", "mrock",
+	"etree_bush", "rgrass", "rflower", "riris", "mrock",
 ]
 ## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
 ## замкнутая петля по земле вокруг дома. Радиус петли, запас от твёрдых
@@ -123,6 +123,9 @@ const PASS_THROUGH_TYPES: PackedStringArray = [
 ## CRITTER_ROUTE_MIN — на резких изломах (край площадки, обход валуна)
 ## ошибка хорды растёт линейно с длиной сегмента, мельчайший сегмент
 ## держит её в допуске теста движения (5 см).
+## ГПСЧ цветочных акцентов у валунов Леса (доработка под эталон): не
+## сдвигает основную последовательность rng раскладки.
+const STONE_FLOWER_SEED: int = 60409
 const CRITTER_R_MIN: float = 1.6
 const CRITTER_R_MAX: float = 7.0
 const CRITTER_TURN: float = 1.2
@@ -714,6 +717,11 @@ static func _trees_and_rocks(
 ) -> void:
 	var forest := Vector2(-52.0, -52.0)
 	var trees: Dictionary = {}
+	# Доработка под эталон: цветочные акценты у валунов Леса — клетки
+	# крупных глыб (rrock) и камней во мху (mrock) собираются здесь, ирисы
+	# и жёлтые цветы сажаются вокруг них после основной раскладки.
+	var stone_cells: Array[Vector2i] = []
+	var big_stones: Dictionary = {}
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
 			var cell := Vector2i(x, z)
@@ -739,6 +747,8 @@ static func _trees_and_rocks(
 					_prop(props, rng, cell, h, "dead_log", "plain", 1)
 				elif rng.randf() < 0.004:
 					_prop(props, rng, cell, h, "rrock", "plain", 3)
+					stone_cells.append(cell)
+					big_stones[cell] = true
 			# Редкие деревья вокруг леса (не на площади). П5.8, часть A:
 			# кольцо перехода занимает хвойное (крупнее кенниевских елей,
 			# отступ шире).
@@ -795,17 +805,73 @@ static func _trees_and_rocks(
 				if _is_grassy_forest(heights, x, z):
 					var patch: float = _grass_patch(x, z)
 					if patch > 0.05:
-						if rng.randf() < 0.62 * patch:
-							_prop(props, rng, cell, h, "rgrass", "plain", 3)
+						# Доработка 2 (эталон): пятнышко — это островок из 3–6
+						# соприкасающихся кочек на клетке, а не одиночный пучок:
+						# внутри пятна трава густая, между пятнами — голая земля.
+						if rng.randf() < 0.70 * patch:
+							var tufts: int = 3
+							if rng.randf() < 0.75:
+								tufts += 1
+							if rng.randf() < 0.5:
+								tufts += 1
+							if rng.randf() < 0.35:
+								tufts += 1
+							for i: int in tufts:
+								var tuft_scale: float = rng.randf_range(0.85, 1.25)
+								_add_prop(
+									props, rng, &"rgrass",
+									Vector3(
+										x + rng.randf_range(-0.45, 0.45), h,
+										z + rng.randf_range(-0.45, 0.45)),
+									rng.randf_range(0.0, TAU),
+									Vector3(
+										tuft_scale,
+										tuft_scale * rng.randf_range(0.9, 1.15),
+										tuft_scale),
+									"plain", 3)
 						elif rng.randf() < 0.10 * patch:
 							_prop(props, rng, cell, h, "rflower", "plain", 3)
 					if _moss_patch(x, z) > 0.55 and rng.randf() < 0.06:
 						_prop(props, rng, cell, h, "mrock", "plain", 3)
+						stone_cells.append(cell)
 				continue
 			if rng.randf() < 0.30:
 				_prop(props, rng, cell, h, "grass_tuft", "grass")
 			elif rng.randf() < 0.08:
 				_prop(props, rng, cell, h, "flower", "flower")
+	# Цветочные акценты у валунов (доработка под эталон): фиолетовые ирисы
+	# и жёлтые цветы жмутся к глыбам подлеска — у крупных rrock по 2–3, у
+	# мелких мшистых mrock — реже. Отдельный ГПСЧ: раскладка травы и
+	# деревьев не сдвигается, детерминизм тот же.
+	var flower_rng := RandomNumberGenerator.new()
+	flower_rng.seed = STONE_FLOWER_SEED
+	for cell: Vector2i in stone_cells:
+		# Крупные глыбы — по три акцента, мшистые камешки — пара, но не у
+		# каждого: цветы должны собираться у камней, а не рассыпаться ковром.
+		var tries: int = 3 if big_stones.has(cell) else 2
+		if not big_stones.has(cell) and flower_rng.randf() > 0.5:
+			continue
+		var start_angle: float = flower_rng.randf_range(0.0, TAU)
+		for t: int in tries:
+			var ang: float = start_angle + TAU * float(t) / float(tries) \
+				+ flower_rng.randf_range(-0.3, 0.3)
+			var ring: float = flower_rng.randf_range(0.6, 1.25)
+			var spot := Vector2(
+				cell.x + 0.5 + cos(ang) * ring, cell.y + 0.5 + sin(ang) * ring)
+			var spot_cell := Vector2i(floori(spot.x), floori(spot.y))
+			if reserved.has(spot_cell) or trees.has(spot_cell):
+				continue
+			var fh: float = heights[_idx(spot_cell.x, spot_cell.y)]
+			if fh <= 0.9 or fh >= 16.0 \
+					or not _is_grassy_forest(heights, spot_cell.x, spot_cell.y):
+				continue
+			var iris: bool = flower_rng.randf() < 0.55
+			var scale: float = flower_rng.randf_range(0.9, 1.15)
+			_add_prop(
+				props, flower_rng, &"riris" if iris else &"rflower",
+				Vector3(spot.x, fh, spot.y), flower_rng.randf_range(0.0, TAU),
+				Vector3(scale, scale * flower_rng.randf_range(0.95, 1.2), scale),
+				"plain", 3 if iris else 1)
 	# Камыши по кромке озера (шаг 3 П4.5): полоса берега шириной ~0.5 м
 	# над уровнем воды; камыш проходим, виден с 40 м как трава.
 	for z: int in range(-HALF, HALF + 1):
@@ -850,13 +916,16 @@ static var _grass_patch_noise: FastNoiseLite
 static var _moss_patch_noise: FastNoiseLite
 
 
-## Вес пятна травы в точке (0 — проплешина, 1 — гуща).
+## Вес пятна травы в точке (0 — проплешина, 1 — гуща). Доработка 2:
+## порог снижен — шум FastNoiseLite сгущается около нуля, прежние
+## 0.42–0.78 давали жидкие пятна со средним весом ~0.2 (трава занимала
+## ~10% земли); 0.30–0.62 дают гущу ~0.5–0.6 при тех же проплешинах.
 static func _grass_patch(x: int, z: int) -> float:
 	if _grass_patch_noise == null:
 		_grass_patch_noise = FastNoiseLite.new()
 		_grass_patch_noise.seed = GRASS_PATCH_SEED
 		_grass_patch_noise.frequency = GRASS_PATCH_FREQUENCY
-	return smoothstep(0.42, 0.78, (_grass_patch_noise.get_noise_2d(x, z) + 1.0) * 0.5)
+	return smoothstep(0.30, 0.62, (_grass_patch_noise.get_noise_2d(x, z) + 1.0) * 0.5)
 
 
 ## Вес пятна мха (тот же шум, что красит мох на земле Леса).
@@ -1227,14 +1296,14 @@ static func _coins(
 		if peaks.size() >= 40:
 			break
 		threshold -= 2.0
-	coins += _pick(peaks, 14, rng)
+	coins += _pick_spaced(peaks, 14, rng, coins)
 	# Руины: внутри стен (терраса RUINS_H).
 	var inside: Array[Vector3] = []
 	var rect: Rect2 = ruins["inside_rect"]
 	for x: int in range(int(rect.position.x), int(rect.position.x + rect.size.x)):
 		for z: int in range(int(rect.position.y), int(rect.position.y + rect.size.y)):
 			inside.append(Vector3(x + 0.5, RUINS_H + 0.35, z + 0.5))
-	coins += _pick(inside, 8, rng)
+	coins += _pick_spaced(inside, 8, rng, coins)
 	# Лес: поляны без деревьев.
 	var occupied := _prop_columns(props)
 	var clearings: Array[Vector3] = []
@@ -1248,7 +1317,7 @@ static func _coins(
 				continue
 			if Vector2(x + 52.0, z + 52.0).length() < 40.0:
 				clearings.append(Vector3(x + 0.5, h + 0.35, z + 0.5))
-	coins += _pick(clearings, 6, rng)
+	coins += _pick_spaced(clearings, 6, rng, coins)
 	# Пирс и лодочки.
 	coins.append(Vector3(5.5, 1.35, 71.5))
 	coins.append(Vector3(6.5, 1.35, 71.5))
@@ -1281,6 +1350,48 @@ static func _pick(source: Array[Vector3], n: int, rng: RandomNumberGenerator) ->
 		pool[i] = pool[j]
 		pool[j] = tmp
 		picked.append(pool[i])
+	return picked
+
+
+## Минимальный разлёт монет по горизонтали, м: монета вершины не ложится
+## вплотную к смотровой площадке — иначе игрок собирает две одним касанием
+## (доработка П5.9: ровно +coin_reward за касание, пары читаются на экране).
+const MIN_COIN_SPACING: float = 2.5
+
+
+## Выбор n точек с разлётом: не ближе MIN_COIN_SPACING ни к уже собранным
+## монетам (keep_away), ни друг к другу. Пул перемешивается целиком —
+## разрежённые кандидаты набираются из всего пула, а не из первых n
+## (иначе вершинная монета добором ложилась на смотровую площадку).
+## Если разрежённых не хватает и после этого — добор без ограничения:
+## ровно 60 монет (критерий этапа) важнее идеального разлёта.
+static func _pick_spaced(
+		source: Array[Vector3], n: int, rng: RandomNumberGenerator,
+		keep_away: Array[Vector3],
+) -> Array[Vector3]:
+	var pool: Array[Vector3] = source.duplicate()
+	for i: int in range(pool.size() - 1):
+		var j: int = rng.randi_range(i, pool.size() - 1)
+		var tmp: Vector3 = pool[i]
+		pool[i] = pool[j]
+		pool[j] = tmp
+	var picked: Array[Vector3] = []
+	for coin: Vector3 in pool:
+		if picked.size() >= n:
+			break
+		var spaced_out := true
+		for other: Vector3 in keep_away + picked:
+			if Vector2(coin.x, coin.z).distance_to(
+					Vector2(other.x, other.z)) < MIN_COIN_SPACING:
+				spaced_out = false
+				break
+		if spaced_out:
+			picked.append(coin)
+	for coin: Vector3 in pool:
+		if picked.size() >= n:
+			break
+		if not picked.has(coin):
+			picked.append(coin)
 	return picked
 
 

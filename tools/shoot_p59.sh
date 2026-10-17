@@ -23,28 +23,34 @@ MAIN_WT="${P59_MAIN:-$HOME/blockparty-main-p59}"
 P58_WT="${P58_BASE:-$HOME/blockparty-p58-base}"
 mkdir -p "$RAW"
 
-have() {
-  local f
-  for f in "$@"; do [ -f "$f" ] || return 1; done
+# have_in <подкаталог OUT> <имена...> — все ли файлы существуют. Отдельная
+# функция вместо "$OUT"/sub/${NAMES[@]}: bash не клеит префикс ко всем
+# элементам раскрытого массива (префикс достаётся только первому).
+have_in() {
+  local sub="$1" f
+  shift
+  for f in "$@"; do [ -f "$OUT/$sub/$f" ] || return 1; done
   return 0
 }
 
 # Запуск тура в каталоге проекта: stills <корень> <env> <подкаталог OUT>
 # [extra] — доп. флаги после «--»: «стало» снимается в «Высоком качестве»
 # (--high-quality: MSAA 4x + FXAA, планка качества П5.9), «было» — как
-# играли тогда, обычным уровнем.
+# играли тогда, обычным уровнем. Лог — абсолютный путь: тур запускается
+# из чужого worktree, где относительного $RAW нет.
 stills() {
   local root="$1" envs="$2" sub="$3" extra="${4:-}"
-  local dir tag
+  local dir tag log
   dir="$(realpath "$OUT/$sub")"
   tag="$(basename "$(realpath "$root")")_$sub"
-  mkdir -p "$dir"
+  log="$(realpath -m "$RAW")/stills_$tag.log"
+  mkdir -p "$dir" "$(dirname "$log")"
   echo "=== $tag: съёмка ($envs ${extra:+$extra})"
   (cd "$root" && env $envs timeout 900 xvfb-run -a godot --path . \
       res://scenes/world_scene.tscn --resolution "$RES_STILL" \
       --rendering-driver opengl3 -- --shot-dir="$dir" $extra \
-      >"$RAW/stills_$tag.log" 2>&1) \
-    || { tail -5 "$RAW/stills_$tag.log"; return 1; }
+      >"$log" 2>&1) \
+    || { tail -5 "$log"; return 1; }
 }
 
 # Серия кадров → GIF: gif <серия> <подкаталог-кадров> <имя-gif> [env].
@@ -103,15 +109,15 @@ gif forest_walk clip_forest_walk clip_forest_walk \
 gif fly_forest fly_forest clip_forest_fly "SHOT_FLY=1"
 
 # 2) Точки П5.7: было (main) — стало (visual-overhaul).
-have "$OUT"/before/${P57_NAMES[@]} \
+have_in before "${P57_NAMES[@]}" \
   || stills "$MAIN_WT" "SHOT_P57=1" before
-have "$OUT"/after/${P57_NAMES[@]} \
+have_in after "${P57_NAMES[@]}" \
   || stills . "SHOT_P57=1" after --high-quality
 
 # 3) Точки П5.8: было (p5.8-realism-v2) — стало (visual-overhaul).
-have "$OUT"/before/${P58_NAMES[@]} \
+have_in before "${P58_NAMES[@]}" \
   || stills "$P58_WT" "SHOT_CREW=1 SHOT_FOLK=1" before
-have "$OUT"/after/${P58_NAMES[@]} \
+have_in after "${P58_NAMES[@]}" \
   || stills . "SHOT_CREW=1 SHOT_FOLK=1" after --high-quality
 
 # 4) Лес в 4 времена суток (середины фаз DayMath: 0.09/0.30/0.58/0.80;

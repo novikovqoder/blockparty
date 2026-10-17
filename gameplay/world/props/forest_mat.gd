@@ -16,7 +16,7 @@ static var _cache: Dictionary = {}
 
 ## Тип обрабатывается этой фабрикой (IslandView._build_props).
 static func handles(type: StringName) -> bool:
-	return ["rgrass", "fern", "rflower", "mrock", "rrock"].has(String(type))
+	return ["rgrass", "fern", "rflower", "riris", "mrock", "rrock"].has(String(type))
 
 
 ## Материал типа (трава — градиент; папоротник/цветы — цвет вершин;
@@ -33,7 +33,9 @@ static func for_type(type: StringName) -> Material:
 			material.set_shader_parameter("use_gradient", 1.0)
 			material.set_shader_parameter("base_color", VPAL.grass_base)
 			material.set_shader_parameter("tip_color", VPAL.grass_tip)
-			material.set_shader_parameter("wind_amplitude", 0.07)
+			# Доработка под эталон: ветер заметен волнами по поляне —
+			# кончик травинки гуляет до ~15 см в порыве.
+			material.set_shader_parameter("wind_amplitude", 0.11)
 			material.set_shader_parameter("wind_freq", 1.8)
 			material.set_shader_parameter("fade_start", 40.0)
 			material.set_shader_parameter("fade_end", 58.0)
@@ -47,16 +49,26 @@ static func for_type(type: StringName) -> Material:
 		"rflower":
 			material.shader = GRASS_SHADER
 			material.set_shader_parameter("use_gradient", 0.0)
-			material.set_shader_parameter("wind_amplitude", 0.03)
+			material.set_shader_parameter("wind_amplitude", 0.04)
 			material.set_shader_parameter("wind_freq", 2.2)
 			material.set_shader_parameter("fade_start", 40.0)
 			material.set_shader_parameter("fade_end", 56.0)
+		# Ирис выше цветка — стебель качается шире, парусам хватает веса UV.y.
+		"riris":
+			material.shader = GRASS_SHADER
+			material.set_shader_parameter("use_gradient", 0.0)
+			material.set_shader_parameter("wind_amplitude", 0.055)
+			material.set_shader_parameter("wind_freq", 2.0)
+			material.set_shader_parameter("fade_start", 42.0)
+			material.set_shader_parameter("fade_end", 58.0)
 		"mrock":
 			material.shader = ROCK_SHADER
 			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.25)
 		"rrock":
 			material.shader = ROCK_SHADER
-			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.4)
+			# Доработка под эталон: рваные островки мха на верхних гранях —
+			# не сплошная шапка и не голый камень.
+			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.55)
 	_cache[type] = material
 	return material
 

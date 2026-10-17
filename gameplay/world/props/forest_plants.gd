@@ -70,6 +70,63 @@ static func fern(variant: int) -> ArrayMesh:
 	return _mesh(verts, normals, colors, uvs, indices)
 
 
+## Ирис (доработка под эталон): розетка мечевидных листьев и 1–2 цветочных
+## стебля 0.40–0.55 м с фиолетовыми «парусами» — три вертикальных лепестка
+## вокруг оси стебля (наклон наружу) и жёлтый язычок-«борода» в центре.
+## Лепестки — те же полосы _strip (нормали вверх, UV.y — высота): ветер
+## качает их вместе со всей поляной.
+static func iris(variant: int) -> ArrayMesh:
+	var rng := _rng("risis", variant)
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var leaf_dark: Color = VPAL.grass_base.lerp(Color.BLACK, 0.15)
+	var leaf_light: Color = VPAL.grass_tip.lerp(VPAL.grass_base, 0.35)
+	# Розетка листьев: 5–6 жёстких мечей наружу, заметно выше травы вокруг
+	# (доработка 2: ирис должен читаться с тропы, а не теряться в кочках).
+	var leaves: int = 5 + variant % 2
+	for l: int in leaves:
+		var angle: float = TAU * float(l) / float(leaves) + rng.randf_range(-0.2, 0.2)
+		var dir := Vector3(cos(angle), 0.0, sin(angle))
+		_strip(verts, normals, colors, uvs, indices,
+			Vector3(dir.x * 0.02, 0.0, dir.z * 0.02),
+			dir * rng.randf_range(0.36, 0.52), Vector3(-dir.z, 0.0, dir.x),
+			rng.randf_range(0.42, 0.6), 0.018, 0.008, 3, leaf_dark, leaf_light)
+	# Цветочные стебли с парусами.
+	var stems: int = 1 + variant % 2
+	for s: int in stems:
+		var angle: float = TAU * float(s) / float(stems) + rng.randf_range(-0.5, 0.5)
+		var dir := Vector3(cos(angle), 0.0, sin(angle))
+		var height: float = rng.randf_range(0.5, 0.68)
+		_strip(verts, normals, colors, uvs, indices,
+			Vector3(dir.x * 0.03, 0.0, dir.z * 0.03),
+			dir * 0.08, Vector3(-dir.z, 0.0, dir.x),
+			height, 0.008, 0.005, 3, leaf_dark, leaf_light)
+		var top := Vector3(dir.x * 0.03, height - 0.05, dir.z * 0.03)
+		# Три паруса вокруг стебля; нижний — темнее и чуть шире (как нижний
+		# лепесток ириса), два верхних — светлее к кончикам.
+		var petal_dark: Color = VPAL.flower_purple.lerp(Color.BLACK, 0.25)
+		var petal_light: Color = VPAL.flower_purple.lerp(Color.WHITE, 0.18)
+		for p: int in 3:
+			var yaw: float = TAU * float(p) / 3.0 + rng.randf_range(-0.2, 0.2)
+			var out_dir := Vector3(cos(angle + yaw), 0.0, sin(angle + yaw))
+			var is_lip: bool = p == 0
+			_strip(verts, normals, colors, uvs, indices, top,
+				out_dir * (0.06 if is_lip else 0.13),
+				Vector3(-out_dir.z, 0.0, out_dir.x),
+				rng.randf_range(0.13, 0.17) if not is_lip else 0.09,
+				0.06 if is_lip else 0.048, 0.014,
+				2, petal_dark, petal_light if not is_lip else petal_dark)
+		# Жёлтая «борода» в центре цветка.
+		_strip(verts, normals, colors, uvs, indices,
+			top + Vector3(0.0, 0.01, 0.0), dir * 0.02,
+			Vector3(-dir.z, 0.0, dir.x), 0.045, 0.012, 0.006, 1,
+			VPAL.flower_yellow, VPAL.flower_yellow)
+	return _mesh(verts, normals, colors, uvs, indices)
+
+
 ## Цветок: стебель 0.15–0.28 м и крест из двух квадов-лепестков.
 static func flower(variant: int) -> ArrayMesh:
 	var rng := _rng("rflower", variant)

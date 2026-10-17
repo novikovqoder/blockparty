@@ -143,7 +143,7 @@ func _build_colliders() -> void:
 ## «Простая графика» (раздел 15): без травы (включая пучки Леса, П5.9),
 ## мелкие предметы ближе.
 func set_simple_graphics(simple: bool) -> void:
-	for type: String in ["grass_tuft", "rgrass", "rflower"]:
+	for type: String in ["grass_tuft", "rgrass", "rflower", "riris"]:
 		if _props_by_type.has(type):
 			(_props_by_type[type] as MultiMeshInstance3D).visible = not simple
 	for type: String in _base_ranges:

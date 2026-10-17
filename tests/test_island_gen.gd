@@ -37,7 +37,7 @@ func test_generation_is_deterministic() -> void:
 	# rtree_leafy/rshrub/rlog/tree_giant → etree_pine/oak/aspen/bush/giant
 	# и dead_log, гигант подрос до ~14 м. Поток rng не менялся:
 	# высоты, тропы, POI и механики прежние, детерминизм — тестом выше.
-	assert_eq(first_hash, 2518214528, "хеш острова совпадает с сгенерированной сценой")
+	assert_eq(first_hash, 3502650095, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_heightmap_fully_covered() -> void:

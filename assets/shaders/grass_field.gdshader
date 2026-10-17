@@ -22,7 +22,7 @@ uniform float use_gradient = 1.0;
 uniform vec3 shadow_tint : source_color = vec3(0.82, 0.87, 0.98);
 
 // --- Ветер ---
-uniform float wind_amplitude = 0.06;
+uniform float wind_amplitude = 0.10;
 uniform float wind_freq = 1.9;
 uniform vec2 wind_direction = vec2(0.85, 0.45);
 

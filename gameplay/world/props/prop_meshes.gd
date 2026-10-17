@@ -65,6 +65,9 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return ForestPlants.fern(variant)
 		"rflower":
 			return ForestPlants.flower(variant)
+		# Доработка под эталон: ирисы — фиолетовые акценты у валунов Леса.
+		"riris":
+			return ForestPlants.iris(variant)
 		"mrock":
 			return RockGen.boulder(variant, 0.22 + 0.05 * (variant % 3), 0.65)
 		# П5.9, блок 5: крупные глыбы подлеска — тот же генератор, что
@@ -142,6 +145,8 @@ static func visibility_range(type: StringName) -> float:
 			return 60.0
 		"rflower":
 			return 56.0
+		"riris":
+			return 56.0
 		"mrock":
 			return 60.0
 	return 0.0
@@ -190,7 +195,7 @@ static func wind_params(type: StringName) -> Dictionary:
 		# (ветер волнами по миру — общий с травой); трава и цветы — в
 		# grass_field (ForestMat).
 		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
-		"etree_giant", "dead_log", "rgrass", "rflower", "mrock", "rrock":
+		"etree_giant", "dead_log", "rgrass", "rflower", "riris", "mrock", "rrock":
 			return {}
 	return {}
 

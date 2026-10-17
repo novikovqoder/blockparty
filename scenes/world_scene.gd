@@ -406,6 +406,20 @@ func _screenshot_tour() -> void:
 	if not OS.get_environment("SHOT_FRACTION").is_empty():
 		shot_fraction = clampf(
 			OS.get_environment("SHOT_FRACTION").to_float(), 0.0, 1.0)
+	# SHOT_SPOT="x,z,yaw" — одиночный кадр из произвольной точки мира (день):
+	# прицельная самопроверка деталей — ирисы у валуна, мох на камне.
+	if not OS.get_environment("SHOT_SPOT").is_empty():
+		var parts := OS.get_environment("SHOT_SPOT").split(",")
+		_set_day_fraction(shot_fraction)
+		var spot := Vector2(parts[0].to_float(), parts[1].to_float())
+		var ground := _ground_at(spot)
+		var eye := Vector3(spot.x, ground + 1.5, spot.y)
+		var yaw := deg_to_rad(parts[2].to_float())
+		camera.global_position = eye
+		camera.look_at(eye + Vector3(-sin(yaw), 0.0, -cos(yaw)), Vector3.UP)
+		await _snap(camera, "spot_check.png")
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOT_P57") == "1":
 		_set_day_fraction(shot_fraction)
 		await _shot_p57_forest(camera)

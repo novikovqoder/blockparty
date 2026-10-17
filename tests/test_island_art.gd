@@ -18,14 +18,14 @@ const PROP_TYPES: PackedStringArray = [
 	"ruin_gate", "ruin_arch", "ruin_column", "bench", "board", "beacon",
 	"pier_post", "plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant",
-	"dead_log", "rrock", "rgrass", "rflower", "mrock",
+	"dead_log", "rrock", "rgrass", "rflower", "riris", "mrock",
 ]
 
 ## Лесная растительность П5.9 с запечёнными нормалями: трава, папоротник
 ## и цветы — Vector3.UP (пучок затеняется как земля, а не как вертикальная
 ## стенка), камни во мху — сглаженные (мягкая форма, не фасет).
 const FOREST_BAKED_NORMALS: PackedStringArray = [
-	"rgrass", "rflower", "fern", "mrock", "rrock",
+	"rgrass", "rflower", "riris", "fern", "mrock", "rrock",
 ]
 
 ## Процедурные деревья и валежник Леса (П5.9, блок 4): нормали запечены
