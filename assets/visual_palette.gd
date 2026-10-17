@@ -15,11 +15,14 @@ extends Resource
 @export var dawn_ambient: Color = Color("959db8")
 
 @export_group("День (зелёно-жёлтая)")
-@export var day_sky_top: Color = Color("6b9bd8")
-@export var day_sky_horizon: Color = Color("d6e6df")
-@export var day_fog: Color = Color("cfe0d4")
+## День (П5.9 переделка П2) — мягкое голубое небо и голубая воздушная
+## дымка по демо ez-tree (skybox.js: низ 6fa2ef, верх 2053ff, туман
+## 94b9f8); взяты смягчённые значения, чтобы не уйти в «кислотный» синий.
+@export var day_sky_top: Color = Color("4a7fd6")
+@export var day_sky_horizon: Color = Color("a9c6f0")
+@export var day_fog: Color = Color("9cbcf2")
 @export var day_sun: Color = Color("fff1d6")
-@export var day_ambient: Color = Color("b9c9d6")
+@export var day_ambient: Color = Color("b7c6dc")
 
 @export_group("Закат (оранжево-красная)")
 @export var dusk_sky_top: Color = Color("4d4a7d")
@@ -29,11 +32,15 @@ extends Resource
 @export var dusk_ambient: Color = Color("8e7ba6")
 
 @export_group("Ночь (сине-фиолетовая)")
-@export var night_sky_top: Color = Color("0d1332")
-@export var night_sky_horizon: Color = Color("2b3662")
-@export var night_fog: Color = Color("252e4d")
+## Ночь (П5.9 переделка П2) — спокойная тёмно-синяя: насыщенность ниже,
+## чем у прежней гаммы (хроматика ночного тинта неба дополнительно
+## приглушается в DayCycle — см. NIGHT_TINT_DESATURATE), без сиреневых
+## и «кислотных» оттенков.
+@export var night_sky_top: Color = Color("0c1224")
+@export var night_sky_horizon: Color = Color("1f2b4d")
+@export var night_fog: Color = Color("202a45")
 @export var night_sun: Color = Color("a9b9e6")
-@export var night_ambient: Color = Color("1c2444")
+@export var night_ambient: Color = Color("182038")
 
 @export_group("Земля Леса (крупные цветовые пятна)")
 ## Подстилка — основной тон лесной земли.

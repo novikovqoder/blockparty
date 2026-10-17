@@ -28,7 +28,14 @@ const NIGHT_EXPOSURE: float = 1.9
 const STAR_TILT: float = 0.8
 ## Затемнение сине-фиолетовой ночи палитры в атмосферном тинте: рассеяние
 ## добавляет свой вклад, полная хроматика ночи делала бы небо сиреневым.
-const NIGHT_TINT_DIM: float = 0.45
+const NIGHT_TINT_DIM: float = 0.38
+## Десатурация хроматики ночного тинта (П5.9 переделка П2): _chroma
+## нормирует максимальный канал в 1 — синева неба ночью получается
+## «кислотной» (b/r ≈ 3.9); примесь спокойного сине-серого (~0.35) даёт
+## b/r ≈ 2.2 — «спокойное тёмно-синее» без электрического оттенка.
+const NIGHT_TINT_DESATURATE: float = 0.35
+## Спокойный сине-серый тон десатурации (точка примеси).
+const NIGHT_TINT_GRAY: Color = Color(0.72, 0.78, 1.0)
 
 
 var _sun: DirectionalLight3D
@@ -110,7 +117,8 @@ func _process(_delta: float) -> void:
 	# рассеяния): верх, тёплый низ у горизонта и ночь приглушенной синевой.
 	_dome.atm_day_tint = _chroma(sky_top)
 	_dome.atm_horizon_light_tint = _chroma(sky_horizon)
-	_dome.atm_night_tint = _chroma(VPAL.night_sky_top * NIGHT_TINT_DIM)
+	_dome.atm_night_tint = _chroma(VPAL.night_sky_top * NIGHT_TINT_DIM) \
+		.lerp(NIGHT_TINT_GRAY, NIGHT_TINT_DESATURATE)
 	_dome.ground_color = sky_horizon.darkened(0.55)
 	# Позиции светил: sun_altitude — полярный угол от зенита (высота − 90°),
 	# азимут 0 — север; луна ходит противоположно солнцу и восходит на закате.

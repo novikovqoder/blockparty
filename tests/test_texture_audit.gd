@@ -2,12 +2,15 @@
 # используемых текстур и материалов проекта. FAIL при отсутствии мип-мапов,
 # фильтре Nearest, анизотропии ниже 16x, разрешении ниже порога категории
 # (1K — крупные объекты, 2K — земля и ключевые модели; исключения — с
-# пояснением в CATEGORIES). Три среза:
+# пояснением в CATEGORIES). Четыре среза:
 #   1) файлы изображений res://assets + .import-сайдкары (мип-мапы, порог);
 #   2) исходники шейдеров проекта и аддона неба (явный не-Nearest фильтр
 #      у каждого сэмплера);
 #   3) живое дерево острова и персонажей: материалы (filter без Nearest,
-#      текстурные — анизотропные) и мип-мапы связанных текстур.
+#      текстурные — анизотропные) и мип-мапы связанных текстур;
+#   4) П5.9 переделка П2: в шейдерах запрещён решётчатый value-noise
+#      (hash12/hash21 + билинейная ячейка) — источник осевых «полос»
+#      на земле и боках камней, который текстурные срезы не видели.
 # Процедурные данные (карты весов земли 128×128) — не текстуры детализации:
 # exempt-порог 256 px по короткой стороне.
 extends GutTest
@@ -114,17 +117,7 @@ func test_shaders_declare_linear_filters() -> void:
 	# Ни один сэмплер игры не фильтруется Nearest: filter_nearest запрещён,
 	# у каждого uniform-сэмплера — явный хинт фильтра (без хинта фильтр
 	# определяется молчаливым дефолтом, это не проходит планку).
-	var paths: Array[String] = SHADER_FILES.duplicate()
-	for dir_path: String in SHADER_DIRS:
-		var dir := DirAccess.open(dir_path)
-		if dir == null:
-			continue
-		dir.list_dir_begin()
-		var name := dir.get_next()
-		while not name.is_empty():
-			if name.match("*.gdshader"):
-				paths.append(dir_path + "/" + name)
-			name = dir.get_next()
+	var paths := _shader_paths()
 	assert_gt(paths.size(), 8, "аудит видит шейдеры проекта")
 	for path: String in paths:
 		var text := FileAccess.get_file_as_string(path)
@@ -139,6 +132,33 @@ func test_shaders_declare_linear_filters() -> void:
 				continue
 			assert_true(trimmed.contains("filter_"),
 				"%s: у сэмплера явный фильтр — «%s»" % [path, trimmed])
+
+
+func test_shaders_no_lattice_value_noise() -> void:
+	# П5.9 переделка П2: «полосы» и рябь на земле Леса (прогон владельца
+	# после П5.7) давал НЕ конвейер текстур — шейдерный value-noise на
+	# квадратной решётке (hash12 + билинейная интерполяция ячеек): на
+	# склонах и растянутых поверхностях решётка читалась осевыми полосами.
+	# Прежний аудит проверял только текстуры, фильтры и материалы — источник
+	# шума в коде шейдера не контролировался, поэтому дефект проходил.
+	# Планка качества: «никаких полосатых паттернов в шейдере» — решётчатый
+	# value-noise в игровых шейдерах запрещён; допустимые шумы — симплекс
+	# (simplex/snoise) и выборки текстур.
+	# Признаки решётчатой реализации: хеш ячейки `hash12(`/`hash21(`
+	# (патенты Ashima не использует, имена характерны именно решётке) и
+	# фирменная билинейная развёртка ячейки `f * f * (3.0 - 2.0 * f)`
+	# (smoothstep-интерполяция floor-сетки). Симплекс floor использует, но
+	# без решёточного сглаживания — пара признаков его не ловит.
+	var paths := _shader_paths()
+	for path: String in paths:
+		var text := FileAccess.get_file_as_string(path)
+		assert_false(text.is_empty(), "%s читается" % path)
+		assert_false(text.contains("hash12("),
+			"%s: нет решётчатого хеша hash12 (value-noise на квадратной сетке)" % path)
+		assert_false(text.contains("hash21("),
+			"%s: нет решётчатого хеша hash21" % path)
+		assert_false(text.contains("3.0 - 2.0 * f"),
+			"%s: нет билинейной интерполяции решётки value-noise" % path)
 
 
 func test_runtime_materials_meet_quality_bar() -> void:
@@ -218,6 +238,22 @@ func test_ubc_material_resources_meet_quality_bar() -> void:
 
 
 # --- Служебное ---
+
+## Все игровые .gdshader (каталоги + отдельные файлы).
+func _shader_paths() -> Array[String]:
+	var paths: Array[String] = SHADER_FILES.duplicate()
+	for dir_path: String in SHADER_DIRS:
+		var dir := DirAccess.open(dir_path)
+		if dir == null:
+			continue
+		dir.list_dir_begin()
+		var name := dir.get_next()
+		while not name.is_empty():
+			if name.match("*.gdshader"):
+				paths.append(dir_path + "/" + name)
+			name = dir.get_next()
+	return paths
+
 
 func _category_for(path: String) -> Dictionary:
 	var local := path.replace("res://", "")

@@ -1,12 +1,13 @@
-# Земля Леса (П5.9, блок 2): сектор острова [-128..0)² красится крупными
-# цветовыми пятнами из палитры (assets/visual_palette.tres) поверх тех же
-# low-poly чанков — меш, коллизия и запечённый island_art.res не меняются
+# Земля Леса (П5.9 переделка, П2): сектор острова [-128..0)² красится
+# поверх тех же low-poly чанков текстурной землёй по схеме демо ez-tree —
+# трава и грунт (CC0-замены текстур демо, тон сведён к демо) смешиваются
+# симплекс-шумом, меш, коллизия и запечённый island_art.res не меняются
 # (хеш острова тот же). ForestGround печёт из карты высот две карты
-# 128 × 128 (1 пиксель = 1 м): веса пятен (уклон → камень, низины → влажная
-# земля, пятна мха — фиксированный шум FastNoiseLite, тропа и полоса
-# Площади — утоптанная земля) и тон края (точный цвет соседних low-poly
-# чанков тем же TerrainBuilder.point_color) — и собирает ShaderMaterial
-# (assets/shaders/forest_ground.gdshader) с цветами из палитры. Всё
+# 128 × 128 (1 пиксель = 1 м): веса оверлеев (уклон → камень, низины →
+# влажная земля, пятна мха — фиксированный шум FastNoiseLite, тропа и
+# полоса Площади — утоптанная земля) и тон края (точный цвет соседних
+# low-poly чанков тем же TerrainBuilder.point_color) — и собирает
+# ShaderMaterial (assets/shaders/forest_ground.gdshader). Всё
 # детерминировано: высоты, уклоны и фиксированный seed. Внутренние края
 # сектора плавно растворяются в цвет соседей — шва на границе Леса нет.
 class_name ForestGround
@@ -55,18 +56,30 @@ const CH_PATH: int = 3
 const SHADER: Shader = preload("res://assets/shaders/forest_ground.gdshader")
 const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 
+## Текстуры базы земли (П5.9 переделка, П2): трава ambientcg Grass001 и
+## грунт polyhaven forest_ground_05 — CC0-замены текстур демо ez-tree
+## (ground/*.jpg), чья лицензия не описана в репозитории. Смешивание
+## и тайлинг — схема демо (симплекс-шум, константы в шейдере).
+const GRASS_TEX: Texture2D = preload(
+	"res://assets/third_party/ambientcg.com/Grass001/Grass001_1K-JPG_Color.jpg")
+const DIRT_TEX: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_diffuse_2k.jpg")
+const DIRT_NORMAL: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_nor_gl_2k.jpg")
+
 
 ## Материал земли Леса: карты покраски запекаются из высот запечённого
 ## острова, цвета пятен берутся из палитры. Детерминирован.
 static func make_material(art: IslandArt) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
-	material.set_shader_parameter("litter_color", VPAL.ground_litter)
-	material.set_shader_parameter("litter_dark_color", VPAL.ground_litter_dark)
 	material.set_shader_parameter("wet_color", VPAL.ground_wet)
 	material.set_shader_parameter("moss_color", VPAL.ground_moss)
 	material.set_shader_parameter("rock_color", VPAL.ground_rock)
 	material.set_shader_parameter("path_color", VPAL.ground_path)
+	material.set_shader_parameter("grass_tex", GRASS_TEX)
+	material.set_shader_parameter("dirt_tex", DIRT_TEX)
+	material.set_shader_parameter("dirt_normal", DIRT_NORMAL)
 	material.set_shader_parameter("weight_map", _weights_texture(art))
 	material.set_shader_parameter("border_map", _border_texture(art))
 	return material
