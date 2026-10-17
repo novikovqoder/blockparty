@@ -1254,6 +1254,13 @@ static func _pier_and_boats(heights: PackedFloat32Array, props: Array) -> Dictio
 						Vector3(x + 0.5, ground, float(z)), 0.0,
 						Vector3(1.0, deck_h - 0.12 - ground, 1.0), "plain", 1)
 			z += int(length)
+	# Швартовочные кнехты на конце причала (П5.13, блок 2): короткие
+	# столбики по углам настила — лодки «привязаны», причал читается
+	# рабочим, а не декорацией.
+	for bollard: Vector2i in [Vector2i(5, 71), Vector2i(6, 71)]:
+		_add_prop(props, rng, &"pier_post",
+			Vector3(bollard.x + 0.35, deck_h - 0.06, bollard.y + 0.6), 0.0,
+			Vector3(0.35, 0.6, 0.35), "plain", 1)
 	for boat: Vector2i in [Vector2i(13, 74), Vector2i(-3, 78)]:
 		_add_prop(props, rng, &"boat",
 			Vector3(boat.x + 1.0, SEA_LEVEL + 0.05, boat.y + 1.0),

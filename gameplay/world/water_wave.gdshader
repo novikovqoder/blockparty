@@ -5,6 +5,13 @@
 //   мелкая рябь (вершины не трогает), низкая шероховатость;
 // — пена у береговой кромки и прозрачность на мелководье: глубина воды
 //   из depth-текстуры (расстояние от поверхности до рельефа под фрагментом).
+// П5.13, блок 2 (дух Sea of Thieves, без копирования платных ассетов):
+// — мягкое отражение неба: френель — у ног вода прозрачная, к горизонту
+//   зеркальная; цвет неба (верх/горизонт) по высоте отражённого луча —
+//   закатное небо само попадает в воду; цвета ведёт DayCycle по часам мира;
+// — дорожка светила: глинт вдоль отражённого луча к солнцу днём и луне
+//   ночью, рябь нормалей рвёт его в мягкие блики;
+// — пена не только у кромки: гребни волн у мелководья вспениваются.
 // Если depth-текстура недоступна (чёрная выборка), линейная глубина сцены
 // получается меньше глубины фрагмента — water_depth зажимается в 0 и
 // пена/прозрачность мягко отключаются, вода остаётся обычной.
@@ -14,6 +21,17 @@ render_mode blend_mix, depth_draw_always, cull_back;
 uniform vec4 water_color : source_color = vec4(0.5, 0.78, 0.91, 0.55);
 uniform vec4 shallow_color : source_color = vec4(0.62, 0.88, 0.95, 0.55);
 uniform vec4 foam_color : source_color = vec4(0.95, 0.98, 1.0, 0.92);
+// Небо для мягкого отражения: верх и горизонт — DayCycle мешает палитры
+// времён суток, вода живёт вместе с небом (ночью отражение темнеет само).
+uniform vec4 sky_top_color : source_color = vec4(0.35, 0.55, 0.85, 1.0);
+uniform vec4 sky_horizon_color : source_color = vec4(0.75, 0.85, 0.95, 1.0);
+// Направление на светило (солнце днём, луна ночью) и цвет его дорожки.
+uniform vec3 sun_direction = vec3(0.4, 0.7, 0.2);
+uniform vec4 glint_color : source_color = vec4(1.0, 0.95, 0.8, 1.0);
+// Сила дорожки: день — 1.0, ночь — приглушённая (энергия в цвете).
+uniform float glint_strength = 1.0;
+// Доля отражения неба в альбедо на френеле (0 — выключить).
+uniform float reflect_strength = 0.75;
 uniform float wave_height = 0.045;
 uniform float wave_length = 8.0;
 uniform float wave_speed = 0.6;
@@ -77,8 +95,31 @@ void fragment() {
 	vec3 albedo = mix(water_color.rgb, shallow_color.rgb, shallow * 0.6);
 	float alpha = mix(water_color.a, water_color.a * 0.45, shallow);
 
-	// Пена у кромки: мягкая полоса, дышит по времени и «крапинки» волной.
-	float foam_mask = 1.0 - smoothstep(0.04, foam_width, water_depth);
+	// Мягкое отражение неба: френель — у ног прозрачная вода, к горизонту
+	// зеркальная; небо по высоте отражённого луча (горизонт → зенит).
+	float facing = clamp(dot(-VIEW, NORMAL), 0.0, 1.0);
+	float fresnel = 0.04 + 0.96 * pow(1.0 - facing, 4.0);
+	vec3 refl_world = normalize(
+		(INV_VIEW_MATRIX * vec4(reflect(VIEW, NORMAL), 0.0)).xyz);
+	vec3 sky = mix(sky_horizon_color.rgb, sky_top_color.rgb,
+		smoothstep(0.0, 0.6, refl_world.y));
+	albedo = mix(albedo, sky,
+		clamp(reflect_strength * fresnel, 0.0, 0.85));
+	alpha = mix(alpha, 0.92, clamp(reflect_strength * fresnel, 0.0, 0.6));
+
+	// Дорожка светила: глинт вдоль отражённого луча, рябь нормалей рвёт
+	// сплошную полосу в блики; ближе к горизонту (френель) — заметнее.
+	float glint = pow(max(dot(refl_world, normalize(sun_direction)), 0.0), 120.0);
+	EMISSION = glint_color.rgb * glint * glint_strength
+		* (0.35 + 0.65 * fresnel);
+
+	// Пена: полоса у кромки (дыхание по времени, «крапинки» волной) и
+	// гребни волн на мелководье — прибой без физики, но живой.
+	float crest = smoothstep(0.45, 0.9,
+		wave_height_at(world_pos.xz) / max(wave_height, 0.001));
+	float crest_foam = crest * (1.0 - smoothstep(0.15, 0.9, water_depth)) * 0.5;
+	float foam_mask = max(1.0 - smoothstep(0.04, foam_width, water_depth),
+		crest_foam);
 	float speckle = sin(world_pos.x * 14.0 + sin(world_pos.z * 11.0) * 4.0
 		+ TIME * 1.2) * 0.5 + 0.5;
 	float foam = foam_mask * (0.65 + 0.35 * speckle);

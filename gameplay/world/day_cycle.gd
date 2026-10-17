@@ -152,6 +152,19 @@ func _process(_delta: float) -> void:
 	# Дымка по высоте (раздел 16): низины и вода — в лёгкой дымке.
 	_environment.fog_height = B.fog_height_m
 	_environment.fog_height_density = B.fog_height_density
+	# Мягкое отражение неба на воде (П5.13, блок 2): цвета неба и дорожка
+	# светила — в шейдеры поверхностей. Днём дорожка солнечная, ночью —
+	# бледная лунная (светило выше горизонта и приглушённый цвет).
+	# Группа, не ссылка: острова может и не быть (лаборатории света).
+	# Лаборатории света зовут _process() у ноды вне дерева — без дерева
+	# поверхностей просто нет.
+	if is_inside_tree():
+		var night: bool = to_sun.y <= 0.05
+		var water_light_dir := -to_sun if night else to_sun
+		var water_glint := VPAL.night_sun * 0.5 if night else sun_color
+		for node: Node in get_tree().get_nodes_in_group("water_surface"):
+			(node as WaterArea).update_sky(sky_top, sky_horizon,
+				water_light_dir, water_glint)
 
 
 ## Смешение четырёх цветов палитры по весам времён суток.

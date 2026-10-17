@@ -32,6 +32,9 @@ const MAX_SUBDIVIDE: int = 192
 @export var surface_hole: Rect2 = Rect2()
 
 var _surface_built: bool = false
+## Шейдерный материал поверхностей (headless — плоский, тогда null):
+## DayCycle пишет в него цвета неба для мягкого отражения.
+var _wave_material: ShaderMaterial = null
 
 
 func _ready() -> void:
@@ -41,6 +44,9 @@ func _ready() -> void:
 	collision_mask = 2  # слой игроков
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	# Группа, не ссылка на сцену: цикл дня находит все поверхности воды
+	# и ведёт их отражение неба по часам мира (П5.13, блок 2).
+	add_to_group("water_surface")
 	if surface_size != Vector2.ZERO:
 		_build_surface()
 
@@ -149,4 +155,20 @@ func _surface_material() -> Material:
 	# Мелководье чуть светлее основного тона (vfx-fix, блок а).
 	material.set_shader_parameter(
 		"shallow_color", Color(PAL.water.lightened(0.14), 0.55))
+	_wave_material = material
 	return material
+
+
+## Цвета неба и дорожка светила для мягкого отражения (П5.13, блок 2):
+## зовёт DayCycle каждый кадр; в headless поверхностей без шейдера —
+## тихий выход. Направление — на солнце днём / луну ночью, цвет дорожки
+## уже с ночной энергией.
+func update_sky(
+	sky_top: Color, sky_horizon: Color, light_dir: Vector3, glint: Color,
+) -> void:
+	if _wave_material == null:
+		return
+	_wave_material.set_shader_parameter("sky_top_color", sky_top)
+	_wave_material.set_shader_parameter("sky_horizon_color", sky_horizon)
+	_wave_material.set_shader_parameter("sun_direction", light_dir.normalized())
+	_wave_material.set_shader_parameter("glint_color", glint)
