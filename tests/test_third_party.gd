@@ -1,8 +1,10 @@
 # Тесты сторонних CC0-ресурсов (шаг 3 П4.5, правила — CLAUDE.md):
 # каждый файл assets/third_party упомянут в LICENSES.md (и наоборот — записи
-# указывают на существующие файлы), форматы допустимые, общий размер в лимите,
-# и все модели Cc0Meshes реально лежат на диске (набор не «переезда» без
-# правки кода). Ресурсы с неизвестной лицензией в проект не попадают.
+# указывают на существующие файлы), форматы допустимые, общий размер в лимите.
+# Ресурсы с неизвестной лицензией в проект не попадают. П5.13, блок 1:
+# таблицы CC0-моделей окружения больше нет (Cc0Meshes удалён — всё
+# процедурное, из kenney осталось только бревно валежника, его читает
+# PropMeshes._dead_log напрямую).
 extends GutTest
 
 const ROOT: String = "res://assets/third_party"
@@ -119,52 +121,3 @@ func test_formats_and_size_limit() -> void:
 		"общий размер third_party < %.0f МБ (факт %.1f МБ)"
 		% [SIZE_LIMIT_MB, total / (1024.0 * 1024.0)],
 	)
-
-
-func test_cc0_models_exist_on_disk() -> void:
-	# Каждая модель из таблицы Cc0Meshes лежит в assets/third_party —
-	# запекание острова не зависит от файлов, которых нет в репозитории.
-	# Путь строится как в Cc0Meshes.mesh: набор — папка от корня (набор ""
-	# у Poly Haven-записей — файлы в списке уже с путём от корня), имя
-	# без точки — kenney-файл .glb.
-	for type: StringName in Cc0Meshes.MODELS:
-		var cfg: Array = Cc0Meshes.MODELS[type]
-		for file: String in cfg[1]:
-			var name := file if file.contains(".") else file + ".glb"
-			var path: String = ROOT.path_join(String(cfg[0])).path_join(name)
-			assert_true(
-				FileAccess.file_exists(path),
-				"модель %s (%s) существует" % [name, type],
-			)
-
-
-func test_cc0_meshes_have_colors_and_stand_on_ground() -> void:
-	# CC0-модель после конвертации — тот же контракт, что у процедурных
-	# мешей: цвет каждой вершине, грани есть, «ноги» в origin, размер
-	# в окрестности эталона из таблицы (±40 % — варианты бывают короче).
-	for type: StringName in Cc0Meshes.MODELS:
-		var cfg: Array = Cc0Meshes.MODELS[type]
-		for variant: int in (cfg[1] as PackedStringArray).size():
-			var mesh: ArrayMesh = Cc0Meshes.mesh(type, variant)
-			assert_gt(mesh.get_surface_count(), 0, "%s: меш собран" % type)
-			var arrays: Array = mesh.surface_get_arrays(0)
-			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
-			assert_eq(colors.size(), verts.size(), "%s: цвет каждой вершине" % type)
-			assert_between(
-				mesh.get_aabb().position.y, -0.05, 0.05,
-				"%s: origin у земли" % type,
-			)
-			var size: Vector3 = mesh.get_aabb().size
-			# Высота может быть заметно ниже эталона: нормировка берёт меньший
-			# из коэффициентов (высота/ширина), а kenney-камни и трава — плоские.
-			assert_between(
-				size.y, float(cfg[2]) * 0.3, float(cfg[2]) * 1.05,
-				"%s: высота около эталона %.2f (факт %.2f)"
-				% [type, float(cfg[2]), size.y],
-			)
-			assert_between(
-				maxf(size.x, size.z), float(cfg[3]) * 0.5, float(cfg[3]) * 1.05,
-				"%s: ширина около эталона %.2f (факт %.2f)"
-				% [type, float(cfg[3]), maxf(size.x, size.z)],
-			)

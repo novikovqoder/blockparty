@@ -4,7 +4,8 @@
 доработки графики (docs/VISUAL_PLAN.md): ресурсы только CC0, код аддонов —
 CC0 или MIT (с автором и лицензией), только с разрешённых сайтов, в проекте
 лежат лишь реально используемые файлы (архивы не хранятся). Папки наборов Kenney закрыты `.gdignore`: Godot не
-импортирует эти файлы, их читает напрямую `gameplay/world/props/cc0_meshes.gd`
+импортирует эти файлы, брёвна валежника читает напрямую
+`gameplay/world/props/prop_meshes.gd` (_dead_log)
 при запекании острова (в игре меши уже встроены в `island_art.res`). Папки
 остальных наборов импортируются движком и загружаются в рантайме; извлечённые
 из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
@@ -15,8 +16,7 @@ Animation Library (П5.7–П5.8).
 
 | Набор | Автор | Страница набора | Лицензия | Дата | Файлы |
 | --- | --- | --- | --- | --- | --- |
-| Nature Kit | Kenney | https://kenney.nl/assets/nature-kit | CC0 | 2026-10-05 | `kenney.nl/nature-kit/`: tree_default.glb, tree_oak.glb, tree_detailed.glb, tree_fat.glb, tree_small.glb, tree_pineRoundA.glb, tree_pineDefaultA.glb, tree_pineSmallA.glb, plant_bush.glb, plant_bushSmall.glb, plant_bushDetailed.glb, grass.glb, grass_leafs.glb, grass_large.glb, flower_redA.glb, flower_yellowA.glb, flower_purpleA.glb, rock_largeA.glb, rock_largeB.glb, rock_largeD.glb, rock_tallA.glb, rock_tallB.glb, rock_tallC.glb, rock_smallA.glb, rock_smallB.glb, rock_smallC.glb, log.glb, log_large.glb, plant_flatTall.glb, plant_flatShort.glb |
-| Castle Kit | Kenney | https://kenney.nl/assets/castle-kit | CC0 | 2026-10-05 | `kenney.nl/castle-kit/wall-pillar.glb`, `kenney.nl/castle-kit/tower-square-arch.glb`, `kenney.nl/castle-kit/Textures/colormap.png` (атлас цветов моделей) |
+| Nature Kit | Kenney | https://kenney.nl/assets/nature-kit | CC0 | 2026-10-05 | `kenney.nl/nature-kit/`: log.glb, log_large.glb — только брёвна валежника (П5.13, блок 1: остальные модели набора заменены процедурными, файлы удалены) |
 | Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_ubc.res` — 19 скелетных клипов, переложенных с универсального рига UAL на риг Universal Base Characters (`tools/make_ubc_anims.gd`; линейки Quaternius Universal делят один риг); исходные glb наборов и архивы в репозитории не хранятся |
 | Universal Base Characters (Standard) | Quaternius | https://quaternius.com/packs/universalbasecharacters.html | CC0 | 2026-10-12 | `quaternius.com/universal_base_characters/baked/` — риг 65 костей (тела Superhero Male/Female, глаза, брови) и причёски (Long, Buns, Buzzed, BuzzedFemale, SimpleParted, Beard), запечённые `tools/make_ubc_characters.gd` в сцены `ubc_male.res`/`ubc_female.res` (срез головы, меши + `_lod1` + скины, материалы, текстуры — кожа обесцвечена под палитры); исходные gltf и архивы в репозитории не хранятся |
 | Modular Character Outfits — Fantasy (Standard) | Quaternius | https://quaternius.com/packs/modularcharacteroutfits.html | CC0 | 2026-10-12 | внутри `quaternius.com/universal_base_characters/baked/` — модульная одежда Peasant/Ranger (верх, руки, низ, обувь, капюшон) из частей Male/Female, собранная тем же запеканием в `meshes/` и сцены `ubc_*.res`; исходные gltf и архивы в репозитории не хранятся |
@@ -29,9 +29,11 @@ Animation Library (П5.7–П5.8).
 | Sky3D 2.1 | Cory Petkovsek, J. Cuéllar и контрибьюторы | https://github.com/TokisanGames/Sky3D | MIT | 2026-10-16 | `addons/sky_3d/` — небо мира (П5.9 блок 6): атмосферное рассеяние, облака, луна, звёзды; текст лицензий — `addons/sky_3d/LICENSE.txt` и `addons/sky_3d/shaders/LICENSE`. Правки кода аддона: (1) прелоады текстур звёздного неба в `src/SkyDome.gd` перенаправлены на процедурные текстуры проекта (см. следующую строку) — штатные Milkyway.jpg/StarField.jpg аддона (панорама ESO/S. Brunier, CC BY 4.0) в проект НЕ вносились и удалены из копии; (2) в `shaders/SkyMaterial.gdshader` шести сэмплерам (луна, звёзды, шум, облака) добавлен явный хинт `filter_linear` — планка качества П5.9 (никаких фильтров Nearest без явного объявления) |
 | Текстуры звёздного неба | сделано для проекта (`tools/make_star_textures.gd`) | — | CC0 (как и весь код проекта) | 2026-10-16 | `assets/visual/sky_starmap.png`, `assets/visual/sky_starfield.png` — процедурная полоса «млечного пути» и россыпь звёзд, детерминированная генерация |
 
-Наборы Kenney используются как геометрия предметов окружения (шаг 3 этапа
-П4.5): модели перекрашиваются в палитры игры вершинными цветами и нормируются
-под размеры процедурных мешей — см. `gameplay/world/props/cc0_meshes.gd`.
+Наборы Kenney (шаг 3 П4.5) использовались как геометрия предметов окружения;
+П5.13, блок 1 убрал их из окружения полностью — лавки, колонны и арки руин,
+навесы площади, камни и растительность процедурные (`prop_meshes.gd`,
+`rock_gen.gd`, `forest_plants.gd`), из набора Nature Kit остались только
+брёвна валежника (log/log_large с корой ambientcg); Castle Kit удалён.
 Сканы Poly Haven (П5.7, блок 2) — фотограмметрия деревьев, кустов, камней и
 брёвен Леса: скачанные glb децимированы до бюджетов low-poly и запечены в
 `.res` с цветом текстуры в вершинах (`tools/decimate_polyhaven.gd`;

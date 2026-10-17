@@ -8,25 +8,29 @@ extends GutTest
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Все типы предметов генератора (порядок — как в PropMeshes.mesh;
-## CC0-модели kenney.nl — через Cc0Meshes, см. assets/third_party/LICENSES.md;
-## etree_* — деревья, сгенерированные самим ez-tree (~/eztree_gen → GLB),
-## валежник dead_log — CC0-брёвна kenney с корой ambientcg).
+## Все типы предметов генератора (порядок — как в PropMeshes.mesh).
+## П5.13, блок 1: kenney-моделей в окружении больше нет — лавки, колонны,
+## арки и навесы процедурные, камни всего острова и камыши — RockGen /
+## ForestPlants с материалами ForestMat; из внешних моделей осталось
+## только бревно валежника dead_log (CC0 kenney с корой ambientcg).
+## etree_* — деревья, сгенерированные самим ez-tree (~/eztree_gen → GLB).
 const PROP_TYPES: PackedStringArray = [
-	"tree_leafy", "tree_spruce", "bush", "fern",
+	"fern",
 	"log_bridge", "boulder", "rock_pillar", "rock_wall",
-	"pebble", "grass_tuft", "flower", "reed", "ruin_block", "ruin_tower",
-	"ruin_gate", "ruin_arch", "ruin_column", "bench",
+	"pebble", "reed", "ruin_block", "ruin_tower",
+	"ruin_gate", "ruin_arch", "ruin_column", "bench", "canopy",
 	"pier_post", "plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant",
 	"dead_log", "rrock", "rgrass", "rflower", "riris", "mrock",
 ]
 
-## Лесная растительность П5.9 с запечёнными нормалями: трава, папоротник
-## и цветы — Vector3.UP (пучок затеняется как земля, а не как вертикальная
-## стенка), камни во мху — сглаженные (мягкая форма, не фасет).
+## Растительность и камни с запечёнными нормалями: трава, папоротник,
+## цветы и камыши — Vector3.UP (пучок затеняется как земля, а не как
+## вертикальная стенка), камни (весь остров, П5.13 блок 1) — сглаженные
+## (мягкая форма, не фасет).
 const FOREST_BAKED_NORMALS: PackedStringArray = [
 	"rgrass", "rflower", "riris", "fern", "mrock", "rrock",
+	"boulder", "rock_pillar", "pebble", "reed",
 ]
 
 ## Деревья Леса (П5.9, переделка): сгенерированы ez-tree, у каждого две
@@ -125,14 +129,14 @@ func test_log_bridge_is_real_logs() -> void:
 func test_prop_meshes_deterministic() -> void:
 	# Детерминизм визуала: сеед меша — от (тип, вариант), не от порядка
 	# вызовов; один и тот же меш собирается одинаково.
-	for type: String in ["tree_leafy", "boulder", "rock_wall", "grass_tuft", "etree_oak"]:
+	for type: String in ["boulder", "rock_wall", "rgrass", "bench", "etree_oak"]:
 		var first: PackedVector3Array = _arrays(type, 2)[Mesh.ARRAY_VERTEX]
 		var second: PackedVector3Array = _arrays(type, 2)[Mesh.ARRAY_VERTEX]
 		assert_eq(first, second, "%s: два вызова дают равные меши" % type)
 	var variants: Array = []
 	for variant: int in 3:
-		variants.append(_arrays("tree_spruce", variant)[Mesh.ARRAY_VERTEX])
-	assert_ne(variants[0], variants[1], "варианты ели различаются")
+		variants.append(_arrays("pebble", variant)[Mesh.ARRAY_VERTEX])
+	assert_ne(variants[0], variants[1], "варианты камешка различаются")
 	var etree_variants: Array = []
 	for variant: int in 3:
 		etree_variants.append(_arrays("etree_pine", variant)[Mesh.ARRAY_VERTEX])

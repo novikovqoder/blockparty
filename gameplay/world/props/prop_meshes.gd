@@ -6,10 +6,13 @@
 # джиттером — вариант предмета задаёт вариацию, никаких randi()/randf()
 # вне rng с сеедом от (тип, вариант). Все модели стоят «ногами» в начале
 # координат (origin у земли): позиция предмета из IslandGen — точка на
-# рельефе. Деревья, кусты, трава, цветы, камни, брёвна и колонны руин —
-# CC0-модели kenney.nl (перекраска и нормировка — cc0_meshes.gd), здесь
-# остались только конструкции: стены, башни, пирс, лодки, постройки
-# площади.
+# рельефе.
+#
+# П5.13, блок 1: CC0-модели kenney в окружении больше не используются —
+# лавки, колонны и арки руин, навесы площади собраны здесь из примитивов
+# (в стиле пирса и мостков), камни — генератор RockGen, трава и камыши —
+# ForestPlants; из kenney осталось только бревно валежника dead_log
+# (log/log_large с корой ambientcg — единственная внешняя модель).
 #
 # Два типа размеров: «метровые» (rock_wall, ruin_block, plank_deck,
 # pier_post) — scale равен размерам в метрах, mesh — единичный куб;
@@ -23,13 +26,9 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 
 ## Меш предмета: тип и вариант (варианты отличаются джиттером и деталями).
-## Типы окружения с CC0-моделью (шаг 3 П4.5) собирает Cc0Meshes: kenney-меш
-## перекрашивается в палитры игры и нормируется под размеры процедурной
-## модели — коллизии и scale предметов IslandGen не меняются.
+## Все типы процедурные; размеры натуральных моделей — эталоны прежних
+## CC0-моделей, коллизии и scale предметов IslandGen не меняются.
 static func mesh(type: StringName, variant: int) -> ArrayMesh:
-	var cc0 := Cc0Meshes.mesh(type, variant)
-	if cc0 != null:
-		return cc0
 	match String(type):
 		"rock_wall":
 			return _rock_wall(variant)
@@ -39,6 +38,14 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _ruin_tower()
 		"ruin_gate":
 			return _ruin_gate()
+		"ruin_column":
+			return _ruin_column(variant)
+		"ruin_arch":
+			return _ruin_arch(variant)
+		"bench":
+			return _bench(variant)
+		"canopy":
+			return _canopy(variant)
 		"pier_post":
 			return _pier_post()
 		"plank_deck":
@@ -75,6 +82,20 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 		# ForestMat (rock_moss.gdshader), как у mrock.
 		"rrock":
 			return RockGen.boulder(variant, 0.7 + 0.16 * (variant % 3), 0.62)
+		# П5.13, блок 1: валуны, скальные зубцы и камешки вне Леса — тот же
+		# генератор, что камни Леса (мягкие сглаженные нормали, мох красит
+		# ForestMat): весь остров в одном стиле, размеры — эталоны прежних
+		# kenney-моделей (0.95 / 2.4 / 0.18 м высоты).
+		"boulder":
+			return RockGen.boulder(variant, 0.66 + 0.08 * (variant % 3), 0.8)
+		"rock_pillar":
+			return RockGen.boulder(variant, 0.58 + 0.06 * (variant % 3), 2.05)
+		"pebble":
+			return RockGen.boulder(variant, 0.13 + 0.02 * (variant % 3), 0.72)
+		# Камыши у кромки озера — процедурные стебли с початками
+		# (ForestPlants, материал ForestMat).
+		"reed":
+			return ForestPlants.reed(variant)
 	push_error("Неизвестный тип предмета: %s" % type)
 	return ArrayMesh.new()
 
@@ -329,24 +350,17 @@ static func _log_bark_material() -> ShaderMaterial:
 # SPEC 16: трава исчезает дальше 40 м).
 static func visibility_range(type: StringName) -> float:
 	match String(type):
-		"grass_tuft":
-			return 40.0
 		"reed":
 			return 40.0
-		"flower":
-			return 60.0
 		"pebble":
 			return 80.0
-		"bush":
-			return 70.0
 		"fern":
 			return 50.0
-		# Реалистичные сканы Леса (П5.7, блок 2): кусты и кочки — как их
-		# кенниевские аналоги, деревья видны всегда (силуэт леса издалека).
-		# П5.9, блок 4: деревья Леса (etree_*) видны всегда — дальний план
-		# держат уровни детализации IslandView._build_tree_lods.
-		# П5.9, блок 3: спад густоты травы делает шейдер (травинки
-		# «садятся» в землю с 40 м), MultiMesh гасится чуть дальше.
+		# Деревья Леса (etree_*) видны всегда — дальний план держат уровни
+		# детализации IslandView._build_tree_lods; валуны и постройки — тоже
+		# (силуэт острова издалека).
+		# Спад густоты травы делает шейдер (травинки «садятся» в землю
+		# с 40 м), MultiMesh гасится чуть дальше.
 		"rgrass":
 			return 60.0
 		"rflower":
@@ -360,48 +374,14 @@ static func visibility_range(type: StringName) -> float:
 
 ## Параметры ветра для качающихся типов (vfx-fix, блок б): амплитуда, м;
 ## частота; высота начала качания и размах нарастания, м; направление.
-## Пустой словарь — тип не качается (камни, постройки). Трава мелко и часто,
-## кусты медленнее, камыши выше, ветви деревьев — широко и размашисто,
-## ствол (ниже base) стоит на месте.
+## Пустой словарь — тип не качается (камни, постройки). П5.9, переделка:
+## вся растительность качается в своих шейдерах (grass_field у травы
+## и камышей, canopy у листвы) — общих качающихся типов не осталось.
 static func wind_params(type: StringName) -> Dictionary:
 	match String(type):
-		"grass_tuft":
-			return {
-				"wind_amplitude": 0.05, "wind_freq": 1.9,
-				"wind_weight_base": 0.02, "wind_weight_span": 0.35,
-				"wind_direction": Vector2(0.85, 0.45),
-			}
-		"flower":
-			return {
-				"wind_amplitude": 0.04, "wind_freq": 2.2,
-				"wind_weight_base": 0.05, "wind_weight_span": 0.25,
-				"wind_direction": Vector2(0.85, 0.45),
-			}
-		"reed":
-			return {
-				"wind_amplitude": 0.08, "wind_freq": 1.4,
-				"wind_weight_base": 0.1, "wind_weight_span": 0.8,
-				"wind_direction": Vector2(0.8, 0.5),
-			}
-		"bush":
-			return {
-				"wind_amplitude": 0.06, "wind_freq": 1.1,
-				"wind_weight_base": 0.15, "wind_weight_span": 0.9,
-				"wind_direction": Vector2(0.9, 0.4),
-			}
-		# П5.9, блок 3: ветер rgrass/fern/rflower — в шейдере grass_field
-		# (ForestMat), не общий wind.gdshader.
-		"tree_leafy", "tree_spruce":
-			return {
-				"wind_amplitude": 0.22, "wind_freq": 0.55,
-				"wind_weight_base": 1.6, "wind_weight_span": 3.5,
-				"wind_direction": Vector2(0.85, 0.45),
-			}
-		# П5.9, переделка: деревья Леса — ветер листвы в canopy.gdshader
-		# (формула ez-tree), ветви и валежник неподвижны (как в демо);
-		# трава и цветы — в grass_field (ForestMat).
 		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", \
-		"etree_giant", "dead_log", "rgrass", "rflower", "riris", "mrock", "rrock":
+		"etree_giant", "dead_log", "rgrass", "rflower", "riris", "mrock", \
+		"rrock", "boulder", "rock_pillar", "pebble", "reed", "canopy":
 			return {}
 	return {}
 
@@ -413,8 +393,6 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 	match String(type):
 		"rock_wall", "ruin_block", "plank_deck", "pier_post":
 			return Vector3(maxf(scale.x, 0.05), maxf(scale.y, 0.05), maxf(scale.z, 0.05))
-		"tree_leafy", "tree_spruce":
-			return Vector3(0.7 * scale.x, 2.8 * scale.y, 0.7 * scale.x)
 		# Деревья Леса (П5.9, блок 4): стволы EZ-Tree тоньше сканов — коробка
 		# уже; коллизия до высоты кроны не нужна (игрок ниже ветвей).
 		"etree_pine", "etree_oak", "etree_aspen":
@@ -447,9 +425,6 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 		"rrock":
 			return Vector3(0.85 * scale.x, 0.5 * scale.y, 0.85 * scale.x)
 	return Vector3.ZERO
-
-
-# --- Деревья и растительность: CC0-модели kenney.nl (Cc0Meshes) ---
 
 
 # --- Камень: стены и руины ---
@@ -517,7 +492,86 @@ static func _ruin_gate() -> ArrayMesh:
 	return _merge(parts)
 
 
-## Обломок колонны: CC0-модель wall-pillar (kenney castle-kit) — см. Cc0Meshes.
+## Колонна руин (П5.13, блок 1): плинт, барабаны ствола с энтазисом
+## (лёгкое утолщение к трети высоты) и капитель; вариант 1 — обломок
+## без капители, вариант 2 — высокий обломок с рваным верхом из осколков.
+## Высота целой ~1.55 м — эталон прежней kenney-модели.
+static func _ruin_column(variant: int) -> ArrayMesh:
+	var rng := _rng("ruin_column", variant)
+	var brick: Color = PAL.ruin_brick
+	var dark: Color = PAL.ruin_dark
+	var parts: Array = [
+		_box(Vector3(0.95, 0.2, 0.95), brick.darkened(0.06), Vector3(0, 0.1, 0)),
+		_box(Vector3(0.78, 0.12, 0.78), brick, Vector3(0, 0.26, 0)),
+	]
+	var shaft_h: float = 1.05 if variant != 1 else rng.randf_range(0.55, 0.8)
+	# Барабаны: три яруса с чуть разными радиусами и тонами — ствол читается
+	# сложенным из камня, а не трубой; лёгкие перекосы по yaw.
+	var radii: Array[float] = [0.33, 0.35, 0.31]
+	var tones: Array[float] = [1.0, 0.94, 1.05]
+	var y: float = 0.32
+	for tier: int in 3:
+		var tier_h: float = shaft_h / 3.0
+		parts.append(_cyl(radii[tier] * 0.96, radii[tier], tier_h, 10,
+			brick.lerp(Color.WHITE, (tones[tier] - 1.0) * 0.5),
+			Vector3(rng.randf_range(-0.008, 0.008), y + tier_h * 0.5, 0),
+			rng.randf_range(-0.06, 0.06)))
+		y += tier_h
+	if variant == 0:
+		# Капитель: шейка и абака.
+		parts.append(_cyl(0.3, 0.33, 0.08, 10, brick.lerp(Color.WHITE, 0.08),
+			Vector3(0, y + 0.04, 0)))
+		parts.append(_box(Vector3(0.82, 0.14, 0.82),
+			brick.lerp(Color.WHITE, 0.12), Vector3(0, y + 0.15, 0)))
+	elif variant == 2:
+		# Рваный верх: осколки по срезу ствола.
+		for i: int in 4:
+			var angle: float = TAU * float(i) / 4.0 + rng.randf_range(-0.3, 0.3)
+			var dist: float = rng.randf_range(0.05, 0.2)
+			parts.append(_box(
+				Vector3(rng.randf_range(0.12, 0.24), rng.randf_range(0.08, 0.2),
+					rng.randf_range(0.12, 0.22)),
+				dark.lerp(brick, rng.randf_range(0.3, 0.7)),
+				Vector3(cos(angle) * dist, y + 0.04, sin(angle) * dist),
+				rng.randf_range(0.0, TAU)))
+	return _merge(parts)
+
+
+## Арка руин (П5.13, блок 1): две стойки сухой кладки и полукруг клиньев
+## (по клину на каждые ~20° дуги, замковый клин у вершины чуть крупнее
+## и светлее). Проход вдоль Z, габарит ~2.3 × 2.75 × 0.6 — эталон прежней
+## kenney-модели.
+static func _ruin_arch(variant: int) -> ArrayMesh:
+	var rng := _rng("ruin_arch", variant)
+	var brick: Color = PAL.ruin_brick
+	var parts: Array = []
+	# Стойки: ядро + пояски кладки с чередованием тона.
+	var leg_h: float = 1.8
+	for side: float in [-1.0, 1.0]:
+		parts.append(_box(Vector3(0.6, leg_h, 0.55), brick.darkened(0.05),
+			Vector3(side * 0.72, leg_h * 0.5, 0)))
+		for course: int in 5:
+			var tone: float = 0.5 + 0.5 * sin(course * 2.2 + side)
+			parts.append(_box(
+				Vector3(0.66, 0.1, 0.58),
+				brick.lerp(PAL.ruin_dark, 0.35 * tone),
+				Vector3(side * 0.72 + rng.randf_range(-0.015, 0.015),
+					0.16 + course * (leg_h - 0.2) / 5.0, 0)))
+		# Пятовый камень — клин, с которого начинается дуга.
+		parts.append(_box(Vector3(0.42, 0.26, 0.6), brick.lerp(Color.WHITE, 0.06),
+			Vector3(side * 0.54, leg_h + 0.05, 0)))
+	# Дуга: клинья по полукругу радиуса 0.68 от стойки до стойки.
+	var radius: float = 0.68
+	var wedges: int = 8
+	for i: int in wedges:
+		var angle: float = PI * (float(i) + 0.5) / float(wedges)
+		var keystone: bool = i == wedges / 2
+		var width: float = 0.4 if keystone else 0.3
+		var center := Vector3(cos(angle) * radius, leg_h + 0.16 + sin(angle) * radius, 0.0)
+		parts.append(_box(Vector3(width, 0.34, 0.58),
+			brick.lerp(Color.WHITE, 0.14 if keystone else rng.randf_range(-0.05, 0.05)),
+			center, 0.0, 0.0, angle - PI * 0.5))
+	return _merge(parts)
 
 
 # --- Площадь и постройки --
@@ -544,6 +598,71 @@ static func _plank_deck() -> ArrayMesh:
 	return _merge(parts)
 
 
+## Лавка у костра (П5.13, блок 1): пара чурбанов-опор и сиденье из трёх
+## продольных досок на высоте 0.45 м (эталон сидения IslandGen), сзади —
+## низкая спинка. Модель смотрит в +Z, габарит 1.9 × ~0.8 × 0.7 — как
+## коллизия bench.
+static func _bench(variant: int) -> ArrayMesh:
+	var rng := _rng("bench", variant)
+	var parts: Array = []
+	# Опоры-чурбаны: гранёные, тоном коры с вариацией.
+	for x_at: float in [-0.72, 0.72]:
+		parts.append(_cyl(0.125, 0.145, 0.44, 7,
+			PAL.trunk.lerp(Color.WHITE, rng.randf_range(-0.05, 0.05)),
+			Vector3(x_at + rng.randf_range(-0.015, 0.015), 0.22, 0.0)))
+	# Сиденье: три доски вдоль X со щелями, лёгкий перекос каждой.
+	for i: int in 3:
+		var shade: Color = PAL.planks.lerp(
+			Color.WHITE, 0.07 * ((i * 5 + variant) % 3) - 0.035)
+		parts.append(_box(Vector3(1.9, 0.045, 0.135), shade,
+			Vector3(0.0, 0.45 + 0.006 * float(i), i * 0.15 - 0.15),
+			rng.randf_range(-0.012, 0.012)))
+	# Спинка: две стойки и доска на высоте пояса, чуть наклонена назад.
+	for x_at: float in [-0.72, 0.72]:
+		parts.append(_box(Vector3(0.07, 0.34, 0.05), PAL.trunk,
+			Vector3(x_at, 0.62, -0.31)))
+	parts.append(_box(Vector3(1.9, 0.1, 0.045),
+		PAL.planks.lerp(Color.WHITE, 0.05), Vector3(0.0, 0.76, -0.325), 0.0, -0.1))
+	return _merge(parts)
+
+
+## Навес площади (П5.13, блок 1): четыре столба, прогоны и двускатная
+## крыша из досок с свесами. Габарит 3.7 × 2.9 × 2.9; проход под крышей
+## свободен: коллизию дают только столбы — IslandGen ставит под навес
+## четыре pier_post (они уже внутри этих столбов). Доски крыши — с
+## чередованием тона, конёк — кряж.
+static func _canopy(variant: int) -> ArrayMesh:
+	var rng := _rng("canopy", variant)
+	var parts: Array = []
+	var post_h: float = 2.16
+	# Столбы: гранёные, слегка наклонены внутрь — навес «собран вручную».
+	for x_at: float in [-1.5, 1.5]:
+		for z_at: float in [-0.95, 0.95]:
+			parts.append(_cyl(0.175, 0.19, post_h, 7,
+				PAL.trunk.lerp(Color.WHITE, rng.randf_range(-0.06, 0.06)),
+				Vector3(x_at, post_h * 0.5, z_at)))
+	# Прогоны вдоль X поверх столбов.
+	for z_at: float in [-0.95, 0.95]:
+		parts.append(_box(Vector3(3.3, 0.1, 0.12), PAL.trunk,
+			Vector3(0.0, post_h + 0.05, z_at)))
+	# Настил: по пять досок на скат, конёк вдоль X. Скат от z=0.08 (конёк)
+	# до z=1.38 (свес), наклон ~24°.
+	var ridge_y: float = post_h + 0.72
+	var pitch: float = 0.42
+	for side: float in [-1.0, 1.0]:
+		for k: int in 5:
+			var frac: float = (float(k) + 0.5) / 5.0
+			var z_local: float = lerpf(0.1, 1.36, frac)
+			var y: float = ridge_y - z_local * tan(pitch)
+			var shade: Color = PAL.planks.lerp(
+				Color.WHITE, 0.07 * ((k * 3 + variant) % 3) - 0.035)
+			parts.append(_box(Vector3(3.7, 0.055, 0.3), shade,
+				Vector3(0.0, y, side * z_local), 0.0, side * pitch))
+	parts.append(_box(Vector3(3.8, 0.11, 0.2),
+		PAL.trunk.lerp(Color.WHITE, 0.06), Vector3(0.0, ridge_y + 0.02, 0.0)))
+	return _merge(parts)
+
+
 ## Лодочка-плот: корпус с носом-клином и скамьёй (модель по +Z).
 static func _boat() -> ArrayMesh:
 	var hull: Color = PAL.trunk.lerp(PAL.planks, 0.4)
@@ -560,13 +679,15 @@ static func _boat() -> ArrayMesh:
 
 # --- Детали примитивов ---
 
-## Куб заданного размера; pos — центр.
+## Куб заданного размера; pos — центр. pitch — наклон вокруг X (скаты
+## крыш), roll — вокруг Z (клинья арки).
 static func _box(
-	size: Vector3, color: Color, pos: Vector3, yaw: float = 0.0
+	size: Vector3, color: Color, pos: Vector3, yaw: float = 0.0,
+	pitch: float = 0.0, roll: float = 0.0,
 ) -> Array:
 	var prim := BoxMesh.new()
 	prim.size = size
-	return _prim(prim, color, pos, yaw)
+	return _prim(prim, color, pos, yaw, null, 0.0, Vector3.ONE, pitch, roll)
 
 
 ## Призма-клин (наклонная грань к +Z); pos — центр.
@@ -600,11 +721,12 @@ static func _rng(type: String, variant: int) -> RandomNumberGenerator:
 
 ## Массивы поверхности примитива: только вершины с цветом и индексы
 ## (нормали и UV шейдеру low-poly не нужны), сдвиг/поворот/джиттер
-## применяются к вершинам сразу.
+## применяются к вершинам сразу. Порядок поворотов: yaw (вокруг Y),
+## затем pitch (вокруг X) и roll (вокруг Z).
 static func _prim(
 	prim: PrimitiveMesh, color: Color, pos: Vector3, yaw: float,
 	rng: RandomNumberGenerator = null, jitter_amount: float = 0.0,
-	squash: Vector3 = Vector3.ONE,
+	squash: Vector3 = Vector3.ONE, pitch: float = 0.0, roll: float = 0.0,
 ) -> Array:
 	var arrays: Array = prim.surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -618,7 +740,8 @@ static func _prim(
 				rng.randf_range(-jitter_amount, jitter_amount) * 0.5,
 				rng.randf_range(-jitter_amount, jitter_amount),
 			)
-	var basis := Basis(Vector3.UP, yaw)
+	var basis := Basis(Vector3.UP, yaw) \
+		* Basis(Vector3.RIGHT, pitch) * Basis(Vector3.BACK, roll)
 	for i: int in verts.size():
 		verts[i] = (basis * (verts[i] * squash)) + pos
 	arrays[Mesh.ARRAY_COLOR] = colors

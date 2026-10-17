@@ -127,6 +127,41 @@ static func iris(variant: int) -> ArrayMesh:
 	return _mesh(verts, normals, colors, uvs, indices)
 
 
+## Камыш (П5.13, блок 1): 7–10 стеблей 0.6–1.0 м от общего корня, над
+## верхушкой — короткий коричневый початок-«карандаш» (чуть шире стебля).
+## Нормали вверх и UV.y-высота, как у травы: качается вместе с поляной
+## (grass_field.gdshader), у кромки воды читается плотной полосой.
+## Коричневый початка — локальная константа: в VisualPalette тёплого
+## коричневого нет, палитра — про траву и камни.
+static func reed(variant: int) -> ArrayMesh:
+	var rng := _rng("reed", variant)
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var stems: int = 7 + variant % 3
+	var stem_dark: Color = VPAL.grass_base.lerp(Color.BLACK, 0.22)
+	var stem_light: Color = VPAL.grass_base.lerp(VPAL.grass_tip, 0.3)
+	var cob: Color = Color(0.36, 0.23, 0.10)
+	for s: int in stems:
+		var angle: float = TAU * float(s) / float(stems) + rng.randf_range(-0.3, 0.3)
+		var dist: float = rng.randf_range(0.02, 0.16)
+		var start := Vector3(cos(angle) * dist, 0.0, sin(angle) * dist)
+		var height: float = rng.randf_range(0.6, 1.0)
+		var lean := Vector3(cos(angle), 0.0, sin(angle)) \
+			* rng.randf_range(0.14, 0.34) \
+			+ Vector3(rng.randf_range(-0.06, 0.06), 0.0, rng.randf_range(-0.06, 0.06))
+		var side := Vector3(-sin(angle), 0.0, cos(angle))
+		_strip(verts, normals, colors, uvs, indices, start, lean, side,
+			height, 0.011, 0.006, 3, stem_dark, stem_light)
+		# Початок начинается чуть ниже верхушки стебля — сплошной стебель.
+		var top := start + lean + Vector3.UP * (height - 0.05)
+		_strip(verts, normals, colors, uvs, indices, top, lean * 0.25, side,
+			0.2, 0.017, 0.012, 1, cob, cob.lerp(Color.WHITE, 0.12))
+	return _mesh(verts, normals, colors, uvs, indices)
+
+
 ## Цветок: стебель 0.15–0.28 м и крест из двух квадов-лепестков.
 static func flower(variant: int) -> ArrayMesh:
 	var rng := _rng("rflower", variant)

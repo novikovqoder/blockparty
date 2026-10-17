@@ -29,12 +29,8 @@ const MODEL: PackedScene = preload(
 ##     головы и одежда 2K, руки/волосы 1K, глаза — мелкая деталь 256;
 ##   панорамы неба — купол Sky3D, процедурные CC0;
 ##   карта острова — UI-мини-карта;
-##   colormap castle-kit — данные запекания: цвет уходит в вершины руин
-##     (Cc0Meshes), в рендере не участвует — порога и мип-мапов нет;
 ##   polyhaven.com — земля Леса (2K, категория сайта).
 const CATEGORIES: Array = [
-	["assets/third_party/kenney.nl/castle-kit/Textures/colormap.png",
-		{"min_side": 0, "mips": false}],
 	["assets/third_party/quaternius.com/universal_base_characters/baked/textures/eyes",
 		{"min_side": 256, "mips": true}],
 	["assets/third_party/quaternius.com/universal_base_characters/baked/textures/",

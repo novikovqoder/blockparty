@@ -8,7 +8,7 @@
 class_name PropGroup
 extends Resource
 
-## Меш-эталон группы (PropMeshes/Cc0Meshes, «ногами» в origin).
+## Меш-эталон группы (PropMeshes, «ногами» в origin).
 @export var mesh: Mesh
 ## Дальние уровни детализации деревьев (П5.9): [LOD1, LOD2] — генерация
 ## ez-tree с прореженными секциями и листьями (материалы в мешах).

@@ -9,7 +9,7 @@ extends SceneTree
 func _initialize() -> void:
 	var types := [
 		&"etree_oak", &"etree_giant", &"etree_bush", &"rrock", &"dead_log",
-		&"rgrass", &"fern", &"tree_leafy", &"tree_spruce",
+		&"rgrass", &"fern", &"bench", &"canopy", &"ruin_column",
 	]
 	for type in types:
 		for variant: int in 4:

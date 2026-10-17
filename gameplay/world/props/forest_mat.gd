@@ -15,9 +15,12 @@ const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 static var _cache: Dictionary = {}
 
 
-## Тип обрабатывается этой фабрикой (IslandView._build_props).
+## Тип обрабатывается этой фабрикой (IslandView._build_props). П5.13, блок 1:
+## камни всего острова (boulder/rock_pillar/pebble) и камыш — тоже здесь:
+## единый стиль мягких форм и мха, эталон Леса на всех зон.
 static func handles(type: StringName) -> bool:
-	return ["rgrass", "fern", "rflower", "riris", "mrock", "rrock"].has(String(type))
+	return ["rgrass", "fern", "rflower", "riris", "mrock", "rrock",
+		"boulder", "rock_pillar", "pebble", "reed"].has(String(type))
 
 
 ## Материал типа (трава — градиент; папоротник/цветы — цвет вершин;
@@ -70,6 +73,26 @@ static func for_type(type: StringName) -> Material:
 			# Доработка под эталон: рваные островки мха на верхних гранях —
 			# не сплошная шапка и не голый камень.
 			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.55)
+		# П5.13, блок 1: камни вне Леса — тот же камень и мох, но мха мало
+		# (площадь и холмы суше леса); скальные зубцы — почти голые.
+		"boulder":
+			material.shader = ROCK_SHADER
+			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.22)
+		"rock_pillar":
+			material.shader = ROCK_SHADER
+			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.12)
+		"pebble":
+			material.shader = ROCK_SHADER
+			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.18)
+		# Камыш у воды — ветер заметнее лесной травы, гуще к верхушке
+		# (початок самый подвижный: UV.y у него ~1).
+		"reed":
+			material.shader = GRASS_SHADER
+			material.set_shader_parameter("use_gradient", 0.0)
+			material.set_shader_parameter("wind_amplitude", 0.09)
+			material.set_shader_parameter("wind_freq", 1.4)
+			material.set_shader_parameter("fade_start", 40.0)
+			material.set_shader_parameter("fade_end", 58.0)
 	_cache[type] = material
 	return material
 

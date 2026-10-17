@@ -98,8 +98,10 @@ const LOOKOUT_TOP_H: float = 10.0
 
 ## Типы предметов с коллизией (рецепт формы — в prop_meshes.gd).
 ## ruin_gate — только рама: проём закрывает узел RuinGate (П5, раздел 9.2).
+## Навес площади (canopy) — проходим: под крышей ходят, коллизию дают
+## четыре pier_post в его столбах (_plaza_canopies).
 const SOLID_TYPES: PackedStringArray = [
-	"tree_leafy", "tree_spruce", "boulder", "rock_pillar",
+	"boulder", "rock_pillar",
 	"rock_wall", "ruin_block", "ruin_tower", "ruin_arch", "ruin_column",
 	"bench", "log_bridge", "pier_post",
 	"plank_deck", "boat",
@@ -111,7 +113,7 @@ const SOLID_TYPES: PackedStringArray = [
 ## Тест проверяет: каждый тип раскладки — либо SOLID (форма в prop_meshes),
 ## либо здесь; ничего третьего не бывает.
 const PASS_THROUGH_TYPES: PackedStringArray = [
-	"grass_tuft", "reed", "flower", "pebble", "bush", "fern", "ruin_gate",
+	"reed", "pebble", "fern", "ruin_gate", "canopy",
 	"etree_bush", "rgrass", "rflower", "riris", "mrock",
 ]
 ## Маршруты зверьков (vfx-fix, баг 3): вместо редких вейпоинтов — плотная
@@ -185,6 +187,7 @@ static func generate() -> Dictionary:
 	var ruins: Dictionary = _ruins(heights, props, rng)
 	var pier: Dictionary = _pier_and_boats(heights, props)
 	var fire: Dictionary = _campfire(heights, props)
+	_plaza_canopies(props)
 	var lookouts: Array = []
 	for center: Vector2i in LOOKOUTS:
 		lookouts.append({
@@ -730,12 +733,29 @@ static func _trees_and_rocks(
 				if rng.randf() < 0.007 and _no_trees_near(trees, x, z, 4):
 					trees[cell] = true
 					_prop(props, rng, cell, h, "etree_pine", "plain", 5, heights)
+			# Площадь (П5.13, блок 1): кромку мощения обрамляют редкие
+			# дубы и осины эталонного стиля да камни во мху — площадь
+			# не голая тарелка; кольцо 20–27 м, за цветочной кромкой.
+			elif Vector2(x, z - 4.0).length() >= 20.0 \
+					and Vector2(x, z - 4.0).length() <= 27.0 and grassy:
+				if rng.randf() < 0.011 and _no_trees_near(trees, x, z, 5):
+					trees[cell] = true
+					_prop(props, rng, cell, h, _plaza_tree_kind(x, z), "plain", 5, heights)
+				elif rng.randf() < 0.008:
+					_prop(props, rng, cell, h, "mrock", "plain", 3)
+			# Руины (П5.13, блок 1): ели по периметру террасы — руины
+			# смотрятся на фоне леса, а не пустоши; за террасой (24–31 м).
+			elif Vector2(x - 58.0, z + 48.0).length() >= 24.5 \
+					and Vector2(x - 58.0, z + 48.0).length() <= 31.0 and grassy:
+				if rng.randf() < 0.012 and _no_trees_near(trees, x, z, 4):
+					trees[cell] = true
+					_prop(props, rng, cell, h, "etree_pine", "plain", 5, heights)
 			# Холмы: валуны повыше, редкие ели, камни у вершин.
 			elif in_hills and h > 4.0:
 				if rng.randf() < 0.012:
 					_prop(props, rng, cell, h, "boulder", "stone")
 				elif h < 13.0 and rng.randf() < 0.006:
-					_prop(props, rng, cell, h, "tree_spruce", "leaf")
+					_prop(props, rng, cell, h, "etree_pine", "plain", 5, heights)
 				elif h > 16.0 and rng.randf() < 0.02:
 					_prop(props, rng, cell, h, "rock_pillar", "stone")
 			# Пляж: камешки.
@@ -809,10 +829,12 @@ static func _trees_and_rocks(
 						_prop(props, rng, cell, h, "mrock", "plain", 3)
 						stone_cells.append(cell)
 				continue
+			# П5.13, блок 1: луга — та же трава и цветы, что в Лесу
+			# (ForestPlants/ForestMat): весь остров в едином стиле.
 			if rng.randf() < 0.30:
-				_prop(props, rng, cell, h, "grass_tuft", "grass")
+				_prop(props, rng, cell, h, "rgrass", "plain", 3)
 			elif rng.randf() < 0.08:
-				_prop(props, rng, cell, h, "flower", "flower")
+				_prop(props, rng, cell, h, "rflower", "flower", 3)
 	# Цветочные акценты у валунов (доработка под эталон): фиолетовые ирисы
 	# и жёлтые цветы жмутся к глыбам подлеска — у крупных rrock по 2–3, у
 	# мелких мшистых mrock — реже. Отдельный ГПСЧ: раскладка травы и
@@ -880,7 +902,7 @@ static func _trees_and_rocks(
 		var cell := Vector2i(roundi(ring.x), roundi(ring.y))
 		if reserved.has(cell):
 			continue
-		_prop(props, rng, cell, PLAZA_H, "flower", "flower")
+		_prop(props, rng, cell, PLAZA_H, "rflower", "flower", 3)
 
 
 static func _no_trees_near(trees: Dictionary, x: int, z: int, radius: int) -> bool:
@@ -945,6 +967,22 @@ static func _forest_kind(x: int, z: int) -> String:
 static func _forest_variants(type: String) -> int:
 	var list: Array = EzTreeMeshes.ASSETS.get(StringName(type), [])
 	return maxi(1, list.size())
+
+
+## Порода дерева у Площади (П5.13, блок 1): лиственные — дуб рощами,
+## осина пятнами (тот же шум, что породы Леса, но сдвинут: свои пятна);
+## хвойных у тёплой площади нет. Выбор по координатам — rng не сдвигается.
+const PLAZA_TREE_SEED: int = 4507
+static var _plaza_tree_noise: FastNoiseLite
+
+
+static func _plaza_tree_kind(x: int, z: int) -> String:
+	if _plaza_tree_noise == null:
+		_plaza_tree_noise = FastNoiseLite.new()
+		_plaza_tree_noise.seed = PLAZA_TREE_SEED
+		_plaza_tree_noise.frequency = 0.05
+	var kind := (_plaza_tree_noise.get_noise_2d(x, z) + 1.0) * 0.5
+	return "etree_oak" if kind < 0.7 else "etree_aspen"
 
 
 ## Клетка леса пригодна для пучков травы: не тропа/гравий (вес < 0.2 —
@@ -1250,6 +1288,29 @@ static func _campfire(heights: PackedFloat32Array, props: Array) -> Dictionary:
 		"center": Vector3(0.5, PLAZA_H, 2.5),
 		"benches": benches,
 	}
+
+
+## Навесы площади (П5.13, блок 1): два дощатых навеса на столбах южнее
+## костра — укрытие от непогоды и силуэт площади. Крыша (canopy) проходима,
+## под ней ходят; коллизию дают четыре pier_post, спрятанных в столбах
+## меша (радиус меньше видимого столба, вершина заподлицо с прогонами).
+## Кольцо 13–14 м от центра: не задевает костёр, лавки, цветочную кромку
+## и южный проход к озеру между навесами.
+static func _plaza_canopies(props: Array) -> void:
+	var rng := rng_static()
+	var spots: Array[Vector3] = [
+		Vector3(-10.5, PLAZA_H, -8.5),
+		Vector3(11.5, PLAZA_H, -7.0),
+	]
+	var yaws: Array[float] = [0.35, -0.5]
+	for i: int in spots.size():
+		_add_prop(props, rng, &"canopy", spots[i], yaws[i],
+			Vector3.ONE, "plain", 2)
+		for x_at: float in [-1.5, 1.5]:
+			for z_at: float in [-0.95, 0.95]:
+				var local := Vector3(x_at, 0.0, z_at).rotated(Vector3.UP, yaws[i])
+				_add_prop(props, rng, &"pier_post", spots[i] + local, 0.0,
+					Vector3(0.3, 2.16, 0.3), "plain", 1)
 
 
 ## Детерминированный ГПСЧ для «строительных» предметов без внешнего rng
