@@ -11,8 +11,8 @@
 # П5.13, блок 1: CC0-модели kenney в окружении больше не используются —
 # лавки, колонны и арки руин, навесы площади собраны здесь из примитивов
 # (в стиле пирса и мостков), камни — генератор RockGen, трава и камыши —
-# ForestPlants; из kenney осталось только бревно валежника dead_log
-# (log/log_large с корой ambientcg — единственная внешняя модель).
+# ForestPlants. П5.13, блок 5: последнее бревно kenney (dead_log) заменено
+# процедурной корягой — внешних моделей в мире больше нет вовсе.
 #
 # Два типа размеров: «метровые» (rock_wall, ruin_block, plank_deck,
 # pier_post) — scale равен размерам в метрах, mesh — единичный куб;
@@ -46,6 +46,13 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _bench(variant)
 		"canopy":
 			return _canopy(variant)
+		# П5.13, блок 5: домики жителей и заборы-палисадники у Площади —
+		# сруб из брёвен с дощатой крышей (как навес и мостик: примитивы
+		# с цветом в вершинах, тон зоны — LowPolyMat).
+		"house":
+			return _house(variant)
+		"fence":
+			return _fence(variant)
 		"pier_post":
 			return _pier_post()
 		"plank_deck":
@@ -60,10 +67,11 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 		# EzTreeMeshes.build_set (IslandArt/IslandView).
 		"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant":
 			return EzTreeMeshes.build_set(type, variant)["mesh"]
-		# Валежник (П5.9, переделка): CC0-бревно kenney (локальная
-		# библиотека) с корой ambientcg — той же, что у мостика через овраг.
+		# Валежник (П5.13, блок 5: kenney убран полностью): коряга —
+		# изогнутое бревно из тех же _log_limb-сегментов, что мостик,
+		# с корой ambientcg; размеры — эталон прежних kenney-моделей.
 		"dead_log":
-			return _dead_log(variant)
+			return _snag(variant)
 		# П5.9, блок 3: растительность Леса — процедурные пучки/вайи/цветы
 		# и камни во мху (материалы — ForestMat).
 		"rgrass":
@@ -100,21 +108,44 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 	return ArrayMesh.new()
 
 
-## Валежник Леса (П5.9, переделка): CC0-брёвна kenney.nl (nature-kit,
-## log/log_large — настоящие модели из локальной библиотеки) с корой
-## ambientcg по UV. Бревно лежит длинной стороной вдоль X, низ — в origin.
-## Вариант — какая из двух моделей и лёгкий поворот вокруг оси.
-static func _dead_log(variant: int) -> ArrayMesh:
-	var file := "log_large.glb" if variant % 2 == 0 else "log.glb"
-	var path := "res://assets/third_party/kenney.nl/nature-kit".path_join(file)
-	var doc := GLTFDocument.new()
-	var state := GLTFState.new()
-	if doc.append_from_file(path, state) != OK:
-		push_error("Не читается бревно kenney: " + path)
-		return ArrayMesh.new()
-	var scene := doc.generate_scene(state)
-	var arrays := _merge_log_surfaces(scene, Vector3(2.4, 0.45, 0.6))
-	scene.free()
+## Коряга (П5.13, блок 5): изогнутое сухое бревно с обломанными суками —
+## сегменты _log_limb с изломами, тем же способом, что мостик через овраг
+## (кора ambientcg, UV в метрах, пятаки-спилы светлее). Габарит — эталон
+## прежних kenney-брёвен (2.4 × 0.45 × 0.6): коллизии и посадки IslandGen
+## не меняются. Лежит длинной стороной вдоль X, низ — в origin; вариант —
+## степень изгиба и число сучков.
+static func _snag(variant: int) -> ArrayMesh:
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	# Ствол двумя-тремя сегментами с изломами: комель толще, к вершине
+	# тоньше; вариант 0 выгибается вверх, вариант 1 — вниз и короче.
+	var length: float = 2.4 if variant % 2 == 0 else 1.8
+	var bend: float = 0.14 if variant % 2 == 0 else -0.10
+	var r0: float = 0.20 if variant % 2 == 0 else 0.23
+	var knee := Vector3(length * 0.52, 0.24 + bend, 0.20)
+	_log_limb(verts, normals, uvs, colors, indices,
+		Vector3(0.08, r0, 0.30), knee, r0, 1.0)
+	_log_limb(verts, normals, uvs, colors, indices,
+		knee, Vector3(length - 0.06, 0.30 + bend * 2.2, 0.05),
+		r0 * 0.82, 1.0)
+	# Сучки-обломыши: короткие отростки от колена ствола вверх и вбок.
+	var branch: int = 2 if variant % 2 == 0 else 1
+	for i: int in branch:
+		var side: float = -1.0 if i % 2 == 1 else 1.0
+		_log_limb(verts, normals, uvs, colors, indices,
+			knee + Vector3(0.1 * i, 0.02, -0.04 * side),
+			knee + Vector3(0.34 + 0.16 * i, 0.5 + 0.14 * i, 0.28 * side),
+			0.055 + 0.02 * i, 1.06)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh.surface_set_material(0, _log_bark_material())
@@ -254,86 +285,6 @@ static func _log_limb(
 				indices.append(cap + 1 + k)
 
 
-## Поверхности сцены GLB в один набор массивов с UV и нормалями (кора
-## освещается по нормалям kenney-модели), нормированный на target (длина
-## вдоль X × толщина × ширина, м) и опущенный на землю. Если модель длиннее
-## по Z — координаты меняются местами (бревно ложится длинной стороной
-## вдоль X); нормали при неравномерном масштабе делятся на покомпонентный
-## scale (обратная транспонированная диагональной матрицы) и нормируются.
-static func _merge_log_surfaces(root: Node, target: Vector3) -> Array:
-	var parts: Array = []
-	_collect_log_surfaces(root, Transform3D.IDENTITY, parts)
-	var min_v := Vector3(INF, INF, INF)
-	var max_v := Vector3(-INF, -INF, -INF)
-	for arrays: Array in parts:
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		for v: Vector3 in verts:
-			min_v = min_v.min(v)
-			max_v = max_v.max(v)
-	var size := max_v - min_v
-	var swap_xz: bool = size.z > size.x
-	var length: float = maxf(size.x, size.z)
-	var scale := Vector3(
-		target.x / maxf(length, 0.001),
-		target.y / maxf(size.y, 0.001),
-		target.z / maxf(minf(size.x, size.z), 0.001))
-	var verts := PackedVector3Array()
-	var normals := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	var indices := PackedInt32Array()
-	for arrays: Array in parts:
-		var part_verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var part_normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-		var part_uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
-		var base: int = verts.size()
-		for v: int in part_verts.size():
-			var local := Vector3(
-				part_verts[v].x - min_v.x,
-				part_verts[v].y - min_v.y,
-				part_verts[v].z - min_v.z)
-			var normal: Vector3 = part_normals[v] if v < part_normals.size() \
-				else Vector3.UP
-			if swap_xz:
-				local = Vector3(local.z, local.y, local.x)
-				normal = Vector3(normal.z, normal.y, normal.x)
-			verts.append(local * scale)
-			normals.append(
-				Vector3(normal.x / scale.x, normal.y / scale.y, normal.z / scale.z).normalized())
-			uvs.append(part_uvs[v])
-		var part_indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-		for index: int in part_indices:
-			indices.append(base + index)
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = verts
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_INDEX] = indices
-	return arrays
-
-
-static func _collect_log_surfaces(node: Node, parent_xf: Transform3D, parts: Array) -> void:
-	var xf: Transform3D = parent_xf * node.transform if node is Node3D else parent_xf
-	if node is MeshInstance3D:
-		var mesh: Mesh = (node as MeshInstance3D).mesh
-		if mesh != null:
-			for surface: int in mesh.get_surface_count():
-				var arrays: Array = mesh.surface_get_arrays(surface)
-				if arrays.is_empty() \
-						or mesh.surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES:
-					continue
-				var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-				if verts.is_empty() or not (arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array):
-					continue
-				for v: int in verts.size():
-					verts[v] = xf * verts[v]
-					if v < normals.size():
-						normals[v] = (xf.basis * normals[v]).normalized()
-				parts.append(arrays)
-	for child: Node in node.get_children():
-		_collect_log_surfaces(child, xf, parts)
-
 
 ## Кора брёвен: та же текстура ambientcg, что у деревьев ez-tree
 ## (Bark001, CC0), чуть плотнее тайлинг; свет — как у коры деревьев.
@@ -411,6 +362,12 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(0.95, 1.4, 0.95) * scale.x
 		"bench":
 			return Vector3(1.9, 0.55, 0.7)
+		# Домик жителя (П5.13, блок 5): один бокс на сруб с крышей —
+		# внутри никто не ходит; забор — секция выше автоподъёма.
+		"house":
+			return Vector3(3.9, 2.9, 2.8) * scale.x
+		"fence":
+			return Vector3(1.9 * scale.x, 1.05, 0.18)
 		"boat":
 			return Vector3(1.3, 0.5, 2.35)
 		# Гигант (П5.9, блок 4): дуб-исполин — толстый ствол без кроны;
@@ -663,6 +620,106 @@ static func _canopy(variant: int) -> ArrayMesh:
 	return _merge(parts)
 
 
+## Домик жителя (П5.13, блок 5): сруб из настоящих брёвен (венцы из
+## _cyl-цилиндров, как столбы навеса), дощатые фронтоны и двускатная
+## крыша со свесами (как у навеса), каменное основание «врастает» в
+## землю. Дверь и окно — на стороне +Z (модель «лицом» к +Z), крыльцо
+## со ступенькой. Габарит ~4.1 × 2.9 × 3.0; весь дом непроходим —
+## коллизия одним боксом (внутри никто не ходит), вход не нужен:
+## жители стоят снаружи. Вариант — тона брёвен и наклон крыши.
+static func _house(variant: int) -> ArrayMesh:
+	var rng := _rng("house", variant)
+	var parts: Array = []
+	# Каменное основание: чуть шире сруба, «врастает» в землю.
+	parts.append(_box(Vector3(3.9, 0.18, 2.8),
+		PAL.stone.darkened(0.18), Vector3(0.0, 0.08, 0.0)))
+	# Сруб: пять венцов; длинные брёвна вдоль X (дверь на +Z), короткие
+	# вяжут торцы с выпуском «в чашу». Тон брёвен варьируется — сруб
+	# собран «из разных деревьев».
+	var log_r: float = 0.155
+	var rise: float = 0.28
+	for course: int in 5:
+		var y: float = 0.28 + log_r + course * rise
+		var shade: Color = PAL.trunk.lerp(
+			Color.WHITE, rng.randf_range(-0.07, 0.07))
+		for z_at: float in [-1.06, 1.06]:
+			parts.append(_cyl(log_r * 0.97, log_r, 3.5, 7, shade,
+				Vector3(rng.randf_range(-0.02, 0.02), y, z_at),
+				0.0, 0.0, PI / 2.0))
+		for x_at: float in [-1.66, 1.66]:
+			parts.append(_cyl(log_r * 0.94, log_r, 2.44, 7,
+				shade.lerp(Color.WHITE, 0.04),
+				Vector3(x_at, y + rise * 0.5, rng.randf_range(-0.02, 0.02)),
+				0.0, PI / 2.0))
+	# Фронтоны на торцах: две сужающиеся доски-ступени под конёк.
+	for x_at: float in [-1.52, 1.52]:
+		parts.append(_box(Vector3(0.12, 0.52, 2.1),
+			PAL.planks.lerp(Color.WHITE, 0.03), Vector3(x_at, 1.98, 0.0)))
+		parts.append(_box(Vector3(0.12, 0.42, 1.24),
+			PAL.planks.lerp(Color.WHITE, 0.07), Vector3(x_at, 2.42, 0.0)))
+	# Крыша: два ската досок с чередованием тона (как навес), конёк-кряж.
+	var pitch: float = 0.44 + 0.04 * float(variant % 2)
+	var ridge_y: float = 2.86
+	for side: float in [-1.0, 1.0]:
+		for k: int in 5:
+			var frac: float = (float(k) + 0.5) / 5.0
+			var z_local: float = lerpf(0.12, 1.5, frac)
+			var shade: Color = PAL.planks.lerp(
+				Color.WHITE, 0.07 * ((k * 3 + variant) % 3) - 0.035)
+			parts.append(_box(Vector3(4.1, 0.055, 0.32), shade,
+				Vector3(0.0, ridge_y - z_local * tan(pitch), side * z_local),
+				0.0, side * pitch))
+	parts.append(_cyl(0.13, 0.15, 4.2, 7,
+		PAL.trunk.lerp(Color.WHITE, 0.06), Vector3(0.0, ridge_y + 0.06, 0.0),
+		0.0, 0.0, PI / 2.0))
+	# Дверь с наличником (сторона +Z), тёмное дерево.
+	parts.append(_box(Vector3(0.82, 1.5, 0.07),
+		PAL.trunk.darkened(0.38), Vector3(0.42, 0.96, 1.18)))
+	for dx: float in [-0.5, 0.5]:
+		parts.append(_box(Vector3(0.1, 1.62, 0.09), PAL.planks,
+			Vector3(0.42 + dx, 0.99, 1.19)))
+	parts.append(_box(Vector3(1.12, 0.11, 0.1), PAL.planks,
+		Vector3(0.42, 1.82, 1.19)))
+	# Окно со ставнями слева от двери.
+	parts.append(_box(Vector3(0.56, 0.52, 0.06),
+		PAL.trunk.darkened(0.5), Vector3(-0.82, 1.18, 1.18)))
+	for dx: float in [-0.36, 0.36]:
+		parts.append(_box(Vector3(0.18, 0.5, 0.05),
+			PAL.planks.lerp(Color.WHITE, 0.05),
+			Vector3(-0.82 + dx, 1.16, 1.2), rng.randf_range(-0.05, 0.05)))
+	# Крыльцо: настил и ступень у двери.
+	parts.append(_box(Vector3(1.3, 0.14, 0.62), PAL.planks,
+		Vector3(0.42, 0.21, 1.52)))
+	parts.append(_box(Vector3(1.3, 0.12, 0.4),
+		PAL.planks.darkened(0.08), Vector3(0.42, 0.06, 1.98)))
+	return _merge(parts)
+
+
+## Секция забора-палисадника (П5.13, блок 5): два столбика и пара
+## перекладин, лёгкие перекосы от rng — забор «собран вручную».
+## Единичная секция ~1.9 м по X; IslandGen ставит крылья по 1–2 секции
+## у домиков, не замыкая их (проход всегда открыт). SOLID: высота выше
+## автоподъёма, перешагнуть нельзя.
+static func _fence(variant: int) -> ArrayMesh:
+	var rng := _rng("fence", variant)
+	var parts: Array = []
+	for x_at: float in [-0.8, 0.8]:
+		parts.append(_cyl(0.075, 0.1, 1.08, 6,
+			PAL.trunk.lerp(Color.WHITE, rng.randf_range(-0.06, 0.06)),
+			Vector3(x_at + rng.randf_range(-0.02, 0.02), 0.52, 0.0)))
+	for y_at: float in [0.52, 0.9]:
+		var span: float = rng.randf_range(-0.03, 0.03)
+		parts.append(_box(
+			Vector3(1.86, 0.1, 0.055),
+			PAL.planks.lerp(Color.WHITE, 0.05 * float(variant % 2) - 0.025),
+			Vector3(0.0, y_at, 0.0), 0.0, 0.0, span))
+	if variant % 2 == 1:
+		# Второй вариант — диагональная подпорка: забор на склоне.
+		parts.append(_box(Vector3(1.7, 0.07, 0.05), PAL.planks.darkened(0.1),
+			Vector3(0.0, 0.7, 0.02), 0.0, 0.0, 0.42))
+	return _merge(parts)
+
+
 ## Лодочка-плот: корпус с носом-клином и скамьёй (модель по +Z).
 static func _boat() -> ArrayMesh:
 	var hull: Color = PAL.trunk.lerp(PAL.planks, 0.4)
@@ -700,16 +757,17 @@ static func _prism(
 
 
 ## Гранёный цилиндр/конус (r_top ≈ 0 — конус); pos — центр по высоте.
+## pitch/roll кладут цилиндр (бревно венца: roll — вдоль X, pitch — вдоль Z).
 static func _cyl(
 	r_top: float, r_bottom: float, height: float, segments: int, color: Color,
-	pos: Vector3, yaw: float = 0.0,
+	pos: Vector3, yaw: float = 0.0, pitch: float = 0.0, roll: float = 0.0,
 ) -> Array:
 	var prim := CylinderMesh.new()
 	prim.top_radius = r_top
 	prim.bottom_radius = r_bottom
 	prim.height = height
 	prim.radial_segments = segments
-	return _prim(prim, color, pos, yaw)
+	return _prim(prim, color, pos, yaw, null, 0.0, Vector3.ONE, pitch, roll)
 
 
 ## ГПСЧ детали: сеед от (тип, вариант) — меши не зависят от порядка вызовов.

@@ -120,7 +120,7 @@ const SOLID_TYPES: PackedStringArray = [
 	"bench", "log_bridge", "pier_post",
 	"plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_giant",
-	"rrock", "dead_log",
+	"rrock", "dead_log", "house", "fence",
 ]
 ## Предметы раскладки без коллизии (vfx-fix, баг 2): мелкая растительность
 ## проходима, рама ruin_gate — по задумке (проём закрывает RuinGate).
@@ -142,6 +142,9 @@ const PASS_THROUGH_TYPES: PackedStringArray = [
 ## ГПСЧ цветочных акцентов у валунов Леса (доработка под эталон): не
 ## сдвигает основную последовательность rng раскладки.
 const STONE_FLOWER_SEED: int = 60409
+## ГПСЧ наполнения зон (П5.13, блок 5): кусты, коряги, валуны и деревья
+## берега Озера — добавки поверх прежней раскладки, её поток не трогаем.
+const FILLER_SEED: int = 20261018
 const CRITTER_R_MIN: float = 1.6
 const CRITTER_R_MAX: float = 7.0
 const CRITTER_TURN: float = 1.2
@@ -203,6 +206,13 @@ static func generate() -> Dictionary:
 	var pier: Dictionary = _pier_and_boats(heights, props)
 	var fire: Dictionary = _campfire(heights, props)
 	_plaza_canopies(props)
+	# П5.13, блок 5: деревня у Площади (домики жителей, заборы) и наполнение
+	# зон (кусты, коряги, валуны, деревья у Озера) — свои потоки rng:
+	# прежняя раскладка не сдвигается, добавки поверх неё. Постройки — до
+	# наполнения: якоря наполнения включают их углы (не загораживать подход).
+	var village: Dictionary = _village(props)
+	_zone_fill(heights, props, reserved, village, ruins, pier, fire,
+		stones, spawns)
 	var lookouts: Array = []
 	for center: Vector2i in LOOKOUTS:
 		lookouts.append({
@@ -212,7 +222,10 @@ static func generate() -> Dictionary:
 	data["spawn_zones"] = spawns
 	data["mobs"] = _mobs(heights, props, rng)
 	data["hang"] = _hang()
-	data["poi"] = {"ruins": ruins, "pier": pier, "campfire": fire, "lookouts": lookouts}
+	data["poi"] = {
+		"ruins": ruins, "pier": pier, "campfire": fire,
+		"lookouts": lookouts, "village": village,
+	}
 	data["bounds"] = HALF - 0.5
 	props.sort_custom(_prop_less)
 	return data
@@ -257,6 +270,75 @@ static func walkable_reach(data: Dictionary, terrain_only: bool = false) -> Dict
 				visited[next] = true
 				queue.append(next)
 	return visited
+
+
+## Радиус капсулы игрока (player.tscn): боксы коллизий в mechanics_reach
+## расширяются на него — клетка считается «на предмете», если персонаж
+## в её центре пересекает бокс; щель между домиком и забором уже 0.7 м
+## для капсулы непроходима.
+const PLAYER_R: float = 0.35
+
+
+## Достижимые клетки с учётом наполнения (П5.13, блок 5): как
+## walkable_reach, но верхние поверхности строятся и из боксов коллизий
+## твёрдых предметов — «ступени» на их верхнюю грань. Так честно видно,
+## что наполнение не отрезает механики: низкое (валун кольца костра,
+## гребень стены каньона 0.4 м) персонаж перешагивает автоподъёмом, и BFS
+## проходит по верху; высокое (домик 2.9 м, ствол дерева, забор 1.05 м —
+## выше MAX_STEP) становится барьером. Вниз BFS не ограничен — срыв
+## с кромки в расщелину возможен всегда (механика 9.1). Рама ruin_gate
+## проходима (проём держит узел RuinGate — механика плит, раздел 9.2).
+## Возвращает {"cells": посещённые клетки, "tops": клетки, чья высота —
+## верх предмета}: в "tops" путь возможен только поверх предмета
+## (например, на крышу домика со склона), но не сквозь него.
+static func mechanics_reach(data: Dictionary) -> Dictionary:
+	var heights := _surface_heights(data)
+	var tops: Dictionary = {}
+	for prop: Dictionary in data["props"]:
+		var type := String(prop["type"])
+		if type == "plank_deck" or type == "boat" or type == "ruin_gate":
+			continue  # настилы уже поверхности, рама ворот проходима
+		var size: Vector3 = PropMeshes.collision_size(StringName(type), prop["scale"])
+		if size == Vector3.ZERO:
+			continue
+		var pos: Vector3 = prop["pos"]
+		var yaw: float = float(prop["yaw"])
+		# Верх коллизии — поверхность клетки, если персонаж в её центре
+		# пересекает бокс (полуширины + радиус капсулы); выше берём верх.
+		var top: float = pos.y + size.y
+		var hx: float = size.x * 0.5 + PLAYER_R
+		var hz: float = size.z * 0.5 + PLAYER_R
+		var cos_y := cos(yaw)
+		var sin_y := sin(yaw)
+		var reach_x: float = absf(cos_y) * hx + absf(sin_y) * hz
+		var reach_z: float = absf(sin_y) * hx + absf(cos_y) * hz
+		for x: int in range(int(floor(pos.x - reach_x)), int(ceil(pos.x + reach_x))):
+			for z: int in range(int(floor(pos.z - reach_z)), int(ceil(pos.z + reach_z))):
+				var dx: float = float(x) + 0.5 - pos.x
+				var dz: float = float(z) + 0.5 - pos.z
+				var lx: float = dx * cos_y + dz * sin_y
+				var lz: float = -dx * sin_y + dz * cos_y
+				if absf(lx) <= hx and absf(lz) <= hz:
+					var key := Vector2i(x, z)
+					if heights.get(key, -1e9) < top:
+						heights[key] = top
+						tops[key] = true
+	# BFS от спавна площади: шаг не выше MAX_STEP.
+	var start := Vector2i(0, 10)
+	var visited: Dictionary = {}
+	var queue: Array[Vector2i] = [start]
+	visited[start] = true
+	while not queue.is_empty():
+		var current: Vector2i = queue.pop_front()
+		var h0: float = heights[current]
+		for dir: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var next: Vector2i = current + dir
+			if visited.has(next) or not heights.has(next):
+				continue
+			if heights[next] - h0 <= MAX_STEP + 0.01:
+				visited[next] = true
+				queue.append(next)
+	return {"cells": visited, "tops": tops}
 
 
 ## Высота рельефа в точке (м) или NaN за краем карты.
@@ -1528,6 +1610,167 @@ static func _plaza_canopies(props: Array) -> void:
 				var local := Vector3(x_at, 0.0, z_at).rotated(Vector3.UP, yaws[i])
 				_add_prop(props, rng, &"pier_post", spots[i] + local, 0.0,
 					Vector3(0.3, 2.16, 0.3), "plain", 1)
+
+
+## Деревня у Площади (П5.13, блок 5): три домика жителей в «карманах»
+## кромки террасы — посередине между соседними выходами с площади, так
+## что ни один радиальный путь (Озеро, Расщелина, Руины, Холмы, Лес)
+## не перекрывается. Двери смотрят к центру площади; от передних углов
+## расходятся крылья заборных секций — палисадник раскрыт к площади,
+## вход между крыльями свободен. rng_static: правки леса не двигают
+## деревню. Возвращает якоря-углы домиков (наполнение не ставит предметы
+## вплотную к постройкам).
+static func _village(props: Array) -> Dictionary:
+	var rng := rng_static()
+	var plaza: Vector2 = ZONES[0]["center"]
+	# Единичные направления выходов с площади (по зонам) и карманы между
+	# соседними: юго-восток (Озеро/Расщелина), запад (Холмы/Лес), север
+	# (Лес/Руины). Домики на r = 17: терраса (r < 18) плоская, задняя
+	# стена чуть заходит на кромку — каменное основание «врастает».
+	var exits: Array[Vector2] = [
+		Vector2(0.077, 0.997), Vector2(0.755, 0.646),
+		Vector2(0.745, -0.667), Vector2(-0.837, 0.548),
+		Vector2(-0.680, -0.733),
+	]
+	var pockets: Array[int] = [0, 3, 4]
+	var anchors: Array[Vector3] = []
+	var doors: Array[Vector3] = []
+	for pocket: int in pockets:
+		var dir: Vector2 = (exits[pocket] + exits[(pocket + 1) % exits.size()]).normalized()
+		var pos2d: Vector2 = plaza + dir * 17.0
+		var base := Vector3(pos2d.x, PLAZA_H, pos2d.y)
+		var yaw: float = atan2(-dir.x, -dir.y)
+		_add_prop(props, rng, &"house", base, yaw, Vector3.ONE, "plain", 2)
+		doors.append(base + Vector3(0.42, 0.0, 2.6).rotated(Vector3.UP, yaw))
+		# Крылья забора: по две секции вдоль фасада (локальный X) с каждой
+		# стороны двери, чуть впереди фасада. Габарит домика по X ±2 — крыло
+		# продолжается от угла наружу, проход к двери шириной 2.3 м.
+		for side: float in [-1.0, 1.0]:
+			for seg: int in 2:
+				var local := Vector3(side * (1.15 + seg * 1.9), 0.0, 1.35) \
+					.rotated(Vector3.UP, yaw)
+				_add_prop(props, rng, &"fence", base + local, yaw,
+					Vector3.ONE, "plain", 2)
+		# Якоря-углы домика (габарит 4.1 × 3.0): наполнение держит отступ.
+		for x_at: float in [-2.05, 2.05]:
+			for z_at: float in [-1.5, 1.5]:
+				anchors.append(base + Vector3(x_at, 0.0, z_at).rotated(Vector3.UP, yaw))
+	return {"anchors": anchors, "doors": doors}
+
+
+## Наполнение зон (П5.13, блок 5): кусты, коряги, валуны и деревья берега
+## Озера на лугах между зонами — весь остров в стиле Леса, без пустошей.
+## Свой поток rng (FILLER_SEED): прежняя раскладка не сдвигается. Твёрдые
+## предметы держат отступ от якорей механик (спавны, камни духа, плиты,
+## сундук, кромка причала, HangPoint, смотровые) и от построек деревни —
+## пути и соло-пути не загораживаются; достижимость проверяет тест
+## проходимости (test_walkability).
+static func _zone_fill(
+	heights: PackedFloat32Array, props: Array, reserved: Dictionary,
+	village: Dictionary, ruins: Dictionary, pier: Dictionary, fire: Dictionary,
+	stones: Array[Vector3], spawns: Dictionary,
+) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = FILLER_SEED
+	var anchors: Array[Vector3] = []
+	anchors.append_array(reserved_anchor_spots(ruins, pier, fire))
+	anchors.append_array(stones)
+	for zone_name: String in spawns:
+		anchors.append(spawns[zone_name])
+	anchors.append_array(village["anchors"])
+	var trees: Dictionary = {}
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			var cell := Vector2i(x, z)
+			if reserved.has(cell):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= 0.9 or h > 15.0:
+				continue
+			var pos := Vector2(x, z)
+			var d_plaza: float = pos.distance_to(Vector2(0, 4))
+			var d_forest: float = pos.distance_to(Vector2(-52, -52))
+			var d_ruins: float = pos.distance_to(Vector2(58, -48))
+			var d_lake: float = pos.distance_to(Vector2(6, 82))
+			# Двор руин: коряги среди обломков (терраса ровная — SOLID
+			# низкий, обход всегда есть).
+			if d_ruins < 22.0:
+				if rng.randf() < 0.006 and _clear_of_anchors(Vector3(x, h, z), anchors, 2.5):
+					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+				continue
+			# Внутри площади и террасы руин наполнения нет.
+			if d_plaza < 21.0 or d_ruins < 26.0:
+				continue
+			# Каньон расщелины и подходы к мосткам — свободны.
+			if x >= CREVASSE_X0 - 2 and x <= CREVASSE_X1 + 2 \
+					and z >= CREVASSE_Z0 - 2 and z <= CREVASSE_Z1 + 2:
+				continue
+			# Полоса причала Озера (подход по берегу) — свободна.
+			if x >= 2 and x <= 9 and z >= 56 and z <= 75:
+				continue
+			# Луга: кусты, коряги, валуны и камни во мху — редко, островки.
+			if d_forest >= 42.0 and d_lake > 21.0:
+				if rng.randf() < 0.004:
+					_prop(props, rng, cell, h, "etree_bush", "plain", 5, heights)
+				elif rng.randf() < 0.0015 \
+						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
+					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+				elif rng.randf() < 0.0015 \
+						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
+					_prop(props, rng, cell, h, "boulder", "stone")
+				elif rng.randf() < 0.003:
+					_prop(props, rng, cell, h, "mrock", "plain", 3)
+				continue
+			# Берег Озера (кроме полосы причала): деревья кольцом за
+			# камышами, коряги и валуны у кромки — берег живой.
+			if d_lake <= 26.0:
+				if rng.randf() < 0.01 and _no_trees_near(trees, x, z, 3):
+					trees[cell] = true
+					_prop(props, rng, cell, h, _forest_kind(x, z), "plain",
+						_forest_variants(_forest_kind(x, z)), heights)
+				elif rng.randf() < 0.008 \
+						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
+					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+				elif rng.randf() < 0.006:
+					_prop(props, rng, cell, h, "mrock", "plain", 3)
+				continue
+			# Холмы ниже вершин: кусты и коряги в траве.
+			if Vector2(x + 58.0, z - 42.0).length() < 42.0 and h < 10.0:
+				if rng.randf() < 0.003:
+					_prop(props, rng, cell, h, "etree_bush", "plain", 5, heights)
+				elif rng.randf() < 0.0015 \
+						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
+					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+
+
+## Клетки, возле которых наполнение не ставит твёрдые предметы: спавны и
+## камни духа — по спискам из poi, плиты/сундук/ворота руин, конец причала,
+## костёр и лавки, смотровые площадки (лестницы и входы троп), HangPoint
+## расщелины. Возвращает 3D-точки для дистанционной проверки.
+static func reserved_anchor_spots(
+	ruins: Dictionary, pier: Dictionary, fire: Dictionary,
+) -> Array[Vector3]:
+	var spots: Array[Vector3] = []
+	spots.append_array(fire["benches"])
+	spots.append(fire["center"])
+	spots.append(ruins["chest"])
+	spots.append(ruins["gate_center"])
+	spots.append_array(ruins["plates"])
+	spots.append(pier["deck_end"])
+	for center: Vector2i in LOOKOUTS:
+		spots.append(Vector3(float(center.x), LOOKOUT_TOP_H, float(center.y)))
+	for point: Vector3 in _hang()["points"]:
+		spots.append(point)
+	return spots
+
+
+## Свободен ли отступ от якорей (твёрдое наполнение не загораживает
+## механики и постройки).
+static func _clear_of_anchors(pos: Vector3, anchors: Array[Vector3], min_d: float) -> bool:
+	for anchor: Vector3 in anchors:
+		if Vector2(pos.x, pos.z).distance_to(Vector2(anchor.x, anchor.z)) < min_d:
+			return false
+	return true
 
 
 ## Детерминированный ГПСЧ для «строительных» предметов без внешнего rng

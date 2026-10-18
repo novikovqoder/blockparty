@@ -3,11 +3,7 @@
 Правила использования — раздел «Скачивание ресурсов» в CLAUDE.md и план
 доработки графики (docs/VISUAL_PLAN.md): ресурсы только CC0, код аддонов —
 CC0 или MIT (с автором и лицензией), только с разрешённых сайтов, в проекте
-лежат лишь реально используемые файлы (архивы не хранятся). Папки наборов Kenney закрыты `.gdignore`: Godot не
-импортирует эти файлы, брёвна валежника читает напрямую
-`gameplay/world/props/prop_meshes.gd` (_dead_log)
-при запекании острова (в игре меши уже встроены в `island_art.res`). Папки
-остальных наборов импортируются движком и загружаются в рантайме; извлечённые
+лежат лишь реально используемые файлы (архивы не хранятся). Извлечённые
 из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
 это та же встроенная текстура модели. Наборы KayKit (персонажи и анимации,
 раздел 16 SPEC v2.3) удалены после перехода на персонажей Quaternius
@@ -16,7 +12,6 @@ Animation Library (П5.7–П5.8).
 
 | Набор | Автор | Страница набора | Лицензия | Дата | Файлы |
 | --- | --- | --- | --- | --- | --- |
-| Nature Kit | Kenney | https://kenney.nl/assets/nature-kit | CC0 | 2026-10-05 | `kenney.nl/nature-kit/`: log.glb, log_large.glb — только брёвна валежника (П5.13, блок 1: остальные модели набора заменены процедурными, файлы удалены) |
 | Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_ubc.res` — 19 скелетных клипов, переложенных с универсального рига UAL на риг Universal Base Characters (`tools/make_ubc_anims.gd`; линейки Quaternius Universal делят один риг); исходные glb наборов и архивы в репозитории не хранятся |
 | Universal Base Characters (Standard) | Quaternius | https://quaternius.com/packs/universalbasecharacters.html | CC0 | 2026-10-12 | `quaternius.com/universal_base_characters/baked/` — риг 65 костей (тела Superhero Male/Female, глаза, брови) и причёски (Long, Buns, Buzzed, BuzzedFemale, SimpleParted, Beard), запечённые `tools/make_ubc_characters.gd` в сцены `ubc_male.res`/`ubc_female.res` (срез головы, меши + `_lod1` + скины, материалы, текстуры — кожа обесцвечена под палитры); исходные gltf и архивы в репозитории не хранятся |
 | Modular Character Outfits — Fantasy (Standard) | Quaternius | https://quaternius.com/packs/modularcharacteroutfits.html | CC0 | 2026-10-12 | внутри `quaternius.com/universal_base_characters/baked/` — модульная одежда Peasant/Ranger (верх, руки, низ, обувь, капюшон) из частей Male/Female, собранная тем же запеканием в `meshes/` и сцены `ubc_*.res`; исходные gltf и архивы в репозитории не хранятся |
@@ -31,10 +26,11 @@ Animation Library (П5.7–П5.8).
 | Terrain3D 1.0.2 | Cory Petkovsek, Roope Palmroos и контрибьюторы | https://github.com/TokisanGames/Terrain3D | MIT | 2026-10-18 | `addons/terrain_3d/` — рельеф острова вне сектора Леса (П5.13, блок 3): сглаженные нормали, LOD-клипмап, дырки рендера из control-карты; коллизия аддона выключена (физика остаётся на HeightMapShape3D). Текст лицензии — `addons/terrain_3d/LICENSE.txt`. Вершинная часть `gameplay/world/terrain3d_ground.gdshader` — облегчённый шейдер аддона `extras/shaders/lightweight.gdshader` (MIT, с атрибуцией в комментарии), фрагментная часть наша. Код аддона не правил |
 
 Наборы Kenney (шаг 3 П4.5) использовались как геометрия предметов окружения;
-П5.13, блок 1 убрал их из окружения полностью — лавки, колонны и арки руин,
-навесы площади, камни и растительность процедурные (`prop_meshes.gd`,
-`rock_gen.gd`, `forest_plants.gd`), из набора Nature Kit остались только
-брёвна валежника (log/log_large с корой ambientcg); Castle Kit удалён.
+П5.13, блок 1 убрал их из окружения почти полностью — лавки, колонны и арки
+руин, навесы площади, камни и растительность процедурные (`prop_meshes.gd`,
+`rock_gen.gd`, `forest_plants.gd`); Castle Kit удалён. П5.13, блок 5 убрал и
+последнее — брёвна валежника Nature Kit (log/log_large) заменены процедурной
+корягой `_snag` (`prop_meshes.gd`); файлов kenney в проекте больше нет.
 Сканы Poly Haven (П5.7, блок 2) — фотограмметрия деревьев, кустов, камней и
 брёвен Леса: скачанные glb децимированы до бюджетов low-poly и запечены в
 `.res` с цветом текстуры в вершинах (`tools/decimate_polyhaven.gd`;
@@ -50,7 +46,8 @@ Node.js-конвейере вне репозитория (пресеты Pine/Oa
 `gameplay/world/props/eztree_meshes.gd`). Наборы island_tree_01–03,
 shrub_02–04 и dead_tree_trunk удалены; кора — текстуры ambientCG (таблица
 выше), текстуры листвы — из репозитория ez-tree (MIT). Валежник и мостик —
-брёвна kenney с корой ambientcg. Исходники ez-tree в проекте не хранятся.
+процедурные брёвна с корой ambientcg (`_snag`/`_log_bridge` в
+`prop_meshes.gd`). Исходники ez-tree в проекте не хранятся.
 П5.9 (блок 5) заменил фотосканы крупных камней Леса процедурными глыбами
 `gameplay/world/props/rock_gen.gd` (искажённая шумом сфера, мох по верхним
 граням красит `assets/shaders/rock_moss.gdshader`) — наборы rock_07,

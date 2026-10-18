@@ -124,9 +124,9 @@ static func build_set(type: StringName, variant: int) -> Dictionary:
 
 ## Один уровень: GLB → две поверхности в один ArrayMesh, вершины ×k,
 ## материалы коры и листвы (шейдеры, параметры пресета из манифеста).
-## GLB читается GLTFDocument'ом в обход системы импорта — как брёвна
-## kenney (_dead_log): те же файлы грузятся и при headless-запекании,
-## и из экспортированной сборки (GLB без .import уходит в пакет целиком).
+## GLB читается GLTFDocument'ом в обход системы импорта: те же файлы
+## грузятся и при headless-запекании, и из экспортированной сборки
+## (GLB без .import уходит в пакет целиком).
 static func _lod_mesh(base: String, lod: int, k: float, info: Dictionary) -> ArrayMesh:
 	var path := "%s%s_lod%d.glb" % [DIR, base, lod]
 	var doc := GLTFDocument.new()
