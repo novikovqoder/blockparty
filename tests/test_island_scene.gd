@@ -24,6 +24,7 @@ func test_baked_art_matches_generator() -> void:
 	# молча (IslandView._ready уже построил рельеф и коллизии из ресурса).
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	var view := island.get_node("IslandView") as IslandView
 	assert_not_null(view, "в сцене есть IslandView")
 	var data: Dictionary = _island_data()
@@ -52,6 +53,7 @@ func test_baked_art_matches_generator() -> void:
 func test_scene_contents() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	var birds := 0
 	var critters := 0
 	var fireflies := 0
@@ -91,6 +93,7 @@ func test_scene_contents() -> void:
 func test_water_surfaces_configured() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	for child: Node in island.get_children():
 		if child is WaterArea:
 			var area := child as WaterArea
@@ -106,6 +109,7 @@ func test_water_surfaces_configured() -> void:
 func test_sea_hole_removes_lake_overlap() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	var sea_hole := Rect2()
 	var lake_world := Rect2()
 	for child: Node in island.get_children():
@@ -167,6 +171,7 @@ func test_player_stands_in_every_spawn_zone() -> void:
 	# ни в одной зоне.
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	var player := PLAYER.instantiate() as Player
 	island.add_child(player)
 	for zone: String in island.spawn_zones:

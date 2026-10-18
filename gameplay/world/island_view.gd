@@ -23,10 +23,11 @@ func _ready() -> void:
 	_build_colliders()
 
 
-## Рельеф: одна карта высот и на коллизию (HeightMapShape3D), и на меш
-## чанками 32 × 32 м (вершины на целых координатах −128..128). Сектор Леса
-## [−128..0)² с П5.7 красится реалистичным материалом ForestGround: те же
-## чанки и та же коллизия — меняется только материал.
+## Рельеф: одна карта высот и на коллизию (HeightMapShape3D — вся физика
+## и механики), и на визуал. Сектор Леса [−128..0)² — прежние чанки 32 × 32
+## с материалом ForestGround (вид П5.9 не трогаем). Остров вне Леса рисует
+## Terrain3D (П5.13, блок 3): сглаженные нормали, LOD-клипмап, эрозионный
+## рельеф; коллизию Terrain3D выключаем — она дублировала бы HeightMapShape.
 func _build_terrain() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Terrain"
@@ -37,15 +38,16 @@ func _build_terrain() -> void:
 	shape.map_data = art.heights
 	collision.shape = shape
 	body.add_child(collision)
-	var material := LowPolyMat.flat_or_vertex()
 	var forest_material := ForestGround.make_material(art)
 	for chunk: Mesh in art.chunks:
+		if not _in_forest_sector(chunk.get_aabb()):
+			continue
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = chunk
-		mesh_instance.material_override = (
-			forest_material if _in_forest_sector(chunk.get_aabb()) else material)
+		mesh_instance.material_override = forest_material
 		body.add_child(mesh_instance)
 	add_child(body)
+	Terrain3DIsland.spawn(self, art.heights)
 
 
 ## Чанк целиком в секторе Леса (границы кратны 32 — пересечений нет).

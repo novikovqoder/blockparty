@@ -31,6 +31,20 @@ const ISLAND_R_OUT: float = 112.0
 ## Предел шага рельефа при выравнивании (м перепада на 1 м клетки): 0.9 < 45°
 ## — склон, по которому идёт персонаж; круче — стена.
 const MAX_STEP: float = 0.9
+
+## Гидравлическая эрозия (П5.13, блок 3): количество капель и параметры
+## переноса осадка. Подобраны под сетку 1 м: промоины глубиной ~0.3–1.2 м
+## переживают второй проход _limit_slopes (стенки < 0.9 м/м).
+const EROSION_DROPLETS: int = 9000
+const EROSION_MAX_STEPS: int = 32
+const EROSION_BRUSH: int = 2
+const EROSION_INERTIA: float = 0.06
+const EROSION_CAPACITY: float = 3.4
+const EROSION_ERODE: float = 0.32
+const EROSION_DEPOSIT: float = 0.26
+const EROSION_EVAPORATE: float = 0.02
+## Уклон запуска капли (м на клетку): эрозия — только на склонах.
+const EROSION_SPAWN_SLOPE: float = 0.22
 ## Высоты суши, м (раздел 6: 1–22 м).
 const LAND_MIN: float = 1.0
 const LAND_MAX: float = 22.0
@@ -156,6 +170,7 @@ static func generate() -> Dictionary:
 			heights[_idx(x, z)] = _base_height(x, z, shape, detail)
 	_apply_zones(heights)
 	_limit_slopes(heights, {})
+	_erode(heights)
 	_carve_crevasse(heights)
 	_bridge_ramps(heights)
 	_lookouts(heights)
@@ -437,6 +452,173 @@ static func _protected_cells() -> Dictionary:
 ## Расщелина: дно каньона и приподнятая кромка, плавно сливающаяся
 ## с рельефом. Прорезается после выравнивания — стены каньона вертикальные
 ## (перепад 5 м на клетку), переправа только по мосткам.
+## Гидравлическая эрозия каплями (П5.13, блок 3): овраги и осыпи на
+## склонах Холмов и вдоль Расщелины. Детерминирована собственным RNG
+## (поток rng раскладки предметов не трогаем — их позиции не меняются).
+## Капля идёт вниз по градиенту с инерцией, набирает осадок пропорционально
+## крутизне и скорости, откладывает веером при переполнении — у подножий
+## получаются осыпи, на склонах древовидные промоины. Маска вырезает
+## сектор Леса (его запечённые карты весов и вид П5.9 привязаны к высотам)
+## и террасы Площади/Руин/Озера; каньон, мостки, смотровые и лесной овраг
+## прорезаются ПОСЛЕ эрозии и переустанавливают высоты точно.
+static func _erode(heights: PackedFloat32Array) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED_VALUE + 991
+	# Клетки запуска: суша вне маски-запрета с уклоном — эрозия работает
+	# на склонах, ровные луга не трогает. Маска размываемости замораживается
+	# байтовым массивом на входе: в горячем цикле капли она читается одним
+	# индексом (вызов _erodible на каждое касание кисти — минуты), а запрет
+	# Леса/террас/мелей от хода прогона не зависит.
+	var mask := PackedByteArray()
+	mask.resize(POINTS * POINTS)
+	var spawns: Array[int] = []
+	for z: int in range(-HALF + 2, HALF - 1):
+		for x: int in range(-HALF + 2, HALF - 1):
+			var i: int = (z + HALF) * POINTS + (x + HALF)
+			var h: float = heights[i]
+			if not _erodible(x, z, h):
+				continue
+			mask[i] = 1
+			var steep: float = maxf(
+				absf(heights[i + 1] - h), absf(heights[i - 1] - h))
+			steep = maxf(steep, absf(heights[i + POINTS] - h))
+			steep = maxf(steep, absf(heights[i - POINTS] - h))
+			if steep >= EROSION_SPAWN_SLOPE:
+				spawns.append(i)
+	if spawns.is_empty():
+		return
+	# Кисть отложения/смыва: веса билинейного ядра 5 × 5.
+	var brush_off: PackedInt32Array = []
+	var brush_w: PackedFloat32Array = []
+	for dz: int in range(-EROSION_BRUSH, EROSION_BRUSH + 1):
+		for dx: int in range(-EROSION_BRUSH, EROSION_BRUSH + 1):
+			var wx: float = 1.0 - absf(float(dx)) / float(EROSION_BRUSH + 1.0)
+			var wz: float = 1.0 - absf(float(dz)) / float(EROSION_BRUSH + 1.0)
+			var weight: float = wx * wz
+			if weight > 0.0:
+				brush_off.append(dz * POINTS + dx)
+				brush_w.append(weight)
+	for droplet: int in EROSION_DROPLETS:
+		var i: int = spawns[rng.randi_range(0, spawns.size() - 1)]
+		var pos := Vector2(
+			float(i % POINTS) - HALF + rng.randf(),
+			float(i / POINTS) - HALF + rng.randf())
+		var dir := Vector2.ZERO
+		var speed: float = 1.0
+		var water: float = 1.0
+		var sediment: float = 0.0
+		for step: int in EROSION_MAX_STEPS:
+			var cx: int = int(floorf(pos.x)) + HALF
+			var cz: int = int(floorf(pos.y)) + HALF
+			var fx: float = pos.x - floorf(pos.x)
+			var fz: float = pos.y - floorf(pos.y)
+			var i00: int = cz * POINTS + cx
+			var h00: float = heights[i00]
+			var h10: float = heights[i00 + 1]
+			var h01: float = heights[i00 + POINTS]
+			var h11: float = heights[i00 + POINTS + 1]
+			var gradient := Vector2(
+				(h10 - h00) * (1.0 - fz) + (h11 - h01) * fz,
+				(h01 - h00) * (1.0 - fx) + (h11 - h10) * fx)
+			var height: float = lerpf(
+				lerpf(h00, h10, fx), lerpf(h01, h11, fx), fz)
+			dir = (dir * EROSION_INERTIA - gradient * (1.0 - EROSION_INERTIA))
+			if dir.length_squared() < 1e-12:
+				break
+			dir = dir.normalized()
+			var new_pos := pos + dir
+			# Дальше только по размываемым клеткам: у кромки маски капля
+			# оставляет веер осадка и заканчивает путь. Граница карты —
+			# с запасом радиуса кисти (±2), индекс не заворачивает на
+			# соседнюю строку.
+			var nx: int = int(floorf(new_pos.x)) + HALF
+			var nz: int = int(floorf(new_pos.y)) + HALF
+			if nx < 3 or nz < 3 or nx >= POINTS - 3 or nz >= POINTS - 3 \
+					or not mask[nz * POINTS + nx]:
+				_brush(heights, mask, cx, cz, sediment, brush_off, brush_w, false)
+				break
+			var new_height: float = _bilinear(heights, new_pos)
+			var delta: float = new_height - height
+			if delta >= 0.0:
+				# Подъём в гору: капля теряет способность нести осадок.
+				var drop: float = minf(sediment, delta * 0.5)
+				_brush(heights, mask, cx, cz, drop, brush_off, brush_w, false)
+				sediment -= drop
+			var capacity: float = maxf(-delta, 0.0) * speed * water \
+				* EROSION_CAPACITY
+			if sediment > capacity:
+				var deposit: float = (sediment - capacity) * EROSION_DEPOSIT
+				_brush(heights, mask, cx, cz, deposit, brush_off, brush_w, false)
+				sediment -= deposit
+			else:
+				var erode: float = minf(
+					(capacity - sediment) * EROSION_ERODE, maxf(-delta, 0.0))
+				_brush(heights, mask, cx, cz, erode, brush_off, brush_w, true)
+				sediment += erode
+			speed = sqrt(maxf(0.06, speed * speed + -delta * 9.8 * 0.25))
+			water *= 1.0 - EROSION_EVAPORATE
+			if water < 0.02:
+				_brush(heights, mask, cx, cz, sediment, brush_off, brush_w, false)
+				break
+			pos = new_pos
+
+
+## Клетка размываема: вне сектора Леса (запечённые карты весов ForestGround
+## привязаны к нынешним высотам — эрозия там ломает вид П5.9), суша
+## (мельче SEA_H — кромка воды), вне террас Площади/Руин и котловины Озера
+## с пляжем (их высоты заданы _apply_zones и после эрозии не
+## переустанавливаются).
+static func _erodible(x: int, z: int, h: float) -> bool:
+	if x < 0 and z < 0:
+		return false
+	if h <= SEA_H + 0.1:
+		return false
+	if Vector2(x, z - 4.0).length() < 20.0:
+		return false
+	if Vector2(x - 58.0, z + 48.0).length() < 26.0:
+		return false
+	if Vector2(x - 6.0, z - 82.0).length() < 23.0:
+		return false
+	return true
+
+
+## Нанести кистью смыв (sign = true, углубление) или осадок (sign = false,
+## поднятие) в клетке: только по клеткам замороженной маски, вес из ядра
+## кисти; сумма весов нормируется по размываемой части кисти.
+static func _brush(
+	heights: PackedFloat32Array, mask: PackedByteArray, cx: int, cz: int,
+	amount: float, brush_off: PackedInt32Array, brush_w: PackedFloat32Array,
+	sign: bool,
+) -> void:
+	if amount <= 0.0005:
+		return
+	var center: int = cz * POINTS + cx
+	var total: float = 0.0
+	for k: int in brush_off.size():
+		if mask[center + brush_off[k]]:
+			total += brush_w[k]
+	if total <= 0.0:
+		return
+	var share: float = amount / total
+	for k: int in brush_off.size():
+		var i: int = center + brush_off[k]
+		if mask[i]:
+			heights[i] += -share * brush_w[k] if sign \
+				else share * brush_w[k]
+
+
+## Высота в дробной точке (билинейно), для шага капли.
+static func _bilinear(heights: PackedFloat32Array, p: Vector2) -> float:
+	var cx: int = clampi(int(floorf(p.x)) + HALF, 0, POINTS - 2)
+	var cz: int = clampi(int(floorf(p.y)) + HALF, 0, POINTS - 2)
+	var fx: float = clampf(p.x - floorf(p.x), 0.0, 1.0)
+	var fz: float = clampf(p.y - floorf(p.y), 0.0, 1.0)
+	var i: int = cz * POINTS + cx
+	return lerpf(
+		lerpf(heights[i], heights[i + 1], fx),
+		lerpf(heights[i + POINTS], heights[i + POINTS + 1], fx), fz)
+
+
 static func _carve_crevasse(heights: PackedFloat32Array) -> void:
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):

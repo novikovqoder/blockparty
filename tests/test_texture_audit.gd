@@ -298,6 +298,7 @@ func _collect_world_materials() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var island := ISLAND.instantiate()
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	# Сцена мира — риг неба Sky3D (купол со звёздными текстурами) поверх
 	# того же острова: материалы дедуплицируются, добавляются только небесные.
 	var world := WORLD.instantiate()

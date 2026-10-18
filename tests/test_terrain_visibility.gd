@@ -52,6 +52,7 @@ func test_terrain_faces_point_up_in_every_zone() -> void:
 	assert_ne(up_sign, 0.0, "эталон обхода PlaneMesh найден")
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	for zone: Dictionary in island.zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
@@ -86,6 +87,7 @@ func test_terrain_material_is_opaque() -> void:
 	# включают blend-режимы прозрачности.
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	for mesh: MeshInstance3D in _terrain_meshes(island):
 		var material: Material = mesh.material_override
 		assert_not_null(material, "у рельефа назначен материал")
@@ -123,6 +125,7 @@ func test_terrain_visible_and_in_camera_cull_mask() -> void:
 	# попадает в cull_mask камеры игрока (маска 1 по умолчанию).
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
+	GutNoise.ignore_terrain3d_deprecation(self)
 	var player := PLAYER.instantiate() as Player
 	island.add_child(player)
 	var camera := player.find_children("*", "Camera3D")[0] as Camera3D

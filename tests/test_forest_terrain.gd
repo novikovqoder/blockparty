@@ -150,8 +150,9 @@ func test_relief_normals_bend_on_gully_walls() -> void:
 
 
 func test_island_uses_forest_material() -> void:
-	# В сцене: 16 чанков сектора Леса с материалом ForestGround, остальные
-	# 48 — low-poly; коллизия по-прежнему одна на весь остров.
+	# В сцене: 16 чанков сектора Леса с материалом ForestGround, остальной
+	# рельеф — два узла Terrain3D (П5.13, блок 3); коллизия по-прежнему
+	# одна на весь остров.
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	var terrain := island.get_node("IslandView/Terrain") as StaticBody3D
@@ -165,10 +166,17 @@ func test_island_uses_forest_material() -> void:
 				low_poly += 1
 	assert_eq(
 		forest, 16, "16 чанков Леса с материалом ForestGround")
+	# П5.13, блок 3: чанков вне Леса больше нет — тот сектор рисуют два
+	# узла Terrain3D (сглаженные нормали, LOD); их коллизия выключена,
+	# физика остаётся на единственной HeightMapShape3D всего острова.
 	assert_eq(
-		low_poly,
-		TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE - 16,
-		"остальные чанки — low-poly")
+		low_poly, 0, "чанков вне Леса нет — их рисует Terrain3D")
+	var terrain3d := 0
+	for child: Node in island.get_node("IslandView").get_children():
+		if child is Terrain3D:
+			terrain3d += 1
+	assert_eq(terrain3d, 2, "два узла Terrain3D: East и West")
+	GutNoise.ignore_terrain3d_deprecation(self)
 	var shapes := 0
 	for child: Node in terrain.get_children():
 		if child is CollisionShape3D:
