@@ -300,12 +300,38 @@ static func zone_blend(pos: Vector2, colors: PackedColorArray) -> Color:
 		var d: float = pos.distance_to(zone["center"])
 		if d >= reach:
 			continue
-		var weight: float = 1.0 - d / reach
+		var weight: float = _zone_weight(d, reach)
 		mix += colors[i] * weight
 		total += weight
 	if total <= 0.0:
 		return Color.WHITE
 	return mix / total
+
+
+## Сила зонального тона в точке (П5.13, блок 4, планка Ж: бесшовность):
+## сумма весов зон с отсечкой в 1. Вне охвата зон 0 — тон отсутствует.
+## Смешения умножают свою долю на силу, поэтому к краю охвата зональный
+## цвет растворяется в базовый материал плавно: раньше нормализация
+## mix/total держала полный тон до самой границы охвата, и на метре
+## «зона кончилась» цвет резко терял зональность (шов между зонами —
+## находка теста test_zone_blend_is_smooth).
+static func zone_color_strength(pos: Vector2) -> float:
+	var total: float = 0.0
+	for zone: Dictionary in ZONES:
+		var reach: float = float(zone["radius"]) * 1.4
+		var d: float = pos.distance_to(zone["center"])
+		if d >= reach:
+			continue
+		total += _zone_weight(d, reach)
+	return minf(total, 1.0)
+
+
+## Профиль веса зоны (smoothstep): наклон нулевой в центре зоны и на
+## границе охвата — линейный профиль «переламывался» на стыках зон
+## видимой ломаной в цвете земли, тумана и тинт предметов.
+static func _zone_weight(d: float, reach: float) -> float:
+	var t: float = clampf(1.0 - d / reach, 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
 
 
 ## Индекс точки в карте высот.
@@ -1222,10 +1248,11 @@ static func _add_prop(
 
 
 ## Тон предмета: лёгкая вариация яркости + уклон к палитре зоны в этой
-## точке (zone_blend). kind: leaf — листва/кусты (zone_leaf), stone — камни
-## и стены (zone_stone), grass — трава (zone_ground), flower — цветок из
-## палитры, plain — без уклона. Уклон умеренный: стволы и камни не
-## перекрашиваются целиком.
+## точке (zone_blend, с силой зоны — П5.13, блок 4: вне охвата зон тон
+## нейтрален, к краю растворяется). kind: leaf — листва/кусты (zone_leaf),
+## stone — камни и стены (zone_stone), grass — трава (zone_ground),
+## flower — цветок из палитры, plain — без уклона. Уклон умеренный:
+## стволы и камни не перекрашиваются целиком.
 static func _zone_tint(rng: RandomNumberGenerator, pos: Vector2, kind: String) -> Color:
 	var tint := Color.WHITE * rng.randf_range(0.92, 1.08)
 	tint.a = 1.0
@@ -1242,7 +1269,8 @@ static func _zone_tint(rng: RandomNumberGenerator, pos: Vector2, kind: String) -
 		zone_color = zone_blend(pos, PAL.zone_ground)
 	else:
 		zone_color = zone_blend(pos, PAL.zone_leaf)
-	return tint.lerp(zone_color.lerp(Color.WHITE, 0.5), 0.5)
+	return tint.lerp(zone_color.lerp(Color.WHITE, 0.5),
+		0.5 * zone_color_strength(pos))
 
 
 # --- Стены расщелины и смотровых (раздел 6: уступы — предметы) ---

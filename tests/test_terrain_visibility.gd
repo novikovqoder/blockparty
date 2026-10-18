@@ -48,14 +48,23 @@ func test_terrain_faces_point_up_in_every_zone() -> void:
 	# геометрическую ориентацию считаем из обхода треугольника и сравниваем
 	# с конвенцией движка: если порядок вершин перевернётся (грань видна
 	# только снизу — баг П4.5), знак уйдёт в противоположный.
+	# П5.13, блок 3: чанки остались только в секторе Леса (x < 0, z < 0),
+	# остальной остров рисует Terrain3D (его домены, высоты и дырки —
+	# тестами test_terrain3d_island); проверяем зоны, чей круг заходит
+	# в сектор Леса (forest целиком, plaza краем).
 	var up_sign := _engine_up_sign()
 	assert_ne(up_sign, 0.0, "эталон обхода PlaneMesh найден")
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	GutNoise.ignore_terrain3d_deprecation(self)
+	var checked := 0
 	for zone: Dictionary in island.zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
+		var nearest := Vector2(minf(center.x, 0.0), minf(center.y, 0.0))
+		if center.distance_to(nearest) >= radius:
+			continue  # зона целиком вне сектора чанков
+		checked += 1
 		var sum := Vector3.ZERO
 		var faces := 0
 		for mesh_instance: MeshInstance3D in _terrain_meshes(island):
@@ -78,6 +87,7 @@ func test_terrain_faces_point_up_in_every_zone() -> void:
 			"зона %s: обход граней совпадает с конвенцией движка (грань видна сверху, y=%.2f)"
 			% [zone["name"], mean.normalized().y],
 		)
+	assert_gt(checked, 0, "хотя бы одна зона попала в сектор чанков Леса")
 
 
 func test_terrain_material_is_opaque() -> void:

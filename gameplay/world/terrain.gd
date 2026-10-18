@@ -82,7 +82,10 @@ static func point_color(
 	else:
 		# Луг высыхает с высотой — к битой земле, не к камню.
 		color = PAL.grass.lerp(PAL.dirt, clampf((h - 8.0) / 10.0, 0.0, 1.0) * 0.4)
-		color = color.lerp(IslandGen.zone_blend(Vector2(x, z), PAL.zone_ground), ZONE_MIX)
+		# Зональный тон с силой зоны (П5.13, блок 4): вне охвата зон луг
+		# чистый, к краю охвата тон растворяется — шва «зона кончилась» нет.
+		color = color.lerp(IslandGen.zone_blend(Vector2(x, z), PAL.zone_ground),
+			ZONE_MIX * IslandGen.zone_color_strength(Vector2(x, z)))
 	# Лёгкое высветление высот — холмы читаются на карте.
 	return color.lerp(Color.WHITE, clampf(h / 26.0, 0.0, 1.0) * HEIGHT_LIGHT)
 

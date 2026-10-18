@@ -142,11 +142,13 @@ func _process(_delta: float) -> void:
 	var fog := _mix4(VPAL.dawn_fog, VPAL.day_fog, VPAL.dusk_fog,
 		VPAL.night_fog, mixes)
 	if _fog_focus_set:
-		# Туман по зонам (раздел 16): цвет зоны игрока поверх палитры.
-		var zone_fog := IslandGen.zone_blend(
-			Vector2(_fog_focus.x, _fog_focus.z), PAL.zone_fog
-		)
-		fog = fog.lerp(zone_fog, ZONE_FOG_MIX)
+		# Туман по зонам (раздел 16): цвет зоны игрока поверх палитры,
+		# с силой зоны (П5.13, блок 4) — вне охвата зон туман чисто
+		# палитры времени суток, без высветляющего лерпа к белому.
+		var focus := Vector2(_fog_focus.x, _fog_focus.z)
+		var zone_fog := IslandGen.zone_blend(focus, PAL.zone_fog)
+		fog = fog.lerp(zone_fog,
+			ZONE_FOG_MIX * IslandGen.zone_color_strength(focus))
 	_environment.fog_light_color = fog
 	_environment.fog_density = B.fog_density_simple if simple else B.fog_density
 	# Дымка по высоте (раздел 16): низины и вода — в лёгкой дымке.

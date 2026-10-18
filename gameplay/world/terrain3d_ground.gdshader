@@ -45,6 +45,13 @@ uniform bool flat_terrain_normals = false;
 uniform float macro_scale : hint_range(0.5, 32.0) = 7.0;
 uniform float macro_detail_scale : hint_range(0.25, 8.0) = 1.6;
 uniform float macro_strength : hint_range(0.0, 0.3) = 0.09;
+// Гашение вариации у мировых осей x = 0 / z = 0 (П5.13, блок 4, планка Ж:
+// бесшовность): у кромки Леса ForestGround печатает в border_map точный
+// point_color соседей — вариация здесь давала бы цветовой скачок на стыке;
+// на стыке узлов East/West вариация непрерывна по мировым координатам,
+// но гасится синхронно с обеих сторон — обе стороны сходятся к одному
+// запечённому цвету.
+const float EDGE_FADE_M = 6.0;
 // Шероховатость земли: матовая, блики только у кромки воды (вода — свой шейдер).
 uniform float ground_roughness : hint_range(0.5, 1.0) = 0.96;
 
@@ -197,6 +204,9 @@ void fragment() {
 	float macro = value_noise(uv / macro_scale) - 0.5;
 	float detail = value_noise(uv / macro_detail_scale) - 0.5;
 	float variation = (macro * 0.7 + detail * 0.3) * 2.0 * macro_strength;
+	// Кромки доменов (планка Ж): вариация гаснет у осей x = 0 / z = 0 —
+	// кромка Леса и стык узлов сходятся к точному цвету color-карты.
+	variation *= smoothstep(0.0, EDGE_FADE_M, min(abs(uv.x), abs(uv.y)));
 
 	// Плоские нормали (для стилизации) не используются: сглаженные
 	// нормали рельефа уже в NORMAL от вершинного прохода.

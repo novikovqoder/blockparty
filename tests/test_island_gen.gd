@@ -43,7 +43,50 @@ func test_generation_is_deterministic() -> void:
 	# Площади/Руин и котловину Озера), высоты под ней изменились →
 	# перегенерированы island.tscn/island_art.res/island_map.png, якоря
 	# механик легли на новую карту высот. Механики, тропы, POI — прежние.
-	assert_eq(first_hash, 79254868, "хеш острова совпадает с сгенерированной сценой")
+	# П5.13, блок 4: хеш обновлён сознательно — профиль весов zone_blend
+	# стал smoothstep и появился спад силы зонального тона к краю охвата
+	# (плавные границы зон, планка Ж); высоты и раскладка предметов не
+	# менялись, сдвинулся только tint-тон предметов (входит в хеш).
+	# Перегенерированы island.tscn/island_art.res/island_map.png.
+	assert_eq(first_hash, 819163341, "хеш острова совпадает с сгенерированной сценой")
+
+
+func test_zone_blend_is_smooth() -> void:
+	# П5.13, блок 4 (планка Ж: бесшовность): итоговый зональный вклад
+	# (цвет зоны × сила зоны — ровно то, что подмешивается к земле, туману
+	# и тинтам предметов) меняется вдоль лучей между центрами зон без
+	# шва — резкой смены на соседних метрах. До фикса силы зоны
+	# нормализация mix/total держала полный тон до края охвата, и на метре
+	# «зона кончилась» вклад выпадал скачком ~1.0 (замер пробы: 1.19 на
+	# лучах ruins/lake — выбеленные линзы между зонами). Естественный
+	# градиент растворения зоны — до 0.11 на метр (пик производной
+	# smoothstep-профиля у самой узкой зоны, сумма трёх каналов); шов был
+	# бы ≥ 0.5 (полная разница цветов зон). Порог 0.2 — отсекает шов,
+	# градиент допускает.
+	var pal: Palette = load("res://assets/palette.tres")
+	var zones: Array = IslandGen.ZONES
+	var from: Vector2 = zones[0]["center"]
+	for zone: Dictionary in zones:
+		var center: Vector2 = zone["center"]
+		if center == from:
+			continue
+		var prev := _zone_contribution(from, pal.zone_ground)
+		var steps := maxf(1, int(from.distance_to(center)))
+		for s: int in range(1, steps + 1):
+			var pos := from.lerp(center, float(s) / float(steps))
+			var color := _zone_contribution(pos, pal.zone_ground)
+			var jump: float = absf(color.r - prev.r) \
+				+ absf(color.g - prev.g) + absf(color.b - prev.b)
+			assert_lt(jump, 0.2,
+				"зона %s: шов вклада на метре (шаг %d)" % [zone["name"], s])
+			prev = color
+
+
+## Зональный вклад в точке: цвет зоны, умноженный на силу зоны — как его
+## используют point_color, туман и тинты (сила гасит вклад вне охвата).
+func _zone_contribution(pos: Vector2, colors: PackedColorArray) -> Color:
+	return IslandGen.zone_blend(pos, colors) \
+		* IslandGen.zone_color_strength(pos)
 
 
 func test_heightmap_fully_covered() -> void:
