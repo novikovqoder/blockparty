@@ -200,7 +200,6 @@ static func generate() -> Dictionary:
 	_trees_and_rocks(heights, props, rng, reserved)
 	_crevasse_walls(props, rng)
 	_lookout_walls(props, rng)
-	_lookout_trails(props, rng)
 	_bridges(props, rng)
 	var ruins: Dictionary = _ruins(heights, props, rng)
 	var pier: Dictionary = _pier_and_boats(heights, props)
@@ -1418,14 +1417,14 @@ static func _crevasse_walls(props: Array, rng: RandomNumberGenerator) -> void:
 
 
 ## Кольцо скальных призм вокруг каждой смотровой площадки (уступ 3 м):
-## грань рельефа проходит на 1.5 м от центра площадки 2 × 2 м. Север открыт —
-## туда входит обходная тропа (раздел 9.3, запасной путь одиночки).
+## грань рельефа проходит на 1.5 м от центра площадки 2 × 2 м. Кольцо
+## замкнуто — доработка-2 П5.13 (П2) убрала обходные тропы со ступенями:
+## смотровые уступы пешеходом не проходимы, только механики (верёвочная
+## лестница с юга по LOOKOUT_TOP_H + LookoutLadder, подсадка с головы).
 static func _lookout_walls(props: Array, rng: RandomNumberGenerator) -> void:
 	var wall_h: float = LOOKOUT_TOP_H - LOOKOUT_BASE_H + 0.4
 	for center: Vector2i in LOOKOUTS:
 		for side: int in range(4):
-			if side == 2:
-				continue  # северная стена — разрыв под тропу
 			var along_x: bool = side % 2 == 0
 			var sign: float = 1.0 if side < 2 else -1.0
 			var pos := Vector3(
@@ -1441,32 +1440,6 @@ static func _lookout_walls(props: Array, rng: RandomNumberGenerator) -> void:
 		for i: int in range(3):
 			_prop(props, rng, center + Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1)),
 				LOOKOUT_TOP_H, "pebble", "stone")
-
-
-## Обходная тропа на смотровую (раздел 9.3, запасной путь одиночки):
-## дуга деревянных ступеней вокруг скалы — с юга через восток к северному
-## разрыву стены. Каждая ступень выше предыдущей меньше автоподъёма —
-## тропа проходима без чужой помощи, но дольше, чем подсадка или лестница.
-static func _lookout_trails(props: Array, rng: RandomNumberGenerator) -> void:
-	var steps: int = 10
-	var radius: float = 2.9
-	for center: Vector2i in LOOKOUTS:
-		for i: int in steps:
-			var t: float = float(i) / float(steps - 1)
-			var angle: float = PI / 2.0 - t * PI
-			var pos := Vector3(
-				float(center.x) + radius * cos(angle),
-				7.05 + t * 2.7,
-				float(center.y) + radius * sin(angle),
-			)
-			# Ступень длинной стороной вдоль касательной дуги.
-			_add_prop(props, rng, &"plank_deck", pos,
-				atan2(sin(angle), -cos(angle)) + rng.randf_range(-0.03, 0.03),
-				Vector3(1.5, 0.12, 1.2), "plain", 1)
-		# Финальная ступень у северного разрыва — вход на площадку.
-		_add_prop(props, rng, &"plank_deck",
-			Vector3(float(center.x), 9.88, float(center.y) - 1.8), 0.0,
-			Vector3(1.5, 0.12, 1.6), "plain", 1)
 
 
 ## Мостки: две переправы из досок на кромке (walk — поверхность BFS) и

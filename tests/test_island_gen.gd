@@ -75,9 +75,12 @@ func test_generation_is_deterministic() -> void:
 	# уходит, склоны холмов линейны и не меняются, кромки террас/оврага/
 	# смотровых защищены гашением веса у перепадов, близких к MAX_STEP),
 	# поэтому высоты и посадки предметов сдвинулись на сантиметры.
-	# Раскладка, тропы и POI прежние; сглаживание проверяет
-	# tests/test_terrain_lod.gd.
-	assert_eq(first_hash, 3454090224, "хеш острова совпадает с сгенерированной сценой")
+	# Доработка-2 П5.13, П2: хеш обновлён снова — обходные тропы смотровых
+	# убраны (уступы пешеходом не проходимы, только лестница/подсадка),
+	# кольцо стен стало замкнутым (четыре стороны вместо трёх — сдвиг
+	# потока rng раскладки). Раскладка зон и POI прежние; сглаживание
+	# проверяет tests/test_terrain_lod.gd, проходимость — test_slope_walking.
+	assert_eq(first_hash, 4049955047, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_zone_blend_is_smooth() -> void:
@@ -156,13 +159,15 @@ func test_lookouts_not_reachable_without_help() -> void:
 		assert_true(base_reachable, "базис смотровой %s достижим" % lookout)
 
 
-func test_lookouts_reachable_by_solo_trail() -> void:
-	# Раздел 9.3, запасной путь: обходная тропа из досок ведёт на площадку —
-	# одиночка поднимается без подсадки (настилы входят в поверхность).
+func test_lookouts_not_reachable_even_with_decks() -> void:
+	# Доработка-2 П5.13, П2: обходные тропы смотровых удалены — путь
+	# «настилами» (walkable_reach учитывает предметы-поверхности) больше
+	# не ведёт на площадки: только механики (лестница после подсадки).
 	var data: Dictionary = _island_data()
 	var reach: Dictionary = IslandGen.walkable_reach(data)
 	for lookout: Vector2i in IslandGen.LOOKOUTS:
-		assert_true(reach.has(lookout), "тропа ведёт на смотровую %s" % lookout)
+		assert_false(reach.has(lookout),
+			"смотровая %s не достижима пешеходом и по настилам" % lookout)
 
 
 func test_spawn_points_on_land() -> void:

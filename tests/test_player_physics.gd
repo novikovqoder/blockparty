@@ -44,9 +44,12 @@ func test_locomotion_speeds_from_spec() -> void:
 	assert_gt(B.run_speed, B.walk_speed)
 
 
-func test_step_up_is_for_half_blocks_only() -> void:
-	assert_between(B.step_up_height, 0.5, 0.999,
-		"автоподъём покрывает полублоки, но не блок")
+func test_step_up_is_for_small_steps_only() -> void:
+	# Доработка-2 П5.13, П2: авто-шаг ~0.3 м (ступени лестниц смотровых
+	# 0.3 м проходят с запасом), всё выше — только прыжком; прежние
+	# «полублоки» 0.5 м больше не перешагиваются.
+	assert_between(B.step_up_height, 0.28, 0.36,
+		"автоподъём — ступенька ~0.3 м, не полублок")
 
 
 # --- Интеграционные: реальная физика CharacterBody3D ---

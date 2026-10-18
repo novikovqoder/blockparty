@@ -405,13 +405,15 @@ func test_crevasse_walls_and_bridges_are_props() -> void:
 				if pos.z >= IslandGen.CREVASSE_Z0 and pos.z <= IslandGen.CREVASSE_Z1:
 					posts += 1
 	assert_gt(walls, 30, "стены расщелины — предметы rock_wall")
+	# Доработка-2 П5.13, П2: кольцо смотровых ЗАМКНУТО (четыре стены) —
+	# обходные тропы убраны, уступ пешеходом не проходим (только механики).
 	assert_eq(
-		lookout_walls, IslandGen.LOOKOUTS.size() * 3,
-		"по три стены на смотровой (север — разрыв под тропу, раздел 9.3)",
+		lookout_walls, IslandGen.LOOKOUTS.size() * 4,
+		"по четыре стены на смотровой (замкнутое кольцо)",
 	)
 	assert_between(decks, 10, 24, "настилы двух мостков через каньон")
 	assert_eq(
-		trail_steps, IslandGen.LOOKOUTS.size() * 11,
-		"тропа на смотровую: 10 ступеней дуги и входная (раздел 9.3)",
+		trail_steps, 0,
+		"обходные тропы на смотровые убраны (доработка-2 П5.13, П2)",
 	)
 	assert_between(posts, 4, 8, "опоры мостков под настилом")

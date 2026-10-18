@@ -35,6 +35,8 @@ var _bot: BotController = null
 var _coyote: float = 0.0
 var _jump_buffer: float = 0.0
 var _jump_cut_done: bool = false
+## Прыжок выполнен в текущем кадре (анти-подскок на гребнях его не гасит).
+var _jumped: bool = false
 var _was_on_floor: bool = true
 var _attack_cooldown: float = 0.0
 var _attack_active: float = 0.0
@@ -77,7 +79,10 @@ func _ready() -> void:
 	collision_mask = 1
 	# Собственная голова не должна ловить собственную капсулу.
 	$HeadTop.add_collision_exception_with(self)
-	floor_snap_length = 0.2
+	# Ходьба по склонам (доработка-2 П5.13, П2): пологие склоны холмов
+	# (включая крутые диагонали ~52°) — пол, отвесные кромки и скалы — стена.
+	floor_max_angle = deg_to_rad(B.walk_max_slope_deg)
+	floor_snap_length = B.floor_snap_length
 	# Player — всегда локальный игрок (RemotePlayer отдельно): с него Net
 	# берёт снапшоты и позицию для проверок хоста (раздел 10).
 	Net.register_local_player(self)
@@ -97,6 +102,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_jumped = false
 	_update_invite_timer(delta)
 	if _sitting:
 		if _stand_input():
@@ -121,10 +127,21 @@ func _physics_process(delta: float) -> void:
 	_apply_gravity_or_buoyancy(delta)
 	if _hand_leader_peer == 0:
 		_update_jump(delta)
+	_limit_slope_climb()
 	_update_head_collision()
 	var was_floor := is_on_floor()
 	move_and_slide()
-	if was_floor and is_on_floor() and is_on_wall():
+	# Анти-подскок на гребнях (доработка-2 П5.13, П2): срыв с пола без
+	# прыжка не должен подбрасывать — восходящая скорость гасится, и
+	# floor_snap возвращает на поверхность (бег через гребень без
+	# подпрыгивания на рёбрах).
+	if was_floor and not is_on_floor() and velocity.y > 0.0 and not _jumped:
+		velocity.y = 0.0
+	# Авто-шаг — только на ходу: зашедший на ступень персонаж её берёт,
+	# трение о стену на месте не дёргает его подскоками (проба П2: цикл
+	# «поднялся-упал» у высокой стены каждые 15 кадров).
+	if was_floor and is_on_floor() and is_on_wall() \
+			and Vector2(velocity.x, velocity.z).length() > 1.0:
 		_try_step_up(wish)
 	_update_animation()
 	_turn_model(wish, delta)
@@ -241,6 +258,8 @@ func _follow_leader() -> Vector3:
 	if leader_jumping and not _leader_was_jumping and is_on_floor():
 		velocity.y = B.jump_speed
 		_jump_cut_done = true
+		# Это прыжок (анти-подскок и срезка тяги склона его не гасят).
+		_jumped = true
 	_leader_was_jumping = leader_jumping
 	return to_target / distance if distance > 0.15 else Vector3.ZERO
 
@@ -429,11 +448,65 @@ func _move_horizontally(wish: Vector3, delta: float) -> void:
 		# Плавание медленнее бега (раздел 6): одна скорость для всех.
 		speed = minf(speed, B.swim_speed)
 	var target := wish.limit_length(1.0) * speed
+	# Ходьба по склонам (доработка-2 П5.13, П2) — два эффекта физики:
+	# 1) горизонтальная скорость, направленная «в» склон, скользит по
+	#    плоскости пола и теряет горизонтальный ход до v·cos²θ — бег в гору
+	#    замедлялся почти вдвое. Цель проецируется на плоскость пола и
+	#    масштабируется до полной горизонтальной скорости (предел
+	#    slope_speed_comp_max), включая вертикальную тягу вдоль склона;
+	#    тяга — только в подъём, у гребней и на спуске ведёт гравитация.
+	# 2) наклонная СТЕНА (круче walk_max_slope_deg) — «эскалатор»: давление
+	#    в неё move_and_slide переизлучает вверх по касательной, персонаж
+	#    вылезал по отвесным кромкам пешеходом. Составляющая давления в
+	#    стену гасится — остаётся скольжение вдоль стены по горизонтали.
+	var uphill := false
+	if not _in_water:
+		if is_on_floor():
+			var normal := get_floor_normal()
+			var into: float = target.dot(normal)
+			if into < -0.01:
+				var along: Vector3 = target - normal * into
+				var horiz: float = Vector2(along.x, along.z).length()
+				var wanted: float = Vector2(target.x, target.z).length()
+				if horiz > 0.01 and wanted > 0.01:
+					target = along * minf(wanted / horiz, B.slope_speed_comp_max)
+					# Крутые склоны: вертикальная часть тяги не прыжковая
+					# (v·tanθ у 54° догоняет прыжок — срезаем до предела,
+					# подъём становится чуть медленнее полной скорости).
+					if target.y > B.slope_climb_vy_max:
+						target *= B.slope_climb_vy_max / target.y
+					uphill = true
+		if is_on_wall():
+			var wall_normal := get_wall_normal()
+			if target.dot(wall_normal) < -0.001:
+				var along_wall := Vector3(
+					-wall_normal.z, 0.0, wall_normal.x).normalized()
+				target = along_wall * maxf(target.dot(along_wall), 0.0)
 	var accel: float = B.deceleration if target == Vector3.ZERO else B.acceleration
 	if not is_on_floor() and not _in_water:
 		accel *= B.air_control
 	velocity.x = move_toward(velocity.x, target.x, accel * delta)
 	velocity.z = move_toward(velocity.z, target.z, accel * delta)
+	if uphill:
+		velocity.y = move_toward(velocity.y, target.y, accel * delta)
+
+
+## Излишек вертикальной тяги срезается по ТЕКУЩЕМУ наклону пола
+## (доработка-2 П5.13, П2). Тяга в гору нужна ровно в размере
+## «горизонтальный ход × тангенс уклона» — на выполаживании у гребня
+## прежние 5 м/с держались по инерции и подбрасывали персонажа над
+## землёй на четверть секунды. Мгновенная срезка держит его на склоне.
+func _limit_slope_climb() -> void:
+	if _jumped or _in_water or not is_on_floor() or velocity.y <= 0.0:
+		return
+	var normal := get_floor_normal()
+	var tan_a: float = sqrt(maxf(1.0 - normal.y * normal.y, 0.0)) \
+		/ maxf(normal.y, 0.05)
+	var cap: float = minf(
+		Vector2(velocity.x, velocity.z).length() * tan_a,
+		B.slope_climb_vy_max)
+	if velocity.y > cap:
+		velocity.y = cap
 
 
 func _apply_gravity_or_buoyancy(delta: float) -> void:
@@ -470,6 +543,7 @@ func _update_jump(delta: float) -> void:
 				Net.request_boost(_head_peer)
 		velocity.y = speed
 		_jump_buffer = 0.0
+		_jumped = true
 		_coyote = 0.0
 		_jump_cut_done = false
 	# Переменная высота: отпускание режет вертикальную скорость (один раз).
@@ -478,17 +552,24 @@ func _update_jump(delta: float) -> void:
 		_jump_cut_done = true
 
 
-## Автоподъём на ступеньку до step_up_height (полублоки): вверх, вперёд, вниз.
-## Если впереди стена выше ступени, подъёма не выходит — игрок остаётся у стены.
+## Автоподъём на ступеньку до step_up_height: вверх, вперёд, вниз. Встать
+## выше старта получилось — шаг принят; впереди стена выше ступени —
+## позиция откатывается к исходной, персонаж остаётся у стены без
+## подскоков (доработка-2 П5.13, П2: без отката цикл «поднялся-упал»
+## каждые пару кадров рвал контакт с полом у валунов и стен колец).
 func _try_step_up(wish: Vector3) -> void:
 	if wish.length() < 0.1:
 		return
+	var before := global_position
 	var dir := wish.normalized()
 	var up := move_and_collide(Vector3.UP * B.step_up_height)
 	var lifted: float = B.step_up_height if up == null \
 		else B.step_up_height - up.get_remainder().length()
 	move_and_collide(dir * STEP_PROBE)
 	move_and_collide(Vector3.DOWN * (lifted + 0.01))
+	if global_position.y < before.y + 0.05:
+		global_position = before
+		velocity.y = 0.0
 
 
 # --- Голова другого игрока (подсадка) ---

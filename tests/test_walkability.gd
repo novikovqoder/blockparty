@@ -43,11 +43,12 @@ func test_mechanics_reachable_with_fill() -> void:
 	# спавны зон, камни духа (возрождение), костёр и лавки (посадка),
 	# плиты и ворота руин, сундук (внутри двора — через проломы или
 	# открывшиеся ворота; рама ruin_gate проходима: решётку держит узел
-	# RuinGate по механике плит), конец причала, смотровые площадки
-	# (обходные тропы), HangPoint расщелины, участки деревни (палисадники
-	# без домиков — срубы убраны в доработке П5.13, подход к будущим
-	# домам не зарос), места жителей и обе кромки обоих мостков через
-	# каньон.
+	# RuinGate по механике плит), конец причала, HangPoint расщелины,
+	# участки деревни (палисадники без домиков — срубы убраны в доработке
+	# П5.13, подход к будущим домам не зарос), места жителей и обе кромки
+	# обоих мостков через каньон. Смотровых площадок в списке НЕТ —
+	# доработка-2 П5.13 (П2) убрала обходные тропы: уступы пешеходом
+	# не проходимы (см. test_lookouts_not_reachable_on_foot).
 	var data: Dictionary = _island_data()
 	var reach: Dictionary = IslandGen.mechanics_reach(data)["cells"]
 	var points: Array[Dictionary] = []
@@ -66,8 +67,6 @@ func test_mechanics_reachable_with_fill() -> void:
 	points.append({"name": "ворота руин", "pos": ruins["gate_center"]})
 	points.append({"name": "сундук руин", "pos": ruins["chest"]})
 	points.append({"name": "конец причала", "pos": data["poi"]["pier"]["deck_end"]})
-	for lookout: Dictionary in data["poi"]["lookouts"]:
-		points.append({"name": "смотровая %s" % lookout["center"], "pos": lookout["center"]})
 	for point: Vector3 in data["hang"]["points"]:
 		points.append({"name": "HangPoint %s" % point, "pos": point})
 	for spot: Vector3 in data["poi"]["village"]["spots"]:
@@ -91,6 +90,36 @@ func test_mechanics_reachable_with_fill() -> void:
 			failed.append(String(point["name"]))
 	assert_eq(failed.size(), 0,
 		"все точки достижимы, застряли: %s" % ", ".join(failed))
+
+
+func test_lookouts_not_reachable_on_foot() -> void:
+	# Доработка-2 П5.13, П2: смотровые уступы пешеходом НЕ проходимы —
+	# только механики (верёвочная лестница после подсадки, голова другого
+	# игрока). Обходные тропы удалены из генератора; BFS по поверхностям
+	# (шаг ≤ MAX_STEP, падение вниз разрешено) не должен находить путь
+	# с земли на площадку ни одной из четырёх смотровых. Кольцо грунта
+	# вокруг уступа (LOOKOUT_BASE_H) — наоборот, достижимо: к смотровой
+	# можно подойти по склону холма.
+	var data: Dictionary = _island_data()
+	var walked: Dictionary = IslandGen.mechanics_reach(data)
+	var reach: Dictionary = walked["cells"]
+	var tops: Dictionary = walked["tops"]
+	for lookout: Dictionary in data["poi"]["lookouts"]:
+		var center: Vector3 = lookout["center"]
+		var cell := Vector2i(int(floor(center.x)), int(floor(center.z)))
+		assert_false(reach.has(cell) and not tops.has(cell),
+			"площадка смотровой %s пешеходом недостижима" % center)
+		# Кольцо-основание вокруг уступа достижимо: подход по склону есть
+		# (клетки кольца — в 3–6 м от центра, за пределами самой скалы).
+		var ring_reachable := false
+		for dx: int in range(-6, 7):
+			for dz: int in range(-6, 7):
+				if maxi(absi(dx), absi(dz)) < 3:
+					continue
+				if reach.has(Vector2i(cell.x + dx, cell.y + dz)):
+					ring_reachable = true
+		assert_true(ring_reachable,
+			"к смотровой %s есть подход по кольцу-основанию" % center)
 
 
 func test_village_fences_block_their_cells() -> void:
