@@ -3411,7 +3411,20 @@ WorldSelfCheck (GUT test_world_ground + --selftest-world): у каждой
 - Остров перегенерирован без мобов: хеш 2191791124 (осознанно,
   пояснение в test_island_gen.gd); island_art.res и карта высот
   не изменились — мобы были только узлами island.tscn.
-- Windows-сборка пересобрана: builds/blockparty-windows.zip.
+- Windows-сборка пересобрана: builds/blockparty-windows.zip. Первый zip
+  доработки оказался недописан (17,8 МБ, обрыв по таймауту прогона);
+  пересобран с нуля `tools/build_windows.sh` (экспорт заново, EXIT 0):
+  124 МБ, `unzip -t` без ошибок, состав — exe 218 МБ (pck встроен,
+  embed_pck) + 2 DLL GodotSteam + steam_appid.txt; sha256 exe
+  `95c614b8d9418a14072810a28ca0880397cdc9a3096340ee930484543c0b3b8e`.
+  Запуск exe на Linux-сервере невозможен (wine нет) — проверка запуска
+  на Windows за владельцем.
+- Финальные прогоны после пересборки: GUT полный — 37 скриптов,
+  257 тестов: 256 passed + 1 pending (известный дефект П5.8), без
+  fail'ов; `--selftest-anim` на экспортированной Linux-сборке — PASS,
+  код 0, лог без единого «requires tangents» (единственный WARN —
+  ожидаемое «Steam недоступен»). Осиротевшие .uid удалённых моб-тестов
+  (test_mob_motion, test_host_authority) вычищены.
 
 **Как проверить вручную (Windows-сборка):**
 - Небо/свет: зайти днём (`--dev-spawn=plaza`) — видимый диск солнца
