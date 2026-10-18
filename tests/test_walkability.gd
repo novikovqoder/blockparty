@@ -1,9 +1,10 @@
 # Тесты проходимости с наполнением (П5.13, блок 5): деревня у Площади
-# (домики, заборы) и наполнение зон (деревья берега Озера, коряги, валуны,
-# кусты) не отрезают механики и соло-пути. mechanics_reach — BFS по верхним
-# поверхностям: рельеф, настилы и верхние грани коллизий твёрдых предметов
-# (бокс расширен на радиус игрока). Предмет выше MAX_STEP (домик, забор,
-# ствол) — барьер; ниже (кольцо валунов костра, гребень стены каньона) —
+# (заборы участков — срубы-домики убраны в доработке П5.13) и наполнение
+# зон (деревья берега Озера, коряги, валуны, кусты) не отрезают механики
+# и соло-пути. mechanics_reach — BFS по верхним поверхностям: рельеф,
+# настилы и верхние грани коллизий твёрдых предметов (бокс расширен
+# на радиус игрока). Предмет выше MAX_STEP (забор, ствол) — барьер;
+# ниже (кольцо валунов костра, гребень стены каньона) —
 # ступень, персонаж перешагивает автоподъёмом. Точка достижима, если занята
 # клетка в радиусе подхода 1.6 м — у лавки или плиты игрок останавливается
 # рядом, а не в центре.
@@ -43,8 +44,10 @@ func test_mechanics_reachable_with_fill() -> void:
 	# плиты и ворота руин, сундук (внутри двора — через проломы или
 	# открывшиеся ворота; рама ruin_gate проходима: решётку держит узел
 	# RuinGate по механике плит), конец причала, смотровые площадки
-	# (обходные тропы), HangPoint расщелины, двери домиков деревни,
-	# места жителей и обе кромки обоих мостков через каньон.
+	# (обходные тропы), HangPoint расщелины, участки деревни (палисадники
+	# без домиков — срубы убраны в доработке П5.13, подход к будущим
+	# домам не зарос), места жителей и обе кромки обоих мостков через
+	# каньон.
 	var data: Dictionary = _island_data()
 	var reach: Dictionary = IslandGen.mechanics_reach(data)["cells"]
 	var points: Array[Dictionary] = []
@@ -67,8 +70,8 @@ func test_mechanics_reachable_with_fill() -> void:
 		points.append({"name": "смотровая %s" % lookout["center"], "pos": lookout["center"]})
 	for point: Vector3 in data["hang"]["points"]:
 		points.append({"name": "HangPoint %s" % point, "pos": point})
-	for door: Vector3 in data["poi"]["village"]["doors"]:
-		points.append({"name": "дверь домика %s" % door, "pos": door})
+	for spot: Vector3 in data["poi"]["village"]["spots"]:
+		points.append({"name": "участок деревни %s" % spot, "pos": spot})
 	# Кромки мостков через каньон: заход на настил с обеих сторон
 	# (BRIDGE_X — X мостков, кромка каньона по Z с двух сторон).
 	for bx: int in IslandGen.BRIDGE_X:
@@ -90,26 +93,29 @@ func test_mechanics_reachable_with_fill() -> void:
 		"все точки достижимы, застряли: %s" % ", ".join(failed))
 
 
-func test_village_houses_block_their_cells() -> void:
-	# Домики действительно твёрдые: BFS не проходит их насквозь. Клетка под
-	# домом либо недостижима, либо входит в "tops" — путь туда лежит только
-	# ПОВЕРХ предмета (наступив на крышу со склона у кромки площади: шаг
-	# ≤ MAX_STEP), сквозь стены пути нет. Настил на крыше — физика игры
-	# (коллизия домика — бокс, автоподъём работает и на него).
+func test_village_fences_block_their_cells() -> void:
+	# Заборы деревни действительно твёрдые: BFS не проходит секцию насквозь.
+	# Клетка под забором либо недостижима, либо входит в "tops" — путь туда
+	# лежит только ПОВЕРХ предмета, сквозь секции пути нет. Доработка
+	# П5.13: домики-срубы убраны (дома встанут моделью), палисадники
+	# у участков остались — их непроходимость и проверяем.
 	var data: Dictionary = _island_data()
 	var walked: Dictionary = IslandGen.mechanics_reach(data)
 	var reach: Dictionary = walked["cells"]
 	var tops: Dictionary = walked["tops"]
-	var houses: int = 0
+	var fences: int = 0
 	for prop: Dictionary in data["props"]:
-		if String(prop["type"]) != "house":
+		if String(prop["type"]) != "fence":
 			continue
-		houses += 1
+		fences += 1
 		var pos: Vector3 = prop["pos"]
 		var cell := Vector2i(int(floor(pos.x)), int(floor(pos.z)))
 		assert_false(reach.has(cell) and not tops.has(cell),
-			"домик %s: сквозь дом пути нет" % pos)
-	assert_eq(houses, 3, "три домика жителей у площади")
+			"забор %s: сквозь секцию пути нет" % pos)
+	assert_eq(fences, 12, "три участка по два крыла из двух секций")
+	assert_eq(int(data["props"].filter(func(p: Dictionary) -> bool:
+			return String(p["type"]) == "house").size()), 0,
+		"процедурных срубов-коробок в мире больше нет")
 
 
 func test_zone_fill_adds_props_without_moving_layout() -> void:
@@ -129,5 +135,4 @@ func test_zone_fill_adds_props_without_moving_layout() -> void:
 	# Наполнение живое: коряги вне Леса, кусты на лугах, деревья у Озера.
 	assert_gt(int(counts.get("dead_log", 0)), 12, "коряг больше, чем было в Лесу")
 	assert_gt(int(counts.get("etree_bush", 0)), 40, "кустов больше, чем было в Лесу")
-	assert_gt(int(counts.get("house", 0)), 0, "домики деревни поставлены")
-	assert_gt(int(counts.get("fence", 0)), 0, "заборы у домиков поставлены")
+	assert_gt(int(counts.get("fence", 0)), 0, "заборы деревни поставлены")

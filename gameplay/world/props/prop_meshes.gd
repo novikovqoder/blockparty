@@ -46,11 +46,10 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _bench(variant)
 		"canopy":
 			return _canopy(variant)
-		# П5.13, блок 5: домики жителей и заборы-палисадники у Площади —
-		# сруб из брёвен с дощатой крышей (как навес и мостик: примитивы
-		# с цветом в вершинах, тон зоны — LowPolyMat).
-		"house":
-			return _house(variant)
+		# П5.13, доработка: заборы-палисадники у Площади (примитивы с
+		# цветом в вершинах, тон зоны — LowPolyMat); домики жителей —
+		# процедурные срубы убраны, дома встанут моделью (сруб Kless
+		# в очереди владельца).
 		"fence":
 			return _fence(variant)
 		"pier_post":
@@ -362,10 +361,8 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(0.95, 1.4, 0.95) * scale.x
 		"bench":
 			return Vector3(1.9, 0.55, 0.7)
-		# Домик жителя (П5.13, блок 5): один бокс на сруб с крышей —
-		# внутри никто не ходит; забор — секция выше автоподъёма.
-		"house":
-			return Vector3(3.9, 2.9, 2.8) * scale.x
+		# Забор деревни — секция выше автоподъёма (домики-срубы убраны
+		# в доработке П5.13: дома жителей встанут моделью позже).
 		"fence":
 			return Vector3(1.9 * scale.x, 1.05, 0.18)
 		"boat":
@@ -620,86 +617,11 @@ static func _canopy(variant: int) -> ArrayMesh:
 	return _merge(parts)
 
 
-## Домик жителя (П5.13, блок 5): сруб из настоящих брёвен (венцы из
-## _cyl-цилиндров, как столбы навеса), дощатые фронтоны и двускатная
-## крыша со свесами (как у навеса), каменное основание «врастает» в
-## землю. Дверь и окно — на стороне +Z (модель «лицом» к +Z), крыльцо
-## со ступенькой. Габарит ~4.1 × 2.9 × 3.0; весь дом непроходим —
-## коллизия одним боксом (внутри никто не ходит), вход не нужен:
-## жители стоят снаружи. Вариант — тона брёвен и наклон крыши.
-static func _house(variant: int) -> ArrayMesh:
-	var rng := _rng("house", variant)
-	var parts: Array = []
-	# Каменное основание: чуть шире сруба, «врастает» в землю.
-	parts.append(_box(Vector3(3.9, 0.18, 2.8),
-		PAL.stone.darkened(0.18), Vector3(0.0, 0.08, 0.0)))
-	# Сруб: пять венцов; длинные брёвна вдоль X (дверь на +Z), короткие
-	# вяжут торцы с выпуском «в чашу». Тон брёвен варьируется — сруб
-	# собран «из разных деревьев».
-	var log_r: float = 0.155
-	var rise: float = 0.28
-	for course: int in 5:
-		var y: float = 0.28 + log_r + course * rise
-		var shade: Color = PAL.trunk.lerp(
-			Color.WHITE, rng.randf_range(-0.07, 0.07))
-		for z_at: float in [-1.06, 1.06]:
-			parts.append(_cyl(log_r * 0.97, log_r, 3.5, 7, shade,
-				Vector3(rng.randf_range(-0.02, 0.02), y, z_at),
-				0.0, 0.0, PI / 2.0))
-		for x_at: float in [-1.66, 1.66]:
-			parts.append(_cyl(log_r * 0.94, log_r, 2.44, 7,
-				shade.lerp(Color.WHITE, 0.04),
-				Vector3(x_at, y + rise * 0.5, rng.randf_range(-0.02, 0.02)),
-				0.0, PI / 2.0))
-	# Фронтоны на торцах: две сужающиеся доски-ступени под конёк.
-	for x_at: float in [-1.52, 1.52]:
-		parts.append(_box(Vector3(0.12, 0.52, 2.1),
-			PAL.planks.lerp(Color.WHITE, 0.03), Vector3(x_at, 1.98, 0.0)))
-		parts.append(_box(Vector3(0.12, 0.42, 1.24),
-			PAL.planks.lerp(Color.WHITE, 0.07), Vector3(x_at, 2.42, 0.0)))
-	# Крыша: два ската досок с чередованием тона (как навес), конёк-кряж.
-	var pitch: float = 0.44 + 0.04 * float(variant % 2)
-	var ridge_y: float = 2.86
-	for side: float in [-1.0, 1.0]:
-		for k: int in 5:
-			var frac: float = (float(k) + 0.5) / 5.0
-			var z_local: float = lerpf(0.12, 1.5, frac)
-			var shade: Color = PAL.planks.lerp(
-				Color.WHITE, 0.07 * ((k * 3 + variant) % 3) - 0.035)
-			parts.append(_box(Vector3(4.1, 0.055, 0.32), shade,
-				Vector3(0.0, ridge_y - z_local * tan(pitch), side * z_local),
-				0.0, side * pitch))
-	parts.append(_cyl(0.13, 0.15, 4.2, 7,
-		PAL.trunk.lerp(Color.WHITE, 0.06), Vector3(0.0, ridge_y + 0.06, 0.0),
-		0.0, 0.0, PI / 2.0))
-	# Дверь с наличником (сторона +Z), тёмное дерево.
-	parts.append(_box(Vector3(0.82, 1.5, 0.07),
-		PAL.trunk.darkened(0.38), Vector3(0.42, 0.96, 1.18)))
-	for dx: float in [-0.5, 0.5]:
-		parts.append(_box(Vector3(0.1, 1.62, 0.09), PAL.planks,
-			Vector3(0.42 + dx, 0.99, 1.19)))
-	parts.append(_box(Vector3(1.12, 0.11, 0.1), PAL.planks,
-		Vector3(0.42, 1.82, 1.19)))
-	# Окно со ставнями слева от двери.
-	parts.append(_box(Vector3(0.56, 0.52, 0.06),
-		PAL.trunk.darkened(0.5), Vector3(-0.82, 1.18, 1.18)))
-	for dx: float in [-0.36, 0.36]:
-		parts.append(_box(Vector3(0.18, 0.5, 0.05),
-			PAL.planks.lerp(Color.WHITE, 0.05),
-			Vector3(-0.82 + dx, 1.16, 1.2), rng.randf_range(-0.05, 0.05)))
-	# Крыльцо: настил и ступень у двери.
-	parts.append(_box(Vector3(1.3, 0.14, 0.62), PAL.planks,
-		Vector3(0.42, 0.21, 1.52)))
-	parts.append(_box(Vector3(1.3, 0.12, 0.4),
-		PAL.planks.darkened(0.08), Vector3(0.42, 0.06, 1.98)))
-	return _merge(parts)
-
-
 ## Секция забора-палисадника (П5.13, блок 5): два столбика и пара
 ## перекладин, лёгкие перекосы от rng — забор «собран вручную».
-## Единичная секция ~1.9 м по X; IslandGen ставит крылья по 1–2 секции
-## у домиков, не замыкая их (проход всегда открыт). SOLID: высота выше
-## автоподъёма, перешагнуть нельзя.
+## Единичная секция ~1.9 м по X; IslandGen ставит крылья по две секции
+## у участков деревни, не замыкая их (проход всегда открыт). SOLID:
+## высота выше автоподъёма, перешагнуть нельзя.
 static func _fence(variant: int) -> ArrayMesh:
 	var rng := _rng("fence", variant)
 	var parts: Array = []

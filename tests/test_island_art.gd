@@ -12,15 +12,16 @@ const PAL: Palette = preload("res://assets/palette.tres")
 ## П5.13, блок 1: kenney-моделей в окружении больше нет — лавки, колонны,
 ## арки и навесы процедурные, камни всего острова и камыши — RockGen /
 ## ForestPlants с материалами ForestMat. П5.13, блок 5: последнее бревно
-## kenney (dead_log) заменено процедурной корягой _snag; домики жителей
-## (house) и заборы (fence) деревни — процедурные.
+## kenney (dead_log) заменено процедурной корягой _snag; заборы деревни
+## (fence) — процедурные. Доработка П5.13: домики-срубы (house) убраны —
+## дома жителей встанут готовой моделью (сруб Kless, очередь владельца).
 ## etree_* — деревья, сгенерированные самим ez-tree (~/eztree_gen → GLB).
 const PROP_TYPES: PackedStringArray = [
 	"fern",
 	"log_bridge", "boulder", "rock_pillar", "rock_wall",
 	"pebble", "reed", "ruin_block", "ruin_tower",
 	"ruin_gate", "ruin_arch", "ruin_column", "bench", "canopy",
-	"house", "fence",
+	"fence",
 	"pier_post", "plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_bush", "etree_giant",
 	"dead_log", "rrock", "rgrass", "rflower", "riris", "mrock",
