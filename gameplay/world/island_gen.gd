@@ -1573,17 +1573,13 @@ static func _pier_and_boats(heights: PackedFloat32Array, props: Array) -> Dictio
 	}
 
 
-## Костёр на площади: каменное кольцо и лавки вокруг.
+## Костёр на площади: лавки вокруг. Каменное кольцо — модель CC0
+## (доработка П5.13: узел Campfire ставит stone_fire_pit с шатром
+## поленьев и коллизией очага), процедурные валуны у огня убраны.
 ## Сидение и огонь-логика — П5; здесь геометрия и позиции (площадь — PLAZA_H).
 static func _campfire(heights: PackedFloat32Array, props: Array) -> Dictionary:
 	var fire := Vector2i(0, 2)
 	var ring_rng := rng_static()
-	for i: int in range(8):
-		var angle: float = TAU * i / 8.0
-		var ring := Vector2(fire) + Vector2(cos(angle), sin(angle)) * 1.5
-		_add_prop(props, ring_rng, &"boulder",
-			Vector3(ring.x, PLAZA_H - 0.15, ring.y), angle,
-			Vector3(0.5, 0.42, 0.5), "stone")
 	var benches: Array[Vector3] = []
 	for i: int in range(8):
 		var angle: float = TAU * i / 8.0 + PI / 8.0

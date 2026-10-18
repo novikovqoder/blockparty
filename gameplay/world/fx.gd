@@ -9,6 +9,8 @@
 class_name Fx
 extends Node3D
 
+const SMOKE_SHADER: Shader = preload("res://assets/shaders/smoke.gdshader")
+
 ## Сколько секунд нода эффекта живёт до самоосвобождения, с.
 const LINGER: float = 2.0
 
@@ -55,6 +57,57 @@ static func fire_sparks(node: Node3D, pos: Vector3, color: Color) -> GPUParticle
 	material.emission_enabled = true
 	material.emission = color
 	material.emission_energy_multiplier = 2.2
+	quad.material = material
+	fx.draw_pass_1 = quad
+	node.add_child(fx)
+	return fx
+
+
+## Лёгкий дым костра (доработка П5.13, живой огонь): редкие мягкие клубы
+## (smoke.gdshader) над пламенем — поднимаются, разворачиваются турбулентностью
+## и тают; нода возвращается вставившемуся (костёр меняет amount по сидящим).
+static func campfire_smoke(node: Node3D, pos: Vector3, amount: int) -> GPUParticles3D:
+	var fx := GPUParticles3D.new()
+	fx.name = "Smoke"
+	fx.amount = amount
+	fx.lifetime = 4.2
+	fx.position = pos
+	fx.local_coords = false
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3.UP
+	process.spread = 12.0
+	process.initial_velocity_min = 0.45
+	process.initial_velocity_max = 0.7
+	# Лёгкая тяга вверх (газ от огня), без гравитации.
+	process.gravity = Vector3(0.0, 0.18, 0.0)
+	process.scale_min = 0.55
+	process.scale_max = 1.0
+	# Клубы разворачивает ветерком турбулентности — дым не столб.
+	process.turbulence_enabled = true
+	process.turbulence_noise_strength = 0.35
+	process.turbulence_noise_scale = 0.6
+	process.turbulence_noise_speed = Vector3(0.3, 0.1, 0.2)
+	# Альфа по жизни: быстро проявляется, медленно тает.
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(1.0, 1.0, 1.0, 0.0))
+	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	gradient.add_point(0.18, Color(1.0, 1.0, 1.0, 0.55))
+	gradient.add_point(0.6, Color(1.0, 1.0, 1.0, 0.3))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = gradient
+	process.color_ramp = ramp
+	# Клуб растёт по жизни (крутая кривая не нужна — масштаб умеренный).
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.4))
+	curve.add_point(Vector2(1.0, 1.0))
+	var curve_tex := CurveTexture.new()
+	curve_tex.curve = curve
+	process.scale_curve = curve_tex
+	fx.process_material = process
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.75, 0.75)
+	var material := ShaderMaterial.new()
+	material.shader = SMOKE_SHADER
 	quad.material = material
 	fx.draw_pass_1 = quad
 	node.add_child(fx)
