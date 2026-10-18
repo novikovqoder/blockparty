@@ -175,11 +175,18 @@ static func _material_tone_weight(
 
 
 static func _weights_texture(art: IslandArt) -> ImageTexture:
-	return ImageTexture.create_from_image(_weights_image(art))
+	var image := _weights_image(art)
+	# Мип-мапы (П8): карты сэмплятся на весь остров, без них дальние склоны
+	# рябят; рельефная карта уже строилась с мип-мапами — карты весов и тона
+	# выравниваем под неё.
+	image.generate_mipmaps()
+	return ImageTexture.create_from_image(image)
 
 
 static func _border_texture(art: IslandArt) -> ImageTexture:
-	return ImageTexture.create_from_image(_border_image(art))
+	var image := _border_image(art)
+	image.generate_mipmaps()
+	return ImageTexture.create_from_image(image)
 
 
 ## Карта честных нормалей рельефа (П5.9 переделка, П3): сглаженные нормали

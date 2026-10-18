@@ -94,6 +94,9 @@ func _build() -> void:
 	add_child(pit)
 	# Уголь: огранённый камень с углями — чуть живее бокса (раздел 16).
 	var ember := MeshInstance3D.new()
+	# Имя нужно аудиту поверхностей (П8): безымянный меш не отличить от
+	# забытой белой заглушки.
+	ember.name = "Ember"
 	var ember_mesh := SphereMesh.new()
 	ember_mesh.radius = 0.22
 	ember_mesh.height = 0.44

@@ -26,7 +26,7 @@ static func handles(type: StringName) -> bool:
 ## Материал типа (трава — градиент; папоротник/цветы — цвет вершин;
 ## камни — мох). Амплитуда ветра у травы мелкая и частая, у вай — меньше.
 static func for_type(type: StringName) -> Material:
-	if DisplayServer.get_name() == "headless":
+	if WorldMaterials.want_flat():
 		return _flat()
 	if _cache.has(type):
 		return _cache[type]

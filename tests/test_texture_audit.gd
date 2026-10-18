@@ -10,7 +10,14 @@
 #      текстурные — анизотропные) и мип-мапы связанных текстур;
 #   4) П5.9 переделка П2: в шейдерах запрещён решётчатый value-noise
 #      (hash12/hash21 + билинейная ячейка) — источник осевых «полос»
-#      на земле и боках камней, который текстурные срезы не видели.
+#      на земле и боках камней, который текстурные срезы не видели;
+#   5) доработка-2 П5.13, П8: «нет меша без текстуры» — каждая поверхность
+#      мира (включая процедуры и MultiMesh) несёт текстуру либо входит
+#      в списки легитимных нетекстурных; материал null = белый дефолт = FAIL.
+#      Прежний аудит молчал о «белых блоках» по двум причинам: _note
+#      пропускал null-материалы, а проверка сэмплеров шейдеров сравнивала
+#      int-тип uniform'а со строкой «sampler» и не срабатывала никогда —
+#      нетекстурный материал проходил аудит без замечаний.
 # Процедурные данные (карты весов земли 128×128) — не текстуры детализации:
 # exempt-порог 256 px по короткой стороне.
 extends GutTest
@@ -57,6 +64,47 @@ const SHADER_FILES: Array[String] = [
 ## Каталоги игрового кода: изображений быть не должно (все — в assets/).
 const GAME_CODE_DIRS: Array[String] = [
 	"res://gameplay", "res://scenes", "res://ui", "res://autoload", "res://net",
+]
+
+## Слот текстур BaseMaterial3D (срез 5): хотя бы один занят — материал
+## текстурный.
+const TEXTURE_SLOTS: Array[String] = [
+	"albedo_texture", "normal_texture", "roughness_texture",
+	"orm_texture", "emission_texture",
+]
+
+## Легитимно нетекстурные поверхности (срез 5): путь узла содержит ключ.
+## Это принятый владельцем вид, а не забытая заглушка:
+##   флора Леса и листва деревьев — шейдеры градиента/ветра и цвета
+##     (кора при этом текстурная), П5.9/П5.13 приняты;
+##   деревня — вершинно-цветные предметы low-poly (не белые: цвет в вершинах);
+##   костёр — VFX огня и фотосканы polyhaven, раскрашенные вершинами;
+##   небо — меш дымки Sky3D;
+##   жители — процедурные шляпы (персонажи приняты, раздел 16 SPEC).
+## Если предмет из списка убирают из мира — запись удалить вместе с ним.
+const ALWAYS_UNTEXTURED: Array[String] = [
+	"Props_rgrass_", "Props_rflower_", "Props_riris_", "Props_reed_",
+	"Props_fern_", "Props_etree_",
+	"Props_bench_", "Props_boat_", "Props_canopy_", "Props_fence_",
+	"Flame", "FirePit", "/Logs", "/Ember",
+	"_FogMeshI",
+	"hat_",
+]
+
+## Переходные нетекстурные поверхности (срез 5): закрываются пунктами
+## доработки-2 П5.13, по мере закрытия записи УДАЛЯТЬ (тест следит, чтобы
+## каждая запись реально встречалась в мире — устаревшая ломает прогон):
+##   П3 — плоскости моря и озера до переезда на Boujie Water;
+##   П4 — белые блоки руин, ворота, сундук, плиты, кладка стен;
+##   П5 — светокубы HangPoint/RespawnStone, лестницы смотровых, причал;
+##   П6 — брёвна, мостик, пень жителя до моделей с корой;
+##   П7 — камни до текстурного мха.
+const TRANSITIONAL_UNTEXTURED: Array[String] = [
+	"SeaWater/", "LakeWater/",
+	"Props_ruin_", "RuinGate", "RuinChest", "Plate", "rock_wall",
+	"HangPoint", "RespawnStone", "LookoutLadder", "pier_post", "plank_deck",
+	"dead_log", "log_bridge", "/Stump",
+	"mrock", "rrock", "boulder", "pebble",
 ]
 
 
@@ -159,6 +207,47 @@ func test_shaders_no_lattice_value_noise() -> void:
 			"%s: нет билинейной интерполяции решётки value-noise" % path)
 
 
+## Срез 5, П8: каждая поверхность мира текстурна или легитимно нетекстурна.
+## Мир инстанцируется в текстурном режиме (WorldMaterials.textured_headless):
+## фабрики отдают те же материалы, что в Windows-сборке, а не headless-плоские
+## заглушки, — аудит видит картинку игрока. Прогон с переменной окружения
+## AUDIT_STRICT=1 вычищает переходный список: тест обязан FAIL'ить на руинах,
+## корягах и светокубах (доказательство, что ловит, — STATUS.md).
+func test_world_surfaces_textured_or_whitelisted() -> void:
+	WorldMaterials.textured_headless = true
+	var surfaces := _collect_world_surfaces()
+	WorldMaterials.textured_headless = false
+	assert_gt(surfaces.size(), 800, "обход видит все поверхности мира")
+	var strict := OS.get_environment("AUDIT_STRICT") == "1"
+	var allow: Array[String] = ALWAYS_UNTEXTURED.duplicate()
+	if not strict:
+		allow.append_array(TRANSITIONAL_UNTEXTURED)
+	var offenders: Array[String] = []
+	var matched: Dictionary = {}
+	for entry: Dictionary in surfaces:
+		var path: String = entry["path"]
+		var allowed := false
+		for pattern: String in allow:
+			if path.contains(pattern):
+				allowed = true
+				matched[pattern] = true
+		if allowed:
+			continue
+		var material: Material = entry["material"]
+		if material == null:
+			offenders.append("%s: материала нет — белый дефолт" % path)
+		elif not _material_has_texture(material):
+			offenders.append("%s: %s без текстуры" % [path, material.get_class()])
+	assert_eq(offenders.size(), 0,
+		"нетекстурные поверхности — только из списков разрешений:\n"
+		+ "\n".join(offenders))
+	if strict:
+		return
+	for pattern: String in TRANSITIONAL_UNTEXTURED:
+		assert_true(matched.has(pattern),
+			"переходная запись «%s» в мире не встречается — удалить" % pattern)
+
+
 func test_runtime_materials_meet_quality_bar() -> void:
 	# Живое дерево острова (рельеф, предметы, деревья с запечённой корой)
 	# и персонажи: материалы без Nearest; текстурные BaseMaterial3D —
@@ -192,12 +281,13 @@ func test_runtime_materials_meet_quality_bar() -> void:
 					"%s: текстурный материал анизотропный (%s)" % [
 						where, base.resource_name])
 		elif material is ShaderMaterial:
+			# П8: тип uniform'а в get_shader_uniform_list() — int, прежняя
+			# строковая проверка «sampler» не срабатывала никогда. Текстуру
+			# определяем по значению: bool/цвет/число Texture2D'ом не бывают.
 			var shader := (material as ShaderMaterial).shader
 			if shader == null:
 				continue
 			for u: Dictionary in shader.get_shader_uniform_list():
-				if not str(u["type"]).contains("sampler"):
-					continue
 				var value = (material as ShaderMaterial).get_shader_parameter(u["name"])
 				if value is Texture2D:
 					_assert_texture_mips(value as Texture2D,
@@ -236,6 +326,71 @@ func test_ubc_material_resources_meet_quality_bar() -> void:
 
 
 # --- Служебное ---
+
+
+## Поверхности живого дерева (срез 5): эффективный материал каждой
+## поверхности — override узла, затем материал поверхности меша, затем
+## per-surface override; null допустим только после них (белый дефолт).
+func _collect_world_surfaces() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var island := ISLAND.instantiate()
+	add_child_autofree(island)
+	var world := WORLD.instantiate()
+	add_child_autofree(world)
+	for gender: int in [0, 1]:
+		var model := MODEL.instantiate() as CharacterModel
+		add_child_autofree(model)
+		model.setup_appearance(Appearance.default_for(gender))
+	_collect_surfaces(island, out)
+	_collect_surfaces(world, out)
+	for child: Node in get_children():
+		if child is CharacterModel:
+			_collect_surfaces(child, out)
+	return out
+
+
+func _collect_surfaces(node: Node, out: Array[Dictionary]) -> void:
+	var path := str(node.get_path())
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null:
+			for surface: int in mi.mesh.get_surface_count():
+				var material: Material = mi.material_override
+				if material == null:
+					material = mi.mesh.surface_get_material(surface)
+				if material == null:
+					material = mi.get_surface_override_material(surface)
+				out.append({"path": "%s#%d" % [path, surface], "material": material})
+	elif node is MultiMeshInstance3D:
+		var mmi := node as MultiMeshInstance3D
+		if mmi.multimesh != null and mmi.multimesh.mesh != null:
+			var am := mmi.multimesh.mesh as ArrayMesh
+			if am != null:
+				for surface: int in am.get_surface_count():
+					var material: Material = mmi.material_override
+					if material == null:
+						material = am.surface_get_material(surface)
+					out.append({"path": "%s#%d" % [path, surface], "material": material})
+	for child: Node in node.get_children():
+		_collect_surfaces(child, out)
+
+
+## Материал несёт текстуру (срез 5).
+func _material_has_texture(material: Material) -> bool:
+	if material is BaseMaterial3D:
+		var base := material as BaseMaterial3D
+		for prop: String in TEXTURE_SLOTS:
+			if base.get(prop) != null:
+				return true
+		return false
+	if material is ShaderMaterial:
+		var sm := material as ShaderMaterial
+		if sm.shader == null:
+			return false
+		for u: Dictionary in sm.shader.get_shader_uniform_list():
+			if sm.get_shader_parameter(u["name"]) is Texture2D:
+				return true
+	return false
 
 ## Все игровые .gdshader (каталоги + отдельные файлы).
 func _shader_paths() -> Array[String]:

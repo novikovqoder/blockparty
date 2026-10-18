@@ -39,7 +39,7 @@ static func vertex() -> ShaderMaterial:
 ## плюс вершинное покачивание; wind — параметры из PropMeshes.wind_params.
 ## Кэшируется по типу (материал один на все экземпляры MultiMesh типа).
 static func wind_or_vertex(type: StringName) -> Material:
-	if DisplayServer.get_name() == "headless":
+	if WorldMaterials.want_flat():
 		return flat_or_vertex()
 	if _wind_cache.has(type):
 		return _wind_cache[type]
@@ -54,7 +54,7 @@ static func wind_or_vertex(type: StringName) -> Material:
 
 ## Headless-вариант (dummy-рендер): плоский цвет без шейдера.
 static func flat_or_vertex() -> Material:
-	if DisplayServer.get_name() == "headless":
+	if WorldMaterials.want_flat():
 		var flat := StandardMaterial3D.new()
 		flat.vertex_color_use_as_albedo = true
 		return flat
@@ -64,7 +64,7 @@ static func flat_or_vertex() -> Material:
 ## Однотонный материал с цветом (мобы): в headless — плоский Standard без
 ## шейдера, логика и тесты от рендера не зависят.
 static func flat_or_mat(color: Color, emission_energy: float = 0.0) -> Material:
-	if DisplayServer.get_name() == "headless":
+	if WorldMaterials.want_flat():
 		var flat := StandardMaterial3D.new()
 		flat.albedo_color = color
 		flat.roughness = 1.0

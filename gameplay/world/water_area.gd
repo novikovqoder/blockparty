@@ -143,7 +143,7 @@ func _add_plane(rect: Rect2, material: Material) -> void:
 ## В нормальном рендере — шейдер волн; в headless (dummy-рендер без шейдеров,
 ## серверные прогоны) — полупрозрачный стандартный материал без волн.
 func _surface_material() -> Material:
-	if DisplayServer.get_name() == "headless":
+	if WorldMaterials.want_flat():
 		var flat := StandardMaterial3D.new()
 		flat.albedo_color = PAL.water
 		flat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
