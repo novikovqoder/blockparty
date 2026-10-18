@@ -8,6 +8,14 @@
 # перекрывают материал на террасах и площадках. Коллизия —
 # HeightMapShape3D по той же карте: 257 вершин на 256 м, вершина i
 # на x = −128 + i, ровно сетка генератора.
+# Тангенты (доработка П5.13): весь остров красит forest_ground.gdshader,
+# чья NORMAL_MAP грунта требует массива ARRAY_TANGENT — без него Forward+
+# роняет warning «shader requires tangents» на каждый чанк. Квад высот
+# с UV-ростом вдоль мировых X/Z имеет dP/du = (1, dh/dx, 0): фасетный
+# тангент квадрата T = normalize(1, dy, 0), w = +1 — движковая бинормаль
+# cross(TANGENT, NORMAL)·w тогда смотрит вдоль dP/dv = (0, dh/dz, 1)
+# (знак сверен с SurfaceTool.generate_tangents, тест test_world_ground),
+# и базис нормал-мапа согласован с семплингом текстуры по world_pos.xz.
 class_name TerrainBuilder
 extends RefCounted
 
@@ -103,7 +111,8 @@ static func _face_colors(heights: PackedFloat32Array, tint: Dictionary) -> Packe
 
 
 ## Меш одного чанка: квадраты (x, z)–(x+1, z+1) двумя треугольниками,
-## диагональ (x, z)–(x+1, z+1); цвет всей грани — от точки (x, z).
+## диагональ (x, z)–(x+1, z+1); цвет всей грани — от точки (x, z),
+## тангент — фасетный на квадрат (см. шапку класса).
 static func _chunk_mesh(
 	heights: PackedFloat32Array, face_colors: PackedColorArray,
 	cx: int, cz: int,
@@ -113,9 +122,11 @@ static func _chunk_mesh(
 	var z_begin: int = -half + cz * CHUNK
 	var verts := PackedVector3Array()
 	var colors := PackedColorArray()
+	var tangents := PackedFloat32Array()
 	var indices := PackedInt32Array()
 	verts.resize(CHUNK * CHUNK * 4)
 	colors.resize(CHUNK * CHUNK * 4)
+	tangents.resize(CHUNK * CHUNK * 4 * 4)
 	indices.resize(CHUNK * CHUNK * 6)
 	var vi: int = 0
 	var ii: int = 0
@@ -135,6 +146,18 @@ static func _chunk_mesh(
 			colors[vi + 1] = color
 			colors[vi + 2] = color
 			colors[vi + 3] = color
+			# Тангент квадрата: dh/dx по четырём углам (две колонки сетки),
+			# одна краска на все 4 вершины — фасет, без скачка интерполяции.
+			var dy: float = (
+				heights[_idx(x + 1, z)] + heights[_idx(x + 1, z + 1)]
+				- heights[_idx(x, z)] - heights[_idx(x, z + 1)]) * 0.5
+			var inv_len: float = 1.0 / sqrt(1.0 + dy * dy)
+			var ti: int = vi * 4
+			for k: int in 4:
+				tangents[ti + k * 4] = inv_len
+				tangents[ti + k * 4 + 1] = dy * inv_len
+				tangents[ti + k * 4 + 2] = 0.0
+				tangents[ti + k * 4 + 3] = 1.0
 			indices[ii] = vi
 			indices[ii + 1] = vi + 2
 			indices[ii + 2] = vi + 1
@@ -147,6 +170,7 @@ static func _chunk_mesh(
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TANGENT] = tangents
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)

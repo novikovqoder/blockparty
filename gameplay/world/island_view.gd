@@ -24,10 +24,10 @@ func _ready() -> void:
 
 
 ## Рельеф: одна карта высот и на коллизию (HeightMapShape3D — вся физика
-## и механики), и на визуал. Сектор Леса [−128..0)² — прежние чанки 32 × 32
-## с материалом ForestGround (вид П5.9 не трогаем). Остров вне Леса рисует
-## Terrain3D (П5.13, блок 3): сглаженные нормали, LOD-клипмап, эрозионный
-## рельеф; коллизию Terrain3D выключаем — она дублировала бы HeightMapShape.
+## и механики), и на визуал. Все 64 чанка 32 × 32 рисует один материал
+## ForestGround (доработка П5.13): текстурная земля в стиле принятого Леса
+## на весь остров, карты покраски 256 × 256 с плавными границами зон;
+## меши чанков несут фасетные тангенты (нормал-мап грунта без warning'ов).
 func _build_terrain() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Terrain"
@@ -40,21 +40,11 @@ func _build_terrain() -> void:
 	body.add_child(collision)
 	var forest_material := ForestGround.make_material(art)
 	for chunk: Mesh in art.chunks:
-		if not _in_forest_sector(chunk.get_aabb()):
-			continue
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = chunk
 		mesh_instance.material_override = forest_material
 		body.add_child(mesh_instance)
 	add_child(body)
-	Terrain3DIsland.spawn(self, art.heights)
-
-
-## Чанк целиком в секторе Леса (границы кратны 32 — пересечений нет).
-## Вершины чанков в мировых координатах, нод без transform — AABB готов.
-static func _in_forest_sector(aabb: AABB) -> bool:
-	return aabb.position.x >= -128.0 and aabb.end.x <= 0.0 \
-		and aabb.position.z >= -128.0 and aabb.end.z <= 0.0
 
 
 ## Предметы: MultiMesh собирается в рантайме из групп ресурса (инстанс-данные

@@ -10,6 +10,11 @@ var bot: bool = false
 ## входа в мир гоняет AnimSelfCheck на модели локального игрока, печатает
 ## SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL).
 var selftest_anim: bool = false
+## Самопроверка мира (--selftest-world, доработка П5.13): после входа в мир
+## гоняет WorldSelfCheck (тангенты чанков, земля и коллизия во всех зонах,
+## предметы не висят и не под водой, вода в чаше озера), печатает
+## SELFTEST-WORLD: PASS/FAIL и выходит (код 1 при FAIL).
+var selftest_world: bool = false
 ## Зона появления из --dev-spawn (пустая строка — стандартная Площадь).
 var spawn_zone: String = ""
 
@@ -24,11 +29,14 @@ var session_time: float = 0.0
 func _ready() -> void:
 	bot = Dev.bot
 	selftest_anim = Dev.selftest_anim
+	selftest_world = Dev.selftest_world
 	spawn_zone = Dev.spawn_zone
 	if bot:
 		Log.info("Режим бота включён", "Session")
 	if selftest_anim:
 		Log.info("Режим самопроверки анимаций включён", "Session")
+	if selftest_world:
+		Log.info("Режим самопроверки мира включён", "Session")
 	if bot:
 		if DisplayServer.get_name() == "headless":
 			# Нагрузочные прогоны: без ограничения FPS копии игры на сервере

@@ -88,6 +88,13 @@ const GULLY_TAPER: float = 2.5
 const GIANT_CELL: Vector2i = Vector2i(-41, -66)
 const GIANT_CLEAR_R: int = 7
 
+## Чаша озера (доработка П5.13, вынесены для самопроверки воды): d меньше
+## LAKE_BASIN_R — дно −1.2, до LAKE_BEACH_R — пологий пляж. Плоскость воды
+## обязана накрывать чашу — берег выше уровня прячет излишек под рельефом.
+const LAKE_CENTER: Vector2 = Vector2(6, 82)
+const LAKE_BASIN_R: float = 16.0
+const LAKE_BEACH_R: float = 21.0
+
 ## Зоны (раздел 6): имя для --dev-spawn и F3, круг для названия места.
 ## Порядок — как в палитрах зон (Palette.zone_*).
 const ZONES: Array[Dictionary] = [
@@ -187,7 +194,10 @@ static func generate() -> Dictionary:
 		"tint": tint_hints(),
 		"water": {
 			"sea": {"center": Vector2(0, 0), "size": Vector2(HALF * 2, HALF * 2), "level": SEA_LEVEL},
-			"lake": {"center": Vector2(6, 82), "size": Vector2(30, 30), "level": SEA_LEVEL},
+			# Доработка П5.13: плоскость 34 × 34 накрывает чашу озера
+			# (LAKE_BASIN_R с запасом) — берег выше уровня воды прячет излишек
+			# под рельефом, видимый контур задаёт береговая линия чаши.
+			"lake": {"center": LAKE_CENTER, "size": Vector2(34, 34), "level": SEA_LEVEL},
 		},
 	}
 	var props: Array = data["props"]
@@ -490,10 +500,10 @@ static func _apply_zones(heights: PackedFloat32Array) -> void:
 			if Vector2(x - 58.0, z + 48.0).length() < 24.0:
 				h = RUINS_H
 			# Озеро: котловина с водой и песчаной кромкой.
-			var d_lake: float = Vector2(x - 6.0, z - 82.0).length()
-			if d_lake < 16.0:
+			var d_lake: float = Vector2(x - LAKE_CENTER.x, z - LAKE_CENTER.y).length()
+			if d_lake < LAKE_BASIN_R:
 				h = -1.2
-			elif is_land and d_lake < 21.0:
+			elif is_land and d_lake < LAKE_BEACH_R:
 				h = minf(h, 0.9)
 			heights[_idx(x, z)] = h
 

@@ -1,15 +1,16 @@
-# Тесты реалистичной земли Леса (П5.7, блок 1): сектор [−128..0)² красится
-# материалом ForestGround поверх тех же чанков и той же коллизии — запечённый
-# остров не меняется. Карты весов и края детерминированы (высоты, уклоны,
-# фиксированный шум), правила покраски проверяются по точкам, цвет края —
-# тем же TerrainBuilder.point_color, что у соседних low-poly чанков.
+# Тесты реалистичной земли в стиле Леса (П5.7, блок 1; доработка П5.13 —
+# весь остров): чанки красятся материалом ForestGround поверх той же
+# коллизии — запечённый остров не меняется. Карты весов и тона
+# детерминированы (высоты, уклоны, фиксированный шум), правила покраски
+# проверяются по точкам, цвет тона — тем же TerrainBuilder.point_color,
+# что у low-poly граней и карты-миниатюры.
 extends GutTest
 
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
 
 
-## Пиксель карты по мировым координатам (сектор — [-128..0)²).
+## Пиксель карты по мировым координатам (карта — весь остров, пиксель = 1 м).
 static func _pixel(image: Image, wx: float, wz: float) -> Color:
 	return image.get_pixel(int(wx) + 128, int(wz) + 128)
 
@@ -29,10 +30,12 @@ func test_weights_paint() -> void:
 	# чтобы вес не гасилось смягчением). Индекс карты: пиксель (x, z)
 	# сектора — это строка z, столбец x карты острова (мир = пиксель − 128).
 	var lowest := Vector2i(-70, -60)
-	for z: int in ForestGround.SECTOR_M:
-		for x: int in ForestGround.SECTOR_M:
+	for z: int in ForestGround.MAP_M:
+		for x: int in ForestGround.MAP_M:
 			if x < 16 and z < 16:
 				continue  # полоса края: оверлеи там гасятся
+			if x >= 128 or z >= 128:
+				continue  # ищем по сектору Леса, как раньше
 			var h: float = ART.heights[z * IslandGen.POINTS + x]
 			var h_low: float = ART.heights[
 				(lowest.y + 128) * IslandGen.POINTS + lowest.x + 128]
@@ -150,35 +153,82 @@ func test_relief_normals_bend_on_gully_walls() -> void:
 
 
 func test_island_uses_forest_material() -> void:
-	# В сцене: 16 чанков сектора Леса с материалом ForestGround, остальной
-	# рельеф — два узла Terrain3D (П5.13, блок 3); коллизия по-прежнему
-	# одна на весь остров.
+	# В сцене: все 64 чанка острова с материалом ForestGround (доработка
+	# П5.13 — текстурная земля в стиле Леса на весь остров, Terrain3D
+	# больше не используется); коллизия по-прежнему одна на весь остров.
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	var terrain := island.get_node("IslandView/Terrain") as StaticBody3D
 	var forest := 0
-	var low_poly := 0
+	var others := 0
 	for node: Node in terrain.get_children():
 		if node is MeshInstance3D:
 			if (node as MeshInstance3D).material_override is ShaderMaterial:
 				forest += 1
 			else:
-				low_poly += 1
+				others += 1
 	assert_eq(
-		forest, 16, "16 чанков Леса с материалом ForestGround")
-	# П5.13, блок 3: чанков вне Леса больше нет — тот сектор рисуют два
-	# узла Terrain3D (сглаженные нормали, LOD); их коллизия выключена,
-	# физика остаётся на единственной HeightMapShape3D всего острова.
-	assert_eq(
-		low_poly, 0, "чанков вне Леса нет — их рисует Terrain3D")
-	var terrain3d := 0
-	for child: Node in island.get_node("IslandView").get_children():
-		if child is Terrain3D:
-			terrain3d += 1
-	assert_eq(terrain3d, 2, "два узла Terrain3D: East и West")
-	GutNoise.ignore_terrain3d_deprecation(self)
+		forest, TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE,
+		"все 64 чанка острова с материалом ForestGround")
+	assert_eq(others, 0, "чанков с другим материалом нет")
 	var shapes := 0
 	for child: Node in terrain.get_children():
 		if child is CollisionShape3D:
 			shapes += 1
 	assert_eq(shapes, 1, "коллизия одна на весь остров")
+
+
+func test_maps_cover_whole_island() -> void:
+	# Доработка П5.13: карты покраски — весь остров 256 × 256 (пиксель = 1 м),
+	# не только сектор Леса.
+	for image: Image in [
+		ForestGround._weights_image(ART),
+		ForestGround._border_image(ART),
+		ForestGround._relief_image(ART),
+	]:
+		assert_eq(image.get_width(), ForestGround.MAP_M, "карта шириной 256")
+		assert_eq(image.get_height(), ForestGround.MAP_M, "карта высотой 256")
+
+
+func test_outside_tone_paints_zones() -> void:
+	# Доработка П5.13: вне Леса вес тона — материал точки: пляж и террасы —
+	# чистый цвет point_color (тон 1), луг — смесь с текстурной землёй
+	# (тон MEADOW_TONE..ROCK_TONE по уклону). Граница Леса непрерывна:
+	# у линии снаружи вес тоже 1 (обобщённый краевой вес).
+	var border := ForestGround._border_image(ART)
+	# Первая надводная точка пляжа вне Леса (высота между уровнем воды
+	# и песчаной отметкой): тон полный — чистый цвет point_color.
+	var beach := Vector2i.ZERO
+	var found_beach := false
+	for z: int in ForestGround.MAP_M:
+		if found_beach:
+			break
+		for x: int in range(128, ForestGround.MAP_M):
+			var h: float = ART.heights[z * IslandGen.POINTS + x]
+			if h > IslandGen.SEA_LEVEL and h < TerrainBuilder.SAND_H:
+				beach = Vector2i(x - 128, z - 128)
+				found_beach = true
+				break
+	assert_true(found_beach, "надводный пляж вне Леса найден")
+	assert_almost_eq(
+		_pixel(border, beach.x, beach.y).a, 1.0, 0.01,
+		"пляж вне Леса — чистый тон point_color")
+	# Внутри острова, на лугу (не пляж, не терраса): тон в диапазоне
+	# луг↔скала, не крайние значения.
+	var meadow := Vector2i(40, -40)
+	for z: int in range(-60, -20):
+		var h: float = ART.heights[(z + 128) * IslandGen.POINTS + 40 + 128]
+		var hint: Dictionary = IslandGen.tint_hints().get(
+			Vector2i(40, z), {})
+		if h > TerrainBuilder.SAND_H + 0.5 and h < 8.0 and hint.is_empty():
+			meadow = Vector2i(40, z)
+			break
+	var meadow_a: float = _pixel(border, meadow.x, meadow.y).a
+	assert_between(meadow_a, 0.3, 0.95,
+		"луг вне Леса — смесь текстуры и тона, не крайние значения (a=%.2f)"
+		% meadow_a)
+	# Непрерывность через границу Леса: вес у линии с обеих сторон — 1.
+	assert_almost_eq(
+		_pixel(border, -1.0, -60.0).a, 1.0, 0.05, "у границы изнутри Леса")
+	assert_almost_eq(
+		_pixel(border, 1.0, -60.0).a, 1.0, 0.05, "у границы снаружи Леса")

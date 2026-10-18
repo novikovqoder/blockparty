@@ -1,20 +1,23 @@
-# Земля Леса (П5.9 переделка, П2): сектор острова [-128..0)² красится
-# поверх тех же low-poly чанков текстурной землёй по схеме демо ez-tree —
-# трава и грунт (CC0-замены текстур демо, тон сведён к демо) смешиваются
+# Земля острова в стиле Леса (доработка П5.13): весь остров красится
+# поверх low-poly чанков текстурной землёй по схеме демо ez-tree — трава
+# и грунт (CC0-замены текстур демо, тон сведён к демо) смешиваются
 # симплекс-шумом, меш, коллизия и запечённый island_art.res не меняются
-# (хеш острова тот же). ForestGround печёт из карты высот две карты
-# 128 × 128 (1 пиксель = 1 м): веса оверлеев (уклон → камень, низины →
-# влажная земля, пятна мха — фиксированный шум FastNoiseLite, тропа и
-# полоса Площади — утоптанная земля) и тон края (точный цвет соседних
-# low-poly чанков тем же TerrainBuilder.point_color) — и собирает
-# ShaderMaterial (assets/shaders/forest_ground.gdshader). Всё
-# детерминировано: высоты, уклоны и фиксированный seed. Внутренние края
-# сектора плавно растворяются в цвет соседей — шва на границе Леса нет.
+# (хеш острова тот же; Terrain3D больше не используется). ForestGround
+# печёт из карты высот три карты 256 × 256 (1 пиксель = 1 м, весь остров):
+# веса оверлеев (уклон → камень, низины → влажная земля, пятна мха —
+# фиксированный шум FastNoiseLite, тропа и полоса Площади — утоптанная
+# земля), тон (RGB — цвет «материала» точки по TerrainBuilder.point_color:
+# пляж, снег, террасы, зональные луга; A — вес тона) и нормали рельефа.
+# В секторе Леса [−128..0)² формулы те же, что в принятом П5.9/П5.13 —
+# вид Леса не меняется. Вне Леса вес тона — max(краевой вес границы Леса,
+# вес материала: пляж/снег/террасы 1, луг 0.35 → скала 0.9), поэтому
+# переходы между зонами и через границу Леса плавные, без шва. Всё
+# детерминировано: высоты, уклоны и фиксированный seed.
 class_name ForestGround
 extends RefCounted
 
-## Сторона сектора Леса, м (= стороне карты покраски).
-const SECTOR_M: int = 128
+## Сторона карты покраски, м (= стороне всего острова).
+const MAP_M: int = 256
 
 ## Камень на крутых склонах: тангенс уклона (dh на 1 м).
 const ROCK_SLOPE_SOFT: float = 0.45
@@ -36,12 +39,20 @@ const PLAZA_CENTER: Vector2 = Vector2(0.0, 4.0)
 const PLAZA_R_FULL: float = 20.0
 const PLAZA_R_SOFT: float = 24.0
 
-## Мягкий край сектора (SPEC 2.5: «на границе Леса — мягкий переход без
-## шва»): у внутренних краёв x = 0 и z = 0 вес края 1 — текстура полностью
-## тонирована точным цветом соседнего low-poly чанка, вглубь гаснет за
-## EDGE_SOFT метров. Морские края (x/z = −128) не смягчаем — соседа нет.
+## Мягкий край (SPEC 2.5: «на границе Леса — мягкий переход без шва»):
+## у границы сектора Леса (с обеих сторон — внутри и снаружи) вес края 1 —
+## текстура полностью тонирована точным цветом point_color, вглубь гаснет
+## за EDGE_SOFT метров. Морские края (x/z = −128) не смягчаем — соседа нет.
 const EDGE_FULL: float = 2.0
 const EDGE_SOFT: float = 12.0
+
+## Вес тона вне Леса (доработка П5.13): доля цвета point_color в albedo.
+## Луг чуть тонирован текстурной землёй, крутые склоны — почти чистый камень
+## (smoothstep до ROCK_TONE по уклону вокруг STONE_SLOPE террас TerrainBuilder).
+const MEADOW_TONE: float = 0.35
+const ROCK_TONE: float = 0.9
+const ROCK_TONE_FROM: float = TerrainBuilder.STONE_SLOPE - 0.2
+const ROCK_TONE_TO: float = TerrainBuilder.STONE_SLOPE + 0.2
 
 ## Шум пятен мха (тот же принцип детерминизма, что у генератора).
 const MOSS_SEED: int = 5707
@@ -68,7 +79,7 @@ const DIRT_NORMAL: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_nor_gl_2k.jpg")
 
 
-## Материал земли Леса: карты покраски запекаются из высот запечённого
+## Материал земли острова: карты покраски запекаются из высот запечённого
 ## острова, цвета пятен берутся из палитры. Детерминирован.
 static func make_material(art: IslandArt) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
@@ -89,12 +100,12 @@ static func make_material(art: IslandArt) -> ShaderMaterial:
 ## Карта весов оверлеев: чистые функции высоты, уклона и фиксированного
 ## шума — одна и та же точка всегда даёт тот же вес.
 static func _weights_image(art: IslandArt) -> Image:
-	var image := Image.create_empty(SECTOR_M, SECTOR_M, false, Image.FORMAT_RGBA8)
+	var image := Image.create_empty(MAP_M, MAP_M, false, Image.FORMAT_RGBA8)
 	var noise := FastNoiseLite.new()
 	noise.seed = MOSS_SEED
 	noise.frequency = MOSS_FREQUENCY
-	for z: int in SECTOR_M:
-		for x: int in SECTOR_M:
+	for z: int in MAP_M:
+		for x: int in MAP_M:
 			var wx: float = float(x) - 128.0
 			var wz: float = float(z) - 128.0
 			# Пиксель (x, z) — мир (x−128, z−128); индекс карты: (z)*POINTS + x.
@@ -114,30 +125,53 @@ static func _weights_image(art: IslandArt) -> Image:
 				IslandGen.GULLY_HALF_W + 0.5,
 				IslandGen.GULLY_HALF_W + 1.5,
 				IslandGen.gully_across(roundi(wx), roundi(wz)))
-			# Край сектора гасит оверлеи: у границы — чистая тонированная
-			# подстилка цветом соседней зоны. Вымощенная Площадь не гасится:
-			# она и есть соседняя зона, гравий лежит до самого края,
-			# тон края сводит цвет с низкополигональными плитами.
+			# Край границы Леса гасит оверлеи (с обеих сторон): у линии —
+			# чистая тонированная подстилка цветом point_color. Вымощенная
+			# Площадь не гасится: она и есть соседняя зона, гравий лежит
+			# до самого края, тон сводит цвет с низкополигональными плитами.
 			var fade: float = 1.0 - _border_weight(wx, wz) * (1.0 - w_plaza)
 			image.set_pixel(x, z, Color(
 				w_rock * fade, w_wet * fade, w_moss * fade, w_path * fade))
 	return image
 
 
-## Карта края: RGB — цвет соседнего low-poly рельефа (та же функция, что
-## красит чанки, включая подсказки террас Площади), A — вес края.
+## Карта тона: RGB — цвет «материала» точки (та же функция, что красит
+## грани low-poly чанков и карту-миниатюру, включая подсказки террас
+## Площади), A — вес тона. В секторе Леса вес — прежний краевой (у границы
+## 1, вглубь 0), вне Леса — max(краевой, вес материала точки).
 static func _border_image(art: IslandArt) -> Image:
-	var image := Image.create_empty(SECTOR_M, SECTOR_M, false, Image.FORMAT_RGBA8)
+	var image := Image.create_empty(MAP_M, MAP_M, false, Image.FORMAT_RGBA8)
 	var tint: Dictionary = IslandGen.tint_hints()
-	for z: int in SECTOR_M:
-		for x: int in SECTOR_M:
+	for z: int in MAP_M:
+		for x: int in MAP_M:
 			var wx: float = float(x) - 128.0
 			var wz: float = float(z) - 128.0
 			var low_poly: Color = TerrainBuilder.point_color(
 				art.heights, tint, int(wx), int(wz))
-			var weight: float = _border_weight(wx, wz)
+			var weight: float
+			if wx < 0.0 and wz < 0.0:
+				# Сектор Леса: точный прежний вес — вид принятого Леса не меняется.
+				weight = _border_weight(wx, wz)
+			else:
+				weight = maxf(
+					_border_weight(wx, wz),
+					_material_tone_weight(art, tint, x, z))
 			image.set_pixel(x, z, Color(low_poly.r, low_poly.g, low_poly.b, weight))
 	return image
+
+
+## Вес тона материала точки вне Леса: пляж, снег вершин и террасы — чистый
+## цвет point_color; луг и склоны — смесь с текстурной землёй по уклону.
+static func _material_tone_weight(
+	art: IslandArt, tint: Dictionary, x: int, z: int,
+) -> float:
+	if not tint.get(Vector2i(x - 128, z - 128), {}).is_empty():
+		return 1.0
+	var h: float = art.heights[z * IslandGen.POINTS + x]
+	if h < TerrainBuilder.SAND_H or h >= TerrainBuilder.SNOW_H:
+		return 1.0
+	return lerpf(MEADOW_TONE, ROCK_TONE,
+		smoothstep(ROCK_TONE_FROM, ROCK_TONE_TO, _slope(art, x, z)))
 
 
 static func _weights_texture(art: IslandArt) -> ImageTexture:
@@ -156,17 +190,17 @@ static func _border_texture(art: IslandArt) -> ImageTexture:
 ## исчезает, объём рельефа остаётся. Кодируется как n·0.5+0.5 (данные,
 ## не цвет — без source_color); мип-мапы усредняют дальние склоны.
 static func _relief_image(art: IslandArt) -> Image:
-	var image := Image.create_empty(SECTOR_M, SECTOR_M, false, Image.FORMAT_RGB8)
-	for z: int in SECTOR_M:
-		for x: int in SECTOR_M:
+	var image := Image.create_empty(MAP_M, MAP_M, false, Image.FORMAT_RGB8)
+	for z: int in MAP_M:
+		for x: int in MAP_M:
 			var left: float = art.heights[
 				z * IslandGen.POINTS + maxi(x - 1, 0)]
 			var right: float = art.heights[
-				z * IslandGen.POINTS + mini(x + 1, SECTOR_M - 1)]
+				z * IslandGen.POINTS + mini(x + 1, MAP_M - 1)]
 			var north: float = art.heights[
 				maxi(z - 1, 0) * IslandGen.POINTS + x]
 			var south: float = art.heights[
-				mini(z + 1, SECTOR_M - 1) * IslandGen.POINTS + x]
+				mini(z + 1, MAP_M - 1) * IslandGen.POINTS + x]
 			var n := Vector3(left - right, 2.0, north - south).normalized()
 			image.set_pixel(x, z, Color(
 				0.5 + n.x * 0.5, 0.5 + n.y * 0.5, 0.5 + n.z * 0.5))
@@ -179,13 +213,13 @@ static func _relief_texture(art: IslandArt) -> ImageTexture:
 
 
 ## Максимальный тангенс уклона в точке по соседям карты высот (кламп на краях).
-## x, z — пиксельные координаты сектора 0..127 (мир − 128).
+## x, z — пиксельные координаты карты 0..255 (мир − 128).
 static func _slope(art: IslandArt, x: int, z: int) -> float:
 	var here: float = art.heights[z * IslandGen.POINTS + x]
 	var worst := 0.0
 	for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var nx: int = clampi(x + offset.x, 0, SECTOR_M - 1)
-		var nz: int = clampi(z + offset.y, 0, SECTOR_M - 1)
+		var nx: int = clampi(x + offset.x, 0, MAP_M - 1)
+		var nz: int = clampi(z + offset.y, 0, MAP_M - 1)
 		var h: float = art.heights[nz * IslandGen.POINTS + nx]
 		worst = maxf(worst, absf(h - here))
 	return worst
@@ -212,14 +246,29 @@ static func _plaza_weight(wx: float, wz: float) -> float:
 		Vector2(wx, wz).distance_to(PLAZA_CENTER))
 
 
-## Вес мягкого края: 1 у внутренних границ сектора (x = 0, z = 0),
-## 0 от EDGE_SOFT вглубь.
+## Вес мягкого края границы Леса: 1 у самой линии (x = 0 при z ≤ 0 и
+## z = 0 при x ≤ 0, с углом в нуле), 0 от EDGE_SOFT в обе стороны.
+## Расстояние до границы непрерывно склеивается через все квадранты —
+## шва «Лес кончился» нет ни внутри, ни снаружи сектора.
 static func _border_weight(wx: float, wz: float) -> float:
-	return 1.0 - smoothstep(EDGE_FULL, EDGE_SOFT, minf(-wx, -wz))
+	return 1.0 - smoothstep(EDGE_FULL, EDGE_SOFT, _forest_edge_dist(wx, wz))
+
+
+## Расстояние до границы сектора Леса, м: внутри — до ближайшей из стенок
+## x = 0 / z = 0; в соседних квадрантах — до продолжения той же стенки,
+## в диагональном — до угла (0, 0). Функция непрерывна на всех швах.
+static func _forest_edge_dist(wx: float, wz: float) -> float:
+	if wx >= 0.0 and wz >= 0.0:
+		return sqrt(wx * wx + wz * wz)
+	if wx >= 0.0:
+		return wx
+	if wz >= 0.0:
+		return wz
+	return minf(-wx, -wz)
 
 
 ## Мох: пятна фиксированного шума, гуще во влажных местах, не на камне.
 static func _moss_weight(
-		noise: FastNoiseLite, x: int, z: int, w_rock: float, w_wet: float) -> float:
+	noise: FastNoiseLite, x: int, z: int, w_rock: float, w_wet: float) -> float:
 	var patch: float = smoothstep(0.05, 0.75, (noise.get_noise_2d(x, z) + 1.0) * 0.5)
 	return patch * (1.0 - w_rock) * (0.45 + 0.55 * w_wet)

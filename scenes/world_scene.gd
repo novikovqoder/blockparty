@@ -217,6 +217,29 @@ func _spawn_player() -> void:
 	# экспортированных сборках, чтобы ловить проблемы экспорта.
 	if Session.selftest_anim:
 		_selftest_anim(_player.visual)
+	# Самопроверка мира (--selftest-world, доработка П5.13): тангенты чанков,
+	# текстурная земля и коллизия во всех зонах, предметы не висят и не под
+	# водой, вода в чаше озера — печатает SELFTEST-WORLD: PASS/FAIL и выходит
+	# (код 1 при FAIL); гоняется и на экспортированных сборках.
+	if Session.selftest_world:
+		_selftest_world()
+
+
+## Прогон WorldSelfCheck на острове и выход (--selftest-world): статичные
+## данные запечённого мира, кадров ждать не нужно. Печатает
+## SELFTEST-WORLD: PASS/FAIL и выходит (код 1 при FAIL).
+func _selftest_world() -> void:
+	for i: int in 10:
+		await get_tree().physics_frame
+	var result: Dictionary = WorldSelfCheck.run(_island, true)
+	if result["ok"]:
+		print("SELFTEST-WORLD: PASS")
+		get_tree().quit(0)
+		return
+	print("SELFTEST-WORLD: FAIL")
+	for reason: String in result["reasons"]:
+		print("SELFTEST-WORLD: %s" % reason)
+	get_tree().quit(1)
 
 
 ## Прогон AnimSelfCheck на модели локального игрока и выход (--selftest-anim):

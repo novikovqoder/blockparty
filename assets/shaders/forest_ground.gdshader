@@ -47,7 +47,7 @@ uniform float tile_m = 30.0;
 // Сила нормалей грунта (normalScale демо = 1).
 uniform float normal_strength = 1.0;
 
-// Карты покраски сектора (128 × 128, край — clamp).
+// Карты покраски острова (256 × 256, пиксель = 1 м, край — clamp).
 uniform sampler2D weight_map : filter_linear_mipmap_anisotropic;
 uniform sampler2D border_map : source_color, filter_linear_mipmap_anisotropic;
 
@@ -118,12 +118,14 @@ float simplex2d(vec2 v) {
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 128.0;
+	// Доработка П5.13: карта покраски — весь остров 256 × 256 (ForestGround),
+	// в секторе Леса те же пиксели, что при карте 128 × 128.
+	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 256.0;
 	edge_w = textureLod(border_map, sector_uv, 0.0).a;
 }
 
 void fragment() {
-	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 128.0;
+	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 256.0;
 	vec4 w = texture(weight_map, sector_uv);
 	vec4 border = texture(border_map, sector_uv);
 

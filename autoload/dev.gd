@@ -4,7 +4,10 @@
 # --debug-collisions (полупрозрачные формы коллизий мира поверх картинки),
 # --selftest-anim (самопроверка анимаций персонажа в запущенной игре:
 # печатает SELFTEST-ANIM: PASS/FAIL и выходит с кодом 1 при FAIL —
-# гоняется и на экспортированных сборках, возврат П5.8).
+# гоняется и на экспортированных сборках, возврат П5.8),
+# --selftest-world (самопроверка мира: тангенты чанков, земля и коллизия
+# во всех зонах, предметы не висят и не под водой, вода в чаше озера —
+# печатает SELFTEST-WORLD: PASS/FAIL, доработка П5.13).
 # Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
@@ -30,6 +33,7 @@ var simple_graphics: bool = false  # --simple-graphics: «Простая гра�
 var high_quality: bool = false   # --high-quality: тяжёлые эффекты, шаг 4 П4.5
 var debug_collisions: bool = false  # --debug-collisions: показать формы коллизий
 var selftest_anim: bool = false  # --selftest-anim: проверка анимаций и выход
+var selftest_world: bool = false  # --selftest-world: проверка мира и выход
 
 
 func _init() -> void:
@@ -47,6 +51,7 @@ func _init() -> void:
 	high_quality = parsed["high_quality"]
 	debug_collisions = parsed["debug_collisions"]
 	selftest_anim = parsed["selftest_anim"]
+	selftest_world = parsed["selftest_world"]
 
 
 func _ready() -> void:
@@ -74,6 +79,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"high_quality": false,
 		"debug_collisions": false,
 		"selftest_anim": false,
+		"selftest_world": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -105,6 +111,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["debug_collisions"] = true
 		elif arg == "--selftest-anim":
 			result["selftest_anim"] = true
+		elif arg == "--selftest-world":
+			result["selftest_world"] = true
 	return result
 
 

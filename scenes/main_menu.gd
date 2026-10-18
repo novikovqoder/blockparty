@@ -34,9 +34,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Автовход: прогулочный бот (--bot) и самопроверка анимаций
-	# (--selftest-anim, возврат П5.8).
-	if (not Session.bot and not Session.selftest_anim) or Session.in_world:
+	# Автовход: прогулочный бот (--bot) и самопроверки
+	# (--selftest-anim возврат П5.8, --selftest-world доработка П5.13).
+	if (not Session.bot and not Session.selftest_anim
+			and not Session.selftest_world) or Session.in_world:
 		return
 	_bot_wait += delta
 	if _bot_wait >= BOT_AUTO_ENTER_DELAY:

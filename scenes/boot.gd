@@ -14,9 +14,9 @@ func _ready() -> void:
 		_go_to_menu()
 	elif SteamService.available:
 		_go_to_menu()
-	elif Session.bot or Session.selftest_anim:
+	elif Session.bot or Session.selftest_anim or Session.selftest_world:
 		# Headless-бот без Steam: кнопки жать некому — продолжаем офлайн.
-		# Самопроверка анимаций (--selftest-anim) — тот же случай.
+		# Самопроверки (--selftest-anim, --selftest-world) — тот же случай.
 		Log.info("Boot: Steam нет, бот/самопроверка продолжает офлайн", "Boot")
 		_go_to_menu()
 	else:
