@@ -1,7 +1,7 @@
 # Интеграционные тесты сцены острова (этапы П2/П4.5): island.tscn
 # соответствует данным IslandGen — рельеф и предметы из запечённого
-# island_art.res (IslandView), в сцене все мобы и три жителя, персонаж стоит
-# на земле во всех зонах (--dev-spawn), удар игрока убивает моба.
+# island_art.res (IslandView), в сцене три жителя, персонаж стоит
+# на земле во всех зонах (--dev-spawn). Мобы удалены в доработке П5.13.
 # Сцена коммитится — по сети не передаётся.
 extends GutTest
 
@@ -52,21 +52,12 @@ func test_baked_art_matches_generator() -> void:
 func test_scene_contents() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
-	var birds := 0
-	var critters := 0
-	var fireflies := 0
 	var water := 0
 	var markers := 0
 	var folk := 0
 	var seats := 0
 	for child: Node in island.get_children():
-		if child is Bird:
-			birds += 1
-		elif child is Critter:
-			critters += 1
-		elif child is GoldenFirefly:
-			fireflies += 1
-		elif child is WaterArea:
+		if child is WaterArea:
 			water += 1
 		elif child is HangArea:
 			markers = (child as HangArea).point_positions().size()
@@ -74,9 +65,6 @@ func test_scene_contents() -> void:
 			folk += 1
 		elif child is CampfireSeat:
 			seats += 1
-	assert_eq(birds, 8, "птиц")
-	assert_eq(critters, 6, "зверьков")
-	assert_eq(fireflies, 3, "светлячков")
 	assert_eq(water, 2, "море и озеро")
 	assert_gt(markers, 0, "в расщелине есть HangPoint")
 	assert_eq(folk, 3, "три жителя (Финн, Луми, Тимьян)")
@@ -224,61 +212,3 @@ func test_player_stands_in_every_spawn_zone() -> void:
 			"в зоне %s стоит на поверхности, а не падает" % zone,
 		)
 	player.queue_free()
-
-
-func test_player_attack_kills_bird() -> void:
-	var world := Node3D.new()
-	add_child_autofree(world)
-	var bird := Bird.new()
-	bird.spawn_id = 99
-	bird.motion = {
-		"center": Vector3(0.0, 3.0, 0.0),
-		"radius": 6.0,
-		"height": 0.8,
-		"period": 600.0,
-		"phase": 0.0,
-		"direction": 1,
-	}
-	world.add_child(bird)
-	var player := PLAYER.instantiate() as Player
-	world.add_child(player)
-	# Площадка под ногами, чтобы персонаж не улетел вниз за время удара.
-	var floor_body := StaticBody3D.new()
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(30, 1, 30)
-	shape.shape = box
-	floor_body.add_child(shape)
-	floor_body.position = Vector3(6.0, -0.5, 0.0)
-	world.add_child(floor_body)
-	# Зона удара — на 0.8 м выше ступней и 0.9 м впереди по +Z.
-	var bird_pos := MobMotion.bird_position(bird.motion, Session.world_time)
-	player.global_position = bird_pos + Vector3(0.0, -0.8, -0.9)
-	await get_tree().physics_frame
-	var killed: Array[int] = []
-	EventBus.mob_killed.connect(
-		func(id: int, _killers: Array, _respawn: float) -> void: killed.append(id),
-		CONNECT_ONE_SHOT,
-	)
-	player._try_attack()
-	for i: int in range(30):
-		await get_tree().physics_frame
-		if not bird.visible:
-			break
-	assert_false(bird.visible, "птица исчезла после удара")
-	assert_eq(killed, [99], "событие mob_killed с spawn_id")
-	player.queue_free()
-
-
-func test_firefly_survives_single_hit() -> void:
-	# Раздел 8: светлячок уязвим только для ударов двоих — один удар бессилен
-	# (полная механика «двое в 3 с» — П5).
-	var world := Node3D.new()
-	add_child_autofree(world)
-	var firefly := GoldenFirefly.new()
-	firefly.motion = {
-		"center": Vector3(0.0, 2.0, 0.0), "drift": 1.0, "period": 5.0, "phase": 0.0,
-	}
-	world.add_child(firefly)
-	firefly.take_hit()
-	assert_true(firefly.visible, "светлячок жив после одного удара")

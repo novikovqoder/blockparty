@@ -65,20 +65,12 @@ signal interaction_hint(key: String)
 ## Прогресс удержания E (0..1); отрицательное значение — удержание не идёт.
 signal interaction_progress(fraction: float)
 
-# --- Мобы (раздел 8; подтверждает хост — раздел 10) ---
+## Мобы (раздел 8) удалены в доработке П5.13: события mob_killed,
+## firefly_weakened и world_state_applied(dead_mobs) убраны вместе
+## с подсистемой.
 
-## Хост подтвердил убийство моба: killers — кто убил (светлячка убивают
-## двое), respawn_at — время возрождения по world_time (клиенты оживляют
-## моба сами).
-signal mob_killed(spawn_id: int, killers: Array, respawn_at: float)
-## Хост разослал ослабление светлячка (раздел 8): peer ударил первым,
-## until — конец окна уязвимости по world_time.
-signal firefly_weakened(spawn_id: int, peer: int, until: float)
 ## Хост разослал факт подсадки (раздел 13): jumper прыгнул с головы base.
 signal player_boosted(base_peer: int, jumper_peer: int)
-## Хост прислал полное состояние мира (вход в идущий мир, раздел 10):
-## dead_mobs — массив {spawn_id, respawn_at}.
-signal world_state_applied(dead_mobs: Array)
 
 # --- Сеть (раздел 10) ---
 

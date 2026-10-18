@@ -22,10 +22,10 @@ func test_loss_threshold() -> void:
 
 
 func test_protocol_constants_section10() -> void:
-	# Раздел 10: лимиты, каналы, снапшоты, интерполяция; версия 5 — П5.9
-	# переделка (мир без монет/заданий/маяков), 4 — П5.8
-	# (внешность байтами индексов).
-	assert_eq(Protocol.PROTOCOL_VERSION, 5)
+	# Раздел 10: лимиты, каналы, снапшоты, интерполяция; версия 6 —
+	# доработка П5.13 (мир без мобов), 5 — П5.9 переделка
+	# (мир без монет/заданий/маяков), 4 — П5.8 (внешность байтами индексов).
+	assert_eq(Protocol.PROTOCOL_VERSION, 6)
 	assert_eq(Protocol.MAX_PLAYERS, 12)
 	assert_eq(Protocol.MAX_PLAYERS_HARD, 16)
 	# Каналы 0..2 из раздела 10, все разные.

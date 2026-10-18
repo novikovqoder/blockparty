@@ -2,12 +2,12 @@
 # Steam — лобби-миры раздела 11: владелец лобби становится хостом),
 # ростер мира и синхронизация часов мира. Мир открыт для входа в любой
 # момент: rpc_hello добавляет игрока и сразу получает world_state (часы,
-# игроки, мёртвые мобы). Снапшоты движения идут 20 Гц
-# через хост, хост пересылает их с AOI-фильтром по расстоянию; мобы
-# решает хост (HostAuthority). Выход хоста закрывает мир у всех.
-# В одиночной игре без сети Net сам исполняет роль хоста — те же события
-# EventBus.
-# Не делает: голос (П6).
+# игроки, активности). Снапшоты движения идут 20 Гц
+# через хост, хост пересылает их с AOI-фильтром по расстоянию;
+# активности решает хост (ActivityAuthority). Выход хоста закрывает мир
+# у всех. В одиночной игре без сети Net сам исполняет роль хоста — те же
+# события EventBus.
+# Не делает: голос (П6). Мобы (раздел 8) удалены в доработке П5.13.
 extends Node
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -30,8 +30,6 @@ var world_epoch_msec: int = 0
 ## Передаётся в world_state: у гостей часы те же.
 var world_time_offset_sec: float = 0.0
 
-## Авторитет хоста: мёртвые мобы с временем возрождения.
-var authority := HostAuthority.new()
 ## Авторитет хоста: активности и социальные механики П5 (разделы 7, 9).
 var activity := ActivityAuthority.new()
 ## Связи «за руку» (раздел 9.5): leader → follower; заполняется rpc_hand_link
@@ -90,7 +88,6 @@ func _ready() -> void:
 				multiplayer.multiplayer_peer = transport.peer
 				# Мир создан вместе с сервером: часы мира пошли (раздел 7).
 				_start_world_clock()
-				authority.clear()
 				activity.clear()
 				hand_links.clear()
 				_aoi.clear()
@@ -152,7 +149,6 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		local_peer_id = multiplayer.get_unique_id()
 		# Мир создан вместе с хостом: часы мира пошли (раздел 7), как в dev-host.
 		_start_world_clock()
-		authority.clear()
 		activity.clear()
 		hand_links.clear()
 		_aoi.clear()
@@ -183,8 +179,6 @@ func _process(delta: float) -> void:
 	_send_own_snapshot(delta)
 	_update_traffic(delta)
 	if is_host():
-		# Возродившиеся выпадают из состояния — world_state остаётся компактным.
-		authority.prune(world_time_sec())
 		# Активности П5 (раздел 9): плиты и зоны — по снапшотам игроков.
 		_activity_accum += delta
 		if _activity_accum >= B.activity_tick:
@@ -316,13 +310,11 @@ func rpc_hello(player_name: String, appearance: PackedByteArray) -> void:
 	)
 	_broadcast_roster()
 	# Полное состояние мира одним пакетом: часы, ростер с флагами «в мире»,
-	# мёртвые мобы с временем возрождения (раздел 10).
-	authority.prune(world_time_sec())
+	# активности (раздел 10).
 	var state := {
 		"world_epoch_msec": world_epoch_msec,
 		"world_time_offset_sec": world_time_offset_sec,
 		"players": _roster_entries(),
-		"dead_mobs": authority.dead_mob_entries(),
 		"activities": {
 			"ruins": activity.ruins_state(),
 			"ladders": activity.ladders_state(),
@@ -374,13 +366,11 @@ func rpc_world_state(data: PackedByteArray) -> void:
 		slot["in_world"] = bool(entry["in_world"])
 		fresh[int(entry["peer_id"])] = slot
 	players = fresh
-	var dead: Array = state["dead_mobs"]
 	Log.info(
-		"Состояние мира получено: world_time=%.1f с, игроков=%d, мёртвых мобов=%d"
-		% [world_time_sec(), players.size(), dead.size()], "Net"
+		"Состояние мира получено: world_time=%.1f с, игроков=%d"
+		% [world_time_sec(), players.size()], "Net"
 	)
 	if Session.in_world:
-		EventBus.world_state_applied.emit(dead)
 		_apply_activities(state)
 
 
@@ -389,7 +379,6 @@ func rpc_world_state(data: PackedByteArray) -> void:
 func replay_world_state() -> void:
 	if last_world_state.is_empty():
 		return
-	EventBus.world_state_applied.emit(last_world_state["dead_mobs"])
 	_apply_activities(last_world_state)
 
 
@@ -515,121 +504,6 @@ func _send_own_snapshot(delta: float) -> void:
 	else:
 		snapshot_bytes_sent += data.size()
 		_send(func() -> void: rpc_id(1, "rpc_snapshot", data), true)
-
-
-# --- Авторитет хоста: мобы (разделы 8, 10) ---
-
-## Удар по мобу (раздел 8): клиент видит попадание, хост проверяет
-## дистанцию до 2.5 м с допуском на пинг, перезарядку и что моб жив.
-func request_mob_hit(spawn_id: int, client_world_time: float) -> void:
-	if is_host():
-		_handle_mob_hit(local_peer_id, spawn_id, client_world_time)
-	else:
-		_send(
-			func() -> void: rpc_id(1, "rpc_hit_mob", spawn_id, client_world_time), false
-		)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hit_mob(spawn_id: int, client_world_time: float) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_mob_hit(multiplayer.get_remote_sender_id(), spawn_id, client_world_time)
-
-
-func _handle_mob_hit(killer_peer: int, spawn_id: int, client_world_time: float) -> void:
-	var mob := _find_mob(spawn_id)
-	if mob == null:
-		Log.warn("Удар по неизвестному мобу %d отклонён" % spawn_id, "Net")
-		return
-	var killer_pos: Vector3 = _peer_position(killer_peer)
-	if killer_pos == _POS_UNKNOWN:
-		Log.warn("Удар по мобу %d отклонён: нет позиции игрока %d" % [spawn_id, killer_peer], "Net")
-		return
-	# Светлячок «на двоих» (раздел 8): окно двух разных игроков — отдельно.
-	if mob is GoldenFirefly:
-		_handle_firefly_hit(killer_peer, mob as GoldenFirefly, client_world_time, killer_pos)
-		return
-	var event := authority.try_kill_mob(
-		spawn_id, killer_peer, client_world_time,
-		mob.position_at(client_world_time), killer_pos, mob.respawn_sec(), B
-	)
-	if event.is_empty():
-		return
-	Log.info(
-		"Моб %d убит игроком %d, возрождение %.0f с"
-		% [spawn_id, killer_peer, float(event["respawn_at"]) - client_world_time], "Net"
-	)
-	_broadcast_mob_killed(spawn_id, [killer_peer], float(event["respawn_at"]))
-
-
-## Удар по золотому светлячку (раздел 8): дистанцию и перезарядку проверяет
-## authority.hit_allowed, пару ударов — activity.try_firefly_hit. Первый
-## удар открывает окно (событие ослабления), второй от другого игрока
-## в окне убивает. Одиночка в мире (раздел 9.4,
-## запасной путь) убивает светлячка одним ударом.
-func _handle_firefly_hit(
-	killer_peer: int, mob: GoldenFirefly, world_time: float, killer_pos: Vector3
-) -> void:
-	if not authority.hit_allowed(
-		mob.spawn_id, killer_peer, world_time, mob.position_at(world_time), killer_pos, B
-	):
-		return
-	var event := activity.try_firefly_hit(
-		mob.spawn_id, killer_peer, world_time, mob.respawn_sec(), B,
-		in_world_count() <= 1,
-	)
-	if event.is_empty():
-		return
-	if event.has("killed"):
-		var killers: Array = event["killed"]
-		var respawn_at: float = float(event["respawn_at"])
-		authority.mark_mob_dead(mob.spawn_id, respawn_at)
-		Log.info(
-			"Светлячок %d убит (%s), возрождение %.0f с"
-			% [
-				mob.spawn_id,
-				", ".join(killers.map(func(p: int) -> String: return str(p))),
-				respawn_at - world_time,
-			], "Net"
-		)
-		_broadcast_mob_killed(mob.spawn_id, killers, respawn_at)
-		return
-	Log.info(
-		"Светлячок %d ослаблен игроком %d на %.0f с" % [mob.spawn_id, killer_peer, B.firefly_window],
-		"Net",
-	)
-	_broadcast_firefly_weakened(mob.spawn_id, int(event["weakened"]), float(event["until"]))
-
-
-## Хост подтвердил убийство моба всем (раздел 8): killers — кто убил
-## (светлячка убивают двое).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_mob_killed(spawn_id: int, killers: Array, respawn_at: float) -> void:
-	EventBus.mob_killed.emit(spawn_id, killers, respawn_at)
-
-
-func _broadcast_mob_killed(spawn_id: int, killers: Array, respawn_at: float) -> void:
-	if is_networked():
-		_send(
-			func() -> void: rpc_mob_killed.rpc(spawn_id, killers, respawn_at), false
-		)
-	else:
-		rpc_mob_killed(spawn_id, killers, respawn_at)
-
-
-## Хост разослал ослабление светлячка (раздел 8): узел мигает ярче,
-## второй игрок видит, что окно открыто.
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_firefly_weakened(spawn_id: int, peer: int, until: float) -> void:
-	EventBus.firefly_weakened.emit(spawn_id, peer, until)
-
-
-func _broadcast_firefly_weakened(spawn_id: int, peer: int, until: float) -> void:
-	if is_networked():
-		_send(func() -> void: rpc_firefly_weakened.rpc(spawn_id, peer, until), false)
-	else:
-		rpc_firefly_weakened(spawn_id, peer, until)
 
 
 # --- Подсадка на голову: событие для «Встреч» (разделы 5, 13) ---
@@ -882,7 +756,7 @@ func _handle_sit(peer: int, seat_index: int) -> void:
 	var seat := seats[seat_index]
 	var flat := peer_pos - seat.global_position
 	flat.y = 0.0
-	if flat.length() > B.campfire_seat_radius + B.mob_hit_slack \
+	if flat.length() > B.campfire_seat_radius + B.ping_slack \
 			or absf(peer_pos.y - seat.global_position.y) > B.campfire_use_window:
 		return
 	if activity.try_sit(peer, seat_index, flat.length(), B).is_empty():
@@ -1308,7 +1182,6 @@ func _teardown_network() -> void:
 	_seq = 0
 	last_world_state = {}
 	hand_links.clear()
-	authority.clear()
 	activity.clear()
 	_activity_accum = 0.0
 	if was_steam:
@@ -1373,7 +1246,7 @@ func in_world_count() -> int:
 
 
 ## Позиция игрока для проверок хоста: свой — из сцены, чужой — последний
-## снапшот (устарел на пинг — это допускает mob_hit_slack, раздел 8).
+## снапшот (устарел на пинг — это допускает ping_slack).
 func _peer_position(peer_id: int) -> Vector3:
 	if peer_id == local_peer_id:
 		if _local_player != null and is_instance_valid(_local_player):
@@ -1382,14 +1255,6 @@ func _peer_position(peer_id: int) -> Vector3:
 	if _peer_pos.has(peer_id):
 		return _peer_pos[peer_id]
 	return _POS_UNKNOWN
-
-
-## Моб по spawn_id из группы (остров у всех одинаковый, раздел 6).
-func _find_mob(spawn_id: int) -> Mob:
-	for node: Node in get_tree().get_nodes_in_group(Mob.GROUP):
-		if node is Mob and (node as Mob).spawn_id == spawn_id:
-			return node
-	return null
 
 
 ## Скорость снапшотов за последнюю секунду для панели F3 (раздел 10: бюджет).

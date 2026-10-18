@@ -56,7 +56,7 @@ func setup_seats(count: int) -> void:
 func try_sit(peer: int, seat_index: int, distance: float, b: Balance) -> Dictionary:
 	if seat_index < 0 or seat_index >= _seats.size():
 		return {}
-	if distance > b.campfire_seat_radius + b.mob_hit_slack:
+	if distance > b.campfire_seat_radius + b.ping_slack:
 		return {}
 	if _seats[seat_index] != 0:
 		return {}  # занято
@@ -107,7 +107,7 @@ func try_hand_link(
 ) -> Dictionary:
 	if leader == follower or _hand_leader.has(follower) or _hand_follower.has(leader):
 		return {}
-	if distance > b.hand_link_radius + b.mob_hit_slack:
+	if distance > b.hand_link_radius + b.ping_slack:
 		return {}
 	if _chain_length(leader, follower) > b.hand_chain_max:
 		return {}
@@ -146,7 +146,7 @@ func update_hand_links(entries: Array[Dictionary], b: Balance) -> Dictionary:
 		if not positions.has(leader) or not positions.has(follower):
 			return try_hand_release(follower)
 		if (positions[leader] as Vector3).distance_to(
-				positions[follower] as Vector3) > b.hand_break_distance + b.mob_hit_slack:
+				positions[follower] as Vector3) > b.hand_break_distance + b.ping_slack:
 			return try_hand_release(follower)
 	return {}
 
@@ -179,7 +179,7 @@ func hand_links_state() -> Array[Dictionary]:
 
 ## Проверка вытягивания из расщелины (раздел 9.1): helper удержал E у точки,
 ## где висит target. Хост видит флаг «висит» и позиции из снапшотов;
-## дистанция допускает пинг (как mob_hit_slack у удара).
+## дистанция допускает пинг (ping_slack).
 func try_pull(
 	target: int,
 	helper: int,
@@ -190,7 +190,7 @@ func try_pull(
 ) -> Dictionary:
 	if not target_hanging or helper == target:
 		return {}
-	if distance > b.pull_radius + b.mob_hit_slack:
+	if distance > b.pull_radius + b.ping_slack:
 		return {}
 	return {"helper": helper, "target": target, "at": world_time}
 
@@ -311,44 +311,6 @@ func ladders_state() -> Array[Dictionary]:
 	return state
 
 
-# --- Золотой светлячок «на двоих» (раздел 8) ---
-
-## Первый удар по светлячку: spawn_id -> {peer, at} — окно firefly_window,
-## в которое удар второго игрока убивает.
-var _firefly_pair: Dictionary = {}
-
-
-## Удар по светлячку (раздел 8): уязвим только от ударов двух РАЗНЫХ
-## игроков в пределах firefly_window. Первый удар открывает окно
-## ({"weakened": peer, "until": t}), удар другого в окне убивает
-## ({"killed": [первый, второй], "respawn_at": t}); тот же игрок снова —
-## окно обновляется без события, за окном — новое окно. Запасной путь
-## одиночки (раздел 9.4): когда игрок в мире один (solo), удар сразу убивает.
-func try_firefly_hit(
-	spawn_id: int,
-	peer: int,
-	world_time: float,
-	respawn_sec: float,
-	b: Balance,
-	solo: bool = false,
-) -> Dictionary:
-	if solo:
-		_firefly_pair.erase(spawn_id)
-		return {"killed": [peer], "respawn_at": world_time + respawn_sec}
-	var pair: Dictionary = _firefly_pair.get(spawn_id, {})
-	if not pair.is_empty() and world_time - float(pair["at"]) <= b.firefly_window:
-		if int(pair["peer"]) != peer:
-			_firefly_pair.erase(spawn_id)
-			return {
-				"killed": [int(pair["peer"]), peer],
-				"respawn_at": world_time + respawn_sec,
-			}
-		_firefly_pair[spawn_id] = {"peer": peer, "at": world_time}
-		return {}
-	_firefly_pair[spawn_id] = {"peer": peer, "at": world_time}
-	return {"weakened": peer, "until": world_time + b.firefly_window}
-
-
 
 func _distinct_peers(plate_peers: Array[int]) -> Array[int]:
 	var peers: Array[int] = []
@@ -365,7 +327,7 @@ func _empty_plates(count: int) -> Array[int]:
 	return plates
 
 
-## Полный сброс (новый мир): вызывается вместе с authority.clear().
+## Полный сброс (новый мир).
 func clear() -> void:
 	_hand_leader.clear()
 	_hand_follower.clear()
@@ -375,4 +337,3 @@ func clear() -> void:
 	_gate_wait_started_at = -1.0
 	_plates = []
 	_ladders = []
-	_firefly_pair.clear()

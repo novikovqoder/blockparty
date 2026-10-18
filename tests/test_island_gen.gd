@@ -66,7 +66,11 @@ func test_generation_is_deterministic() -> void:
 	# библиотеке моделей замены нет; дома жителей встанут готовой моделью,
 	# сруб Kless в очереди владельца). Заборы-палисадники, якоря участков,
 	# высоты, тропы и POI не менялись.
-	assert_eq(first_hash, 4090659172, "хеш острова совпадает с сгенерированной сценой")
+	# Доработка П5.13, дочистка: хеш обновлён сознательно — мобы удалены
+	# из данных генератора (data["mobs"] больше нет: птицы, зверьки, золотой
+	# светлячок; раздел 8 выведен из мира). Высоты, тропы, POI, предметы
+	# и деревенские заборы не менялись.
+	assert_eq(first_hash, 2191791124, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_zone_blend_is_smooth() -> void:
@@ -220,93 +224,3 @@ func test_forest_landmarks_giant_tree_and_gully_bridge() -> void:
 	var bank: float = heights[IslandGen._idx(
 		roundi(bank_flat.x), roundi(bank_flat.y))]
 	assert_gt(bank - bottom, 0.9, "овраг глубже метра")
-
-
-func test_mobs_match_spec_table() -> void:
-	# Раздел 8: птицы кружат (радиус 4–8, высота 2–4), зверьки — маршрут
-	# из 3–5 точек, светлячки парят в лесу; spawn_id уникальны.
-	var data: Dictionary = _island_data()
-	var mobs: Array = data["mobs"]
-	var birds := 0
-	var critters := 0
-	var fireflies := 0
-	var ids: Dictionary = {}
-	for mob: Dictionary in mobs:
-		assert_false(ids.has(mob["spawn_id"]), "spawn_id уникален")
-		ids[mob["spawn_id"]] = true
-		match mob["kind"]:
-			"bird":
-				birds += 1
-				assert_between(float(mob["radius"]), 4.0, 8.0, "радиус окружности")
-				assert_between(float(mob["height"]), 2.0, 4.0, "высота полёта")
-				assert_gt((mob["center"] as Vector3).y, IslandGen.SEA_LEVEL, "над сушей")
-			"critter":
-				critters += 1
-				assert_between(
-					(mob["waypoints"] as Array).size(), 3, 5, "вейпоинтов в маршруте")
-				assert_gte(
-					(mob["points"] as Array).size(),
-					(mob["waypoints"] as Array).size(),
-					"маршрут плотнее вейпоинтов (по земле)")
-				for point: Vector3 in mob["points"]:
-					assert_gt(point.y, IslandGen.SEA_LEVEL, "маршрут по земле")
-			"firefly":
-				fireflies += 1
-				assert_gt((mob["center"] as Vector3).y, IslandGen.SEA_LEVEL, "над сушей")
-	assert_between(birds, 4, 12, "птиц на острове")
-	assert_between(critters, 4, 8, "зверьков на острове")
-	assert_between(fireflies, 2, 4, "светлячков на острове")
-
-
-# --- Зверьки по земле и мимо предметов (vfx-fix, баг 3) ---
-
-
-## Круги твёрдых предметов (x, z, radius) — как в отборе генератора.
-func _solid_circles(data: Dictionary) -> Array[Vector3]:
-	var circles: Array[Vector3] = []
-	for prop: Dictionary in data["props"]:
-		var size: Vector3 = PropMeshes.collision_size(
-			StringName(prop["type"]), prop["scale"])
-		if size == Vector3.ZERO:
-			continue
-		var pos: Vector3 = prop["pos"]
-		circles.append(Vector3(pos.x, pos.z, maxf(size.x, size.z) * 0.5))
-	return circles
-
-
-## Каждая точка маршрута зверька — на высоте рельефа (та же триангуляция,
-## что у меша) и вне запаса твёрдых предметов; в движении (сэмплы во
-## времени) зверёк тоже не отрывается от земли.
-func test_critter_routes_on_terrain_and_clear_of_props() -> void:
-	var data: Dictionary = _island_data()
-	var heights: PackedFloat32Array = data["heights"]
-	var circles := _solid_circles(data)
-	for mob: Dictionary in data["mobs"]:
-		if String(mob["kind"]) != "critter":
-			continue
-		var points: Array = mob["points"]
-		assert_gt(points.size(), 8, "маршрут плотный (не 3–5 редких точек)")
-		var near: Array[Vector3] = []
-		for circle: Vector3 in circles:
-			for point: Vector3 in points:
-				if Vector2(point.x, point.z).distance_to(Vector2(circle.x, circle.y)) \
-						<= IslandGen.CRITTER_ROUTE_MAX:
-					near.append(circle)
-					break
-		for point: Vector3 in points:
-			assert_almost_eq(
-				point.y, IslandGen.ground_height(heights, point.x, point.z), 0.02,
-				"точка маршрута на высоте рельефа (%.1f, %.1f)" % [point.x, point.z])
-			for circle: Vector3 in near:
-				assert_gt(
-					Vector2(point.x, point.z).distance_to(Vector2(circle.x, circle.y)),
-					circle.z + IslandGen.CRITTER_CLEAR - 0.01,
-					"точка маршрута вне предмета (%.1f, %.1f)" % [point.x, point.z])
-		# Движение: сэмплы во времени не отрываются от земли (шаг 0.3 с —
-		# мельче шага маршрута, проверка всей траектории, а не только узлов).
-		for i: int in range(0, 300):
-			var t: float = float(i) * 0.3
-			var at := MobMotion.critter_position(mob, t)
-			assert_almost_eq(
-				at.y, IslandGen.ground_height(heights, at.x, at.z), 0.05,
-				"зверёк на высоте рельефа (t=%.1f)" % t)

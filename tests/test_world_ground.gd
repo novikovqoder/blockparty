@@ -125,6 +125,14 @@ func test_world_self_check_passes() -> void:
 	assert_eq(result["metrics"]["chunks"],
 		TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE,
 		"чанков — вся карта")
+	# Дочистка П5.13: «белых квадратов» нет — каждый меш острова (включая
+	# костёр, жителей, воду и частицы) несёт материал, заглушек не осталось.
+	assert_gt(result["metrics"]["surfaces_checked"], 100,
+		"материалы проверены по всему острову")
+	assert_eq(result["metrics"]["surfaces_bare"], 0,
+		"ни одной поверхности без материала")
+	assert_eq(result["metrics"]["surfaces_placeholder"], 0,
+		"ни одного белого албедо без текстуры")
 
 
 func test_ground_y_interpolates_heightmap() -> void:

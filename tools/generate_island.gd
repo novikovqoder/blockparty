@@ -31,9 +31,6 @@ const SEAT_SCRIPT: String = "res://gameplay/activities/campfire_seat.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
 const FOLK_SCRIPT: String = "res://gameplay/world/townsfolk.gd"
-const BIRD_SCRIPT: String = "res://gameplay/mobs/bird.gd"
-const CRITTER_SCRIPT: String = "res://gameplay/mobs/critter.gd"
-const FIREFLY_SCRIPT: String = "res://gameplay/mobs/golden_firefly.gd"
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
@@ -75,9 +72,8 @@ func _generate() -> void:
 		return
 
 	_render_map(data)
-	print("Остров: предметов %d, мобов %d, хеш %d, %.1f с" % [
+	print("Остров: предметов %d, хеш %d, %.1f с" % [
 		(data["props"] as Array).size(),
-		(data["mobs"] as Array).size(),
 		hash_value,
 		(Time.get_ticks_msec() - started) / 1000.0,
 	])
@@ -192,10 +188,6 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 		seat.seat_index = i
 		root.add_child(seat)
 
-	# Мобы — траектории в параметрах.
-	for mob: Dictionary in data["mobs"]:
-		root.add_child(_mob_node(mob))
-
 	# Невидимые ограждения по краю мира.
 	var bounds: float = root.world_bounds
 	for i: int in 4:
@@ -215,43 +207,6 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 	_set_owners(root)
 	return root
 
-
-@warning_ignore("unsafe_method_access")
-func _mob_node(mob: Dictionary) -> Area3D:
-	# Типизированные массивы из данных превращаем в обычные — так словарь
-	# motion надёжно сериализуется в tscn и читается обратно.
-	var motion: Dictionary = {}
-	for key: String in mob:
-		if key == "kind" or key == "spawn_id":
-			continue
-		if mob[key] is Array:
-			var plain: Array = []
-			for item: Variant in mob[key]:
-				plain.append(item)
-			motion[key] = plain
-		else:
-			motion[key] = mob[key]
-	var script_path: String = ""
-	match String(mob["kind"]):
-		"bird":
-			script_path = BIRD_SCRIPT
-			motion["center"] = mob["center"]
-		"critter":
-			script_path = CRITTER_SCRIPT
-		"firefly":
-			script_path = FIREFLY_SCRIPT
-		_:
-			push_error("Неизвестный тип моба: %s" % mob["kind"])
-	var node: Area3D = load(script_path).new()
-	node.name = "Mob%d" % int(mob["spawn_id"])
-	node.spawn_id = int(mob["spawn_id"])
-	node.motion = motion
-	match String(mob["kind"]):
-		"bird", "firefly":
-			node.position = mob["center"]
-		"critter":
-			node.position = (mob["points"] as Array)[0]
-	return node
 
 
 ## Владелец-корень для упаковки: без owner узел не попадёт в PackedScene.

@@ -10,7 +10,11 @@
 #     каждого экземпляра каждой группы — у билинейной высоты рельефа
 #     в его точке и выше уровня воды;
 #  4) вода — только море вокруг и озеро в своей чаше: две WaterArea,
-#     озеро накрывает чашу (d < 16), море с дыркой по озеру.
+#     озеро накрывает чашу (d < 16), море с дыркой по озеру;
+#  5) ни одного «белого квадрата»: у каждой поверхности каждого меша
+#     острова есть материал, и ни один BaseMaterial3D не является
+#     заглушкой — белый албедо без текстуры, вершинных цветов и свечения
+#     (доработка П5.13, дочистка).
 # Используется тестом GUT (test_world_ground) и ключом --selftest-world
 # в запущенной игре (включая экспортированную сборку).
 class_name WorldSelfCheck
@@ -182,10 +186,80 @@ static func run(island: Island, verbose: bool = false) -> Dictionary:
 					or half.y > IslandGen.HALF + 0.01:
 				reasons.append("море шире карты острова")
 
+	# 5) Материалы: каждый меш острова (включая дочерние сцены — костёр,
+	# жители, вода, частицы) рисуется материалом, и ни один BaseMaterial3D
+	# не выглядит неокрашенной заглушкой (белый албедо без текстуры,
+	# вершинных цветов и свечения — «белый квадрат»).
+	var bare := 0
+	var placeholders := 0
+	var surfaces := 0
+	var offenders: PackedStringArray = PackedStringArray()
+	var meshes: Array = island.find_children("*", "MeshInstance3D", true, false) \
+		+ island.find_children("*", "MultiMeshInstance3D", true, false) \
+		+ island.find_children("*", "GPUParticles3D", true, false)
+	for node: Node in meshes:
+		for mesh: Mesh in _node_meshes(node):
+			for surface: int in mesh.get_surface_count():
+				surfaces += 1
+				var material: Material = (node as GeometryInstance3D).material_override
+				if material == null:
+					material = mesh.surface_get_material(surface)
+				if material == null:
+					bare += 1
+					if offenders.size() < 8:
+						offenders.append("%s: поверхность %d без материала"
+							% [node.get_path(), surface])
+				elif material is BaseMaterial3D and _is_placeholder(material):
+					placeholders += 1
+					if offenders.size() < 8:
+						offenders.append("%s: белый албедо без текстуры"
+							% node.get_path())
+	metrics["surfaces_checked"] = surfaces
+	metrics["surfaces_bare"] = bare
+	metrics["surfaces_placeholder"] = placeholders
+	if bare > 0 or placeholders > 0:
+		reasons.append("мешей без материала/текстуры: %d (+%d заглушек): %s"
+			% [bare, placeholders, ", ".join(offenders)])
+
 	if verbose:
 		for line: String in metrics:
 			print("  %s: %s" % [line, str(metrics[line])])
 	return {"ok": reasons.is_empty(), "reasons": reasons, "metrics": metrics}
+
+
+## Все меши узла-рисователя: сама сетка у MeshInstance3D, multimesh.mesh —
+## у MultiMesh, пассы частиц — у GPUParticles3D.
+static func _node_meshes(node: Node) -> Array[Mesh]:
+	var result: Array[Mesh] = []
+	if node is MultiMeshInstance3D:
+		var multi: MultiMesh = (node as MultiMeshInstance3D).multimesh
+		if multi != null and multi.mesh != null:
+			result.append(multi.mesh)
+	elif node is GPUParticles3D:
+		var fx := node as GPUParticles3D
+		for index: int in fx.draw_passes:
+			var mesh: Mesh = fx.get("draw_pass_%d" % (index + 1)) as Mesh
+			if mesh != null:
+				result.append(mesh)
+	elif node is MeshInstance3D:
+		var mesh: Mesh = (node as MeshInstance3D).mesh
+		if mesh != null:
+			result.append(mesh)
+	return result
+
+
+## Стандартный материал-заглушка: белый албедо без текстуры, вершинных
+## цветов и свечения — именно так выглядит «белый квадрат». Цветной албедо
+## и шейдеры low-poly — легальная раскраска мира.
+static func _is_placeholder(material: BaseMaterial3D) -> bool:
+	if material.albedo_texture != null:
+		return false
+	if material.vertex_color_use_as_albedo:
+		return false
+	if material.emission_enabled:
+		return false
+	var color := material.albedo_color
+	return color.r > 0.92 and color.g > 0.92 and color.b > 0.92
 
 
 ## Высота рельефа билинейно из карты (вершины на целых координатах,

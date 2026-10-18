@@ -38,7 +38,7 @@ func test_pull_rejected_if_self() -> void:
 
 func test_pull_distance_boundary() -> void:
 	var activity := ActivityAuthority.new()
-	var limit: float = B.pull_radius + B.mob_hit_slack
+	var limit: float = B.pull_radius + B.ping_slack
 	# Ровно на границе — допустимо (допуск на пинг), чуть дальше — нет.
 	assert_false(activity.try_pull(7, 3, 120.0, true, limit, B).is_empty())
 	assert_true(activity.try_pull(7, 3, 120.0, true, limit + 0.01, B).is_empty())
@@ -207,70 +207,6 @@ func test_ladder_state_roundtrip_and_clear() -> void:
 	assert_eq(activity.ladders_state().size(), 0)
 
 
-# --- Золотой светлячок «на двоих» (раздел 8) ---
-
-
-func test_firefly_first_hit_opens_window() -> void:
-	var activity := ActivityAuthority.new()
-	var event := activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
-	assert_eq(int(event["weakened"]), 4)
-	assert_almost_eq(float(event["until"]), 100.0 + B.firefly_window, EPS)
-
-
-func test_firefly_killed_by_two_different_players() -> void:
-	var activity := ActivityAuthority.new()
-	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
-	var event := activity.try_firefly_hit(13, 7, 102.5, B.firefly_respawn_sec, B)
-	var killers: Array = event["killed"]
-	assert_eq(killers.size(), 2)
-	assert_true(killers.has(4) and killers.has(7), "оба участника в награде")
-	assert_almost_eq(
-		float(event["respawn_at"]), 102.5 + B.firefly_respawn_sec, EPS
-	)
-
-
-func test_firefly_same_player_twice_does_not_kill() -> void:
-	var activity := ActivityAuthority.new()
-	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
-	assert_true(
-		activity.try_firefly_hit(13, 4, 102.0, B.firefly_respawn_sec, B).is_empty(),
-		"тот же игрок — окна мало",
-	)
-
-
-func test_firefly_window_expires() -> void:
-	var activity := ActivityAuthority.new()
-	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
-	# За пределами окна удар другого игрока не убивает — открывает новое окно.
-	var second_at: float = 100.0 + B.firefly_window + 0.5
-	var late := activity.try_firefly_hit(13, 7, second_at, B.firefly_respawn_sec, B)
-	assert_eq(int(late["weakened"]), 7, "новое окно вместо убийства")
-	# Теперь первый успевает в окно — пара убивает.
-	var pair := activity.try_firefly_hit(
-		13, 4, second_at + B.firefly_window - 0.1, B.firefly_respawn_sec, B
-	)
-	assert_eq((pair["killed"] as Array).size(), 2)
-
-
-func test_firefly_state_reset_on_clear() -> void:
-	var activity := ActivityAuthority.new()
-	activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B)
-	activity.clear()
-	# После сброса первый удар — снова окно, не убийство.
-	var event := activity.try_firefly_hit(13, 7, 100.5, B.firefly_respawn_sec, B)
-	assert_eq(int(event["weakened"]), 7)
-
-
-func test_firefly_solo_killed_by_single_hit() -> void:
-	var activity := ActivityAuthority.new()
-	# Запасной путь одиночки (раздел 9.4): игрок в мире один — один удар убивает.
-	var kill := activity.try_firefly_hit(13, 4, 100.0, B.firefly_respawn_sec, B, true)
-	var killers: Array = kill["killed"]
-	assert_eq(killers.size(), 1, "соло-удар убивает без пары")
-	assert_eq(int(killers[0]), 4)
-	assert_almost_eq(float(kill["respawn_at"]), 100.0 + B.firefly_respawn_sec, EPS)
-
-
 # --- «За руку» (раздел 9.5) ---
 
 func test_hand_link_confirmed_when_close() -> void:
@@ -287,7 +223,7 @@ func test_hand_link_rejected_self_or_far() -> void:
 		activity.try_hand_link(4, 4, 0.0, B).is_empty(),
 		"сам с собой не связывается",
 	)
-	var limit: float = B.hand_link_radius + B.mob_hit_slack
+	var limit: float = B.hand_link_radius + B.ping_slack
 	# Ровно на границе — допустимо (допуск на пинг), чуть дальше — нет.
 	assert_false(activity.try_hand_link(4, 7, limit, B).is_empty())
 	assert_true(
@@ -339,7 +275,7 @@ func test_hand_links_broken_by_distance_or_leaving() -> void:
 	activity.try_hand_link(4, 7, 1.0, B)
 	var entries: Array[Dictionary] = [
 		{"peer": 4, "pos": Vector3.ZERO, "floor": true},
-		{"peer": 7, "pos": Vector3(B.hand_break_distance + B.mob_hit_slack + 0.01, 0.0, 0.0), "floor": true},
+		{"peer": 7, "pos": Vector3(B.hand_break_distance + B.ping_slack + 0.01, 0.0, 0.0), "floor": true},
 	]
 	var event := activity.update_hand_links(entries, B)
 	assert_eq(int(event["follower"]), 7, "разрыв по расстоянию")
@@ -387,7 +323,7 @@ func test_sit_rejected_if_taken_or_far_or_bad_index() -> void:
 		activity.try_sit(7, 2, 1.2, B).is_empty(),
 		"занято второму отказ",
 	)
-	var limit: float = B.campfire_seat_radius + B.mob_hit_slack
+	var limit: float = B.campfire_seat_radius + B.ping_slack
 	# Ровно на границе — допустимо (допуск на пинг), чуть дальше — нет.
 	assert_false(activity.try_sit(7, 3, limit, B).is_empty())
 	assert_true(

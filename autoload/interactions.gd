@@ -18,7 +18,6 @@ const KIND_CAMPFIRE: String = "campfire"        # сидели рядом у к�
 const KIND_GATE_OPEN: String = "gate_open"      # вместе открыли ворота руин
 const KIND_BOOST_GOT: String = "boost_got"      # он подсадил меня на уступ
 const KIND_BOOST_GAVE: String = "boost_gave"    # я подсадил его
-const KIND_FIREFLY: String = "firefly"          # вместе поймали золотого светлячка
 const KIND_EMOTE_REPLY: String = "emote_reply"  # ответная эмоция в течение 5 с
 
 ## peer_id -> суммарные очки.
@@ -38,7 +37,6 @@ var _campfire_seconds: float = 0.0
 func _ready() -> void:
 	EventBus.player_pulled.connect(_on_player_pulled)
 	EventBus.ruins_state.connect(_on_ruins_state)
-	EventBus.mob_killed.connect(_on_mob_killed)
 	EventBus.player_boosted.connect(_on_player_boosted)
 	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.campfire_seats.connect(_on_campfire_seats)
@@ -117,16 +115,6 @@ func _on_ruins_state(open: bool, _plates: Array, openers: Array) -> void:
 	for opener: int in openers:
 		if opener != Net.local_peer_id:
 			add_points(opener, KIND_GATE_OPEN, B.pts_gate_open, Session.world_time)
-
-
-## Золотой светлячок убит парой (раздел 8): каждому из двоих — очки друг
-## за друга (список killers длиннее одного только у светлячка).
-func _on_mob_killed(_spawn_id: int, killers: Array, _respawn_at: float) -> void:
-	if not killers.has(Net.local_peer_id) or killers.size() < 2:
-		return
-	for killer: int in killers:
-		if killer != Net.local_peer_id:
-			add_points(killer, KIND_FIREFLY, B.pts_firefly, Session.world_time)
 
 
 ## Подсадка на голову (разделы 5, 13): base подсадил jumper — очки

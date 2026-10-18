@@ -223,7 +223,7 @@ func _follow_leader() -> Vector3:
 	var to_target := target - global_position
 	to_target.y = 0.0
 	var distance := to_target.length()
-	if distance > B.hand_break_distance + B.mob_hit_slack:
+	if distance > B.hand_break_distance + B.ping_slack:
 		# Дальше разрыва: хост вот-вот оборвёт связь — стоим без рывка.
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -535,16 +535,12 @@ func _end_attack() -> void:
 	# Пересечения читаем, пока monitoring включён: после выключения
 	# get_overlapping_* пуст (и ругается в консоль движка).
 	var bodies := attack_area.get_overlapping_bodies()
-	var areas := attack_area.get_overlapping_areas()
 	attack_area.monitoring = false
-	# По игрокам — только визуальный «тычок» (раздел 5).
+	# По игрокам — только визуальный «тычок» (раздел 5). Мобы (раздел 8)
+	# удалены в доработке П5.13 — удар больше никого не убивает.
 	for body in bodies:
 		if body is Player and body != self:
 			(body as Player).receive_bonk()
-	# Мобы (раздел 8): птица и зверёк — один удар; светлячок на двоих — П5.
-	for area in areas:
-		if area is Mob:
-			(area as Mob).take_hit()
 
 
 func receive_bonk() -> void:

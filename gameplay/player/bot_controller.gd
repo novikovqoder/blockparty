@@ -43,7 +43,7 @@ func _physics_process(delta: float) -> void:
 		if _targets.is_empty():
 			return
 		_pick_target()
-	_jump_or_attack_tick(delta)
+	_jump_tick(delta)
 	_check_stuck(delta)
 	_turn_camera(delta)
 
@@ -62,14 +62,9 @@ func _pick_target() -> void:
 	Log.info("Бот %d идёт к точке (%.0f, %.0f)" % [Net.local_peer_id, _target.x, _target.z], "Bot")
 
 
-func _jump_or_attack_tick(delta: float) -> void:
-	# Моб рядом — идём на него и бьём (зону удара поворачивает модель).
-	var mob := _nearest_mob()
-	if mob != null:
-		var to_mob: Vector3 = mob.global_position - _player.global_position
-		if to_mob.length() <= B.bot_attack_radius * 0.6:
-			_attack_requested = true
-	# Иногда прыгнуть на ходу (раздел 17: «иногда прыгают»).
+func _jump_tick(delta: float) -> void:
+	# Иногда прыгнуть на ходу (раздел 17: «иногда прыгают»); бить некого —
+	# мобы удалены в доработке П5.13.
 	if _rng.randf() < B.bot_jump_chance_per_sec * delta:
 		_request_jump()
 
@@ -104,20 +99,6 @@ func _turn_camera(delta: float) -> void:
 		)
 
 
-func _nearest_mob() -> Mob:
-	var best: Mob = null
-	var best_distance: float = B.bot_attack_radius
-	for node: Node in get_tree().get_nodes_in_group(Mob.GROUP):
-		var mob := node as Mob
-		if mob == null or not mob.is_alive():
-			continue
-		var distance: float = mob.global_position.distance_to(_player.global_position)
-		if distance < best_distance:
-			best_distance = distance
-			best = mob
-	return best
-
-
 func _request_jump() -> void:
 	_jump_requested = true
 	_jump_hold_left = B.bot_jump_hold
@@ -127,16 +108,11 @@ func _request_jump() -> void:
 func wish_direction() -> Vector3:
 	if _pause_left > 0.0 or not _has_target:
 		return Vector3.ZERO
-	var mob := _nearest_mob()
-	var point := _target
-	if mob != null and mob.is_alive():
-		point = mob.global_position
-	var to_point := point - _player.global_position
+	var to_point := _target - _player.global_position
 	to_point.y = 0.0
 	if to_point.length() < B.bot_arrive_radius:
-		if point == _target:
-			_has_target = false
-			_pause_left = B.bot_poi_pause
+		_has_target = false
+		_pause_left = B.bot_poi_pause
 		return Vector3.ZERO
 	return to_point.normalized()
 

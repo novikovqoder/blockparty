@@ -198,20 +198,11 @@ extends Resource
 @export var fog_height_m: float = 0.6
 @export var fog_height_density: float = 0.05
 
-@export_group("Сеть: авторитет хоста (разделы 8, 10)")
-## Дистанция удара по мобу, которую проверяет хост, м (раздел 8).
-@export var mob_hit_distance: float = 2.5
-## Допуск к дистанции удара на пинг (снапшот убийцы устарел на RTT), м.
-@export var mob_hit_slack: float = 1.5
-
-@export_group("Мобы (раздел 8)")
-## Возрождение убитого моба, с (светлячок — отдельно).
-@export var mob_respawn_sec: float = 180.0
-## Возрождение золотого светлячка, с.
-@export var firefly_respawn_sec: float = 300.0
-## Золотой светлячок «на двоих» (раздел 8): окно между ударами двух
-## разных игроков, с.
-@export var firefly_window: float = 3.0
+@export_group("Сеть: авторитет хоста (разделы 9, 10)")
+## Допуск проверяемых хостом дистанций на пинг (снапшот игрока устарел
+## на RTT): посадка у костра, руки, вытягивание. М (в доработке П5.13
+## переименован из mob_hit_slack — мобы удалены).
+@export var ping_slack: float = 1.5
 
 @export_group("Боты (раздел 18: бродят между POI и иногда прыгают)")
 ## Пауза бота на точке интереса перед следующей целью, с.
@@ -220,8 +211,6 @@ extends Resource
 @export var bot_turn_speed: float = 3.0
 ## Шанс прыжка в секунду на ходу (0 — никогда).
 @export var bot_jump_chance_per_sec: float = 0.25
-## Радиус атаки мобов ботом, м (0 — не атакует).
-@export var bot_attack_radius: float = 2.2
 ## Секунд без прогресса до прыжка/смены цели (застрял у склона/дерева).
 @export var bot_stuck_time: float = 4.0
 ## Дойти до цели считается на этом расстоянии, м.
@@ -250,8 +239,6 @@ extends Resource
 @export var pts_gate_open: float = 6.0
 ## Подсадил меня / я подсадил его.
 @export var pts_boost: float = 5.0
-## Вместе поймали золотого светлячка.
-@export var pts_firefly: float = 6.0
 ## Ответная эмоция в течение 5 с и лимит.
 @export var pts_emote_reply: float = 2.0
 @export var pts_emote_reply_max: float = 6.0
