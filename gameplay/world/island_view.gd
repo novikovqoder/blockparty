@@ -15,6 +15,23 @@ extends Node3D
 var _props_by_type: Dictionary = {}
 ## Базовая дальность видимости типов (для «Простой графики»).
 var _base_ranges: Dictionary = {}
+## Меши чанков рельефа (для адаптивной тесселяции, П1).
+var _chunk_instances: Array[MeshInstance3D] = []
+## Текущий шаг тесселяции чанка (1.0 — печёный меш, NEAR_STEP — ближний).
+var _chunk_steps: Array[float] = []
+## Центр последней перестройки (быстрый выход, если игрок не сдвинулся).
+var _lod_center: Vector2 = Vector2(1e9, 1e9)
+## Карты производных рельефа для нормалей ближних чанков (строятся лениво
+## при первой перестройке — боты и сервер без перестроек за них не платят).
+var _slope_maps: Dictionary = {}
+
+
+## Радиус ближней тесселяции (доработка-2 П5.13, П1): чанки ближе этого
+## расстояния (по центру чанка, от игрока в плоскости XZ) тесселируются
+## квадом 0.5 м, дальше остаются печёными 1-метровыми. Гистерезис не даёт
+## чанку дёргаться между уровнями, стоя на границе.
+const LOD_RADIUS: float = 50.0
+const LOD_HYSTERESIS: float = 6.0
 
 
 func _ready() -> void:
@@ -26,8 +43,9 @@ func _ready() -> void:
 ## Рельеф: одна карта высот и на коллизию (HeightMapShape3D — вся физика
 ## и механики), и на визуал. Все 64 чанка 32 × 32 рисует один материал
 ## ForestGround (доработка П5.13): текстурная земля в стиле принятого Леса
-## на весь остров, карты покраски 256 × 256 с плавными границами зон;
-## меши чанков несут фасетные тангенты (нормал-мап грунта без warning'ов).
+## на весь остров, карты покраски 256 × 256 с плавными границами зон.
+## Доработка-2 П5.13 (П1): чанки вокруг игрока (update_viewer) тесселируются
+## квадом 0.5 м — печёные меши 1 м остаются дальним уровнем.
 func _build_terrain() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Terrain"
@@ -44,7 +62,68 @@ func _build_terrain() -> void:
 		mesh_instance.mesh = chunk
 		mesh_instance.material_override = forest_material
 		body.add_child(mesh_instance)
+		_chunk_instances.append(mesh_instance)
+		_chunk_steps.append(1.0)
 	add_child(body)
+
+
+## Адаптивная тесселяция (доработка-2 П5.13, П1): вокруг игрока чанки
+## перестраиваются с квадом 0.5 м (TerrainBuilder.build_near_chunk), при
+## удалении возвращается печёный 1-метровый меш. Стык уровней без щелей:
+## высоты подквадов — та же билинейная выборка карты, нормали — из той же
+## карты. Перестройки идут с бюджетом времени на вызов, ближние — вперёд:
+## при ходьбе меняется один-два чанка, после телепорта весь набор
+## достраивается сразу.
+func update_viewer(viewer_pos: Vector3) -> void:
+	var center := Vector2(viewer_pos.x, viewer_pos.z)
+	if center.distance_to(_lod_center) < 2.0:
+		return
+	_lod_center = center
+	var rebuilds: Array[Dictionary] = []
+	for i: int in _chunk_instances.size():
+		var chunk_center := _chunk_center(i)
+		var dist: float = chunk_center.distance_to(center)
+		var near: bool = dist < LOD_RADIUS \
+			if _chunk_steps[i] == 1.0 else dist < LOD_RADIUS + LOD_HYSTERESIS
+		if near == (_chunk_steps[i] != 1.0):
+			continue
+		rebuilds.append({"index": i, "dist": dist, "near": near})
+	if rebuilds.is_empty():
+		return
+	rebuilds.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["dist"]) < float(b["dist"]))
+	# Бюджет кадра: при обычной ходьбе меняется один-два чанка; при первом
+	# вызове или телепорте (много перестроек сразу) — полная перестройка
+	# за один вызов, чтобы вокруг зрителя не оставалось грубых «дыр».
+	var budget_ms: int = Time.get_ticks_msec() + (600 if rebuilds.size() > 6 else 40)
+	for rebuild: Dictionary in rebuilds:
+		_rebuild_chunk(int(rebuild["index"]), bool(rebuild["near"]))
+		if Time.get_ticks_msec() > budget_ms and rebuild != rebuilds.back():
+			break
+
+
+func _rebuild_chunk(index: int, near: bool) -> void:
+	var instance := _chunk_instances[index]
+	if near:
+		if _slope_maps.is_empty():
+			_slope_maps = TerrainBuilder.slope_maps(art.heights)
+		var cz: int = index / TerrainBuilder.CHUNKS_PER_SIDE
+		var cx: int = index % TerrainBuilder.CHUNKS_PER_SIDE
+		instance.mesh = TerrainBuilder.build_near_chunk(
+			art.heights, _slope_maps, art.chunks[index] as ArrayMesh, cx, cz)
+		_chunk_steps[index] = TerrainBuilder.NEAR_STEP
+	else:
+		instance.mesh = art.chunks[index]
+		_chunk_steps[index] = 1.0
+
+
+func _chunk_center(index: int) -> Vector2:
+	var cz: int = index / TerrainBuilder.CHUNKS_PER_SIDE
+	var cx: int = index % TerrainBuilder.CHUNKS_PER_SIDE
+	return Vector2(
+		float(-IslandGen.HALF + cx * TerrainBuilder.CHUNK + TerrainBuilder.CHUNK / 2),
+		float(-IslandGen.HALF + cz * TerrainBuilder.CHUNK + TerrainBuilder.CHUNK / 2),
+	)
 
 
 ## Предметы: MultiMesh собирается в рантайме из групп ресурса (инстанс-данные

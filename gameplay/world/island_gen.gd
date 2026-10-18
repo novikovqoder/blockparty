@@ -32,6 +32,9 @@ const ISLAND_R_OUT: float = 112.0
 ## — склон, по которому идёт персонаж; круче — стена.
 const MAX_STEP: float = 0.9
 
+## Сила сглаживания карты высот (доработка-2 П5.13, П1, _smooth_pass).
+const SMOOTH_STRENGTH: float = 0.6
+
 ## Гидравлическая эрозия (П5.13, блок 3): количество капель и параметры
 ## переноса осадка. Подобраны под сетку 1 м: промоины глубиной ~0.3–1.2 м
 ## переживают второй проход _limit_slopes (стенки < 0.9 м/м).
@@ -169,6 +172,12 @@ static func generate() -> Dictionary:
 	# Второй проход выравнивания: запланированные обрывы (каньон, площадки
 	# смотровых) защищены, а их кромки получают пологий подход к рельефу.
 	_limit_slopes(heights, _protected_cells())
+	# Доработка-2 П5.13, П1: лёгкое сглаживание карты высот — эрозия и шум
+	# базового рельефа оставляли мелкую рябь шага сетки, читавшуюся на
+	# склонах. Один лапласиан 3×3: линейные участки (равномерные склоны
+	# холмов) не меняются вовсе, вес гаснет на крутых перепадах — кромки
+	# террас, стенки оврага и смотровых (уклон около MAX_STEP) не размываются.
+	_smooth_pass(heights)
 	var data := {
 		"heights": heights,
 		"props": [],
@@ -522,6 +531,34 @@ static func _limit_slopes(heights: PackedFloat32Array, protected: Dictionary) ->
 			if min_neighbor < 1e9 and h > min_neighbor + MAX_STEP:
 				heights[i] = min_neighbor + MAX_STEP
 				changed = true
+
+
+## Доработка-2 П5.13, П1: сглаживание карты высот одним лапласианом 3×3.
+## На линейных участках (равномерный склон) среднее восьми соседей равно
+## самой точке — склон не меняется; выравнивается только высокочастотная
+## рябь эрозии и базового шума. Вес гаснет по максимальному перепаду
+## к соседям, начиная с 0.8 · MAX_STEP: рябь эрозии на склонах (перепады
+## заметно ниже лимита) гасится полным весом, у кромок террас и смотровых
+## (перепад упирается в MAX_STEP, диагональные — выше) вес почти нулевой —
+## запланированные обрывы сохраняются. Рамка карты (край за островом)
+## не трогается.
+static func _smooth_pass(heights: PackedFloat32Array) -> void:
+	var source: PackedFloat32Array = heights.duplicate()
+	for z: int in range(-HALF + 1, HALF):
+		for x: int in range(-HALF + 1, HALF):
+			var here: float = source[_idx(x, z)]
+			var sum: float = 0.0
+			var steepest: float = 0.0
+			for dir: Vector2i in [
+				Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+				Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+			]:
+				var h: float = source[_idx(x + dir.x, z + dir.y)]
+				sum += h
+				steepest = maxf(steepest, absf(h - here))
+			var weight: float = SMOOTH_STRENGTH * (
+				1.0 - smoothstep(MAX_STEP * 0.8, MAX_STEP * 1.05, steepest))
+			heights[_idx(x, z)] = lerpf(here, sum / 8.0, weight)
 
 
 ## Клетки с запланированными обрывами: каньон и его кромка, площадки

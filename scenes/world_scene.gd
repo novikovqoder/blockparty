@@ -94,6 +94,9 @@ func _process(delta: float) -> void:
 	# Туман по зонам (раздел 16): цвет подмешивается там, где стоит игрок.
 	_day_cycle.set_fog_focus(_player.global_position)
 	_ambient.set_focus(_player.global_position)
+	# Адаптивная тесселяция рельефа вокруг игрока (доработка-2 П5.13, П1):
+	# чанки в радиусе 50 м — квад 0.5 м, с бюджетом на перестройку за кадр.
+	_island.update_viewer(_player.global_position)
 	_proximity_tick(delta)
 
 
