@@ -20,7 +20,11 @@ func test_world_scene_atmosphere_base() -> void:
 	var env: Environment = scene.get_node("WorldEnvironment").environment
 	assert_false(env.glow_enabled, "в базе glow выключен (только «Высокое»)")
 	assert_false(env.ssao_enabled, "в базе SSAO выключен (только «Высокое»)")
-	assert_gt(env.tonemap_white, 1.0, "точка белого приподнята (светлее)")
+	# Доработка П5.13 (свет и небо, эталон — демо EZ-Tree): тонмап AgX —
+	# мягкий спад яркости гасит «кислотную» синеву (тонмап-белый при AgX
+	# движком не используется, ассерт заменён с белой точки на режим).
+	assert_eq(env.tonemap_mode, Environment.TONE_MAPPER_AGX,
+		"тонмаппинг AgX (пастельные небо и лес)")
 	assert_true(env.adjustment_enabled, "цветокоррекция включена")
 	assert_gt(env.adjustment_saturation, 1.0, "насыщенность чуть выше единицы")
 	assert_gt(env.fog_height_density, 0.0, "дымка по высоте включена")
@@ -172,6 +176,82 @@ func test_sun_warmer_at_sunset_than_noon() -> void:
 		(sunset.r - sunset.b) - (noon.r - noon.b), 0.05,
 		"закатное солнце заметно теплее полудня",
 	)
+	cycle.free()
+	sky.free()
+
+
+## Доработка П5.13 (свет и небо, эталон — демо EZ-Tree): солнце видно на
+## небе — диск крупнее дефолтного, яркий (интенсивность купола), с усиленным
+## Mie-ореолом вокруг («марево» светила); и диск, и ореол красятся временем
+## суток — закатный оранжевее полудневного крема.
+func test_visible_sun_disk_and_halo() -> void:
+	var sky := _make_sky_rig()
+	var cycle := DayCycle.new()
+	cycle.setup(sky.sun, sky)
+	var saved := Session.world_time
+	Session.world_time = 0.3 * B.day_cycle_sec  # полдень
+	cycle._process(0.0)
+	var noon_disk: Color = sky.sky.sun_disk_color
+	Session.world_time = 0.58 * B.day_cycle_sec  # золотой час
+	cycle._process(0.0)
+	Session.world_time = saved
+	var dome: SkyDome = sky.sky
+	assert_gt(dome.sun_disk_size, 0.02, "диск солнца крупнее дефолта Sky3D")
+	assert_gt(dome.sun_disk_intensity, 1.0, "диск солнца яркий")
+	assert_gt(dome.atm_sun_mie_intensity, 1.0, "Mie-ореол усилен (видимое сияние)")
+	assert_gt(
+		(sky.sky.sun_disk_color.r - sky.sky.sun_disk_color.b)
+			- (noon_disk.r - noon_disk.b), 0.05,
+		"закатный диск солнца теплее полудневного",
+	)
+	assert_almost_eq(
+		dome.atm_sun_mie_tint.r, sky.sky.sun_disk_color.r, 0.001,
+		"ореол красится цветом диска",
+	)
+	cycle.free()
+	sky.free()
+
+
+## Доработка П5.13 (свет и небо): все четыре времени суток красят
+## атмосферу без «кислотных» цветов. Полный тон палитры в хроматике
+## (_chroma нормирует максимум в 1) даёт электрик: у прежнего дня
+## b/r ≈ 2.9, у ночи ≈ 3.9. Десатурация дневного и ночного тинтов
+## (DAY/NIGHT_TINT_DESATURATE) держит отношение крайних каналов и
+## насыщенность в пастельных пределах. Проверяются все 4 фазы суток —
+## рассвет, полдень, золотой час и ночь.
+func test_four_phases_no_acid_colors() -> void:
+	var sky := _make_sky_rig()
+	var cycle := DayCycle.new()
+	cycle.setup(sky.sun, sky)
+	var saved := Session.world_time
+	for phase: float in [0.02, 0.3, 0.58, 0.75]:
+		Session.world_time = B.day_cycle_sec * phase
+		cycle._process(0.0)
+		# Эффективный тинт фазы: днём небо красит atm_day_tint, ночью —
+		# atm_night_tint (дневной при опущенном солнце шейдер гасит
+		# угловыми множителями до нуля — проверять его сырую величину
+		# бессмысленно). Ночь допустимо глубже (spread ≤ 0.6): тёмно-синее
+		# небо с луной, но без электрика (b/r ≤ 2.6 — как у П5.9 ≈ 2.2).
+		var night_phase: bool = not DayMath.is_day(Session.world_time)
+		var tint: Color = sky.sky.atm_night_tint if night_phase \
+			else sky.sky.atm_day_tint
+		assert_lt(
+			tint.b / maxf(tint.r, 0.001), 2.6,
+			"фаза %.2f: синева тинта не «кислотная» (b/r)" % phase,
+		)
+		assert_lt(
+			(maxf(tint.r, maxf(tint.g, tint.b))
+					- minf(tint.r, minf(tint.g, tint.b))),
+			0.6 if night_phase else 0.45,
+			"фаза %.2f: насыщенность тинта пастельная" % phase,
+		)
+	# Дневное небо светлее к горизонту (бледно-голубое с дымкой, как в
+	# демо EZ-Tree: градиент low #6fa2ef → high #2053ff смягчён).
+	assert_gt(
+		VPAL.day_sky_horizon.v, VPAL.day_sky_top.v,
+		"дневной горизонт светлее зенита",
+	)
+	Session.world_time = saved
 	cycle.free()
 	sky.free()
 

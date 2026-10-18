@@ -36,6 +36,21 @@ const NIGHT_TINT_DIM: float = 0.38
 const NIGHT_TINT_DESATURATE: float = 0.35
 ## Спокойный сине-серый тон десатурации (точка примеси).
 const NIGHT_TINT_GRAY: Color = Color(0.72, 0.78, 1.0)
+## Десатурация дневного тинта (доработка П5.13, свет и небо): полный
+## тон палитры в рассеянии давал «кислотную» синеву зенита — как и ночью,
+## примешиваем бледный сине-серый: небо остаётся голубым, но пастельным,
+## как в демо EZ-Tree (градиент #6fa2ef → #2053ff под нейтральным
+## тонмапом). b/r тинта ≈ 2.0 вместо 2.9 у чистой хроматики.
+const DAY_TINT_DESATURATE: float = 0.45
+## Бледно-голубая точка примеси дневного тинта.
+const DAY_TINT_GRAY: Color = Color(0.84, 0.91, 1.0)
+## Диск солнца на куполе (доработка П5.13): чуть крупнее дефолта Sky3D
+## (0.02 рад ≈ 1.1°) — читается с одного взгляда.
+const SUN_DISK_SIZE: float = 0.03
+## Ореол вокруг солнца (доработка П5.13): прямой Mie-блик модели рассеяния
+## с дефолтной единицей почти не виден — AgX сжимает мягкое сияние в белое.
+## Усиленный блик даёт тёплое «марево» вокруг светила, как в демо EZ-Tree.
+const SUN_MIE_INTENSITY: float = 2.5
 
 
 var _sun: DirectionalLight3D
@@ -66,12 +81,16 @@ func setup(sun: DirectionalLight3D, world_env: WorldEnvironment) -> void:
 		_tod.game_time_enabled = false
 		_tod.editor_time_enabled = false
 	# Светила: энергия солнца — из Balance, луна слабая и синеватая из
-	# палитры ночи; диск луны чуть приглушён.
+	# палитры ночи; диск луны чуть приглушён. Диск солнца (доработка
+	# П5.13) покрупнее дефолтного и красится временем суток в _process
+	# (полдень — тёплый крем, закат — оранжевый, как в демо EZ-Tree).
 	_dome.sun_light_energy = B.sun_energy_noon
 	_dome.moon_light_energy = B.moon_energy_night
 	_dome.moon_light_color = VPAL.night_sun
 	_dome.moon_color = VPAL.night_sun.lightened(0.25)
-	_dome.sun_disk_color = VPAL.dusk_sun
+	_dome.sun_disk_color = VPAL.day_sun
+	_dome.sun_disk_size = SUN_DISK_SIZE
+	_dome.atm_sun_mie_intensity = SUN_MIE_INTENSITY
 	# Облака ночью — сине-фиолетовые из палитры, днём их красит солнце.
 	_dome.clouds_night_color = VPAL.night_sky_horizon.darkened(0.35)
 	# Экранный туман Sky3D не нужен: туман и дымка — Environment (балансы
@@ -113,9 +132,17 @@ func _process(_delta: float) -> void:
 		VPAL.dusk_sky_horizon, VPAL.night_sky_horizon, mixes)
 	_dome.sun_light_color = sun_color
 	_dome.sun_horizon_light_color = sun_color.lerp(VPAL.dusk_sun, 0.7 * warmth)
+	# Диск солнца — цвет светила этого часа (доработка П5.13: видимое
+	# солнце, тёплый крем днём и оранжевый спуск к горизонту); тем же
+	# цветом красится Mie-ореол вокруг диска.
+	_dome.sun_disk_color = sun_color
+	_dome.atm_sun_mie_tint = sun_color
 	# Атмосферные тинты — хроматика палитры (яркость неба задаёт модель
 	# рассеяния): верх, тёплый низ у горизонта и ночь приглушенной синевой.
-	_dome.atm_day_tint = _chroma(sky_top)
+	# Днём хроматика разбавлена бледным сине-серым (доработка П5.13,
+	# «убрать кислотную синеву») — пастельное небо как в демо EZ-Tree.
+	_dome.atm_day_tint = _chroma(sky_top) \
+		.lerp(DAY_TINT_GRAY, DAY_TINT_DESATURATE * dayness)
 	_dome.atm_horizon_light_tint = _chroma(sky_horizon)
 	_dome.atm_night_tint = _chroma(VPAL.night_sky_top * NIGHT_TINT_DIM) \
 		.lerp(NIGHT_TINT_GRAY, NIGHT_TINT_DESATURATE)
@@ -136,8 +163,9 @@ func _process(_delta: float) -> void:
 	_environment.ambient_light_energy = DayMath.ambient_energy(world_time)
 	# Ночью экспозиция выше — «мягкая светлая ночь» (глаза адаптировались).
 	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE, 1.0, dayness)
-	# Солнце низкое — тени длинные; у горизонта они ещё и мягче (blur растёт).
-	_sun.shadow_blur = 1.4 + warmth * 0.8
+	# Солнце низкое — тени длинные; у горизонта они ещё и мягче (blur
+	# растёт; доработка П5.13 — база мягче, «тёплые мягкие тени»).
+	_sun.shadow_blur = 1.7 + 0.9 * warmth
 	# Туман — цвет палитры времени суток, поверх — оттенок зоны игрока.
 	var fog := _mix4(VPAL.dawn_fog, VPAL.day_fog, VPAL.dusk_fog,
 		VPAL.night_fog, mixes)

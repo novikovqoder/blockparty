@@ -19,13 +19,18 @@ sky = SubResource("Sky_1")
 ambient_light_source = 2
 ambient_light_color = Color(0.82, 0.8, 0.76, 1)
 ambient_light_energy = 0.25
-tonemap_mode = 2
+; Доработка П5.13 (свет и небо, эталон — демо EZ-Tree): тонмап AgX —
+; мягкий спад яркости гасит «кислотную» синеву неба и пестроту леса
+; (демо: нейтральный Khronos-тонмап при экспозиции 2; AgX — ближайший
+; по духу годевский). Насыщенность чуть приподнята: AgX приглушает
+; цвета, лёгкая компенсация возвращает пастельную сочность.
+tonemap_mode = 4
 tonemap_white = 6.0
 ssao_enabled = false
 glow_enabled = false
 adjustment_enabled = true
-adjustment_contrast = 1.04
-adjustment_saturation = 1.06
+adjustment_contrast = 1.05
+adjustment_saturation = 1.15
 ; Планка качества П5.9: мягкие градиенты неба и тумана без ступенек
 ; яркости (дебандинг добавляет незаметный шум и убирает «полосы»
 ; на плавных переходах).
