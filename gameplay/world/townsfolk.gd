@@ -9,9 +9,6 @@
 class_name Townsfolk
 extends Node3D
 
-const B: Balance = preload("res://gameplay/balance.tres")
-const PAL: Palette = preload("res://assets/palette.tres")
-
 ## Группа жителей (спавн и тесты находят их по группе).
 const TOWNSFOLK_GROUP: StringName = &"townsfolk"
 ## Нейтральный цвет жителей: тёплый песок, вне player_colors.
@@ -90,15 +87,10 @@ func _build_model() -> void:
 	add_child(_model)
 	if sitting:
 		_model.set_state(Protocol.AnimState.SIT)
+		# Доработка-2 П5.13, П6: пень — бревенчатый меш с корой ambientCG
+		# (PropMeshes._stump, тот же стиль, что коряги и мостик), не цилиндр
+		# плоского цвета. Низ меша — в origin, высота = campfire_seat_floor.
 		var stump := MeshInstance3D.new()
 		stump.name = "Stump"
-		var cyl := CylinderMesh.new()
-		cyl.top_radius = 0.24
-		cyl.bottom_radius = 0.3
-		cyl.height = B.campfire_seat_floor
-		stump.mesh = cyl
-		stump.position = Vector3(0.0, B.campfire_seat_floor * 0.5, 0.0)
-		var material := StandardMaterial3D.new()
-		material.albedo_color = PAL.trunk
-		stump.material_override = material
+		stump.mesh = PropMeshes.mesh(&"stump", 0)
 		add_child(stump)

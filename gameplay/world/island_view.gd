@@ -157,6 +157,11 @@ func _build_props() -> void:
 			# Доработка-2 П5.13, П5: дерево настилов у воды (причал,
 			# сваи, кнехты) — текстура плах ambientCG.
 			instance.material_override = WoodMat.for_type(type_name)
+		elif PropMeshes.has_baked_material(type_name):
+			# Доработка-2 П5.13, П6: коряги и мостик из брёвен несут кору
+			# ambientCG прямо в меше (surface material) — override плоским
+			# материалом закрывал текстуру («белые цилиндры»).
+			pass
 		elif not PropMeshes.wind_params(type_name).is_empty():
 			instance.material_override = LowPolyMat.wind_or_vertex(type_name)
 		else:

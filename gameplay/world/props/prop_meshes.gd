@@ -71,6 +71,10 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 		# с корой ambientcg; размеры — эталон прежних kenney-моделей.
 		"dead_log":
 			return _snag(variant)
+		# Пень (доработка-2 П5.13, П6): сиденье Тимьяна у костра — та же
+		# кора и светлый пятак-спил, что у коряг и мостика.
+		"stump":
+			return _stump(variant)
 		# П5.9, блок 3: растительность Леса — процедурные пучки/вайи/цветы
 		# и камни во мху (материалы — ForestMat).
 		"rgrass":
@@ -149,6 +153,54 @@ static func _snag(variant: int) -> ArrayMesh:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh.surface_set_material(0, _log_bark_material())
 	return mesh
+
+
+## Пень (доработка-2 П5.13, П6): низ — в origin, высота 0.45 м
+## (campfire_seat_floor — на срезе сидит Тимьян), комель 0.30 м сужается
+## к срезу 0.24, по бокам — корневые отростки и обломанный сук. Кора и
+## светлые пятаки — тот же _log_limb и материал ambientCG Bark001, что у
+## коряг и мостика: весь валежник острова в одном стиле.
+static func _stump(_variant: int) -> ArrayMesh:
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	const HEIGHT: float = 0.45
+	# Ствол двумя сегментами: комель шире, к срезу сужается.
+	var knee := Vector3(0.02, HEIGHT * 0.55, -0.01)
+	_log_limb(verts, normals, uvs, colors, indices,
+		Vector3.ZERO, knee, 0.30, 1.0)
+	_log_limb(verts, normals, uvs, colors, indices,
+		knee, Vector3(0.0, HEIGHT, 0.0), 0.24, 1.02)
+	# Корневые отростки у земли — пень «держится» за грунт.
+	_log_limb(verts, normals, uvs, colors, indices,
+		Vector3(0.18, 0.06, 0.10), Vector3(0.42, 0.02, 0.26), 0.08, 0.94)
+	_log_limb(verts, normals, uvs, colors, indices,
+		Vector3(-0.16, 0.05, -0.12), Vector3(-0.38, 0.03, -0.30), 0.07, 0.96)
+	# Обломанный сук — пень не «точёный», дерево ломалось.
+	_log_limb(verts, normals, uvs, colors, indices,
+		Vector3(0.10, HEIGHT * 0.6, 0.08),
+		Vector3(0.34, HEIGHT * 0.82, 0.26), 0.05, 1.06)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _log_bark_material())
+	return mesh
+
+
+## Типы, чей меш уже несёт собственный материал (кора ambientCG запечена
+## в поверхность, IslandView не ставит override — доработка-2 П5.13, П6:
+## перекрытие плоским материалом закрывало текстуру, брёвна выглядели
+## белыми цилиндрами).
+static func has_baked_material(type: StringName) -> bool:
+	return ["dead_log", "log_bridge", "stump"].has(String(type))
 
 
 ## Мостик из настоящих брёвен через лесной овраг (П5.7; переделка П5.9,
