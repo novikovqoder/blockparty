@@ -81,7 +81,9 @@ const TEXTURE_SLOTS: Array[String] = [
 ##   костёр — VFX огня и фотосканы polyhaven, раскрашенные вершинами;
 ##   сундук руин — свечение нутра (VFX, доработка-2 П4);
 ##   небо — меш дымки Sky3D;
-##   жители — процедурные шляпы (персонажи приняты, раздел 16 SPEC).
+##   жители — процедурные шляпы (персонажи приняты, раздел 16 SPEC);
+##   тросы лестниц — тонкие планки цвета коры (верёвочный примитив,
+##     доработка-2 П5: ступени при этом текстурные, WoodMat).
 ## Если предмет из списка убирают из мира — запись удалить вместе с ним.
 const ALWAYS_UNTEXTURED: Array[String] = [
 	"Props_rgrass_", "Props_rflower_", "Props_riris_", "Props_reed_",
@@ -89,6 +91,7 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 	"Props_bench_", "Props_boat_", "Props_canopy_", "Props_fence_",
 	"Flame", "FirePit", "/Logs", "/Ember",
 	"/Glow",
+	"/Rope",
 	"_FogMeshI",
 	"hat_",
 ]
@@ -96,14 +99,15 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 ## Переходные нетекстурные поверхности (срез 5): закрываются пунктами
 ## доработки-2 П5.13, по мере закрытия записи УДАЛЯТЬ (тест следит, чтобы
 ## каждая запись реально встречалась в мире — устаревшая ломает прогон):
-##   П5 — светокубы HangPoint/RespawnStone, лестницы смотровых, причал;
 ##   П6 — брёвна, мостик, пень жителя до моделей с корой;
 ##   П7 — камни до текстурного мха.
 ## П3 закрыт: вода Boujie Water текстурна (альбедо и пена), записи воды
 ## удалены. П4 закрыт: руины (блоки, башни, колонны, арки, ворота, плиты,
 ## сундук-дерево, каменные стены) — текстурная кладка RuinMat и Planks007.
+## П5 закрыт: причал (настил, сваи, кнехты) и ступени лестниц смотровых —
+## WoodMat (плахи ambientCG); камни духа — кладка RuinMat + огонёк «/Glow»;
+## маячки HangPoint — сфера «/Glow».
 const TRANSITIONAL_UNTEXTURED: Array[String] = [
-	"HangPoint", "RespawnStone", "LookoutLadder", "pier_post", "plank_deck",
 	"dead_log", "log_bridge", "/Stump",
 	"mrock", "rrock", "boulder", "pebble",
 ]

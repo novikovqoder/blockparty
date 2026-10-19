@@ -117,8 +117,10 @@ func _build_ladder() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Steps"
 	_visual.add_child(body)
-	var material := StandardMaterial3D.new()
-	material.albedo_color = PAL.planks
+	# Доработка-2 П5.13, П5: ступени — текстурное дерево (WoodMat,
+	# плахи ambientCG), не плоский цвет; тросы — тонкие планки цвета
+	# коры (верёвочный примитив деревенского стиля).
+	var material := WoodMat.rungs()
 	for i: int in steps:
 		# i = 0 — нижняя ступень у земли (юг), steps-1 — верхняя у стены.
 		var top: float = -LADDER_DROP + float(i + 1) * STEP_RISE

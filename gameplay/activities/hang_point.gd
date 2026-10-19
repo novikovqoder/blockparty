@@ -1,4 +1,4 @@
-# Точка цепляния на кромке расщелины (раздел 9.1 SPEC): светящийся кубик
+# Точка цепляния на кромке расщелины (раздел 9.1 SPEC): светящаяся точка
 # над кромкой. Когда рядом с точкой висит другой игрок, становится
 # интерактивной — удержание E вытягивает его (Сила помощника сокращает
 # удержание, раздел 16). Подтверждает хост: узел только шлёт запрос
@@ -9,8 +9,8 @@ extends Interactable
 const B: Balance = preload("res://gameplay/balance.tres")
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Кубик-маячок точки, м.
-const POINT_SIZE: float = 0.14
+## Шарик-маячок точки (радиус, м; доработка-2 П5.13 П5 — сфера, не куб).
+const POINT_SIZE: float = 0.09
 ## Подъём кубика над кромкой, м.
 const POINT_LIFT: float = 0.12
 ## Висящего ищем от точки не дальше этого, м.
@@ -58,12 +58,14 @@ func hanging_peer_nearby() -> int:
 	return 0
 
 
-## Светящаяся точка на кромке (как в П1: кубик цвета светлячка).
+## Светящаяся точка на кромке (цвет светлячка; доработка-2 П5.13 П5 —
+## сфера вместо кубика-примитива).
 func _build_glow() -> void:
 	var glow := MeshInstance3D.new()
 	glow.name = "Glow"
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3.ONE * POINT_SIZE
+	var mesh := SphereMesh.new()
+	mesh.radius = POINT_SIZE
+	mesh.height = POINT_SIZE * 2.0
 	glow.mesh = mesh
 	var material := StandardMaterial3D.new()
 	material.albedo_color = PAL.firefly
