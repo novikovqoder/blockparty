@@ -11,6 +11,10 @@ extends RefCounted
 const GRASS_SHADER: Shader = preload("res://assets/shaders/grass_field.gdshader")
 const ROCK_SHADER: Shader = preload("res://assets/shaders/rock_moss.gdshader")
 const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
+# Доработка-2 П5.13, П7: фактура мха камней — ambientCG Moss001 (CC0,
+# та же, что мох кладки руинов).
+const MOSS_TEX: Texture2D = preload(
+	"res://assets/third_party/ambientcg.com/Moss001/Moss001_1K-JPG_Color.jpg")
 
 static var _cache: Dictionary = {}
 
@@ -103,6 +107,7 @@ static func _materialize_rock(
 	material.set_shader_parameter("rock_color", rock)
 	material.set_shader_parameter("moss_color", moss)
 	material.set_shader_parameter("moss_patch_strength", edge)
+	material.set_shader_parameter("moss_tex", MOSS_TEX)
 
 
 static func _flat() -> StandardMaterial3D:

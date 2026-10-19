@@ -1,6 +1,9 @@
 // Камни Леса (П5.9, блоки 3 и 5): глыбы с мхом по верхним граням.
-// Мох растёт там, где мировая нормаль смотрит вверх, с рваным краем из
-// двух шумов (крупные пятна + мелкая кромка); бока и низ — камень.
+// Доработка-2 П5.13, П7: мох — только по верхним граням с мягким
+// переходом (не «островки по всей поверхности» и не полосы), цвет и
+// фактура — текстура ambientCG Moss001 (CC0) трипланаром по мировой
+// позиции (меш глыб не несёт UV); кромку пятен рвут два симплекс-шума
+// (крупные пятна + мелкая кромка). Бока и низ — камень.
 // П5.9 переделка П2: решётчатый value-noise (hash12/vnoise на квадратной
 // сетке) заменён симплексом — у решётчатого шума на боках глыб и склонах
 // проступали осевые «полосы» (тот же дефект, что владелец видел на земле
@@ -14,19 +17,18 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_lambert,
 
 uniform vec3 rock_color : source_color = vec3(0.51, 0.53, 0.54);
 uniform vec3 moss_color : source_color = vec3(0.36, 0.45, 0.25);
-// Доля мха на отвесных боках: с высоты глаз (1.5 м) у приплюснутого
-// купола виден почти только бок — верхняя грань занимает ничтожную долю
-// экрана. Поэтому мох не «шапка вверх», а островки по всей видимой
-// поверхности, лишь гуще к верху.
-uniform float moss_side_density = 0.6;
+// Текстура мха (ambientCG Moss001, CC0) и нормировка её среднего тона
+// к палитровому moss_color: текстура линейно ~ (0.22, 0.22, 0.11),
+// множитель по каналам возвращает итог к тону палитры, сохраняя фактуру.
+uniform sampler2D moss_tex : source_color, filter_linear_mipmap_anisotropic;
+uniform vec3 moss_tint = vec3(4.5, 4.5, 9.0);
+// Тайл фактуры мха, м.
+uniform float moss_tile_m = 1.3;
 // Масштаб островков мха и мелкой рваной кромки, пятна на метр поверхности.
-// Островки ~0.17 м (эталон): на боку глыбы радиусом ~0.9 м читаются
-// 5–10 отдельных точек мха; кромка в 2.5 раза мельче пятна — рваный край.
 uniform float moss_patch_scale = 6.0;
 uniform float moss_edge_scale = 14.0;
 // Густота пятен (0 — голый камень, 1 — почти сплошной мох): сдвигает
-// порог шума пятен. mrock — редко, rrock — заметно. Порог ниже прежнего
-// решётчатого (0.71): симплекс колоколообразен и реже достигает краёв.
+// порог шума пятен. mrock — редко, rrock — заметно.
 uniform float moss_patch_strength = 0.35;
 // Блик мокрого камня.
 uniform float rock_roughness = 0.65;
@@ -87,24 +89,34 @@ void vertex() {
 }
 
 void fragment() {
-	// Мох — островки с резкой кромкой по всей видимой поверхности
-	// (эталон: точки мха на 10–25% камня, не сплошная шапка и не
-	// серо-зелёная смазань): порог по крупному шуму, мелкий шум рвёт
-	// край, наклон лишь гущает пятна кверху и разрежает бока.
+	// Мох — по верхним граням с мягким переходом (доработка-2 П5.13, П7):
+	// маска наклона широкой ступенью (0.15→0.75), порог крупных пятен
+	// с широкой кромкой (±0.06) — ни резкой границы, ни «полос»; бока
+	// и низ — чистый камень.
 	float up = world_normal.y;
-	float slope = mix(moss_side_density, 1.0, smoothstep(0.1, 0.65, up));
+	float slope = smoothstep(0.15, 0.75, up);
 	float patch = snoise01(world_pos.xz * moss_patch_scale);
 	float edge = snoise01(world_pos.xz * moss_edge_scale);
-	// Порог под колоколообразное распределение симплекса (у решётчатого
-	// value-noise оно было равномерным): 0.66 вместо 0.71 держит прежнюю
-	// долю площади мха (mrock ~30%, rrock ~50% с добавками edge/up).
-	float bias = 0.66 - 0.3 * moss_patch_strength;
+	// Порог под колоколообразное распределение симплекса: moss_patch_
+	// strength сдвигает его вниз (rrock гуще, mrock/зубцы реже).
+	float bias = 0.62 - 0.5 * moss_patch_strength;
 	float spots = smoothstep(
-		bias - 0.03, bias + 0.03,
-		patch + 0.15 * (edge - 0.5) + 0.15 * (up - 0.5));
+		bias - 0.06, bias + 0.06,
+		patch + 0.2 * (edge - 0.5) + 0.1 * (up - 0.5));
 	float moss = slope * spots;
-	ALBEDO = mix(rock_color, moss_color, moss) * COLOR.rgb;
-	ROUGHNESS = mix(rock_roughness, 0.9, moss);
+	// Фактура мха — Moss001 трипланаром (веса по сглаженной нормали глыбы):
+	// на верхних гранях — проекция XZ, на покатых боках у кромки — своя.
+	vec3 tri_w = pow(abs(world_normal), vec3(4.0));
+	tri_w /= (tri_w.x + tri_w.y + tri_w.z);
+	vec2 muv_top = world_pos.xz / moss_tile_m;
+	vec2 muv_x = world_pos.zy / moss_tile_m;
+	vec2 muv_z = world_pos.xy / moss_tile_m;
+	vec3 moss_rgb = moss_color * moss_tint * (
+		tri_w.y * texture(moss_tex, muv_top).rgb
+		+ tri_w.x * texture(moss_tex, muv_x).rgb
+		+ tri_w.z * texture(moss_tex, muv_z).rgb);
+	ALBEDO = mix(rock_color, moss_rgb, moss) * COLOR.rgb;
+	ROUGHNESS = mix(rock_roughness, 0.95, moss);
 }
 
 void light() {
