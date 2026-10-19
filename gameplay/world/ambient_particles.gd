@@ -31,6 +31,7 @@ func setup(tier: int) -> void:
 	_simple = tier == GraphicsQuality.Tier.SIMPLE
 	var density := 1.5 if tier == GraphicsQuality.Tier.HIGH else 1.0
 	_fireflies = _make(int(48.0 * density), PAL.firefly, 0.16, 7.0, 0.0, true)
+	_fireflies.name = "Fireflies"
 	var fire_process := _fireflies.process_material as ParticleProcessMaterial
 	fire_process.initial_velocity_min = 0.2
 	fire_process.initial_velocity_max = 0.8
@@ -40,6 +41,7 @@ func setup(tier: int) -> void:
 	# без рампа работает в обоих рендерах; glow (блок е) подхватит.
 
 	_pollen = _make(int(34.0 * density), Color(1.0, 0.97, 0.82, 0.78), 0.09, 9.0)
+	_pollen.name = "Pollen"
 	var pollen_process := _pollen.process_material as ParticleProcessMaterial
 	pollen_process.gravity = Vector3(0.25, -0.12, 0.15)
 	pollen_process.initial_velocity_min = 0.05
@@ -49,6 +51,7 @@ func setup(tier: int) -> void:
 
 	_leaves = _make(
 		int(22.0 * density), Color(0.55, 0.67, 0.28, 0.9), 0.09, 11.0)
+	_leaves.name = "Leaves"
 	var leaves_process := _leaves.process_material as ParticleProcessMaterial
 	leaves_process.gravity = Vector3(0, -0.9, 0)
 	leaves_process.initial_velocity_min = 0.2

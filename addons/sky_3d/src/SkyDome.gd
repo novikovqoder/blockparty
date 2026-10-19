@@ -15,7 +15,9 @@ const FOG_SHADER: String = "res://addons/sky_3d/shaders/AtmFog.gdshader"
 const MOON_TEXTURE: Texture2D = preload("res://addons/sky_3d/assets/thirdparty/textures/moon/MoonMap.png")
 # Blockparty (П5.9): штатные starmap/starfield аддона — панорама ESO под
 # CC BY 4.0; правила проекта допускают только CC0/MIT, поэтому заменены
-# процедурными текстурами проекта (tools/make_star_textures.gd, CC0).
+# текстурами проекта (tools/make_star_textures.gd). Доработка-2 П5.13, П9:
+# источник — ночное HDRI Poly Haven dikhololo_night (CC0): звёзды — чёткие
+# точки из снимка, стармап — настоящий Млечный Путь (полоса снимка).
 const STARMAP_TEXTURE: Texture2D = preload("res://assets/visual/sky_starmap.png")
 const STARFIELD_TEXTURE: Texture2D = preload("res://assets/visual/sky_starfield.png")
 const STARFIELD_NOISE: Texture2D = preload("res://addons/sky_3d/assets/textures/noise.jpg")
