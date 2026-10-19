@@ -4,6 +4,8 @@ class_name RuinChest
 extends Node3D
 
 const PAL: Palette = preload("res://assets/palette.tres")
+const WOOD_TEX: Texture2D = preload(
+	"res://assets/third_party/ambientcg.com/Planks007/Planks007_2K-JPG_Color.jpg")
 
 ## Корпус сундука, м.
 const BODY_SIZE: Vector3 = Vector3(0.95, 0.55, 0.6)
@@ -35,6 +37,21 @@ func set_open(open: bool) -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+## Дерево сундука (доработка-2 П5.13, П4): текстура плах ambientCG
+## (Planks007, CC0) с тоном палитры; в headless — прежний плоский цвет.
+func _wood(dark: float) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	if WorldMaterials.want_flat():
+		material.albedo_color = PAL.trunk.darkened(dark)
+		return material
+	material.albedo_texture = WOOD_TEX
+	material.albedo_color = Color(0.9, 0.78, 0.62).darkened(dark)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.uv1_scale = Vector3(0.8, 0.5, 0.55)
+	material.roughness = 0.85
+	return material
+
+
 ## Корпус, светящееся нутро и крышка на задней кромке (петля).
 func _build_chest() -> void:
 	# Твёрдый сундук (баг vfx-fix): бокс по корпусу с крышкой.
@@ -46,9 +63,7 @@ func _build_chest() -> void:
 	var body_mesh := BoxMesh.new()
 	body_mesh.size = BODY_SIZE
 	body.mesh = body_mesh
-	var body_material := StandardMaterial3D.new()
-	body_material.albedo_color = PAL.trunk
-	body.material_override = body_material
+	body.material_override = _wood(0.0)
 	body.position = Vector3(0.0, BODY_SIZE.y * 0.5, 0.0)
 	add_child(body)
 
@@ -77,8 +92,6 @@ func _build_chest() -> void:
 	var lid_mesh := BoxMesh.new()
 	lid_mesh.size = Vector3(BODY_SIZE.x, 0.22, BODY_SIZE.z)
 	lid_top.mesh = lid_mesh
-	var lid_material := StandardMaterial3D.new()
-	lid_material.albedo_color = PAL.planks
-	lid_top.material_override = lid_material
+	lid_top.material_override = _wood(-0.06)
 	lid_top.position = Vector3(0.0, 0.11, BODY_SIZE.z * 0.5)
 	_lid.add_child(lid_top)

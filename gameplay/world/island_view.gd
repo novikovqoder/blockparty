@@ -149,6 +149,10 @@ func _build_props() -> void:
 		var type_name := StringName(type)
 		if ForestMat.handles(type_name):
 			instance.material_override = ForestMat.for_type(type_name)
+		elif RuinMat.handles(type_name):
+			# Доработка-2 П5.13, П4: кладка руин и каменных стен —
+			# текстурный камень (polyhaven + ambientCG), не белый блок.
+			instance.material_override = RuinMat.for_type(type_name)
 		elif not PropMeshes.wind_params(type_name).is_empty():
 			instance.material_override = LowPolyMat.wind_or_vertex(type_name)
 		else:

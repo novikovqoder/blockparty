@@ -1513,6 +1513,35 @@ static func _ruins(
 		_add_prop(props, rng, &"ruin_arch",
 			Vector3(arch.x, RUINS_H, arch.y), rng.randf_range(0.0, TAU),
 			Vector3.ONE, "plain", 1)
+	# Трава в щелях и щебень (доработка-2 П4): пучки у внутренней кромки
+	# стен и во дворе — руины зарастают; сундук, плиты и проход от ворот
+	# свободны. Высота — терраса руин (плоская, RUINS_H).
+	var chest := Vector2(58.0, -50.0)
+	var plates: Array[Vector2] = [
+		Vector2(54.0, -41.0), Vector2(58.0, -41.0), Vector2(62.0, -41.0)]
+	for edge: int in 4:
+		# Кромки двора: по 6 точек на сторону, ~половина с травой.
+		for i: int in 6:
+			var t: float = float(i + 0.5) / 6.0
+			var x: float = lerpf(float(x0 + 1), float(x1 - 1), t) if edge < 2 \
+				else (float(x0 + 1) if edge == 2 else float(x1 - 1))
+			var z: float = (float(z0 + 1) if edge == 0 else float(z1 - 1)) \
+				if edge < 2 else lerpf(float(z0 + 1), float(z1 - 1), t)
+			if edge == 1 and x > 55.0 and x < 61.0:
+				continue  # у ворот — проход
+			var spot := Vector2(x, z)
+			if spot.distance_to(chest) < 2.0 \
+					or plates.any(func(p: Vector2) -> bool:
+						return spot.distance_to(p) < 1.4):
+				continue
+			if rng.randf() < 0.55:
+				_add_prop(props, rng, &"rgrass",
+					Vector3(x, RUINS_H, z), rng.randf_range(0.0, TAU),
+					Vector3.ONE * rng.randf_range(0.7, 1.3), "grass")
+			elif rng.randf() < 0.4:
+				_add_prop(props, rng, &"pebble",
+					Vector3(x, RUINS_H, z), rng.randf_range(0.0, TAU),
+					Vector3.ONE * rng.randf_range(0.8, 1.6), "plain")
 	return {
 		"center": Vector3(58, RUINS_H, -48),
 		"gate_center": Vector3(58, RUINS_H, float(z1)),

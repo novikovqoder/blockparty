@@ -401,16 +401,49 @@ static func _rock_wall(variant: int) -> ArrayMesh:
 	return _merge(parts)
 
 
-## Блок стены руин («метровый» тип): кладка со сколотой кромкой.
+## Блок стены руин («метровый» тип, доработка-2 П4): кладка с выщербленной
+## кромкой — рваный верх из смещённых камней, сколотые углы (тёмные
+## «сколы» на кромках) и щебень у основания. Текстура кладки и мох —
+## RuinMat (ruin_masonry.gdshader); цвета вершин лишь тонируют камни.
 static func _ruin_block(variant: int) -> ArrayMesh:
 	var rng := _rng("ruin_block", variant)
 	var brick: Color = PAL.ruin_brick
 	var parts: Array = [
 		_box(Vector3(0.96, 1.0, 0.96), brick, Vector3(0, 0.5, 0)),
-		_box(Vector3(0.6, 0.09, 0.55), brick.lerp(Color.WHITE, 0.1),
-			Vector3(rng.randf_range(-0.15, 0.15), 0.99,
-				rng.randf_range(-0.15, 0.15)), rng.randf_range(-0.2, 0.2)),
 	]
+	# Рваный верх: 2–3 камня разной высоты со сдвигом — силуэт стены
+	# «обломан», а не обрезан (кладку несёт текстура, камни дают тени).
+	var crowns: int = 2 + variant % 2
+	for i: int in crowns:
+		parts.append(_box(
+			Vector3(rng.randf_range(0.28, 0.44), rng.randf_range(0.07, 0.16),
+				rng.randf_range(0.3, 0.5)),
+			brick.lerp(Color.WHITE, rng.randf_range(0.0, 0.14)),
+			Vector3(rng.randf_range(-0.3, 0.3), 1.0 + rng.randf_range(0.0, 0.04),
+				rng.randf_range(-0.24, 0.24)),
+			rng.randf_range(-0.25, 0.25)))
+	# Сколы на верхних углах: тёмные призмы чуть внутрь — кромка читается
+	# оббитой (тень скола), не «приклеенной» деталью.
+	for i: int in 2:
+		var corner := Vector3(
+			-0.36 if rng.randf() < 0.5 else 0.36, 0.0,
+			-0.36 if rng.randf() < 0.5 else 0.36)
+		parts.append(_box(
+			Vector3(0.3, rng.randf_range(0.1, 0.24), 0.3),
+			PAL.ruin_dark.lerp(brick, 0.25),
+			Vector3(corner.x * rng.randf_range(0.6, 0.9), 0.9,
+				corner.z * rng.randf_range(0.6, 0.9)),
+			rng.randf_range(-0.3, 0.3)))
+	# Щебень у основания: мелкие камни у кромки — стена «осыпается».
+	for i: int in 3:
+		var angle: float = TAU * float(i) / 3.0 + rng.randf_range(0.0, 1.0)
+		parts.append(_box(
+			Vector3(rng.randf_range(0.1, 0.2), rng.randf_range(0.05, 0.09),
+				rng.randf_range(0.1, 0.2)),
+			brick.lerp(PAL.ruin_dark, rng.randf_range(0.2, 0.45)),
+			Vector3(cos(angle) * rng.randf_range(0.32, 0.44),
+				0.04, sin(angle) * rng.randf_range(0.32, 0.44)),
+			rng.randf_range(0.0, TAU)))
 	if variant == 2:
 		parts.append(_box(Vector3(0.4, 0.5, 0.1), PAL.ruin_dark,
 			Vector3(0, 0.25, 0.48)))
@@ -426,11 +459,15 @@ static func _ruin_tower() -> ArrayMesh:
 		_cyl(0.98, 0.98, 0.35, 6, brick.lerp(Color.WHITE, 0.1), Vector3(0, 2.85, 0)),
 		_box(Vector3(0.6, 1.0, 0.12), PAL.ruin_dark, Vector3(0, 0.5, 0.82)),
 	]
+	# Зубцы (доработка-2 П4): разной высоты, один обломан — венец башни
+	# «выщерблен» временем, а не отлит по шаблону.
+	var teeth_height: Array[float] = [0.34, 0.22, 0.3, 0.12]
 	for i: int in 4:
 		var angle: float = TAU * float(i) / 4.0 + PI / 4.0
 		var off := Vector3(cos(angle), 0.0, sin(angle)) * 0.8
-		parts.append(_box(Vector3(0.3, 0.3, 0.24), brick,
-			Vector3(off.x, 3.15, off.z), angle))
+		parts.append(_box(Vector3(0.3, teeth_height[i], 0.24),
+			brick.lerp(Color.WHITE, 0.04 * i),
+			Vector3(off.x, 3.0 + teeth_height[i] * 0.5, off.z), angle))
 	return _merge(parts)
 
 

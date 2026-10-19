@@ -5,8 +5,6 @@
 class_name RuinGate
 extends Node3D
 
-const PAL: Palette = preload("res://assets/palette.tres")
-
 ## Группа узлов ворот (хост берёт позицию зоны «у ворот»).
 const GROUP: StringName = &"ruin_gate"
 
@@ -62,9 +60,9 @@ func _build_panel() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = PANEL_SIZE
 	_panel.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.albedo_color = PAL.ruin_dark
-	_panel.material_override = material
+	# Доработка-2 П5.13, П4: плита — та же текстурная кладка (тёмная,
+	# почти без мха), что и рама ворот; механика хода не меняется.
+	_panel.material_override = RuinMat.panel()
 	add_child(_panel)
 
 	# Два горизонтальных ребра, чтобы плита читалась как решётка.
@@ -74,8 +72,6 @@ func _build_panel() -> void:
 		var rail_mesh := BoxMesh.new()
 		rail_mesh.size = Vector3(PANEL_SIZE.x - 0.12, 0.1, PANEL_SIZE.z + 0.06)
 		rail.mesh = rail_mesh
-		var rail_material := StandardMaterial3D.new()
-		rail_material.albedo_color = PAL.ruin_brick
-		rail.material_override = rail_material
+		rail.material_override = RuinMat.panel()
 		rail.position = Vector3(0.0, rail_y - PANEL_SIZE.y * 0.5, 0.0)
 		_panel.add_child(rail)

@@ -65,15 +65,15 @@ func set_pressed(pressed: bool) -> void:
 
 
 ## Плита на невысоком постаменте (коллизии не нужна — она ниже шага).
+## Доработка-2 П5.13, П4: камень с текстурой кладки (RuinMat), свечение
+## нажатия — прежнее (механика 9.2 не меняется).
 func _build_plate() -> void:
 	var base := MeshInstance3D.new()
 	base.name = "Base"
 	var base_mesh := BoxMesh.new()
 	base_mesh.size = Vector3(PLATE_SIZE.x + 0.2, 0.1, PLATE_SIZE.z + 0.2)
 	base.mesh = base_mesh
-	var base_material := StandardMaterial3D.new()
-	base_material.albedo_color = PAL.ruin_dark.darkened(0.1)
-	base.material_override = base_material
+	base.material_override = RuinMat.plate_stone()
 	base.position = Vector3(0.0, 0.05, 0.0)
 	add_child(base)
 
@@ -82,8 +82,11 @@ func _build_plate() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = PLATE_SIZE
 	_top.mesh = mesh
-	_material = StandardMaterial3D.new()
-	_material.albedo_color = PAL.ruin_brick
+	_material = RuinMat.plate_stone()
+	if not WorldMaterials.want_flat():
+		# Верхняя плита светлее постамента — читается отдельным камнем.
+		_material.albedo_color = Color(0.72, 0.75, 0.8)
+		_material.uv1_scale = Vector3(0.7, 0.3, 0.7)
 	_top.material_override = _material
 	_top.position = Vector3(0.0, 0.1 + PLATE_SIZE.y * 0.5, 0.0)
 	add_child(_top)
