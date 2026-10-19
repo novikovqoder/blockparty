@@ -58,7 +58,7 @@ const SHADER_DIRS: Array[String] = [
 	"res://addons/sky_3d/shaders",
 ]
 const SHADER_FILES: Array[String] = [
-	"res://gameplay/world/water_wave.gdshader",
+	"res://addons/boujie_water_shader/shader/water.gdshader",
 ]
 
 ## Каталоги игрового кода: изображений быть не должно (все — в assets/).
@@ -94,13 +94,13 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 ## Переходные нетекстурные поверхности (срез 5): закрываются пунктами
 ## доработки-2 П5.13, по мере закрытия записи УДАЛЯТЬ (тест следит, чтобы
 ## каждая запись реально встречалась в мире — устаревшая ломает прогон):
-##   П3 — плоскости моря и озера до переезда на Boujie Water;
 ##   П4 — белые блоки руин, ворота, сундук, плиты, кладка стен;
 ##   П5 — светокубы HangPoint/RespawnStone, лестницы смотровых, причал;
 ##   П6 — брёвна, мостик, пень жителя до моделей с корой;
 ##   П7 — камни до текстурного мха.
+## П3 закрыт: вода Boujie Water текстурна (альбедо и пена), записи воды
+## удалены.
 const TRANSITIONAL_UNTEXTURED: Array[String] = [
-	"SeaWater/", "LakeWater/",
 	"Props_ruin_", "RuinGate", "RuinChest", "Plate", "rock_wall",
 	"HangPoint", "RespawnStone", "LookoutLadder", "pier_post", "plank_deck",
 	"dead_log", "log_bridge", "/Stump",

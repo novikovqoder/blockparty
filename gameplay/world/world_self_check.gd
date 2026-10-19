@@ -161,8 +161,9 @@ static func run(island: Island, verbose: bool = false) -> Dictionary:
 				lake = water
 			elif water.name != "SeaWater":
 				reasons.append("неизвестная вода: %s" % water.name)
-			elif not water.surface_hole.has_area():
-				reasons.append("у моря нет дырки под озеро")
+			elif water.get_node_or_null("Ocean") == null:
+				# Доработка-2 П5.13, П3: море — Boujie Water Ocean с LOD.
+				reasons.append("у моря нет поверхности Ocean")
 		if lake == null:
 			reasons.append("нет озера LakeWater")
 		else:

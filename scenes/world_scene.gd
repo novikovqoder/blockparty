@@ -367,6 +367,10 @@ func _apply_graphics_quality() -> void:
 		tier == GraphicsQuality.Tier.SIMPLE)
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
+		# Доработка-2 П5.13, П3: вода Boujie растворяется ближе к камере
+		# (fade 46–66 м) — при far 70 не остаётся видимого обрыва воды.
+		for node: Node in get_tree().get_nodes_in_group("water_surface"):
+			(node as WaterArea).set_fade_distance(46.0, 66.0)
 	if tier == GraphicsQuality.Tier.HIGH:
 		# Лес (П5.7 блок 3): сгусток шире зоны деревьев (~56 м) — объёмный
 		# туман стелется по всей реалистичной части; у Озера прежний компакт.

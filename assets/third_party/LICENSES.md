@@ -66,3 +66,4 @@ Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — и
 на оба тела); движения без аналогов в Standard-наборах (взмах, «за руку»,
 вис у кромки, «Помогите!») генерируются процедурно поверх rest/запечённых
 баз (подробности — docs/STATUS.md).
+| Boujie Water Shader 1.0.0 | Zach Bernal | https://github.com/Chrisknyfe/boujie_water_shader | MIT | 2026-10-18 | `addons/boujie_water_shader/` — вода мира (доработка-2 П5.13, П3): волны Герстнера, цвет по глубине, береговая пена, френель, LOD-океан; текст лицензии — `addons/boujie_water_shader/LICENSE.md`, скриншоты аддона в проект не вносились. Правки кода аддона: (1) в `shader/water.gdshader` выключены дефайны REFRACTION/REFRACTION_SCALING/SNELLS_WINDOW — SPEC «Простая графика» (README аддона прямо допускает отключение дефайнов), depth-цвет/пена/френель остались; (2) трём сэмплерам текстур добавлен явный хинт `filter_linear_mipmap` — планка качества (никаких фильтров без явного объявления) |

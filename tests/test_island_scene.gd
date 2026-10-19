@@ -124,66 +124,80 @@ func test_water_surfaces_configured() -> void:
 			)
 
 
-## Море не накрывает озеро (vfx-fix, баг 4): у моря дырка по озеру,
-## поверхность — несколько мешей вне дырки, суммарная площадь равна
-## площади моря минус дырка; у озера — один меш без дырки.
-func test_sea_hole_removes_lake_overlap() -> void:
+## Доработка-2 П5.13, П3: вода — Boujie Water Shader. Море — нода Ocean
+## аддона (кольца LOD, следует за камерой), озеро — плоскость тем же
+## шейдером спокойнее (волны меньше) и на LAKE_LIFT выше моря: копланарное
+## мерцание двух полупрозрачных поверхностей (vfx-fix, баг 4) исчезает
+## вместе с дыркой в море.
+func test_water_is_boujie_ocean_and_lake() -> void:
+	# Материалы Boujie строит только текстурный режим (headless без флага
+	# отдаёт плоские заглушки) — включаем, как тест аудита поверхностей.
+	WorldMaterials.textured_headless = true
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
-	var sea_hole := Rect2()
-	var lake_world := Rect2()
+	WorldMaterials.textured_headless = false
+	var sea_material: ShaderMaterial = null
+	var lake_material: ShaderMaterial = null
+	var lake_surface: MeshInstance3D = null
 	for child: Node in island.get_children():
 		var area := child as WaterArea
 		if area == null:
 			continue
-		var meshes := 0
-		var total := 0.0
-		for node: Node in area.get_children():
-			if node is not MeshInstance3D:
-				continue
-			var plane := (node as MeshInstance3D).mesh as PlaneMesh
-			if plane == null:
-				continue
-			meshes += 1
-			var rect := Rect2(
-				(node as Node3D).position.x - plane.size.x * 0.5,
-				(node as Node3D).position.z - plane.size.y * 0.5,
-				plane.size.x, plane.size.y)
-			# Ни один кусок поверхности не заходит в дырку (касание кромки
-			# стыком — не пересечение: strict). Пустая дырка — проверять нечего.
-			if area.surface_hole.has_area():
-				assert_false(
-					rect.intersects(area.surface_hole),
-					"%s: меш вне дырки" % area.name)
-			total += rect.size.x * rect.size.y
 		if area.name == "SeaWater":
-			assert_true(area.surface_hole.has_area(), "у моря есть дырка — озеро")
-			sea_hole = area.surface_hole
-			assert_gt(meshes, 1, "море с дыркой — не один меш")
-			assert_almost_eq(
-				total,
-				area.surface_size.x * area.surface_size.y \
-					- area.surface_hole.size.x * area.surface_hole.size.y,
-				1.0, "суммарная площадь: море минус дырка")
+			# Море — Ocean аддона с материалом Boujie.
+			var ocean := area.get_node_or_null("Ocean") as Ocean
+			assert_not_null(ocean, "море — нода Ocean аддона (LOD-кольца)")
+			if ocean == null:
+				continue
+			assert_gt(ocean.levels_of_detail, 1, "у океана есть уровни LOD")
+			assert_gt(ocean.far_edge, 500, "дальняя плоскость у горизонта")
+			var follower := ocean.get_node_or_null(
+				"CameraFollower3D") as CameraFollower3D
+			assert_not_null(follower, "LOD-центр следует за камерой")
+			sea_material = ocean.material as ShaderMaterial
 		else:
-			assert_false(area.surface_hole.has_area(), "у озера дырки нет")
-			assert_eq(meshes, 1, "озеро — один меш")
-			lake_world = Rect2(
-				area.position.x - area.surface_size.x * 0.5,
-				area.position.z - area.surface_size.y * 0.5,
-				area.surface_size.x, area.surface_size.y)
-	# Дырка моря — прямоугольник озера в локальных координатах моря
-	# (центр моря в мировых XZ вычитается).
-	assert_almost_eq(
-		sea_hole.position.x + island.get_node("SeaWater").position.x,
-		lake_world.position.x, 0.01, "дырка по кромке озера (x)")
-	assert_almost_eq(
-		sea_hole.position.y + island.get_node("SeaWater").position.z,
-		lake_world.position.y, 0.01, "дырка по кромке озера (z)")
-	assert_almost_eq(
-		sea_hole.size.x, lake_world.size.x, 0.01, "размер дырки — озеро (x)")
-	assert_almost_eq(
-		sea_hole.size.y, lake_world.size.y, 0.01, "размер дырки — озеро (z)")
+			# Озеро — одна плоскость тем же шейдером.
+			var planes := 0
+			for node: Node in area.get_children():
+				if node is MeshInstance3D \
+						and (node as MeshInstance3D).mesh is PlaneMesh:
+					planes += 1
+					lake_surface = node as MeshInstance3D
+			assert_eq(planes, 1, "озеро — одна плоскость")
+			if lake_surface != null:
+				lake_material = lake_surface.material_override as ShaderMaterial
+				# Зеркало озера выше моря (нет копланарного мерцания).
+				var local_top: float = area.water_level - area.position.y \
+					+ WaterArea.LAKE_LIFT
+				assert_almost_eq(lake_surface.position.y, local_top, 0.001,
+					"озеро на LAKE_LIFT выше уровня воды")
+	assert_not_null(sea_material, "материал моря — ShaderMaterial")
+	assert_not_null(lake_material, "материал озера — ShaderMaterial")
+	if sea_material == null or lake_material == null:
+		return
+	# Один и тот же шейдер Boujie у моря и озера («одна поверхность»).
+	assert_eq(sea_material.shader, lake_material.shader,
+		"море и озеро — один шейдер Boujie Water")
+	# Озеро спокойнее: амплитуды волн меньше морских.
+	var sea_amp: float = (sea_material.get_shader_parameter("WaveAmplitudes")
+		as PackedFloat32Array)[0]
+	var lake_amp: float = (lake_material.get_shader_parameter("WaveAmplitudes")
+		as PackedFloat32Array)[0]
+	assert_lt(lake_amp, sea_amp * 0.5,
+		"волны озера заметно спокойнее морских (%.2f < %.2f)" % [
+			lake_amp, sea_amp])
+	# Материал текстурный (П8): альбедо и пена — текстуры аддона.
+	assert_true(sea_material.get_shader_parameter("texture_albedo")
+		is Texture2D, "текстура волн альбедо задана")
+	assert_true(sea_material.get_shader_parameter("texture_foam")
+		is Texture2D, "текстура пены задана")
+	# Цвет по глубине: глубокая темнее и непрозрачнее мелководья.
+	var deep: Color = sea_material.get_shader_parameter("color_deep")
+	var shallow: Color = sea_material.get_shader_parameter("color_shallow")
+	assert_gt(deep.a, shallow.a + 0.3,
+		"глубокая вода непрозрачнее мелководья")
+	assert_lt(deep.get_luminance(), shallow.get_luminance(),
+		"глубокая вода темнее мелководья")
 
 
 func test_player_stands_in_every_spawn_zone() -> void:
