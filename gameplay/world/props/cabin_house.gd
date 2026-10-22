@@ -68,11 +68,47 @@ const WOOD_TINTS: Array[Color] = [
 @export var variant: int = 0
 @export var terrace: bool = true
 
+## Активные срубы сцены: камера спрашивает player_inside(), чтобы внутри
+## дома прижать руку. Бокс интерьера по карте полов (tools/probe_boxes.gd,
+## лучи по коллизии COLL): пол дома 0.16 покрывает x −5.9…5.9,
+## z −6.7…7.3 (южная веранда — в периметре), у двери снаружи — крыльцо
+## 0.62, северо-западный карман (x<0, z<−3.6) — внешний дворик без пола.
+const INSIDE_MIN_X: float = -5.9
+const INSIDE_MAX_X: float = 5.9
+const INSIDE_MIN_Z: float = -6.7
+const INSIDE_MAX_Z: float = 7.3
+const INSIDE_TOP_Y: float = 4.4
+
 static var _material_cache: Dictionary = {}
+static var _instances: Array[CabinHouse] = []
 
 
 func _ready() -> void:
+	_instances.append(self)
 	_build()
+
+
+func _exit_tree() -> void:
+	_instances.erase(self)
+
+
+## Точка внутри одного из домов деревни (пол выше земли, ниже потолка,
+## без наружного СЗ-кармана): камере ограничить длину руки — 6 м
+## вылетают сквозь окна и стены под наклоном вверх.
+static func player_inside(pos: Vector3) -> bool:
+	for house: CabinHouse in _instances:
+		if not is_instance_valid(house):
+			continue
+		var local := house.to_local(pos)
+		if local.x >= INSIDE_MIN_X and local.x <= INSIDE_MAX_X \
+				and local.z >= INSIDE_MIN_Z and local.z <= INSIDE_MAX_Z \
+				and local.y > 0.0 and local.y < INSIDE_TOP_Y:
+			# Северо-западный карман перед крыльцом — снаружи дома:
+			# пола там нет (старт пути входа бота), руку не сжимать.
+			if local.x < 0.0 and local.z < -3.6:
+				continue
+			return true
+	return false
 
 
 ## Позиция дверного проёма в мире (для теста входа и навигации ботов).

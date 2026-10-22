@@ -30,6 +30,7 @@
 ### Лицензии
 
 - Разрешены ассеты и код под CC0 или MIT. Всё вносится в `assets/third_party/LICENSES.md` (для MIT — с автором и текстом лицензии).
+- Исключение по решению владельца (октябрь 2026): сруб деревни «Log Cabin» by Kless (Sketchfab, CC-BY 4.0) — единственный не-CC0 ресурс. Дословная атрибуция обязательна: в титрах игры (`CabinCredits.KLESS_ATTRIBUTION`) и в `assets/third_party/LICENSES.md`; модель — `assets/visual/cabin/log_cabin.glb`.
 - Ассеты сообщества MakeHuman: только CC0 или CC-BY, каждый с проверкой лицензии и записью в `LICENSES.md`. Иные лицензии не брать.
 - Анимации Mixamo из `~/mixamo_raw` (скачаны владельцем с его аккаунта Adobe 16.10.2026, каталог `~/mixamo_raw/CATALOG.md`): использовать только в собранной игре; в `LICENSES.md` записывать как «Mixamo (Adobe)»; исходные файлы Mixamo в репозиторий не класть — только результат ретаргета/импорта.
 

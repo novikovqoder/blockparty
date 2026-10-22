@@ -4,6 +4,9 @@
 ## приближение колесом 3–10 м, наклон от −60° до +35°, мягкое следование
 # за персонажем. Чувствительность и инверсия оси Y — в Settings (экран
 # настроек — П8). Движение персонажа идёт относительно yaw этой камеры.
+# Внутри домов деревни (CabinHouse.player_inside) рука сжимается до
+# INTERIOR_MAX: комнаты уже шести метров, наклон руки вверх вылетал бы
+# сквозь окна и стены.
 class_name PlayerCamera
 extends Node3D
 
@@ -15,14 +18,25 @@ const FOLLOW_HEIGHT: float = 1.35
 const ZOOM_STEP: float = 0.5
 ## Стартовый наклон вниз, рад.
 const START_PITCH: float = -0.3
+## Предел руки внутри домов деревни, м (сруб Kless): комната уже шести
+## метров, наклон руки вверх вылетает сквозь окна и стены — камера
+## прижимается сама, SpringArm о коллизию дома достраховывает.
+const INTERIOR_MAX: float = 2.6
+## Скорость сжатия/растяжения руки при входе/выходе, м/с.
+const INTERIOR_SPEED: float = 8.0
 
 @onready var pivot: Node3D = $Pivot
 @onready var arm: SpringArm3D = $Pivot/SpringArm
 @onready var camera: Camera3D = $Pivot/SpringArm/Camera3D
 
+## Выбор игрока колесом (границы — balance); arm.spring_length —
+## сглаженное фактическое значение: внутри дома не длиннее INTERIOR_MAX.
+var _user_length: float = 0.0
+
 
 func _ready() -> void:
 	top_level = true
+	_user_length = B.camera_length
 	arm.spring_length = B.camera_length
 	pivot.rotation.x = START_PITCH
 
@@ -57,6 +71,12 @@ func _physics_process(delta: float) -> void:
 	global_position = global_position.lerp(
 		target, 1.0 - exp(-B.camera_follow_speed * delta)
 	)
+	# Внутри дома деревни рука сжимается до INTERIOR_MAX (выход — обратно
+	# к выбору игрока); сглаживание не дёргает кадр на пороге.
+	var wanted := _user_length
+	if CabinHouse.player_inside(parent.global_position):
+		wanted = minf(wanted, INTERIOR_MAX)
+	arm.spring_length = move_toward(arm.spring_length, wanted, INTERIOR_SPEED * delta)
 
 
 ## Дальность видимости, м (раздел 15: «Простая графика» режет far камеры,
@@ -73,6 +93,6 @@ func forward_flat() -> Vector3:
 
 
 func _zoom(step: float) -> void:
-	arm.spring_length = clampf(
-		arm.spring_length + step, B.camera_length_min, B.camera_length_max
+	_user_length = clampf(
+		_user_length + step, B.camera_length_min, B.camera_length_max
 	)

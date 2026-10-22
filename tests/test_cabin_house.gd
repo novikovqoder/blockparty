@@ -9,7 +9,10 @@
 #   4) стены и пол: постоянное давление в стену у двери и в южную стену
 #      крыла не проходит сквозь, пол комнаты держит игрока;
 #   5) под срубами нет твёрдых предметов наполнения;
-#   6) LOD: интерьер скрыт дальше 30 м, снаружи — виден.
+#   6) LOD: интерьер скрыт дальше 30 м, снаружи — виден;
+#   7) камера внутри прижимается (SpringArm о коллизию дома) и не
+#      проходит сквозь стены/крышу;
+#   8) тёплый свет внутри и у входа — ночь в доме не чёрная.
 extends GutTest
 
 const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
@@ -362,6 +365,60 @@ func test_interior_lod_visibility() -> void:
 				exterior += 1
 		assert_eq(interior, 5, "%s: пять мешей интерьера" % house.name)
 		assert_eq(exterior, 10, "%s: внешний контур на месте" % house.name)
+
+
+func test_camera_pulls_in_inside_cabin() -> void:
+	# Очередь владельца, пункт «в»: камера от третьего лица внутри сруба
+	# сама прижимается. Стены/пол/потолок ловятся физикой, но рука
+	# наклонена вверх и шесть метров вылетали сквозь окна и стены —
+	# внутри дома длина руки ограничена (INTERIOR_MAX), камера не покидает
+	# габарит дома; на улице длина возвращается к полной.
+	var world := _world()
+	var house := _cabins[0] as CabinHouse
+	var player := PLAYER.instantiate() as Player
+	world.add_child(player)
+	player.global_position = house.global_transform * Vector3(2.7, 0.5, -5.2)
+	# Rig догоняет персонажа мягким lerp'ом, рука сжимается move_toward:
+	# секунды хватает (остаток пути <1%, руки <0.01 м).
+	await _settle(240)
+	var cam: PlayerCamera = player.camera
+	assert_true(
+		cam.arm.spring_length <= PlayerCamera.INTERIOR_MAX + 0.05,
+		"внутри сруба рука сжата до INTERIOR_MAX (факт %.2f)"
+			% cam.arm.spring_length)
+	var cam_local: Vector3 = house.global_transform.affine_inverse() \
+		* cam.camera.global_position
+	assert_between(cam_local.x, -7.2, 7.2, "камера не прошла западную/восточную стену")
+	assert_between(cam_local.z, -8.6, 8.6, "камера не прошла северную/южную стену")
+	assert_lt(cam_local.y, 4.6, "камера не прошла сквозь потолок")
+	# Выход на подушку перед домом: рука плавно возвращается к полной.
+	player.global_position = house.global_transform * Vector3(-4.5, 0.5, -5.2)
+	await _settle(240)
+	assert_gt(cam.arm.spring_length, 5.0,
+		"снаружи рука вернулась к полной длине (факт %.2f)"
+			% cam.arm.spring_length)
+	player.queue_free()
+
+
+func test_interior_lights_warm_and_present() -> void:
+	# Пункт «в» очереди владельца: ночь внутри дома — не чёрная: тёплый
+	# свет у входа и в комнате (паттерн костра) плюс лампа крыльца. Свет
+	# обязателен в каждом срубе деревни — пропажа любого делает интерьер
+	# неиграбельным ночью.
+	var world := _world()
+	for cabin: Node in _cabins:
+		var house := cabin as CabinHouse
+		for light_name: String in ["PorchLight", "WingLight", "HallLight"]:
+			var light := house.get_node_or_null(light_name) as OmniLight3D
+			assert_ne(light, null,
+				"%s: источник света %s на месте" % [house.name, light_name])
+			if light == null:
+				continue
+			assert_gt(light.light_energy, 0.0,
+				"%s/%s: свет включён" % [house.name, light_name])
+			# «Тёплый»: красной составляющей больше синей (паттерн костра).
+			assert_gt(light.light_color.r, light.light_color.b + 0.15,
+				"%s/%s: тёплый оттенок" % [house.name, light_name])
 
 
 func _settle(frames: int) -> void:

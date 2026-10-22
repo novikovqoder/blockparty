@@ -104,6 +104,23 @@ func test_licenses_have_no_stale_entries() -> void:
 				)
 
 
+## Эталон дословной атрибуции сруба Kless (CC-BY 4.0): лицензия требует
+## воспроизводить строку неизменной. Сверяем константу титров и запись
+## LICENSES.md — правка «по смыслу» ломает соответствие лицензии.
+const KLESS_ATTRIBUTION_EXACT: String = "\"Log Cabin (Free Download)\" " \
+	+ "(https://skfb.ly/6ZQuZ) by Kless is licensed under " \
+	+ "Creative Commons Attribution " \
+	+ "(http://creativecommons.org/licenses/by/4.0/)."
+
+
+func test_kless_attribution_verbatim() -> void:
+	assert_eq(CabinCredits.KLESS_ATTRIBUTION, KLESS_ATTRIBUTION_EXACT,
+		"титры: атрибуция Kless дословная")
+	var text: String = FileAccess.get_file_as_string(LICENSES)
+	assert_true(text.contains(KLESS_ATTRIBUTION_EXACT),
+		"LICENSES.md: та же дословная строка атрибуции")
+
+
 func test_formats_and_size_limit() -> void:
 	var total := 0.0
 	for path: String in _files_under(ROOT):
