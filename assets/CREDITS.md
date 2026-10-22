@@ -13,3 +13,4 @@
 | `assets/third_party/quaternius.com/` (Universal Base Characters + Modular Character Outfits, Universal Animation Library) | quaternius.com | CC0 — детали в `assets/third_party/LICENSES.md` |
 | `addons/sky_3d/` (Sky3D 2.1 — небо мира) | github.com/TokisanGames/Sky3D | MIT — детали и замена текстур звёзд в `assets/third_party/LICENSES.md` |
 | `assets/visual/sky_starmap.png`, `assets/visual/sky_starfield.png` (звёздное небо) | сделано для проекта | CC0 (как и весь код проекта) |
+| `assets/visual/cabin/log_cabin.glb` (дом жителей деревни) | sketchfab.com — Kless | CC-BY 4.0 — единственный не-CC0 ресурс, дословная атрибуция в `assets/third_party/LICENSES.md` и титрах игры |

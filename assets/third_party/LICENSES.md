@@ -1,9 +1,12 @@
-# Сторонние ресурсы (CC0 и MIT)
+# Сторонние ресурсы (CC0, CC-BY 4.0 и MIT)
 
 Правила использования — раздел «Скачивание ресурсов» в CLAUDE.md и план
 доработки графики (docs/VISUAL_PLAN.md): ресурсы только CC0, код аддонов —
 CC0 или MIT (с автором и лицензией), только с разрешённых сайтов, в проекте
-лежат лишь реально используемые файлы (архивы не хранятся). Извлечённые
+лежат лишь реально используемые файлы (архивы не хранятся). Единственное
+исключение из «только CC0» — модель сруба Kless (CC-BY 4.0, следующая
+строка): явное решение владельца, атрибуция — дословно, как требует
+лицензия, также в титрах игры (экран Credits). Извлечённые
 из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
 это та же встроенная текстура модели. Наборы KayKit (персонажи и анимации,
 раздел 16 SPEC v2.3) удалены после перехода на персонажей Quaternius
@@ -12,10 +15,11 @@ Animation Library (П5.7–П5.8).
 
 | Набор | Автор | Страница набора | Лицензия | Дата | Файлы |
 | --- | --- | --- | --- | --- | --- |
+| Log Cabin (Free Download) | Kless | https://sketchfab.com/3d-models/log-cabin-free-download-6zquz | CC-BY 4.0 | 2026-10-18 | Дословная атрибуция лицензии: **"Log Cabin (Free Download)" (https://skfb.ly/6ZQuZ) by Kless is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).** — `visual/cabin/log_cabin.glb` — дом жителей деревни (сруб, очередь владельца после доработки П5.13): исходник 36 МБ/585k треугольников обработан вне репозитория (декимация до 42k снаружи + 14k интерьер + 27k коллизия, встроенные текстуры удалены — материалы назначает `gameplay/world/props/cabin_house.gd` из CC0-наборов ниже); исходный glb в репозитории не хранится. Единственный не-CC0 ресурс проекта — по решению владельца; та же строка — в титрах игры (экран Credits) |
 | Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_ubc.res` — 19 скелетных клипов, переложенных с универсального рига UAL на риг Universal Base Characters (`tools/make_ubc_anims.gd`; линейки Quaternius Universal делят один риг); исходные glb наборов и архивы в репозитории не хранятся |
 | Universal Base Characters (Standard) | Quaternius | https://quaternius.com/packs/universalbasecharacters.html | CC0 | 2026-10-12 | `quaternius.com/universal_base_characters/baked/` — риг 65 костей (тела Superhero Male/Female, глаза, брови) и причёски (Long, Buns, Buzzed, BuzzedFemale, SimpleParted, Beard), запечённые `tools/make_ubc_characters.gd` в сцены `ubc_male.res`/`ubc_female.res` (срез головы, меши + `_lod1` + скины, материалы, текстуры — кожа обесцвечена под палитры); исходные gltf и архивы в репозитории не хранятся |
 | Modular Character Outfits — Fantasy (Standard) | Quaternius | https://quaternius.com/packs/modularcharacteroutfits.html | CC0 | 2026-10-12 | внутри `quaternius.com/universal_base_characters/baked/` — модульная одежда Peasant/Ranger (верх, руки, низ, обувь, капюшон) из частей Male/Female, собранная тем же запеканием в `meshes/` и сцены `ubc_*.res`; исходные gltf и архивы в репозитории не хранятся |
-| Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg` (сет «1K» у Bark001 — 512×1024, ниже планки качества П5.9; взят 2K-сет из локальной библиотеки) |
+| Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg` (сет «1K» у Bark001 — 512×1024, ниже планки качества П5.9; взят 2K-сет из локальной библиотеки); `Bark001_2K-JPG_NormalGL.jpg` добавлен 2026-10-22 — нормали брёвен сруба деревни (`cabin_house.gd`), источник — локальная библиотека |
 | Bark002 | ambientCG | https://ambientcg.com/view?id=Bark002 | CC0 | 2026-10-16 | `ambientcg.com/Bark002/Bark002_1K-JPG_Color.jpg` |
 | Bark003 | ambientCG | https://ambientcg.com/view?id=Bark003 | CC0 | 2026-10-16 | `ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg` |
 | Grass001 | ambientCG | https://ambientcg.com/view?id=Grass001 | CC0 | 2026-10-17 | `ambientcg.com/Grass001/Grass001_1K-JPG_Color.jpg` — текстура травы земли Леса (П5.9 переделка, П2); CC0-замена ground/grass.jpg демо ez-tree, лицензия которого не описана в textures/LICENSE.md репозитория |
@@ -71,3 +75,5 @@ Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — и
 | Moss001 | ambientCG | https://ambientcg.com/get?file=Moss001_1K-JPG.zip | CC0 | 2026-10-19 | `ambientcg.com/Moss001/Moss001_1K-JPG_Color.jpg` — текстура мха поверхностей (доработка-2 П5.13, П4: мох кладки руин; 1K намеренно — 2K-нормаль >10 МБ без LFS), источник — локальная библиотека |
 | Planks007 | ambientCG | https://ambientcg.com/get?file=Planks007_2K-JPG.zip | CC0 | 2026-10-19 | `ambientcg.com/Planks007/Planks007_2K-JPG_Color.jpg`, `Planks007_2K-JPG_NormalGL.jpg` — дерево сундука руин (доработка-2 П5.13, П4) и настилов у воды (доработка-2 П5.13, П5: причал, сваи, кнехты, ступени лестниц смотровых — `assets/shaders/planks_wood.gdshader`), источник — локальная библиотека |
 | dikhololo_night | Poly Haven | https://polyhaven.com/a/dikhololo_night | CC0 | 2026-10-19 | Ночное HDRI — источник звёздного неба (доработка-2 П5.13, П9): `assets/visual/sky_starfield.png` (звёзды — чёткие точки из снимка) и `sky_starmap.png` (Млечный Путь — фон снимка), генератор `tools/make_star_textures.gd`. Сам .hdr (4K) — в локальной библиотеке `library/polyhaven/hdris/`, в git не входит |
+| Fabric085 | ambientCG | https://ambientcg.com/view?id=Fabric085 | CC0 | 2026-10-22 | `ambientcg.com/Fabric085/Fabric085_2K-JPG_Color.jpg` — ткань штор интерьера сруба деревни (`cabin_house.gd`), источник — локальная библиотека |
+| PaintedWood006A | ambientCG | https://ambientcg.com/view?id=PaintedWood006A | CC0 | 2026-10-22 | `ambientcg.com/PaintedWood006A/PaintedWood006A_2K-JPG_Color.jpg` — крашеное дерево стен интерьера сруба деревни (`cabin_house.gd`), источник — локальная библиотека |
