@@ -20,6 +20,9 @@ const HANG_BODY_DROP: float = 0.2
 const HEAD_BELOW_EPS: float = 0.15
 ## Глубина проверки автоподъёма вперёд, м.
 const STEP_PROBE: float = 0.35
+## Кулдаун после отклонённого авто-шага, с (сруб Kless): повтор «вверх-
+## вперёд-вниз» у высокой стены каждый тик вжимал персонажа в стену.
+const STEP_FAIL_COOLDOWN: float = 0.25
 
 @onready var model: Node3D = $Model
 @onready var visual: CharacterModel = $Model/CharacterModel
@@ -34,6 +37,7 @@ var _bot: BotController = null
 
 var _coyote: float = 0.0
 var _jump_buffer: float = 0.0
+var _step_fail_left: float = 0.0
 var _jump_cut_done: bool = false
 ## Прыжок выполнен в текущем кадре (анти-подскок на гребнях его не гасит).
 var _jumped: bool = false
@@ -113,6 +117,7 @@ func _physics_process(delta: float) -> void:
 		_update_interaction(delta)
 		return
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
+	_step_fail_left = maxf(_step_fail_left - delta, 0.0)
 	if _attack_active > 0.0:
 		_attack_active -= delta
 		if _attack_active <= 0.0:
@@ -137,11 +142,13 @@ func _physics_process(delta: float) -> void:
 	# подпрыгивания на рёбрах).
 	if was_floor and not is_on_floor() and velocity.y > 0.0 and not _jumped:
 		velocity.y = 0.0
-	# Авто-шаг — только на ходу: зашедший на ступень персонаж её берёт,
-	# трение о стену на месте не дёргает его подскоками (проба П2: цикл
-	# «поднялся-упал» у высокой стены каждые 15 кадров).
-	if was_floor and is_on_floor() and is_on_wall() \
-			and Vector2(velocity.x, velocity.z).length() > 1.0:
+	# Авто-шаг — и на ходу, и из неподвижного упора в ступень: скорость
+	# у стены гасится проекцией на направление вдоль стены, и у порога
+	# сруба (лесенка 0.16→0.64) персонаж с прижатой скоростью <1 м/с
+	# не мог взять ступень 0.18 м никогда (сруб Kless). Дребезг у высоких
+	# стен гасит не порог скорости, а кулдаун отклонённого шага в
+	# _try_step_up (поднялся — принят, нет — откат и пауза).
+	if was_floor and is_on_floor() and is_on_wall():
 		_try_step_up(wish)
 	_update_animation()
 	_turn_model(wish, delta)
@@ -555,10 +562,16 @@ func _update_jump(delta: float) -> void:
 ## Автоподъём на ступеньку до step_up_height: вверх, вперёд, вниз. Встать
 ## выше старта получилось — шаг принят; впереди стена выше ступени —
 ## позиция откатывается к исходной, персонаж остаётся у стены без
-## подскоков (доработка-2 П5.13, П2: без отката цикл «поднялся-упал»
-## каждые пару кадров рвал контакт с полом у валунов и стен колец).
+## подскоков (доработка-2 П5.13, П2). Отклонённый шаг — кулдаун
+## STEP_FAIL_COOLDOWN (сруб Kless): у высокой стены цикл «поднялся-упал»
+## из каждого тика вжимал персонажа в стену, теперь повторы редкие.
+## Вызов — и из неподвижного упора: прежний порог скорости 1.0 м/с
+## замыкал у ступеней (скорость у стены гасится проекцией вдоль стены —
+## лесенка порога сруба 0.18 м не бралась никогда).
 func _try_step_up(wish: Vector3) -> void:
 	if wish.length() < 0.1:
+		return
+	if _step_fail_left > 0.0:
 		return
 	var before := global_position
 	var dir := wish.normalized()
@@ -570,6 +583,7 @@ func _try_step_up(wish: Vector3) -> void:
 	if global_position.y < before.y + 0.05:
 		global_position = before
 		velocity.y = 0.0
+		_step_fail_left = STEP_FAIL_COOLDOWN
 
 
 # --- Голова другого игрока (подсадка) ---

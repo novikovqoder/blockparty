@@ -31,6 +31,7 @@ const SEAT_SCRIPT: String = "res://gameplay/activities/campfire_seat.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
 const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
 const FOLK_SCRIPT: String = "res://gameplay/world/townsfolk.gd"
+const CABIN_SCRIPT: String = "res://gameplay/world/props/cabin_house.gd"
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
@@ -158,6 +159,19 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 	var campfire: Node3D = load(CAMPFIRE_SCRIPT).new()
 	campfire.position = data["poi"]["campfire"]["center"]
 	root.add_child(campfire)
+	# Деревня (сруб Kless, очередь владельца): три дома жителей на плоских
+	# подушках у Площади — вариации поворота, оттенка дерева и террасы.
+	# Геометрию строит CabinHouse._ready в игре: в сцену попадает узел
+	# со скриптом и параметрами (порядок имён Cabin1..3 — как plots).
+	for i: int in (data["poi"]["village"]["plots"] as Array).size():
+		var plot: Dictionary = (data["poi"]["village"]["plots"] as Array)[i]
+		var cabin: Node3D = load(CABIN_SCRIPT).new()
+		cabin.name = "Cabin%d" % (i + 1)
+		cabin.position = plot["pos"]
+		cabin.rotation.y = float(plot["yaw"])
+		cabin.variant = int(plot["variant"])
+		cabin.terrace = bool(plot["terrace"])
+		root.add_child(cabin)
 	# Жители (Финн, Луми, Тимьян): детерминированная раскладка FolkLayout,
 	# порядок имён Folk1..3 — как npc_spots. Модель строится в игре (_ready).
 	var folk_spots: Array[Dictionary] = FolkLayout.npc_spots(art)

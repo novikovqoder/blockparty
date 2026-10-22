@@ -121,3 +121,34 @@ func test_cannot_jump_onto_two_blocks_integrated() -> void:
 	Input.action_release("jump")
 	# Верх блока 2.0, апекс прыжка с пола ≈ 1.35 — не хватает.
 	assert_lt(top, 1.9, "на 2 блока с земли не запрыгнуть")
+
+
+func test_step_up_from_standstill_at_stair() -> void:
+	# Сруб Kless: скорость у стены гасится до проекции вдоль стены (<1 м/с),
+	# и прежний порог вызова автоподъёма замыкал — персонаж, вставший
+	# вплотную к ступеньке (лесенка порога дома 0.16→0.64), не брал её
+	# никогда. Из неподвижного упора ступень ~0.3 м берётся шагом,
+	# 0.5 м — нет (прыжок не жмём).
+	for height: float in [0.3, 0.5]:
+		var world := Node3D.new()
+		add_child_autofree(world)
+		_floor(world)
+		_box(world, Vector3(2.0, height, 2.0), Vector3(0.0, height * 0.5, -3.0))
+		# Вплотную к грани (капсула Ø0.7): стены касается с первых кадров,
+		# скорость у стены — только проекция вдоль, автоподъём обязан
+		# сработать из упора, а не только с разбега.
+		var player := _player_on(world, Vector3(0.0, 0.05, -2.0 + 0.38))
+		await _settle()
+		Input.action_press("move_forward")
+		var stepped := false
+		for i: int in range(150):
+			await get_tree().physics_frame
+			if player.global_position.y > height - 0.05 \
+					and player.global_position.z < -2.0:
+				stepped = true
+				break
+		Input.action_release("move_forward")
+		if height <= 0.31:
+			assert_true(stepped, "ступень 0.3 м берётся шагом из упора вплотную")
+		else:
+			assert_false(stepped, "ступень 0.5 м из упора шагом не берётся")

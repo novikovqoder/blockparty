@@ -122,26 +122,31 @@ func test_lookouts_not_reachable_on_foot() -> void:
 			"к смотровой %s есть подход по кольцу-основанию" % center)
 
 
-func test_village_fences_block_their_cells() -> void:
-	# Заборы деревни действительно твёрдые: BFS не проходит секцию насквозь.
-	# Клетка под забором либо недостижима, либо входит в "tops" — путь туда
-	# лежит только ПОВЕРХ предмета, сквозь секции пути нет. Доработка
-	# П5.13: домики-срубы убраны (дома встанут моделью), палисадники
-	# у участков остались — их непроходимость и проверяем.
+func test_village_pads_flat_and_clear() -> void:
+	# Деревня (сруб Kless): подушки участков плоские на PLAZA_H и проходимы
+	# (BFS доходит до каждого центра участка — у каждой двери есть подход),
+	# наполнение на подушки не заходит. Процедурных срубов-коробок и их
+	# заборов в мире больше нет: дома — узлы-сцены Cabin1..3 (проход
+	# внутрь — tests/test_cabin_house.gd).
 	var data: Dictionary = _island_data()
 	var walked: Dictionary = IslandGen.mechanics_reach(data)
 	var reach: Dictionary = walked["cells"]
-	var tops: Dictionary = walked["tops"]
-	var fences: int = 0
-	for prop: Dictionary in data["props"]:
-		if String(prop["type"]) != "fence":
-			continue
-		fences += 1
-		var pos: Vector3 = prop["pos"]
-		var cell := Vector2i(int(floor(pos.x)), int(floor(pos.z)))
-		assert_false(reach.has(cell) and not tops.has(cell),
-			"забор %s: сквозь секцию пути нет" % pos)
-	assert_eq(fences, 12, "три участка по два крыла из двух секций")
+	var heights: PackedFloat32Array = data["heights"]
+	var plots: Array = data["poi"]["village"]["plots"]
+	for plot: Dictionary in plots:
+		var base: Vector3 = plot["pos"]
+		var cell := Vector2i(int(floor(base.x)), int(floor(base.z)))
+		assert_true(reach.has(cell),
+			"участок деревни %s достижим пешком" % base)
+		for probe: Vector2 in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
+			var at := Vector2(base.x, base.z) + probe * 9.5
+			assert_almost_eq(
+				IslandGen.ground_height(heights, at.x, at.y),
+				IslandGen.PLAZA_H, 0.05,
+				"подушка %s плоская, проба %s" % [base, probe])
+	assert_eq(int(data["props"].filter(func(p: Dictionary) -> bool:
+			return String(p["type"]) == "fence").size()), 0,
+		"заборные секции П5.13 убраны (двор сруба — терраса дома)")
 	assert_eq(int(data["props"].filter(func(p: Dictionary) -> bool:
 			return String(p["type"]) == "house").size()), 0,
 		"процедурных срубов-коробок в мире больше нет")
@@ -164,4 +169,3 @@ func test_zone_fill_adds_props_without_moving_layout() -> void:
 	# Наполнение живое: коряги вне Леса, кусты на лугах, деревья у Озера.
 	assert_gt(int(counts.get("dead_log", 0)), 12, "коряг больше, чем было в Лесу")
 	assert_gt(int(counts.get("etree_bush", 0)), 40, "кустов больше, чем было в Лесу")
-	assert_gt(int(counts.get("fence", 0)), 0, "заборы деревни поставлены")

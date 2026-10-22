@@ -45,6 +45,19 @@ func _process(delta: float) -> void:
 		_enter_world()
 
 
+func _on_credits_pressed() -> void:
+	# Титры (сруб Kless, очередь владельца): дословная атрибуция CC-BY 4.0
+	# — требование лицензии модели дома, плюс источники CC0-ассетов.
+	$CreditsPanel/Margin/VB/Text.text = tr("MENU_CREDITS_INTRO") + "\n\n" \
+		+ "[center]" + CabinCredits.KLESS_ATTRIBUTION + "[/center]\n\n" \
+		+ tr("MENU_CREDITS_CC0")
+	$CreditsPanel.visible = true
+
+
+func _on_credits_back_pressed() -> void:
+	$CreditsPanel.visible = false
+
+
 func _on_enter_world_pressed() -> void:
 	if Net.is_networked():
 		# Dev-режим ENet: мир уже поднят и открыт (раздел 10).

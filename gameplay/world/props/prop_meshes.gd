@@ -46,12 +46,6 @@ static func mesh(type: StringName, variant: int) -> ArrayMesh:
 			return _bench(variant)
 		"canopy":
 			return _canopy(variant)
-		# П5.13, доработка: заборы-палисадники у Площади (примитивы с
-		# цветом в вершинах, тон зоны — LowPolyMat); домики жителей —
-		# процедурные срубы убраны, дома встанут моделью (сруб Kless
-		# в очереди владельца).
-		"fence":
-			return _fence(variant)
 		"pier_post":
 			return _pier_post()
 		"plank_deck":
@@ -413,10 +407,6 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 			return Vector3(0.95, 1.4, 0.95) * scale.x
 		"bench":
 			return Vector3(1.9, 0.55, 0.7)
-		# Забор деревни — секция выше автоподъёма (домики-срубы убраны
-		# в доработке П5.13: дома жителей встанут моделью позже).
-		"fence":
-			return Vector3(1.9 * scale.x, 1.05, 0.18)
 		"boat":
 			return Vector3(1.3, 0.5, 2.35)
 		# Гигант (П5.9, блок 4): дуб-исполин — толстый ствол без кроны;
@@ -707,30 +697,6 @@ static func _canopy(variant: int) -> ArrayMesh:
 
 
 ## Секция забора-палисадника (П5.13, блок 5): два столбика и пара
-## перекладин, лёгкие перекосы от rng — забор «собран вручную».
-## Единичная секция ~1.9 м по X; IslandGen ставит крылья по две секции
-## у участков деревни, не замыкая их (проход всегда открыт). SOLID:
-## высота выше автоподъёма, перешагнуть нельзя.
-static func _fence(variant: int) -> ArrayMesh:
-	var rng := _rng("fence", variant)
-	var parts: Array = []
-	for x_at: float in [-0.8, 0.8]:
-		parts.append(_cyl(0.075, 0.1, 1.08, 6,
-			PAL.trunk.lerp(Color.WHITE, rng.randf_range(-0.06, 0.06)),
-			Vector3(x_at + rng.randf_range(-0.02, 0.02), 0.52, 0.0)))
-	for y_at: float in [0.52, 0.9]:
-		var span: float = rng.randf_range(-0.03, 0.03)
-		parts.append(_box(
-			Vector3(1.86, 0.1, 0.055),
-			PAL.planks.lerp(Color.WHITE, 0.05 * float(variant % 2) - 0.025),
-			Vector3(0.0, y_at, 0.0), 0.0, 0.0, span))
-	if variant % 2 == 1:
-		# Второй вариант — диагональная подпорка: забор на склоне.
-		parts.append(_box(Vector3(1.7, 0.07, 0.05), PAL.planks.darkened(0.1),
-			Vector3(0.0, 0.7, 0.02), 0.0, 0.0, 0.42))
-	return _merge(parts)
-
-
 ## Лодочка-плот: корпус с носом-клином и скамьёй (модель по +Z).
 static func _boat() -> ArrayMesh:
 	var hull: Color = PAL.trunk.lerp(PAL.planks, 0.4)

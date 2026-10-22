@@ -130,7 +130,7 @@ const SOLID_TYPES: PackedStringArray = [
 	"bench", "log_bridge", "pier_post",
 	"plank_deck", "boat",
 	"etree_pine", "etree_oak", "etree_aspen", "etree_giant",
-	"rrock", "dead_log", "fence",
+	"rrock", "dead_log",
 ]
 ## Предметы раскладки без коллизии (vfx-fix, баг 2): мелкая растительность
 ## проходима, рама ruin_gate — по задумке (проём закрывает RuinGate).
@@ -146,6 +146,15 @@ const STONE_FLOWER_SEED: int = 60409
 ## ГПСЧ наполнения зон (П5.13, блок 5): кусты, коряги, валуны и деревья
 ## берега Озера — добавки поверх прежней раскладки, её поток не трогаем.
 const FILLER_SEED: int = 20261018
+## Подушка под сруб деревни: плоская терраса PLAZA_H до VILLAGE_PAD_FLAT
+## (габарит дома 13 × 15.1 м, диагональ ~10.8 м, плюс обход) и плавный
+## подъём кромки к естественному рельефу до VILLAGE_PAD_R. Резкий диск
+## у подножия холма (естественный рельеф за кромкой ~8 м) превращался
+## в лестницу с предельным осевым шагом MAX_STEP — по диагонали хода
+## уклон выходил за пределы шага игрока. Кромка шириной 10 м держит
+## осевой градиент ~0.6 м/м даже у подножия холма.
+const VILLAGE_PAD_FLAT: float = 11.0
+const VILLAGE_PAD_R: float = 21.0
 
 
 ## Полные данные острова (детерминированы): heights (карта высот, м),
@@ -205,12 +214,12 @@ static func generate() -> Dictionary:
 	var pier: Dictionary = _pier_and_boats(heights, props)
 	var fire: Dictionary = _campfire(heights, props)
 	_plaza_canopies(props)
-	# П5.13, блок 5: деревня у Площади (участки жителей с заборами; дома —
-	# доработка убрала срубы-коробки, встанут моделью) и наполнение
-	# зон (кусты, коряги, валуны, деревья у Озера) — свои потоки rng:
-	# прежняя раскладка не сдвигается, добавки поверх неё. Постройки — до
-	# наполнения: якоря наполнения включают их углы (не загораживать подход).
-	var village: Dictionary = _village(props)
+	# П5.13, блок 5: деревня у Площади (участки жителей; дома — срубы
+	# Kless из очереди владельца) и наполнение зон (кусты, коряги,
+	# валуны, деревья у Озера) — свои потоки rng: прежняя раскладка не
+	# сдвигается, добавки поверх неё. Постройки — до наполнения: якоря
+	# наполнения включают их углы (не загораживать подход).
+	var village: Dictionary = _village()
 	_zone_fill(heights, props, reserved, village, ruins, pier, fire,
 		stones, spawns)
 	var lookouts: Array = []
@@ -468,6 +477,7 @@ static func _base_height(
 ## с пляжем. Расщелина и смотровые прорезаются после выравнивания склонов —
 ## их обрывы запланированы, весь остальной остров проходим пешком.
 static func _apply_zones(heights: PackedFloat32Array) -> void:
+	var pads: Array[Vector2] = village_pad_centers()
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
 			var h: float = heights[_idx(x, z)]
@@ -483,6 +493,19 @@ static func _apply_zones(heights: PackedFloat32Array) -> void:
 			# Площадь: плоская терраса (запланированная суша в центре острова).
 			if Vector2(x, z - 4.0).length() < 18.0:
 				h = PLAZA_H
+			# Деревня: плоские подушки под срубы — та же терраса PLAZA_H,
+			# кромка плавно поднимается к естественному рельефу (сруб Kless,
+			# очередь владельца). Ниже террасы кромка не опускается — вокруг
+			# дома нет канавы; к площади кромка сливается в общую плоскость.
+			var pad_d: float = 1e9
+			for pad: Vector2 in pads:
+				pad_d = minf(pad_d, Vector2(x, z).distance_to(pad))
+			if pad_d < VILLAGE_PAD_FLAT:
+				h = PLAZA_H
+			elif pad_d < VILLAGE_PAD_R:
+				var pad_t := smoothstep(0.0, 1.0,
+					(pad_d - VILLAGE_PAD_FLAT) / (VILLAGE_PAD_R - VILLAGE_PAD_FLAT))
+				h = lerpf(PLAZA_H, maxf(h, PLAZA_H), pad_t)
 			# Руины: ровная терраса под стенами (вытянута к площади).
 			if Vector2(x - 58.0, z + 48.0).length() < 24.0:
 				h = RUINS_H
@@ -712,7 +735,22 @@ static func _erodible(x: int, z: int, h: float) -> bool:
 		return false
 	if Vector2(x - 6.0, z - 82.0).length() < 23.0:
 		return false
+	# Подушки деревни не размываются (запас 2 м на кромку): сруб стоит
+	# на плоском, промоины у стен не появляются.
+	if on_village_pad(Vector2(x, z)) \
+			or _near_village_pad_rim(Vector2(x, z), 2.0):
+		return false
 	return true
+
+
+## Клетка ближе rim к подушке деревни (кромка подушки и её ступенчатый
+## спуск не кормят эрозию материалом).
+static func _near_village_pad_rim(pos: Vector2, rim: float) -> bool:
+	for center: Vector2 in village_pad_centers():
+		var d: float = pos.distance_to(center)
+		if d >= VILLAGE_PAD_R and d < VILLAGE_PAD_R + rim:
+			return true
+	return false
 
 
 ## Нанести кистью смыв (sign = true, углубление) или осадок (sign = false,
@@ -1051,8 +1089,11 @@ static func _trees_and_rocks(
 			# Площадь (П5.13, блок 1): кромку мощения обрамляют редкие
 			# дубы и осины эталонного стиля да камни во мху — площадь
 			# не голая тарелка; кольцо 20–27 м, за цветочной кромкой.
+			# Подушки деревни из кольца вырезаны: дерево/камень не лезут
+			# под сруб и на его двор (сруб Kless, очередь владельца).
 			elif Vector2(x, z - 4.0).length() >= 20.0 \
-					and Vector2(x, z - 4.0).length() <= 27.0 and grassy:
+					and Vector2(x, z - 4.0).length() <= 27.0 and grassy \
+					and not on_village_pad(Vector2(x, z)):
 				if rng.randf() < 0.011 and _no_trees_near(trees, x, z, 5):
 					trees[cell] = true
 					_prop(props, rng, cell, h, _plaza_tree_kind(x, z), "plain", 5, heights)
@@ -1105,6 +1146,8 @@ static func _trees_and_rocks(
 				continue  # площадь — вымощенная, без травы
 			if Vector2(x - 58.0, z + 48.0).length() < 25.0:
 				continue  # терраса руин — камень
+			if on_village_pad(Vector2(x, z)):
+				continue  # подушки деревни — двор сруба, без луговой травы
 			if Vector2(x, z).distance_to(forest) < 40.0:
 				# П5.9, блок 3: пучки-островки по шуму — густые кочки, между
 				# ними проплешины (не ровный ковёр). Не на тропе и не на
@@ -1209,13 +1252,14 @@ static func _trees_and_rocks(
 			if rng.randf() < 0.3:
 				_prop(props, rng, cell, h, "reed", "grass", 2)
 	# Немного цветов по кромке площади (шаг 3 П4.5): кольцо радиуса 13–16 м,
-	# не задевающее костёр (4.5 м), лавки и вымощенный центр.
+	# не задевающее костёр (4.5 м), лавки, вымощенный центр и дворы срубов
+	# деревни (подушки начинаются в 6 м от площади — кольцо их пересекает).
 	for i: int in 10:
 		var angle: float = TAU * i / 10.0 + rng.randf_range(-0.15, 0.15)
 		var ring := Vector2(0, 4) + Vector2(cos(angle), sin(angle)) \
 			* rng.randf_range(13.0, 16.5)
 		var cell := Vector2i(roundi(ring.x), roundi(ring.y))
-		if reserved.has(cell):
+		if reserved.has(cell) or on_village_pad(Vector2(cell)):
 			continue
 		_prop(props, rng, cell, PLAZA_H, "rflower", "flower", 3)
 
@@ -1636,50 +1680,88 @@ static func _plaza_canopies(props: Array) -> void:
 					Vector3(0.3, 2.16, 0.3), "plain", 1)
 
 
-## Деревня у Площади (П5.13, блок 5; доработка — домики-срубы убраны):
-## три участка жителей в «карманах» кромки террасы — посередине между
-## соседними выходами с площади, так что ни один радиальный путь (Озеро,
-## Расщелина, Руины, Холмы, Лес) не перекрывается. Процедурные серые
-## коробки-срубы удалены по приёмке: дома жителей встанут готовой
-## моделью (сруб Kless, очередь владельца). Крылья заборных секций и
-## якоря-углы участков остаются: палисадники раскрыты к площади, вход
-## между крыльями свободен, наполнение не ставит предметы вплотную.
-## rng_static: правки леса не двигают деревню.
-static func _village(props: Array) -> Dictionary:
-	var rng := rng_static()
+## Деревня у Площади (П5.13, блок 5): три дома жителей — срубы Kless
+## (очередь владельца) — в «карманах» кромки террасы, входом (терраса
+## сруба, локальный −X) на площадь. Карман = биссектриса ПРОМЕЖУТКА
+## между соседними выходами с площади: запад (Холмы/Лес, 80°), юг
+## (Лес/Руины, 91°), восток (Руины/Расщелина, 82°) — три самых широких
+## промежутка: дом 13 × 15 м с подушкой не перегораживает радиальные
+## пути (запас от оси каждого выхода ≥ 11 м), а соседние срубы
+## расходятся на 23–34 м при худшей сумме полу-габаритов ~22 м —
+## раньше карманы-суммы соседних индексов выходов давали два дома
+## в 9 м друг от друга (пересечение моделей) и карман на дороге к Холмам.
+## Участки на r = 17: терраса площади (r < 18) плоская, подушки сливаются
+## с ней без шва. Заборные крылья П5.13 убраны: двор сруба ограждают его
+## собственные терраса с перилами и лестницей.
+## Раскладка детерминирована без rng (данные-константы), правки леса
+## деревню не двигают.
+## Участки: {pos (центр сруба, y = PLAZA_H), yaw (вход на площадь),
+## variant (оттенок дерева 0–2), terrace (крыльцо-терраса есть/нет)}.
+## Лёгкие довороты yaw — вариация «поворот» из очереди владельца.
+static func village_plots() -> Array[Dictionary]:
 	var plaza: Vector2 = ZONES[0]["center"]
-	# Единичные направления выходов с площади (по зонам) и карманы между
-	# соседними: юго-восток (Озеро/Расщелина), запад (Холмы/Лес), север
-	# (Лес/Руины). Участки на r = 17: терраса (r < 18) плоская.
+	# Единичные направления выходов с площади (по зонам): Озеро, Расщелина,
+	# Руины, Холмы, Лес. Пары выходов, чьи промежутки забирают карманы:
+	# (Холмы, Лес), (Лес, Руины), (Руины, Расщелина) — см. комментарий выше.
 	var exits: Array[Vector2] = [
 		Vector2(0.077, 0.997), Vector2(0.755, 0.646),
 		Vector2(0.745, -0.667), Vector2(-0.837, 0.548),
 		Vector2(-0.680, -0.733),
 	]
-	var pockets: Array[int] = [0, 3, 4]
+	var pocket_pairs: Array = [[3, 4], [4, 2], [2, 1]]
+	var yaw_offsets: Array[float] = [0.10, -0.14, 0.07]
+	var plots: Array[Dictionary] = []
+	for idx: int in pocket_pairs.size():
+		var pair: Array = pocket_pairs[idx]
+		var dir: Vector2 = (exits[pair[0]] + exits[pair[1]]).normalized()
+		var pos2d: Vector2 = plaza + dir * 17.0
+		# Вход сруба — локальный −X: ось X от площади (дверь — на площадь;
+		# тест test_village_layout проверяет dot(door_dir, на_площадь) > 0.9).
+		var yaw: float = atan2(-dir.y, dir.x) + yaw_offsets[idx]
+		plots.append({
+			"pos": Vector3(pos2d.x, PLAZA_H, pos2d.y),
+			"yaw": yaw,
+			"variant": idx,
+			"terrace": idx != 1,
+		})
+	return plots
+
+
+## Центры подушек деревни (XZ): рельеф, эрозия и наполнение проверяют
+## по ним расстояние до участков. Данные детерминированы — кэш статический.
+static var _village_pad_cache: Array[Vector2] = []
+
+
+static func village_pad_centers() -> Array[Vector2]:
+	if _village_pad_cache.is_empty():
+		for plot: Dictionary in village_plots():
+			var pos: Vector3 = plot["pos"]
+			_village_pad_cache.append(Vector2(pos.x, pos.z))
+	return _village_pad_cache
+
+
+## Точка на подушке деревни (рельеф плоский, наполнение пустое).
+static func on_village_pad(pos: Vector2) -> bool:
+	for center: Vector2 in village_pad_centers():
+		if pos.distance_to(center) < VILLAGE_PAD_R:
+			return true
+	return false
+
+
+static func _village() -> Dictionary:
+	var plots: Array[Dictionary] = village_plots()
 	var anchors: Array[Vector3] = []
 	var spots: Array[Vector3] = []
-	for pocket: int in pockets:
-		var dir: Vector2 = (exits[pocket] + exits[(pocket + 1) % exits.size()]).normalized()
-		var pos2d: Vector2 = plaza + dir * 17.0
-		var base := Vector3(pos2d.x, PLAZA_H, pos2d.y)
+	for plot: Dictionary in plots:
+		var base: Vector3 = plot["pos"]
 		spots.append(base)
-		var yaw: float = atan2(-dir.x, -dir.y)
-		# Крылья забора: по две секции вдоль фасада участка (локальный X)
-		# с каждой стороны, чуть впереди фасада. Габарит дома по X ±2 —
-		# крыло продолжается от угла наружу, проход шириной 2.3 м.
-		for side: float in [-1.0, 1.0]:
-			for seg: int in 2:
-				var local := Vector3(side * (1.15 + seg * 1.9), 0.0, 1.35) \
-					.rotated(Vector3.UP, yaw)
-				_add_prop(props, rng, &"fence", base + local, yaw,
-					Vector3.ONE, "plain", 2)
-		# Якоря-углы участка (габарит дома 4.1 × 3.0): наполнение держит
-		# отступ — место под будущий дом не зарастает.
-		for x_at: float in [-2.05, 2.05]:
-			for z_at: float in [-1.5, 1.5]:
+		var yaw: float = plot["yaw"]
+		# Якорь-габарит сруба (13.6 × 16.2 с запасом на стены и свесы):
+		# наполнение держит отступ — под дом ничего не растёт.
+		for x_at: float in [-6.8, 0.0, 6.8]:
+			for z_at: float in [-8.1, 0.0, 8.1]:
 				anchors.append(base + Vector3(x_at, 0.0, z_at).rotated(Vector3.UP, yaw))
-	return {"anchors": anchors, "spots": spots}
+	return {"anchors": anchors, "spots": spots, "plots": plots}
 
 
 ## Наполнение зон (П5.13, блок 5): кусты, коряги, валуны и деревья берега
@@ -1722,8 +1804,9 @@ static func _zone_fill(
 				if rng.randf() < 0.006 and _clear_of_anchors(Vector3(x, h, z), anchors, 2.5):
 					_prop(props, rng, cell, h, "dead_log", "plain", 2)
 				continue
-			# Внутри площади и террасы руин наполнения нет.
-			if d_plaza < 21.0 or d_ruins < 26.0:
+			# Внутри площади, террасы руин и подушек деревни наполнения нет
+			# (двор сруба — его собственная терраса с лестницей).
+			if d_plaza < 21.0 or d_ruins < 26.0 or on_village_pad(pos):
 				continue
 			# Каньон расщелины и подходы к мосткам — свободны.
 			if x >= CREVASSE_X0 - 2 and x <= CREVASSE_X1 + 2 \

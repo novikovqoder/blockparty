@@ -83,17 +83,20 @@ const TEXTURE_SLOTS: Array[String] = [
 ##   небо — меш дымки Sky3D;
 ##   жители — процедурные шляпы (персонажи приняты, раздел 16 SPEC);
 ##   тросы лестниц — тонкие планки цвета коры (верёвочный примитив,
-##     доработка-2 П5: ступени при этом текстурные, WoodMat).
+##     доработка-2 П5: ступени при этом текстурные, WoodMat);
+##   сруб деревни — оконное стекло (прозрачность без карты) и светящийся
+##     фонарь крыльца (emission); брёвна/доски/камень/ткани текстурные.
 ## Если предмет из списка убирают из мира — запись удалить вместе с ним.
 const ALWAYS_UNTEXTURED: Array[String] = [
 	"Props_rgrass_", "Props_rflower_", "Props_riris_", "Props_reed_",
 	"Props_fern_", "Props_etree_",
-	"Props_bench_", "Props_boat_", "Props_canopy_", "Props_fence_",
+	"Props_bench_", "Props_boat_", "Props_canopy_",
 	"Flame", "FirePit", "/Logs", "/Ember",
 	"/Glow",
 	"/Rope",
 	"_FogMeshI",
 	"hat_",
+	"/EXT_glass", "/INT_glass", "/EXT_lamp",
 ]
 
 ## Переходные нетекстурные поверхности (срез 5): закрываются пунктами

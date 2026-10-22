@@ -32,3 +32,4 @@ windows_log*.txt
 # Godot создаёт .import для каждого png в res://, включая скриншоты
 # документации docs/screenshots/ — служебный мусор, в git не кладём.
 docs/screenshots/**/*.import
+.gut_*.log

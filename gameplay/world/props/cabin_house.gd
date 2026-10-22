@@ -108,7 +108,10 @@ func _build() -> void:
 		elif mi.name == "TERRACE_deck":
 			mi.visible = terrace
 		elif mi.name == "COLL":
+			# Коллизия строится из меша здесь же; сам меш не должен жить
+			# в дереве ни кадра (и рендер, и аудит поверхностей его не видят).
 			_attach_collision(mi, terrace_box)
+			model.remove_child(mi)
 			mi.queue_free()
 			continue
 		if mat_name != "":

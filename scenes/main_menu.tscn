@@ -77,6 +77,12 @@ disabled = true
 text = "MENU_SETTINGS"
 metadata/tr_key = "MENU_SETTINGS"
 
+[node name="Credits" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+text = "MENU_CREDITS"
+metadata/tr_key = "MENU_CREDITS"
+
 [node name="Quit" type="Button" parent="Menu"]
 custom_minimum_size = Vector2(280, 56)
 theme_override_font_sizes/font_size = 26
@@ -114,7 +120,51 @@ theme_override_font_sizes/font_size = 18
 text = "MENU_NOTE"
 metadata/tr_key = "MENU_NOTE"
 
+[node name="CreditsPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="CreditsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 96
+theme_override_constants/margin_top = 64
+theme_override_constants/margin_right = 96
+theme_override_constants/margin_bottom = 64
+
+[node name="VB" type="VBoxContainer" parent="CreditsPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Title" type="Label" parent="CreditsPanel/Margin/VB"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "MENU_CREDITS"
+metadata/tr_key = "MENU_CREDITS"
+
+[node name="Text" type="RichTextLabel" parent="CreditsPanel/Margin/VB"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="Back" type="Button" parent="CreditsPanel/Margin/VB"]
+custom_minimum_size = Vector2(280, 56)
+theme_override_font_sizes/font_size = 26
+text = "MENU_CREDITS_BACK"
+metadata/tr_key = "MENU_CREDITS_BACK"
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 18
+text = "MENU_NOTE"
+metadata/tr_key = "MENU_NOTE"
+
 [connection signal="pressed" from="Menu/EnterWorld" to="." method="_on_enter_world_pressed"]
 [connection signal="pressed" from="Menu/FriendsWorld" to="." method="_on_friends_world_pressed"]
 [connection signal="pressed" from="Menu/Character" to="." method="_on_character_pressed"]
+[connection signal="pressed" from="Menu/Credits" to="." method="_on_credits_pressed"]
 [connection signal="pressed" from="Menu/Quit" to="." method="_on_quit_pressed"]
+[connection signal="pressed" from="CreditsPanel/Margin/VB/Back" to="." method="_on_credits_back_pressed"]
