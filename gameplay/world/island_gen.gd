@@ -1074,9 +1074,9 @@ static func _trees_and_rocks(
 				elif rng.randf() < 0.022:
 					_prop(props, rng, cell, h, "etree_bush", "plain", 5, heights)
 				elif rng.randf() < 0.006:
-					_prop(props, rng, cell, h, "dead_log", "plain", 1)
+					_prop(props, rng, cell, h, "dead_log", "plain", 1, heights)
 				elif rng.randf() < 0.004:
-					_prop(props, rng, cell, h, "rrock", "plain", 3)
+					_prop(props, rng, cell, h, "rrock", "plain", 3, heights)
 					stone_cells.append(cell)
 					big_stones[cell] = true
 			# Редкие деревья вокруг леса (не на площади). П5.8, часть A:
@@ -1098,7 +1098,7 @@ static func _trees_and_rocks(
 					trees[cell] = true
 					_prop(props, rng, cell, h, _plaza_tree_kind(x, z), "plain", 5, heights)
 				elif rng.randf() < 0.008:
-					_prop(props, rng, cell, h, "mrock", "plain", 3)
+					_prop(props, rng, cell, h, "mrock", "plain", 3, heights)
 			# Руины (П5.13, блок 1): ели по периметру террасы — руины
 			# смотрятся на фоне леса, а не пустоши; за террасой (24–31 м).
 			elif Vector2(x - 58.0, z + 48.0).length() >= 24.5 \
@@ -1109,14 +1109,14 @@ static func _trees_and_rocks(
 			# Холмы: валуны повыше, редкие ели, камни у вершин.
 			elif in_hills and h > 4.0:
 				if rng.randf() < 0.012:
-					_prop(props, rng, cell, h, "boulder", "stone")
+					_prop(props, rng, cell, h, "boulder", "stone", 3, heights)
 				elif h < 13.0 and rng.randf() < 0.006:
 					_prop(props, rng, cell, h, "etree_pine", "plain", 5, heights)
 				elif h > 16.0 and rng.randf() < 0.02:
 					_prop(props, rng, cell, h, "rock_pillar", "stone")
 			# Пляж: камешки.
 			elif h <= 0.9 and h > -0.2 and rng.randf() < 0.05:
-				_prop(props, rng, cell, h, "pebble", "stone")
+				_prop(props, rng, cell, h, "pebble", "stone", 3, heights)
 	# Папоротники (П5.7, блок 2): сплошной ковёр по дну оврага (клетки русла
 	# зарезервированы от деревьев — здесь это разрешено) и редкие — по влажным
 	# низинам леса, где ForestGround красит влажную землю.
@@ -1184,7 +1184,7 @@ static func _trees_and_rocks(
 						elif rng.randf() < 0.10 * patch:
 							_prop(props, rng, cell, h, "rflower", "plain", 3)
 					if _moss_patch(x, z) > 0.55 and rng.randf() < 0.06:
-						_prop(props, rng, cell, h, "mrock", "plain", 3)
+						_prop(props, rng, cell, h, "mrock", "plain", 3, heights)
 						stone_cells.append(cell)
 				continue
 			# П5.13, блок 1: луга — та же трава и цветы, что в Лесу
@@ -1363,6 +1363,13 @@ static func _is_grassy_forest(heights: PackedFloat32Array, x: int, z: int) -> bo
 ## Добавить предмет «по клетке»: позиция у точки сетки с лёгким сдвигом,
 ## случайный поворот и разброс масштаба. Типы с.kind-оттенком получают тон
 ## зоны (instance-цвет MultiMesh смешивается с вершинными цветами меша).
+## Предметы, прижимаемые к билинейной высоте рельефа в фактической точке
+## (деревья etree_* — по префиксу, плюс камни и брёвна из этого списка).
+const GROUND_SNUG: PackedStringArray = [
+	"mrock", "rrock", "boulder", "dead_log", "pebble",
+]
+
+
 static func _prop(
 	props: Array, rng: RandomNumberGenerator, cell: Vector2i, h: float,
 	type: String, kind: String, variants: int = 3,
@@ -1372,10 +1379,13 @@ static func _prop(
 	var pos := Vector3(
 		cell.x + rng.randf_range(-0.3, 0.3), h, cell.y + rng.randf_range(-0.3, 0.3)
 	)
-	# Деревья стоят на рельефе в фактической точке (джиттер сдвигает с
-	# узла сетки — на склоне высота угла клетки отличается до ~0.3 м);
-	# корневая часть чуть утоплена, чтобы основание ствола не висело.
-	if type.begins_with("etree_") and not heights.is_empty():
+	# Деревья, камни и брёвна стоят на рельефе в фактической точке
+	# (джиттер сдвигает с узла сетки — на склоне высота угла клетки
+	# отличается, а на кромке террасы у берега перепад до 8 м: камень
+	# по узлу висел над склоном на 2.3 м, WorldSelfCheck это держит).
+	# Основание чуть утоплено, чтобы низ не висел над землёй.
+	if (type.begins_with("etree_") or GROUND_SNUG.has(type)) \
+			and not heights.is_empty():
 		pos.y = ground_height(heights, pos.x, pos.z) \
 			- clampf(0.08 * scale, 0.05, 0.2)
 	_add_prop(props, rng, StringName(type), pos, rng.randf_range(0.0, TAU),
@@ -1802,7 +1812,7 @@ static func _zone_fill(
 			# низкий, обход всегда есть).
 			if d_ruins < 22.0:
 				if rng.randf() < 0.006 and _clear_of_anchors(Vector3(x, h, z), anchors, 2.5):
-					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+					_prop(props, rng, cell, h, "dead_log", "plain", 2, heights)
 				continue
 			# Внутри площади, террасы руин и подушек деревни наполнения нет
 			# (двор сруба — его собственная терраса с лестницей).
@@ -1821,12 +1831,12 @@ static func _zone_fill(
 					_prop(props, rng, cell, h, "etree_bush", "plain", 5, heights)
 				elif rng.randf() < 0.0015 \
 						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
-					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+					_prop(props, rng, cell, h, "dead_log", "plain", 2, heights)
 				elif rng.randf() < 0.0015 \
 						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
-					_prop(props, rng, cell, h, "boulder", "stone")
+					_prop(props, rng, cell, h, "boulder", "stone", 3, heights)
 				elif rng.randf() < 0.003:
-					_prop(props, rng, cell, h, "mrock", "plain", 3)
+					_prop(props, rng, cell, h, "mrock", "plain", 3, heights)
 				continue
 			# Берег Озера (кроме полосы причала): деревья кольцом за
 			# камышами, коряги и валуны у кромки — берег живой.
@@ -1837,9 +1847,9 @@ static func _zone_fill(
 						_forest_variants(_forest_kind(x, z)), heights)
 				elif rng.randf() < 0.008 \
 						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
-					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+					_prop(props, rng, cell, h, "dead_log", "plain", 2, heights)
 				elif rng.randf() < 0.006:
-					_prop(props, rng, cell, h, "mrock", "plain", 3)
+					_prop(props, rng, cell, h, "mrock", "plain", 3, heights)
 				continue
 			# Холмы ниже вершин: кусты и коряги в траве.
 			if Vector2(x + 58.0, z - 42.0).length() < 42.0 and h < 10.0:
@@ -1847,7 +1857,7 @@ static func _zone_fill(
 					_prop(props, rng, cell, h, "etree_bush", "plain", 5, heights)
 				elif rng.randf() < 0.0015 \
 						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
-					_prop(props, rng, cell, h, "dead_log", "plain", 2)
+					_prop(props, rng, cell, h, "dead_log", "plain", 2, heights)
 
 
 ## Клетки, возле которых наполнение не ставит твёрдые предметы: спавны и
