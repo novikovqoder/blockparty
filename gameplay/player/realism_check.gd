@@ -443,6 +443,7 @@ static func check_landing_blend(player: Player, mode: String = "run",
 	# 2 с после касания, покадрово: клип модели против фактической скорости.
 	var land_frames := 0
 	var bad_frames := 0
+	var air_frames := 0
 	var first_loco_s: float = -1.0
 	for i: int in int(2.0 * hz):
 		await player.get_tree().physics_frame
@@ -450,6 +451,15 @@ static func check_landing_blend(player: Player, mode: String = "run",
 		var hs := _player_hspeed(player)
 		if clip == "Jump_Land":
 			land_frames += 1
+		# Кадры без контакта с землёй — не скольжение: поза прыжка в
+		# воздухе уместна (состояние FALL — прямое отражение
+		# is_on_floor), а «ехать по земле» без земли нельзя. На реальном
+		# острове (GROUND_SNUG-прижатые камни, кромки подушек) бег
+		# после приземления пересекает препятствия и коротко отрывается;
+		# наземные кадры проверяются как раньше, без послаблений.
+		if not player.is_on_floor():
+			air_frames += 1
+			continue
 		if not hold_move or hs <= B.anim_idle_speed + 0.1:
 			continue
 		var loco: bool = clip == "Walk" or clip == "Jog_Fwd" \
@@ -463,6 +473,7 @@ static func check_landing_blend(player: Player, mode: String = "run",
 		elif first_loco_s < 0.0:
 			first_loco_s = float(i + 1) / hz
 	metrics["%s_land_pose_frames" % mode] = land_frames
+	metrics["%s_air_frames" % mode] = air_frames
 	metrics["%s_bad_clip_frames" % mode] = bad_frames
 	if mode == "still":
 		# Прыжок на месте: приземление почти без скорости — поза ленда
