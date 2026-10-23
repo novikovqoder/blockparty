@@ -65,3 +65,35 @@ func test_audio_buses_for_menu_settings() -> void:
 	for bus_name: String in ["Music", "SFX", "Ambient", "Voice"]:
 		var idx: int = AudioServer.get_bus_index(bus_name)
 		assert_eq(AudioServer.get_bus_send(idx), "Master", "%s выводится в Master" % bus_name)
+
+
+# --- «Выход» (фикс после приёмки П9): цепочка не должна обрываться -----------
+
+
+## Обвязка слушает quit_requested кита: раньше сигнал никто не слушал, выход
+## держался только на твине кита и обрывался (пауза дерева, гибель твина).
+func test_wrapper_listens_quit_requested() -> void:
+	var wrapper: MainMenuGame = (load(WRAPPER_SCENE) as PackedScene).instantiate() as MainMenuGame
+	add_child_autofree(wrapper)
+	await wait_physics_frames(2)
+	var heard: bool = false
+	for c: Dictionary in wrapper._menu.quit_requested.get_connections():
+		if c["callable"].get_object() == wrapper:
+			heard = true
+	assert_true(heard, "quit_requested подключён к самой обвязке (_on_quit_requested)")
+
+
+## Полный путь «Выход → процесс закрылся»: отдельный headless-прогон с
+## настоящим get_tree().quit() и кодом возврата (tools/probe_quit_menu.gd).
+## Кейсы: обычное встроенное меню и меню при паузе дерева («вышел из мира,
+## пауза осталась»). Steam-ветку (steamShutdown перед quit) здесь проверить
+## нельзя — Steam-клиента нет, см. STATUS.md «что проверить вручную».
+func test_quit_button_closes_process_in_headless_run() -> void:
+	var godot_path: String = OS.get_executable_path()
+	var project: String = ProjectSettings.globalize_path("res://")
+	for mode: Array in [["--embedded"], ["--embedded", "--paused"]]:
+		var args: PackedStringArray = PackedStringArray(
+			["--headless", "--path", project, "-s", "res://tools/probe_quit_menu.gd", "--"] + mode)
+		var output: Array = []
+		var code: int = OS.execute(godot_path, args, output)
+		assert_eq(code, 0, "режим %s: процесс завершился сам — quit сработал" % str(mode))

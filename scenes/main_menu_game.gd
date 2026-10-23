@@ -23,6 +23,7 @@ func _ready() -> void:
 	_menu.has_save = Session.played
 	add_child(_menu)
 	_menu.start_requested.connect(_on_start_requested)
+	_menu.quit_requested.connect(_on_quit_requested)
 	if not SteamService.available:
 		return
 	EventBus.steam_world_ready.connect(_on_steam_world_ready)
@@ -63,6 +64,17 @@ func _on_start_requested(_mode: StringName) -> void:
 ## Dev-ENet мир уже поднят (раздел 10) или Steam нет — локальный мир без сети.
 func _start_goes_direct() -> bool:
 	return Net.is_networked() or not SteamService.available
+
+
+## «Выход» (раздел 13): кит затемняет кадр и сам не завершает игру, если у
+## сигнала есть слушатель, — завершаем сами. В Steam-сборке перед quit нужно
+## погасить SteamAPI (SteamService.shutdown_and_quit), иначе процесс на
+## Windows может остаться висеть. Таймер как у кита: даём затемнению доехать,
+## не боится паузы дерева.
+func _on_quit_requested() -> void:
+	Log.info("MainMenuBU: «Выход» — завершение игры", "Menu")
+	get_tree().create_timer(0.9, true, false, true).timeout.connect(
+		SteamService.shutdown_and_quit)
 
 
 func _enter_world() -> void:

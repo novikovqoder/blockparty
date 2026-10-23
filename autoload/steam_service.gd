@@ -104,6 +104,15 @@ func _fail(reason: String) -> void:
 	steam_failed.emit(reason)
 
 
+## Выход из игры («Выход» в главном меню): перед quit гасим SteamAPI —
+## на Windows без Steam.steamShutdown() процесс может остаться висеть
+## (окно закрыто, Steam показывает «останавливается»). Офлайн/dev — просто quit.
+func shutdown_and_quit() -> void:
+	if available:
+		Steam.steamShutdown()
+	get_tree().quit()
+
+
 # --- Лобби-миры (раздел 11 SPEC) ---
 
 ## «В мир» (раздел 11): ищем публичные миры этой игры и версии со свободными

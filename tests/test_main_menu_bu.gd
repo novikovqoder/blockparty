@@ -301,3 +301,35 @@ func test_credits_entries_live_in_scroll() -> void:
 			if r.position.y < scroll.get_global_rect().end.y:
 				assert_lt(r.end.y, hints.get_global_rect().position.y + 100.0,
 					"прокрутка держит записи у подсказок, не под ними")
+
+
+# --- «Выход» (фикс после приёмки П9): надёжное завершение -------------------
+
+
+## «Выход» без слушателя (standalone-кит): кит сам планирует выход через
+## SceneTreeTimer с process_always — тот тикает и при паузе дерева (кейс
+## «вернулся из мира, пауза осталась»), в отличие от прежнего выхода
+## твином, который замирал. Выход отменяем — проверяем механизм, не убивая
+## прогон тестов.
+func test_quit_without_listener_sets_pausable_timer() -> void:
+	assert_eq(_menu.quit_requested.get_connections().size(), 0, "в тесте кита слушателя нет")
+	get_tree().paused = true
+	_menu._quit()
+	assert_eq(_menu.section, MainMenuBU.Section.STARTING, "меню уходит в завершение")
+	assert_not_null(_menu._quit_timer, "без хозяина кит сам планирует выход")
+	assert_gt(_menu._quit_timer.time_left, 0.0, "таймер выхода взведён")
+	assert_true(_menu._quit_timer.timeout.is_connected(get_tree().quit),
+		"таймер завершит процесс")
+	_menu._quit_timer.timeout.disconnect(get_tree().quit)
+	get_tree().paused = false
+
+
+## «Выход» со слушателем-хозяином (обвязка игры): кит только эмитит
+## quit_requested и затемняет кадр — выход делает хозяин (Steam-шатдаун
+## перед quit), кит свой таймер не дублирует.
+func test_quit_defers_to_listener() -> void:
+	watch_signals(_menu)
+	_menu.quit_requested.connect(func() -> void: pass)
+	_menu._quit()
+	assert_signal_emitted(_menu, "quit_requested", "сигнал quit_requested доходит хозяину")
+	assert_null(_menu._quit_timer, "кит не дублирует выход за хозяином")

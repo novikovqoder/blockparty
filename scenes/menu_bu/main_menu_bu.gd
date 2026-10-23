@@ -91,6 +91,7 @@ var _thunder: AudioStreamPlayer
 var _lightning_timer: Timer
 var _first_button: Button
 var _panel_tween: Tween
+var _quit_timer: SceneTreeTimer
 
 
 func _ready() -> void:
@@ -827,9 +828,18 @@ func _finish_start(mode: StringName) -> void:
 func _quit() -> void:
 	section = Section.STARTING
 	quit_requested.emit()
+	# Затемнение — твином, не боящимся паузы дерева (возврат из мира мог
+	# оставить paused: обычный твин замирает и выхода не происходит).
+	# Завершение — SceneTreeTimer с process_always: тикает и при паузе,
+	# и не умирает вместе с узлом. Если у quit_requested есть слушатель-хозяин
+	# (обвязка игры), выход — его забота (Steam-шатдаун перед quit): тогда
+	# таймер не ставим, хозяин закроет игру сам после затемнения.
 	var tw: Tween = create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(_fade, "color:a", 1.0, 0.6)
-	tw.tween_callback(get_tree().quit)
+	if quit_requested.get_connections().is_empty():
+		_quit_timer = get_tree().create_timer(0.9, true, false, true)
+		_quit_timer.timeout.connect(get_tree().quit)
 
 
 func _unhandled_input(event: InputEvent) -> void:
