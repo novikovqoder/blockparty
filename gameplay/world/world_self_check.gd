@@ -202,7 +202,17 @@ static func run(island: Island, verbose: bool = false) -> Dictionary:
 		for mesh: Mesh in _node_meshes(node):
 			for surface: int in mesh.get_surface_count():
 				surfaces += 1
-				var material: Material = (node as GeometryInstance3D).material_override
+				var material: Material = null
+				if node is MeshInstance3D:
+					# П10: море строит нода Ocean аддона, материал —
+					# per-surface override на инстансе (surface_set_material
+					# вешать нельзя — аддон не трогаем). Прежняя пара
+					# material_override/surface_get_material их не видела:
+					# 83 LOD-меша воды считались «без материала» и валили
+					# --selftest-world с самого захода воды Boujie (8cfccb1).
+					material = (node as MeshInstance3D).get_active_material(surface)
+				else:
+					material = (node as GeometryInstance3D).material_override
 				if material == null:
 					material = mesh.surface_get_material(surface)
 				if material == null:
