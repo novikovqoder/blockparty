@@ -114,19 +114,19 @@ BU_SET_SUBLANG,Язык субтитров,Subtitle language
 BU_DESC_SUBLANG,Можно слушать оригинальную озвучку с русскими субтитрами.,You can listen to the original voices with subtitles in your language.
 BU_CREDITS_TITLE,АВТОРЫ,CREDITS
 BU_CR_IDEA,ИДЕЯ И ГЕЙМДИЗАЙН,CONCEPT & GAME DESIGN
-BU_CR_IDEA_NAMES,[ВАШЕ ИМЯ],[YOUR NAME]
+BU_CR_IDEA_NAMES,Новиков Руслан,Ruslan Novikov
 BU_CR_CODE,ПРОГРАММИРОВАНИЕ,PROGRAMMING
-BU_CR_CODE_NAMES,Claude Code · OpenClaw,Claude Code · OpenClaw
+BU_CR_CODE_NAMES,Новиков Руслан,Ruslan Novikov
 BU_CR_ART,ИЛЛЮСТРАЦИИ,ARTWORK
-BU_CR_ART_NAMES,[АВТОР / ИНСТРУМЕНТ],[ARTIST / TOOL]
+BU_CR_ART_NAMES,Новиков Руслан,Ruslan Novikov
 BU_CR_MUSIC,МУЗЫКА,MUSIC
-BU_CR_MUSIC_NAMES,[АВТОР],[COMPOSER]
+BU_CR_MUSIC_NAMES,Новиков Руслан,Ruslan Novikov
 BU_CR_FONTS,ШРИФТЫ,FONTS
 BU_CR_FONTS_NAMES,Cormorant — Christian Thalmann · Manrope — Mikhail Sharanda (SIL OFL 1.1),Cormorant — Christian Thalmann · Manrope — Mikhail Sharanda (SIL OFL 1.1)
 BU_CR_ENGINE,ДВИЖОК,ENGINE
 BU_CR_ENGINE_NAMES,Godot Engine (MIT),Godot Engine (MIT)
 BU_CR_THANKS,БЛАГОДАРНОСТИ,SPECIAL THANKS
-BU_CR_THANKS_NAMES,[ИМЕНА],[NAMES]
+BU_CR_THANKS_NAMES,Новиков Руслан,Ruslan Novikov
 BU_CHAPTERS_TITLE,ГЛАВЫ,CHAPTERS
 BU_CHAPTERS_SUB,Пройденные главы можно переиграть — основной прогресс сохранится.,Replay finished chapters — your main progress is kept.
 BU_CH_1,Отлучённый,The Excommunicated

@@ -41,7 +41,7 @@ MENU_WARDROBE,Гардероб,Wardrobe
 MENU_SETTINGS,Настройки,Settings
 MENU_CREDITS,Титры,Credits
 MENU_CREDITS_BACK,Назад,Back
-MENU_CREDITS_INTRO,"Игра и процедурный остров — Blockparty. Дом жителей деревни — модель сообщества (лицензия CC-BY 4.0, строка ниже — дословная):","Game and procedural island by Blockparty. The villagers' house is a community model (CC-BY 4.0, the attribution line below is verbatim):"
+MENU_CREDITS_INTRO,"Игра и процедурный остров — Новиков Руслан. Дом жителей деревни — модель сообщества (лицензия CC-BY 4.0, строка ниже — дословная):","Game and procedural island by Ruslan Novikov. The villagers' house is a community model (CC-BY 4.0, the attribution line below is verbatim):"
 MENU_CREDITS_CC0,"Остальные модели, текстуры и звуки — CC0: ambientcg.com, polyhaven.com, quaternius.com, kenney.nl. Полный список наборов и прямые ссылки — assets/third_party/LICENSES.md в репозитории игры.","Other models, textures and sounds are CC0: ambientcg.com, polyhaven.com, quaternius.com, kenney.nl. Full asset list with direct links — assets/third_party/LICENSES.md in the game repository."
 MENU_QUIT,Выход,Quit
 MENU_NOTE,"«В мир» — быстрый вход в общий мир или свой остров; «Мир для друзей» — с приглашением через Steam.","“Enter world” — quick join a shared world or host your own island; “World for friends” — with a Steam invite."
