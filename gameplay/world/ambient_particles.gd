@@ -9,6 +9,10 @@ class_name AmbientParticles
 extends Node3D
 
 const PAL: Palette = preload("res://assets/palette.tres")
+## Спрайты частиц (доработка П9: ни одна частица — нетекстурный квадрат):
+## светлячки и пыльца — мягкое пятно, листья — лист CC0-нарезки.
+const SOFT_TEX: Texture2D = preload("res://assets/vfx/particles/soft.png")
+const LEAF_TEX: Texture2D = preload("res://assets/vfx/particles/leaf.png")
 
 ## Центры и радиусы зон (IslandGen.ZONES): лес и площадь.
 const FOREST_CENTER := Vector2(-52.0, -52.0)
@@ -30,7 +34,7 @@ var _focus: Vector3 = Vector3.ZERO
 func setup(tier: int) -> void:
 	_simple = tier == GraphicsQuality.Tier.SIMPLE
 	var density := 1.5 if tier == GraphicsQuality.Tier.HIGH else 1.0
-	_fireflies = _make(int(48.0 * density), PAL.firefly, 0.16, 7.0, 0.0, true)
+	_fireflies = _make(int(48.0 * density), PAL.firefly, 0.16, 7.0, 0.0, true, SOFT_TEX)
 	_fireflies.name = "Fireflies"
 	var fire_process := _fireflies.process_material as ParticleProcessMaterial
 	fire_process.initial_velocity_min = 0.2
@@ -40,7 +44,8 @@ func setup(tier: int) -> void:
 	# (проверено попиксельным сравнением кадров). Аддитивное свечение
 	# без рампа работает в обоих рендерах; glow (блок е) подхватит.
 
-	_pollen = _make(int(34.0 * density), Color(1.0, 0.97, 0.82, 0.78), 0.09, 9.0)
+	_pollen = _make(int(34.0 * density), Color(1.0, 0.97, 0.82, 0.78), 0.09, 9.0,
+		0.0, false, SOFT_TEX)
 	_pollen.name = "Pollen"
 	var pollen_process := _pollen.process_material as ParticleProcessMaterial
 	pollen_process.gravity = Vector3(0.25, -0.12, 0.15)
@@ -50,7 +55,8 @@ func setup(tier: int) -> void:
 	pollen_process.turbulence_noise_strength = 0.25
 
 	_leaves = _make(
-		int(22.0 * density), Color(0.55, 0.67, 0.28, 0.9), 0.09, 11.0)
+		int(22.0 * density), Color(0.55, 0.67, 0.28, 0.9), 0.09, 11.0,
+		0.0, false, LEAF_TEX)
 	_leaves.name = "Leaves"
 	var leaves_process := _leaves.process_material as ParticleProcessMaterial
 	leaves_process.gravity = Vector3(0, -0.9, 0)
@@ -80,10 +86,12 @@ func _process(_delta: float) -> void:
 	_leaves.emitting = not _simple and in_forest and day
 
 
-## Каркас системы: квадратные частицы цвета в объёме FIELD вокруг эмиттера.
+## Каркас системы: текстурированные частицы цвета в объёме FIELD вокруг
+## эмиттера.
 func _make(
 	amount: int, color: Color, size: float, lifetime: float,
 	emission_energy: float = 0.0, additive: bool = false,
+	texture: Texture2D = null,
 ) -> GPUParticles3D:
 	var fx := GPUParticles3D.new()
 	fx.amount = maxi(2, amount)
@@ -103,19 +111,21 @@ func _make(
 	fx.process_material = process
 	var quad := QuadMesh.new()
 	quad.size = Vector2(size, size)
-	quad.material = _particle_mat(color, emission_energy, additive)
+	quad.material = _particle_mat(color, emission_energy, additive, texture)
 	fx.draw_pass_1 = quad
 	add_child(fx)
 	return fx
 
 
-## Материал частицы: без освещения, биллборд, цвет и альфа (мерцание
-## color_ramp) — из вершинного COLOR; светлячки светятся сами
+## Материал частицы: спрайт-нарезка без освещения, биллборд, цвет и альфа
+## (мерцание color_ramp) — из вершинного COLOR; светлячки светятся сами
 ## (emission_energy > 0).
 func _particle_mat(
 	color: Color, emission_energy: float, additive: bool,
+	texture: Texture2D,
 ) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = texture
 	mat.albedo_color = color
 	mat.vertex_color_use_as_albedo = true
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

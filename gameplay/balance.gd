@@ -260,3 +260,16 @@ extends Resource
 ## Ответная эмоция в течение 5 с и лимит.
 @export var pts_emote_reply: float = 2.0
 @export var pts_emote_reply_max: float = 6.0
+
+@export_group("Частицы бега (доработка П9)")
+## Максимум частиц у ног при полном беге; шаг эмитит долю от этого
+## (кривая RunParticles.intensity: покой — 0, бег — 1, шаг — ≈0.2).
+@export var run_dust_amount: int = 26
+## Жизнь комка, с.
+@export var run_dust_lifetime: float = 0.45
+## Сторона спрайта-комка, м (травинка — 0.7 от этого).
+@export var run_dust_size: float = 0.08
+## Скорость вылета из-под ног, м/с.
+@export var run_dust_speed: float = 1.1
+## Разброс вылета, °.
+@export var run_dust_spread_deg: float = 40.0

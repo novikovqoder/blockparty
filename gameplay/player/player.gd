@@ -73,6 +73,8 @@ var _stand_sent: bool = false
 ## игроки равны, множителей бега/прыжка/кооп-действий нет.
 ## Точка, за которую висим (куда поднимет вытягивание; раздел 9.1).
 var _hang_point: Vector3 = Vector3.ZERO
+## Частицы бега (доработка П9): комья/травинки по покрытию и скорости.
+var _run_dust: RunParticles = null
 
 
 func _ready() -> void:
@@ -103,6 +105,13 @@ func _ready() -> void:
 		_bot = BotController.new()
 		_bot.setup(self)
 		add_child(_bot)
+	# Частицы бега (доработка П9): ребёнок Model — модель повёрнута по
+	# движению, частицы сносит назад; спрайты по покрытию включит
+	# setup_run_particles (сцена мира передаст арт острова).
+	_run_dust = RunParticles.new()
+	_run_dust.name = "RunDust"
+	_run_dust.position = Vector3(0.0, 0.05, -0.1)
+	model.add_child(_run_dust)
 
 
 func _physics_process(delta: float) -> void:
@@ -732,6 +741,12 @@ func in_water() -> bool:
 
 # --- Модель и анимации ---
 
+## Подключить частицы бега к острову: сцена мира передаёт запечённый арт —
+## по нему RunParticles определяет покрытие под ногами.
+func setup_run_particles(art: IslandArt) -> void:
+	_run_dust.setup(art)
+
+
 func _update_animation() -> void:
 	var hspeed := Vector2(velocity.x, velocity.z).length()
 	if not _was_on_floor and is_on_floor():
@@ -769,6 +784,9 @@ func _update_animation() -> void:
 		if partner >= 0.0:
 			tempo = minf(tempo, partner)
 	visual.set_locomotion_speed(tempo)
+	# Частицы бега (доработка П9): по фактической скорости; в воде их нет
+	# (там круги Fx.water_ring), в воздухе — тоже.
+	_run_dust.update(hspeed, is_on_floor() and not _in_water)
 	_was_on_floor = is_on_floor()
 
 

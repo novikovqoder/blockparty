@@ -37,6 +37,8 @@ var _flags: int = 0
 var _speed_est: float = 0.0
 var _speed_pos: Vector3 = Vector3.ZERO
 var _speed_msec: int = -1
+## Частицы бега (доработка П9): как у локального, по оценке скорости.
+var _run_dust: RunParticles = null
 
 
 func setup(p_peer_id: int, p_name: String, p_appearance: PackedByteArray = PackedByteArray()) -> void:
@@ -88,6 +90,13 @@ func _ready() -> void:
 	box.size = Vector3(0.6, 0.1, 0.6)
 	shape.shape = box
 	head.add_child(shape)
+	# Частицы бега (доработка П9): ребёнок Model (поворачивается по снапшоту
+	# — частицы сносит назад); спрайты по покрытию включит
+	# setup_run_particles (сцена мира передаст арт острова).
+	_run_dust = RunParticles.new()
+	_run_dust.name = "RunDust"
+	_run_dust.position = Vector3(0.0, 0.05, -0.1)
+	_model.add_child(_run_dust)
 
 
 ## Снапшот чужого игрока (переслал хост после AOI-фильтра).
@@ -144,6 +153,15 @@ func render(now_msec: int) -> void:
 		_last_anim = anim
 		_visual.set_state(anim)
 	_visual.set_locomotion_speed(_speed_est)
+	# Частицы бега (доработка П9): по оцененной скорости и флагу «на полу».
+	if _run_dust != null:
+		_run_dust.update(_speed_est, (_flags & Protocol.FLAG_ON_FLOOR) != 0)
+
+
+## Подключить частицы бега к острову (сцена мира передаёт запечённый арт —
+## по нему определяется покрытие под ногами).
+func setup_run_particles(art: IslandArt) -> void:
+	_run_dust.setup(art)
 
 
 ## Оцененная горизонтальная скорость, м/с (для темпа «за руку» у пары).

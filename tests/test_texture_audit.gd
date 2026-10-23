@@ -18,6 +18,10 @@
 #      пропускал null-материалы, а проверка сэмплеров шейдеров сравнивала
 #      int-тип uniform'а со строкой «sampler» и не срабатывала никогда —
 #      нетекстурный материал проходил аудит без замечаний.
+#   6) доработка П9: «ни одной частицы без текстуры» — каждый пасс каждого
+#      эмиттера мира несёт спрайт (нетекстурный квад на экране = белый
+#      квадрат из замечания владельца); исключение — процедурный клуб дыма
+#      костра, который рисует сам шейдер.
 # Процедурные данные (карты весов земли 128×128) — не текстуры детализации:
 # exempt-порог 256 px по короткой стороне.
 extends GutTest
@@ -26,6 +30,8 @@ const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
 const WORLD: PackedScene = preload("res://scenes/world_scene.tscn")
 const MODEL: PackedScene = preload(
 	"res://gameplay/player/character_model.tscn")
+## Запечённые данные острова — включить частицы бега игрока (срез 6).
+const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 
 ## Правила категорий: min_side — минимальная короткая сторона в пикселях,
 ## mips — обязательность мип-мапов. Порядок важен: точные файлы раньше
@@ -40,7 +46,10 @@ const MODEL: PackedScene = preload(
 ##   menu_bu — 2D-иллюстрации главного меню Born Unblessed (П9): панорама
 ##     собора и вырезанные слои CanvasItem, планка UI-графики 256 px;
 ##     мип-мапы комплект не включает (спрайты канвы, экранный масштаб
-##     0.6–1.6 от исходного — мерцание не проявляется).
+##     0.6–1.6 от исходного — мерцание не проявляется);
+##   vfx — спрайты частиц (доработка П9): нарезки 40–96 px с прозрачной
+##     кромкой, билборды 3D — с мип-мапами, чтобы на отдалении не рябили;
+##     порог 40 px — размер наименьшего спрайта (лист).
 const CATEGORIES: Array = [
 	["assets/third_party/quaternius.com/universal_base_characters/baked/textures/eyes",
 		{"min_side": 256, "mips": true}],
@@ -51,6 +60,7 @@ const CATEGORIES: Array = [
 	["assets/visual/", {"min_side": 1024, "mips": true}],
 	["assets/menu_bu/", {"min_side": 256, "mips": false}],
 	["assets/island_map.png", {"min_side": 256, "mips": true}],
+	["assets/vfx/", {"min_side": 40, "mips": true}],
 ]
 
 ## Короткая сторона, с которой связаны текстурой, требует мип-мапы:
@@ -260,6 +270,59 @@ func test_world_surfaces_textured_or_whitelisted() -> void:
 	for pattern: String in TRANSITIONAL_UNTEXTURED:
 		assert_true(matched.has(pattern),
 			"переходная запись «%s» в мире не встречается — удалить" % pattern)
+
+
+## Срез 6, доработка П9 («квадратики при беге» из прогона владельца):
+## ни одна частица мира — нетекстурный квад (белый квадрат). Каждый пасс
+## каждого эмиттера живого дерева мира несёт albedo_texture. Исключение —
+## дым костра (smoke.gdshader): мягкий клуб с кромкой симплекс-шума рисует
+## сам шейдер, это не плоский квад. Частицы бега включаем вручную: мир
+## строит их по арту острова, тест передаёт запечённый ресурс.
+func test_world_particles_textured() -> void:
+	WorldMaterials.textured_headless = true
+	var world := WORLD.instantiate()
+	add_child_autofree(world)
+	WorldMaterials.textured_headless = false
+	for node: Node in get_tree().get_nodes_in_group(Player.GROUP):
+		(node as Player).setup_run_particles(ART)
+	var offenders: Array[String] = []
+	var emitters := _collect_particle_offenders(world, offenders)
+	assert_gt(emitters, 4, "обход видит эмиттеры мира (костёр, атмосфера, бег)")
+	assert_eq(offenders.size(), 0,
+		"частицы без текстуры (белые квадраты) запрещены:\n"
+		+ "\n".join(offenders))
+
+
+## Обход дерева: каждый пасс каждого GPUParticles3D/CPUParticles3D —
+## материал с текстурой (дым smoke.gdshader — легитимный процедурный клуб).
+## Возвращает число найденных эмиттеров, нарушения дописывает в out.
+func _collect_particle_offenders(node: Node, out: Array[String]) -> int:
+	var emitters := 0
+	if node is GPUParticles3D or node is CPUParticles3D:
+		emitters += 1
+		var count := int(node.get("draw_passes"))
+		for i: int in count:
+			var mesh: Mesh = node.get("draw_pass_%d" % (i + 1)) as Mesh
+			if mesh == null or mesh.get_surface_count() == 0:
+				out.append("%s: пасс %d без меша" % [node.get_path(), i + 1])
+				continue
+			var mat := mesh.surface_get_material(0)
+			if mat == null:
+				out.append("%s: пасс %d без материала" % [node.get_path(), i + 1])
+			elif mat is ShaderMaterial:
+				if (mat as ShaderMaterial).shader != Fx.SMOKE_SHADER:
+					out.append("%s: пасс %d — шейдер не из белого списка"
+						% [node.get_path(), i + 1])
+			elif mat is StandardMaterial3D:
+				if (mat as StandardMaterial3D).albedo_texture == null:
+					out.append("%s: пасс %d — StandardMaterial3D без текстуры"
+						% [node.get_path(), i + 1])
+			else:
+				out.append("%s: пасс %d — неожидаемый класс материала %s"
+					% [node.get_path(), i + 1, mat.get_class()])
+	for child: Node in node.get_children():
+		emitters += _collect_particle_offenders(child, out)
+	return emitters
 
 
 func test_runtime_materials_meet_quality_bar() -> void:

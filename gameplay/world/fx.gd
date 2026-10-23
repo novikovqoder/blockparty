@@ -1,7 +1,9 @@
 # Малые эффекты мира (раздел 16 SPEC): однократные частицы — облачко пыли
 # при приземлении, «пуф» при смерти моба, круги
-# на воде при входе в неё; постоянные — искры костра. Все эффекты —
-# процедурные GPUParticles3D и примитивы (правило проекта: без ассетов).
+# на воде при входе в неё; постоянные — искры костра. Эффекты —
+# GPUParticles3D и примитивы; спрайты частиц — CC0-нарезки
+# assets/vfx/particles (доработка П9: нетекстурный квад выглядит белым
+# квадратом; пылевые эффекты несут текстуру земли или мягкого пятна).
 # Ноды однократных эффектов освобождают себя после проигрывания; частицы
 # в мировых координатах (local_coords = false), поэтому эмиттер можно
 # вешать на движущийся узел — шлейп не «едет» за ним. В headless (сервер)
@@ -10,17 +12,21 @@ class_name Fx
 extends Node3D
 
 const SMOKE_SHADER: Shader = preload("res://assets/shaders/smoke.gdshader")
+## Спрайты частиц (CC0): комья земли и мягкое светящееся пятно.
+const DIRT_TEX: Texture2D = preload("res://assets/vfx/particles/dirt.png")
+const SOFT_TEX: Texture2D = preload("res://assets/vfx/particles/soft.png")
 
 ## Сколько секунд нода эффекта живёт до самоосвобождения, с.
 const LINGER: float = 2.0
 
 
-## Облачко пыли (приземление, «пуф» моба): мягкий клубок у земли.
+## Облачко пыли (приземление, «пуф» моба): комья земли у земли, цвет —
+## лёгкий тон поверх текстуры.
 static func puff(
 	parent: Node3D, pos: Vector3, color: Color,
 	amount: int = 12, size: float = 0.14, speed: float = 1.3,
 ) -> void:
-	var fx := _one_shot(parent, pos, amount, 0.55, color, size)
+	var fx := _one_shot(parent, pos, amount, 0.55, color, size, DIRT_TEX)
 	var process := fx.process_material as ParticleProcessMaterial
 	process.direction = Vector3.UP
 	process.spread = 70.0
@@ -51,6 +57,7 @@ static func fire_sparks(node: Node3D, pos: Vector3, color: Color) -> GPUParticle
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.05, 0.05)
 	var material := StandardMaterial3D.new()
+	material.albedo_texture = SOFT_TEX
 	material.albedo_color = color
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -138,10 +145,11 @@ static func water_ring(parent: Node3D, pos: Vector3, color: Color) -> void:
 	tween.tween_callback(ring.queue_free)
 
 
-## Каркас однократного эффекта: GPUParticles3D с квадратной частицей цвета.
+## Каркас однократного эффекта: GPUParticles3D с текстурированной частицей
+## цвета (цвет тонирует спрайт-нарезку).
 static func _one_shot(
 	parent: Node3D, pos: Vector3, amount: int, lifetime: float,
-	color: Color, size: float,
+	color: Color, size: float, texture: Texture2D,
 ) -> GPUParticles3D:
 	var fx := GPUParticles3D.new()
 	fx.name = "Fx"
@@ -158,6 +166,7 @@ static func _one_shot(
 	var quad := QuadMesh.new()
 	quad.size = Vector2(size, size)
 	var material := StandardMaterial3D.new()
+	material.albedo_texture = texture
 	material.albedo_color = Color(color, 0.85)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES

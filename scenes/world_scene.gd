@@ -57,6 +57,8 @@ func _ready() -> void:
 	_vignette = GraphicsQuality.make_vignette()
 	add_child(_vignette)
 	_spawn_player()
+	# Частицы бега (доработка П9): покрытие по запечённым данным острова.
+	_player.setup_run_particles(_island.art())
 	_apply_graphics_quality()
 	_hud = WorldHud.new()
 	add_child(_hud)
@@ -122,6 +124,8 @@ func _on_peer_joined_world(peer_id: int, player_name: String,
 	var remote := RemotePlayer.new()
 	remote.setup(peer_id, player_name, appearance)
 	add_child(remote)
+	# Частицы бега чужого игрока — по тем же покрытиям острова (П9).
+	remote.setup_run_particles(_island.art())
 	_remotes[peer_id] = remote
 	Log.info(
 		"Игрок «%s» (peer %d, внешность %s) появился в мире"

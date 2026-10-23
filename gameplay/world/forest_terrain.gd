@@ -279,3 +279,33 @@ static func _moss_weight(
 	noise: FastNoiseLite, x: int, z: int, w_rock: float, w_wet: float) -> float:
 	var patch: float = smoothstep(0.05, 0.75, (noise.get_noise_2d(x, z) + 1.0) * 0.5)
 	return patch * (1.0 - w_rock) * (0.45 + 0.55 * w_wet)
+
+
+# --- Покрытие под ногами (частицы бега, доработка П9) ---
+
+## Покрытие земли: земля/трава/камень. Значения — порядок пассов спрайтов
+## RunParticles (DIRT → комья земли, GRASS → земля + травинки, STONE → крошка).
+enum Surface { DIRT, GRASS, STONE }
+
+## Покрытие точки мира по тем же весам, что красят землю (_weights_image):
+## крутой склон — камень, тропа/гравий Площади и влажные низины — земля
+## (утоптанная/грязь), мшистые пятна — трава, остальное — земля. Вызов
+## дешёвый (пять выборок высот + шум), RunParticles перекладывает спрайты
+## по нему пару раз в секунду. world_pos — позиция ног игрока в мире.
+static func surface_kind(art: IslandArt, world_pos: Vector3) -> int:
+	var x := clampi(roundi(world_pos.x) + MAP_M / 2, 0, MAP_M - 1)
+	var z := clampi(roundi(world_pos.z) + MAP_M / 2, 0, MAP_M - 1)
+	var wx := float(x) - float(MAP_M / 2)
+	var wz := float(z) - float(MAP_M / 2)
+	if smoothstep(ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z)) >= 0.5:
+		return Surface.STONE
+	var h: float = art.heights[z * IslandGen.POINTS + x]
+	var w_wet: float = 1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)
+	if maxf(_path_weight(wx, wz), _plaza_weight(wx, wz)) >= 0.5 or w_wet >= 0.6:
+		return Surface.DIRT
+	var noise := FastNoiseLite.new()
+	noise.seed = MOSS_SEED
+	noise.frequency = MOSS_FREQUENCY
+	if _moss_weight(noise, x, z, 0.0, w_wet) >= 0.35:
+		return Surface.GRASS
+	return Surface.DIRT
