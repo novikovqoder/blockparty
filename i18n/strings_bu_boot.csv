@@ -1,0 +1,18 @@
+keys,ru,en
+BU_BOOT_INIT,Инициализация…,Starting…
+BU_BOOT_STEAM_TITLE,Steam не запущен,Steam is not running
+BU_BOOT_STEAM_BODY,"Запустите Steam и перезапустите игру. Либо продолжите офлайн в режиме разработки — сеть ENet на этом компьютере.","Start Steam and restart the game. Or continue offline in developer mode — ENet on this computer."
+BU_BOOT_OFFLINE,ИГРАТЬ ОФЛАЙН,PLAY OFFLINE
+BU_BOOT_QUIT,ВЫХОД,QUIT
+BU_LOAD_FAILED,Не удалось загрузить мир. Подробности — в журнале.,Failed to load the world. See the log for details.
+BU_LOAD_ASSETS,Загрузка моделей и текстур,Loading models and textures
+BU_LOAD_BUILD,Построение мира,Building the world
+BU_LOAD_HERO,Подготовка персонажа,Preparing your character
+BU_LOAD_CONNECT,Подключение к миру,Connecting to the world
+BU_LOAD_DONE,Готово,Done
+BU_LOAD_HINT_1,"Каждого младенца Орден омывает святой водой. Тех, на ком она не держится, уносят в собор. Назад их не приносят. — Хроника Святого Ордена","Every newborn is washed in holy water by the Order. Those it will not cling to are carried into the cathedral. They are never brought back. — Chronicle of the Holy Order"
+BU_LOAD_HINT_2,"Он родился в ночь, когда в соборе разом погасли все свечи. — из показаний звонаря","He was born on the night every candle in the cathedral went out at once. — from the bell-ringer's testimony"
+BU_LOAD_HINT_3,"Рыцари Ордена не спрашивают имени. Им достаточно знать, что ты не благословлён.","Knights of the Order never ask your name. It is enough for them that you are unblessed."
+BU_LOAD_HINT_4,"Лес за аббатством не принадлежит ни Богу, ни Ордену. Там хоронят тех, кого не отпели.","The forest beyond the abbey belongs neither to God nor to the Order. It is where the unshriven are buried."
+BU_LOAD_HINT_5,"Благословение даётся при рождении. Всё остальное приходится брать мечом.","Blessing is given at birth. Everything else must be taken with a sword."
+BU_LOAD_HINT_6,"Красная луна встаёт над руинами в ночь Очищения. В такие ночи Орден не спит.","A red moon rises over the ruins on the Night of Cleansing. On such nights the Order does not sleep."

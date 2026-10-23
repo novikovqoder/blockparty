@@ -33,3 +33,7 @@ windows_log*.txt
 # документации docs/screenshots/ — служебный мусор, в git не кладём.
 docs/screenshots/**/*.import
 .gut_*.log
+
+# Исходники Mixamo-паков (FBX): лицензия Mixamo запрещает распространение файлов,
+# в git не кладём; в проект — только результат ретаргета (.res)
+assets_src/

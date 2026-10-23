@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/hero_bu/knight_bu.glb" id="1"]
+[ext_resource type="Script" path="res://scripts/hero_bu/blink_lids_bu.gd" id="2"]
+
+[node name="HeroBU" instance=ExtResource("1")]
+
+[node name="BlinkLidsBU" type="SkeletonModifier3D" parent="Armature/Skeleton3D" index="11"]
+script = ExtResource("2")
