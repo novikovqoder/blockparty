@@ -3991,10 +3991,13 @@ embedded и embedded+paused завершается с кодом 0.
 **--selftest-anim:** PASS, код возврата 0 (пересобранная Linux-сборка,
 те же фильтры ресурсов); персонажи/анимации этапом не менялись.
 
-**Сборка Windows** (пересобрана с нуля после фикса):
-`builds/blockparty-windows.zip`: `unzip -t` — без ошибок; exe внутри zip
-побайтово равен `builds/windows/blockparty.exe`. sha256: exe
-`__EXE_SHA__`, zip `__ZIP_SHA__` (__BUILD_INFO__).
+**Сборка Windows** (пересобрана с нуля после фикса, 2026-10-23, из кода
+коммита 51c5799 — те же файлы, что экспортированы; после сборки код игры
+не менялся): `builds/blockparty-windows.zip` (197 МБ): `unzip -t` — без
+ошибок; exe внутри zip побайтово равен `builds/windows/blockparty.exe`.
+sha256: exe
+`70d036757055773f6b3900fbfaa27fe7cf0f6602d72711d05ce68adee153766f`,
+zip `679c6e9fec57d9e9a4738459ede7ff4bc671e21fcb5af09e5b364d93a829e1cb`.
 
 **Как проверить вручную (Windows-сборка, Steam-клиент):**
 - «Выход» из главного меню при первом запуске: экран затемняется ~0.6 с,
