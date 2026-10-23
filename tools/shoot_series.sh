@@ -14,8 +14,11 @@ OUT_DIR="docs/screenshots/П10"
 mkdir -p "$SERIES_DIR" "$OUT_DIR"
 
 code=0
-timeout 420 xvfb-run -a godot --path . --rendering-driver opengl3 \
-	--resolution 1280x720 -s res://tools/shoot_series_bu.gd -- "$SERIES_DIR" || code=$?
+# --bot: без него boot без Steam останавливается на окне «Steam не запущен».
+# Кадр мира под llvmpipe стоит 25-50 с (сервер 2 ядра) — серия занимает
+# до ~35 мин, таймаут с запасом.
+timeout 2700 xvfb-run -a godot --path . --rendering-driver opengl3 \
+	--resolution 1280x720 -s res://tools/shoot_series_bu.gd -- --bot "$SERIES_DIR" || code=$?
 
 # Игровые кадры уехали в каталог серии — переносим в отчётный набор.
 for name in 20_world_idle 21_world_run 22_world_jump 23_world_sword \
