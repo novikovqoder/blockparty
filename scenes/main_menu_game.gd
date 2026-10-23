@@ -18,6 +18,9 @@ var _auto_wait: float = 0.0
 func _ready() -> void:
 	var packed: PackedScene = load(MENU_BU_SCENE) as PackedScene
 	_menu = packed.instantiate() as MainMenuBU
+	# «Продолжить» — только если в этой сессии уже заходили в мир и вышли
+	# в меню (первый запуск: пункта нет, фокус на «Новой игре»).
+	_menu.has_save = Session.played
 	add_child(_menu)
 	_menu.start_requested.connect(_on_start_requested)
 	if not SteamService.available:

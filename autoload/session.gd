@@ -20,6 +20,9 @@ var spawn_zone: String = ""
 
 ## Локальный игрок в мире (сцена мира загружена и применена).
 var in_world: bool = false
+## В этой сессии запуска уже заходили в мир (доработка П9): «Продолжить»
+# в главном меню появляется только после «начал игру → вышел в меню».
+var played: bool = false
 ## Часы мира, с (раздел 7: цикл дня 20 минут; у всех одинаково — от хоста).
 var world_time: float = 0.0
 ## Время текущего пребывания в мире, с (экран «Встречи», лог плейтеста).
@@ -61,6 +64,7 @@ func enter_world() -> void:
 	# Локальный мир без сети: часы мира стартуют сейчас (раздел 7).
 	Net.begin_world_clock()
 	in_world = true
+	played = true
 	world_time = Net.world_time_sec()
 	session_time = 0.0
 	EventBus.world_entered.emit()

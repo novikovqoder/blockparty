@@ -27,9 +27,50 @@ func test_scene_builds_layers_and_menu() -> void:
 	assert_not_null(_menu.bg_texture, "фон назначен")
 	assert_not_null(_menu.knight_texture, "рыцарь назначен")
 	var buttons: Array[Node] = _menu.find_children("Btn_*", "MenuButtonBU", true, false)
-	# 6 пунктов главного меню + «Назад» в Авторах и Главах.
-	assert_eq(buttons.size(), 8, "все кнопки меню на месте")
+	# Первый запуск («Продолжить» скрыт): 5 пунктов + «Назад» в Авторах и Главах.
+	assert_eq(buttons.size(), 7, "кнопки меню на месте, «Продолжить» скрыт")
+	assert_false(_menu.has_node("Btn_continue_path"), "пункта «Продолжить» нет")
+	assert_eq(_menu._first_button.name, "Btn_new", "фокус на «Новой игре»")
 	assert_eq(_menu.section, MainMenuBU.Section.MAIN)
+
+
+## «Продолжить» появляется по флагу сессии: до входа в мир пункта нет,
+## после «начал игру → вышел в меню» (Session.played) — есть.
+func test_continue_item_follows_session_played_flag() -> void:
+	var was_played: bool = Session.played
+	# Комплект сам по себе показывает пункт только с has_save=true.
+	var kit: MainMenuBU = (load(SCENE) as PackedScene).instantiate() as MainMenuBU
+	kit.has_save = true
+	add_child_autofree(kit)
+	await wait_physics_frames(2)
+	assert_eq(kit.find_children("Btn_continue", "MenuButtonBU", true, false).size(), 1,
+		"с has_save=true пункт «Продолжить» есть")
+	# Обвязка игры читает флаг сессии.
+	Session.played = false
+	var wrap_fresh: MainMenuGame = (load("res://scenes/main_menu_game.tscn") as PackedScene).instantiate() as MainMenuGame
+	add_child_autofree(wrap_fresh)
+	await wait_physics_frames(2)
+	assert_eq(wrap_fresh._menu.find_children("Btn_continue", "MenuButtonBU", true, false).size(), 0,
+		"первый запуск: «Продолжить» скрыт")
+	Session.played = true
+	var wrap_back: MainMenuGame = (load("res://scenes/main_menu_game.tscn") as PackedScene).instantiate() as MainMenuGame
+	add_child_autofree(wrap_back)
+	await wait_physics_frames(2)
+	assert_eq(wrap_back._menu.find_children("Btn_continue", "MenuButtonBU", true, false).size(), 1,
+		"после возврата из мира: «Продолжить» есть")
+	Session.played = was_played
+
+
+## Session.enter_world() поднимает флаг для «Продолжить».
+func test_session_enter_world_sets_played() -> void:
+	var was_played: bool = Session.played
+	var was_in_world: bool = Session.in_world
+	Session.played = false
+	Session.in_world = false
+	Session.enter_world()
+	assert_true(Session.played, "вход в мир поднимает флаг сессии")
+	Session.played = was_played
+	Session.in_world = was_in_world
 
 
 func test_every_section_has_a_camera_shot() -> void:
@@ -161,7 +202,7 @@ func test_main_menu_hints_do_not_overlap_items() -> void:
 		var btn := b as Control
 		if btn.is_visible_in_tree():
 			items.append(btn)
-	assert_gt(items.size(), 5, "пункты главного меню на месте")
+	assert_gte(items.size(), 5, "пункты главного меню на месте")
 	_assert_no_overlap(hints, items, "главное меню")
 
 

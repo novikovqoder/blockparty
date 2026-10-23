@@ -53,8 +53,9 @@ enum Section { MAIN, SETTINGS, CREDITS, CHAPTERS, STARTING }
 @export_group("Игра")
 ## Сцена, которая откроется после затухания. Пусто — только сигнал start_requested.
 @export_file("*.tscn") var next_scene_path: String = ""
-## Есть ли сохранение (показывать «Продолжить»).
-@export var has_save: bool = true
+## Есть ли сохранение (показывать «Продолжить»). Обвязка игры включает
+## по флагу сессии: «начал игру → вышел в меню» (Session.played).
+@export var has_save: bool = false
 ## Подпись под «Продолжить»: ключ перевода или готовый текст.
 @export var continue_subtitle: String = "BU_CONTINUE_SUB"
 @export var music_stream: AudioStream
