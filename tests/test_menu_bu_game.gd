@@ -12,17 +12,29 @@ func before_each() -> void:
 
 
 func test_wrapper_builds_kit_scene() -> void:
-	var packed: PackedScene = load(WRAPPER_SCENE) as PackedScene
-	assert_not_null(packed, "сцена-обвязка есть")
-	var wrapper: MainMenuGame = packed.instantiate() as MainMenuGame
-	assert_not_null(wrapper, "обвязка создаётся")
-	add_child_autofree(wrapper)
+	# Доработка П9: «Продолжить» строится только по флагу сессии — счёт
+	# кнопок проверяем в обоих состояниях (детерминированно, независимо
+	# от порядка прогонов других тестов).
+	var was_played: bool = Session.played
+	Session.played = false
+	var fresh: MainMenuGame = (load(WRAPPER_SCENE) as PackedScene).instantiate() as MainMenuGame
+	assert_not_null(fresh, "обвязка создаётся")
+	add_child_autofree(fresh)
 	await wait_physics_frames(2)
-	var menu: MainMenuBU = wrapper.get_node_or_null("MainMenuBU") as MainMenuBU
+	var menu: MainMenuBU = fresh.get_node_or_null("MainMenuBU") as MainMenuBU
 	assert_not_null(menu, "сцена комплекта инстанцирована")
 	assert_eq(menu.section, MainMenuBU.Section.MAIN, "после загрузки — главный раздел")
-	var buttons: Array[Node] = menu.find_children("Btn_*", "MenuButtonBU", true, false)
-	assert_eq(buttons.size(), 8, "все кнопки меню на месте")
+	assert_eq(menu.find_children("Btn_*", "MenuButtonBU", true, false).size(), 7,
+		"первый запуск: 7 кнопок, «Продолжить» скрыт")
+	Session.played = true
+	var back: MainMenuGame = (load(WRAPPER_SCENE) as PackedScene).instantiate() as MainMenuGame
+	assert_not_null(back, "обвязка создаётся")
+	add_child_autofree(back)
+	await wait_physics_frames(2)
+	var menu_back: MainMenuBU = back.get_node_or_null("MainMenuBU") as MainMenuBU
+	assert_eq(menu_back.find_children("Btn_*", "MenuButtonBU", true, false).size(), 8,
+		"после возврата из мира: все 8 кнопок меню на месте")
+	Session.played = was_played
 
 
 func test_start_goes_direct_without_steam() -> void:
