@@ -78,9 +78,12 @@ func _on_quit_requested() -> void:
 
 
 func _enter_world() -> void:
-	if Session.in_world:
+	# П10 (экран загрузки): мир открывается через LoadingScreenBU — ни одного
+	# серого кадра между затуханием меню и миром. Повторное нажатие за время
+	# загрузки — мимо (экран уже открыт).
+	if Session.in_world or LoadingScreenBU.current != null:
 		return
-	get_tree().call_deferred("change_scene_to_file", WORLD_SCENE)
+	LoadingScreenBU.open(get_tree(), WORLD_SCENE)
 
 
 # --- Steam-поток входа (раздел 11), как в старом меню ---

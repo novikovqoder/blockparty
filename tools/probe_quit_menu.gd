@@ -54,16 +54,15 @@ func _find_menu() -> MainMenuBU:
 
 
 func _press_boot_offline() -> bool:
-	# Boot без Steam показывает офлайн-бокс: жмём «Играть офлайн» — путь владельца.
-	var box: Control = root.find_child("OfflineBox", true, false) as Control
-	if box == null or not box.visible:
+	# Boot без Steam (П10 — BootScreenBU) показывает окно «Steam не запущен»:
+	# жмём «Играть офлайн» — путь владельца.
+	var screen: BootScreenBU = root.find_child("BootScreenBU", true, false) as BootScreenBU
+	if screen == null or not screen.is_steam_missing_shown():
 		return false
-	var btn: Button = root.find_child("PlayOffline", true, false) as Button
+	var buttons: Array = screen.find_children("*", "Button", true, false)
+	var btn: Button = buttons[0] as Button if buttons.size() > 0 else null
 	if btn == null:
-		var buttons: Array = box.find_children("*", "Button", true, false)
-		btn = buttons[0] as Button if buttons.size() > 0 else null
-	if btn == null:
-		print("PROBE FAIL: в boot-офлайн-боксе нет кнопки")
+		print("PROBE FAIL: в окне «Steam не запущен» нет кнопки")
 		quit(4)
 		return true
 	btn.pressed.emit()
@@ -103,10 +102,8 @@ func _process(_delta: float) -> bool:
 			if _frame % 15 == 0:
 				_menu = _find_menu()
 				if _menu == null and _frame % 60 == 0:
-					var box: Control = root.find_child("OfflineBox", true, false) as Control
-					if box != null and box.visible:
-						if _press_boot_offline():
-							return true
+					if _press_boot_offline():
+						return true
 				if _frame > 400:
 					print("PROBE FAIL: MainMenuBU не появился после boot")
 					quit(4)

@@ -2,12 +2,20 @@
 # в главное меню или в окно офлайн-режима (раздел 13 SPEC, экран Boot).
 # В dev-режиме (--dev-host/--dev-join) Steam не используется вовсе — сразу в меню.
 # Меню — Born Unblessed (П9); по --old-menu открывается прежнее меню Blockparty.
+# Вид — BootScreenBU (П10): прежние «Blockparty» и серый фон ушли, логика
+# проверки Steam не меняется — кит показывает статус и окно «Steam не запущен».
 extends Control
+
+@onready var _screen: BootScreenBU = $BootScreenBU
 
 
 func _ready() -> void:
-	LocLabels.apply(self)
+	# П10: заголовок окна — Born Unblessed. application/config/name не трогаем:
+	# от него зависят пути user:// (app_userdata/Blockparty) — меняется только титул.
+	DisplayServer.window_set_title("Born Unblessed")
 	Log.info("Boot: экран загрузки")
+	_screen.offline_requested.connect(_on_play_offline_pressed)
+	_screen.quit_requested.connect(_on_quit_pressed)
 	if Dev.host_mode or Dev.join_address != "":
 		Log.info("Boot: режим разработки ENet — Steam не нужен, вхожу в меню", "Boot")
 		_go_to_menu()
@@ -20,7 +28,7 @@ func _ready() -> void:
 		_go_to_menu()
 	else:
 		# SteamService уже выяснил причину и залогировал её.
-		%OfflineBox.show()
+		_screen.show_steam_missing()
 
 
 func _go_to_menu() -> void:

@@ -131,9 +131,11 @@ func _on_host_lost(_reason: String) -> void:
 
 
 func _enter_world() -> void:
-	if Session.in_world:
+	# П10 (экран загрузки): прежнее меню (--old-menu) открывает мир так же,
+	# через LoadingScreenBU, — единый вход без серого кадра.
+	if Session.in_world or LoadingScreenBU.current != null:
 		return
-	get_tree().call_deferred("change_scene_to_file", WORLD_SCENE)
+	LoadingScreenBU.open(get_tree(), WORLD_SCENE)
 
 
 func _on_quit_pressed() -> void:
