@@ -560,22 +560,42 @@ func _build_credits_panel() -> Control:
 	var root: Control = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var col: VBoxContainer = VBoxContainer.new()
-	col.name = "CreditsCol"
-	col.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
-	col.offset_left = -144 - 700
-	col.offset_right = -144
-	# Полоса «Esc — назад» внизу не перекрывается записями.
-	col.offset_bottom = -120
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 6)
-	root.add_child(col)
+	# Заголовок закреплён сверху колонки, записи — в прокрутке: когда список
+	# помещается, он центрирован, как раньше; длинная локализация скроллится.
+	var head: VBoxContainer = VBoxContainer.new()
+	head.name = "CreditsHead"
+	head.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+	head.offset_left = -144 - 700
+	head.offset_right = -144
+	head.offset_top = 56
+	head.add_theme_constant_override("separation", 10)
+	root.add_child(head)
 	var title: Label = _label("BU_CREDITS_TITLE", UiStyleBU.display_spaced(700, 6), 48, UiStyleBU.TEXT_STRONG)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	col.add_child(title)
-	col.add_child(_accent_line(180, true))
+	head.add_child(title)
+	head.add_child(_accent_line(180, true))
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.name = "CreditsScroll"
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+	scroll.offset_left = -144 - 700
+	scroll.offset_right = -144
+	scroll.offset_top = 150
+	# Полоса «Esc — назад» внизу не перекрывается записями.
+	scroll.offset_bottom = -120
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	root.add_child(scroll)
+	var col: VBoxContainer = VBoxContainer.new()
+	col.name = "CreditsCol"
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Компактно, чтобы все 7 записей помещались в область без прокрутки
+	# (вьюпорт 450 px); длинная локализация всё равно уйдёт в скролл.
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 4)
+	scroll.add_child(col)
 	var gap: Control = Control.new()
-	gap.custom_minimum_size = Vector2(0, 16)
+	gap.custom_minimum_size = Vector2(0, 8)
 	col.add_child(gap)
 	var entries: Array[PackedStringArray] = [
 		PackedStringArray(["BU_CR_IDEA", "BU_CR_IDEA_NAMES"]),
@@ -589,13 +609,15 @@ func _build_credits_panel() -> Control:
 	for e: PackedStringArray in entries:
 		var role: Label = _label(e[0], UiStyleBU.body(600), 13, UiStyleBU.TEXT_FAINT)
 		role.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		role.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		col.add_child(role)
-		var names: Label = _label(e[1], UiStyleBU.display(600), 22, UiStyleBU.TEXT)
+		var names: Label = _label(e[1], UiStyleBU.display(600), 21, UiStyleBU.TEXT)
 		names.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		names.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		col.add_child(names)
 		var g: Control = Control.new()
-		g.custom_minimum_size = Vector2(0, 8)
+		g.custom_minimum_size = Vector2(0, 5)
 		col.add_child(g)
 	var bar: HBoxContainer = _hint_row([PackedStringArray(["Esc", "BU_HINT_BACK"])])
 	bar.name = "BarHints"

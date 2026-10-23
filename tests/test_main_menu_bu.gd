@@ -245,3 +245,59 @@ func test_chapters_panel_layout_no_overlaps() -> void:
 	_assert_no_overlap(hints, [row], "главы: карточки против полосы")
 	assert_false(head.get_global_rect().intersects(row.get_global_rect(), true),
 		"главы: заголовок не пересекает карточки")
+
+
+# --- Прокрутка (доработка П9): тонкая тёмная полупрозрачная полоса ----------
+
+
+## Тема комплекта задаёт BU-стиль полосы прокрутки: узкий полупрозрачный бегунок.
+func test_theme_scrollbar_is_thin_and_translucent() -> void:
+	var t: Theme = UiStyleBU.get_theme()
+	var grab: StyleBoxFlat = t.get_stylebox("grabber", "VScrollBar") as StyleBoxFlat
+	assert_lt(grab.bg_color.a, 0.9, "бегунок полупрозрачный")
+	assert_lte(grab.get_minimum_size().x, 8.0, "бегунок тонкий (не шире 8 px)")
+	var trough: StyleBoxFlat = t.get_stylebox("scroll", "VScrollBar") as StyleBoxFlat
+	assert_lt(trough.bg_color.a, 0.5, "жёлоб едва темнее фона, не сплошной")
+
+
+## Длинная вкладка настроек прокручивается видимой полой, полоса не наезжает
+## на строки (правка 4: прокрутка в длинных панелях).
+func test_long_settings_tab_has_visible_scrollbar() -> void:
+	_menu.open_section(MainMenuBU.Section.SETTINGS)
+	await wait_seconds(1.2)
+	var settings: SettingsPanelBU = _menu.find_children("*", "SettingsPanelBU", true, false)[0] as SettingsPanelBU
+	settings.show_tab(&"gfx")
+	await wait_physics_frames(2)
+	var scroll: ScrollContainer = settings.find_children("RowsScroll", "ScrollContainer", true, false)[0] as ScrollContainer
+	var rows: Array[Node] = settings.find_children("*", "SettingsRowBU", true, false)
+	assert_gt(rows.size(), 6, "вкладка «Изображение» длинная")
+	var bar: VScrollBar = scroll.get_v_scroll_bar()
+	assert_gt(bar.max_value, bar.page, "контент выше вьюпорта — есть что крутить")
+	assert_true(bar.visible, "полоса прокрутки видна")
+	# Полоса не перекрывает контент: строки кончаются левее полосы.
+	var bar_rect: Rect2 = bar.get_global_rect()
+	for r in rows:
+		assert_lte((r as Control).get_global_rect().end.x, bar_rect.position.x + 1.0,
+			"%s не заходит под полосу" % r.name)
+
+
+## Записи «Авторов» лежат в прокрутке: короткий список центрирован и целиком
+## над подсказками, при переполнении список скроллится, а не наезжает вниз.
+func test_credits_entries_live_in_scroll() -> void:
+	_menu.open_section(MainMenuBU.Section.CREDITS)
+	await wait_seconds(1.2)
+	var scroll: ScrollContainer = _menu._credits_panel.find_children("CreditsScroll", "ScrollContainer", true, false)[0] as ScrollContainer
+	assert_not_null(scroll, "панель авторов построена на ScrollContainer")
+	var col: VBoxContainer = scroll.find_children("CreditsCol", "VBoxContainer", true, false)[0] as VBoxContainer
+	assert_true(scroll.is_ancestor_of(col), "записи внутри прокрутки")
+	scroll.get_v_scroll_bar().value = 9999.0
+	await wait_physics_frames(2)
+	# Длинная локализация не выведет записи под полосу подсказок:
+	# прокрутка либо центрирует, либо клиппает контент выше BarHints.
+	var hints: Control = _hints_of(_menu._credits_panel)
+	for child in col.get_children():
+		if child is Label:
+			var r: Rect2 = (child as Control).get_global_rect()
+			if r.position.y < scroll.get_global_rect().end.y:
+				assert_lt(r.end.y, hints.get_global_rect().position.y + 100.0,
+					"прокрутка держит записи у подсказок, не под ними")

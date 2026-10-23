@@ -98,6 +98,22 @@ static func get_theme() -> Theme:
 	t.set_icon("grabber", "HSlider", grab)
 	t.set_icon("grabber_highlight", "HSlider", diamond_texture(16, ACCENT_TEXT))
 	t.set_icon("grabber_disabled", "HSlider", grab)
+	# Полоса прокрутки (доработка П9): тонкая, тёмная, полупрозрачная —
+	# жёлоб едва темнее фона, полоса-бегунок чуть светлее, без стрелок.
+	for scroll_type: String in ["VScrollBar", "HScrollBar"]:
+		var trough: StyleBoxFlat = flat_box(Color(0.0, 0.0, 0.0, 0.22))
+		trough.content_margin_left = 3
+		trough.content_margin_right = 3
+		t.set_stylebox("scroll", scroll_type, trough)
+		var bar: StyleBoxFlat = flat_box(Color(0.07, 0.04, 0.04, 0.55))
+		bar.content_margin_left = 1
+		bar.content_margin_right = 1
+		bar.set_corner_radius_all(2)
+		t.set_stylebox("grabber", scroll_type, bar)
+		var bar_hot: StyleBoxFlat = bar.duplicate() as StyleBoxFlat
+		bar_hot.bg_color = Color(0.16, 0.07, 0.07, 0.75)
+		t.set_stylebox("grabber_highlight", scroll_type, bar_hot)
+		t.set_stylebox("grabber_pressed", scroll_type, bar_hot)
 	_theme = t
 	return t
 
