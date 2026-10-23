@@ -9,6 +9,7 @@
 class_name Townsfolk
 extends Node3D
 
+
 ## Группа жителей (спавн и тесты находят их по группе).
 const TOWNSFOLK_GROUP: StringName = &"townsfolk"
 ## Нейтральный цвет жителей: тёплый песок, вне player_colors.
@@ -33,6 +34,11 @@ var _wave_cooldown: float = 0.0
 
 
 func _ready() -> void:
+	# П10 (уборка мира): житель не создаётся — ни модель, ни коллизия;
+	# код и ассеты остаются, выключили флаг — житель вернулся.
+	if Balance.legacy_hidden():
+		queue_free()
+		return
 	add_to_group(TOWNSFOLK_GROUP)
 	_build_model()
 	_build_collision()

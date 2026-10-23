@@ -62,6 +62,13 @@ var _base_energy: float = CALM_ENERGY
 
 
 func _ready() -> void:
+	# П10 (уборка мира): костра на Площади нет — ни очага, ни огня, ни света;
+	# код и ассеты остаются, выключили флаг — костёр вернулся. Процесс гасим
+	# сразу: мерцание света дотягивало кадр до queue_free с пустым _light.
+	if Balance.legacy_hidden():
+		set_process(false)
+		queue_free()
+		return
 	_build()
 	EventBus.campfire_seats.connect(_on_campfire_seats)
 

@@ -12,6 +12,17 @@ const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
 static var _gen_cache: Dictionary = {}
 
 
+const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
+
+
+func before_all() -> void:
+	BU_LEGACY.legacy_off()
+
+
+func after_all() -> void:
+	BU_LEGACY.legacy_restore()
+
+
 func _island_data() -> Dictionary:
 	if _gen_cache.is_empty():
 		_gen_cache = IslandGen.generate()

@@ -47,6 +47,11 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ##     собора и вырезанные слои CanvasItem, планка UI-графики 256 px;
 ##     мип-мапы комплект не включает (спрайты канвы, экранный масштаб
 ##     0.6–1.6 от исходного — мерцание не проявляется);
+##   hero_bu — герой Born Unblessed (MakeHuman, П10): кожа/одежда 2–4K,
+##     глаза 1K, брови/ресницы — мелкая деталь 512; всё с мип-мапами;
+##   sword_bu — меч героя (П10): кладка 1K с мип-мапами;
+##   loading_bu — картина экрана загрузки (П10): канва 2D 1920×1080 без
+##     мип-мапов, как menu_bu;
 ##   vfx — спрайты частиц (доработка П9): нарезки 40–96 px с прозрачной
 ##     кромкой, билборды 3D — с мип-мапами, чтобы на отдалении не рябили;
 ##     порог 40 px — размер наименьшего спрайта (лист).
@@ -59,6 +64,9 @@ const CATEGORIES: Array = [
 	["assets/third_party/polyhaven.com/", {"min_side": 1024, "mips": true}],
 	["assets/visual/", {"min_side": 1024, "mips": true}],
 	["assets/menu_bu/", {"min_side": 256, "mips": false}],
+	["assets/hero_bu/", {"min_side": 512, "mips": true}],
+	["assets/sword_bu/", {"min_side": 1024, "mips": true}],
+	["assets/loading_bu/", {"min_side": 256, "mips": false}],
 	["assets/island_map.png", {"min_side": 256, "mips": true}],
 	["assets/vfx/", {"min_side": 40, "mips": true}],
 ]
@@ -130,6 +138,17 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 ## П7 закрыт: мох камней (mrock/rrock/boulder/rock_pillar/pebble) — текстура
 ## ambientCG Moss001 по верхним граням с мягким переходом (rock_moss.gdshader).
 const TRANSITIONAL_UNTEXTURED: Array[String] = []
+
+
+const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
+
+
+func before_all() -> void:
+	BU_LEGACY.legacy_off()
+
+
+func after_all() -> void:
+	BU_LEGACY.legacy_restore()
 
 
 func test_project_filter_settings() -> void:

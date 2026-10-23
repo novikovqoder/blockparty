@@ -33,6 +33,17 @@ const FAR_VERTICES: int = TerrainBuilder.CHUNK * TerrainBuilder.CHUNK * 4
 static var _maps_cache: Dictionary = {}
 
 
+const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
+
+
+func before_all() -> void:
+	BU_LEGACY.legacy_off()
+
+
+func after_all() -> void:
+	BU_LEGACY.legacy_restore()
+
+
 func _maps() -> Dictionary:
 	if _maps_cache.is_empty():
 		_maps_cache = TerrainBuilder.slope_maps(ART.heights)

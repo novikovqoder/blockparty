@@ -16,6 +16,17 @@ const EXPECTED: Array = [
 ]
 
 
+const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
+
+
+func before_all() -> void:
+	BU_LEGACY.legacy_off()
+
+
+func after_all() -> void:
+	BU_LEGACY.legacy_restore()
+
+
 func test_townsfolk_presets_have_signature_hats() -> void:
 	for index: int in EXPECTED.size():
 		var want: Dictionary = EXPECTED[index]

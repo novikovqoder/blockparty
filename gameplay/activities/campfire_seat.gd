@@ -17,6 +17,11 @@ var _occupied_by: int = 0
 
 
 func _ready() -> void:
+	# П10 (уборка мира): мест для сидения у костра нет (костра нет —
+	# подсказку «E — сесть» предлагать некому); выключили флаг — вернулись.
+	if Balance.legacy_hidden():
+		queue_free()
+		return
 	super()
 	add_to_group(SEAT_GROUP)
 	EventBus.campfire_seats.connect(_on_campfire_seats)

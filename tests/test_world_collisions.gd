@@ -8,6 +8,17 @@ extends GutTest
 const EPS: float = 0.01
 
 
+const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
+
+
+func before_all() -> void:
+	BU_LEGACY.legacy_off()
+
+
+func after_all() -> void:
+	BU_LEGACY.legacy_restore()
+
+
 func test_every_prop_type_is_solid_or_excepted() -> void:
 	# Аудит раскладки: собираем типы из данных острова и сверяем каждый
 	# с рецептом коллизии или списком исключений.

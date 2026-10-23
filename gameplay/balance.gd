@@ -273,3 +273,32 @@ extends Resource
 @export var run_dust_speed: float = 1.1
 ## Разброс вылета, °.
 @export var run_dust_spread_deg: float = 40.0
+
+@export_group("Born Unblessed (П10)")
+## Временно спрятать «наследие Blockparty» (П10): жители (Финн/Луми/Тимьян),
+## костёр на Площаде (очаг, огонь, свет) и места для сидения не создаются;
+## задания отключены (трекера HUD и точек карты в коде уже нет — П5.9).
+## Код и ассеты не удаляются: выключил флаг — всё вернулось.
+## Значение лежит в balance.tres (true), тесты жителей гоняются при false.
+## Узлы читают через static legacy_hidden(): тестовые перезагрузки скриптов
+## создают копии ресурса — статика класса одна на все экземпляры.
+@export var bu_legacy_hidden: bool = false:
+	set(value):
+		bu_legacy_hidden = value
+		_legacy_hidden = value
+
+
+## Единое значение флага П10 для всех копий ресурса (сеттер выше пишет и
+## сюда); дефолт true — мир Born Unblessed без наследия.
+static var _legacy_hidden: bool = true
+
+
+## П10: прятать ли «наследие Blockparty» (жители, костёр, сидения).
+static func legacy_hidden() -> bool:
+	return _legacy_hidden
+
+
+## П10: переключить флаг наследия (тесты жителей выключают на прогон,
+## after_all возвращают дефолт .tres).
+static func set_legacy_hidden(value: bool) -> void:
+	_legacy_hidden = value
