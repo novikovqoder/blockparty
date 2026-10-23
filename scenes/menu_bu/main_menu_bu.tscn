@@ -1,0 +1,14 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scenes/menu_bu/main_menu_bu.gd" id="1_menu"]
+[ext_resource type="Texture2D" path="res://assets/menu_bu/bu_bg.jpg" id="2_bg"]
+[ext_resource type="Texture2D" path="res://assets/menu_bu/bu_knight.png" id="3_knight"]
+[ext_resource type="Texture2D" path="res://assets/menu_bu/bu_chains.png" id="4_chains"]
+[ext_resource type="Texture2D" path="res://assets/menu_bu/bu_rubble.png" id="5_rubble"]
+
+[node name="MainMenuBU" type="Node2D"]
+script = ExtResource("1_menu")
+bg_texture = ExtResource("2_bg")
+knight_texture = ExtResource("3_knight")
+chains_texture = ExtResource("4_chains")
+rubble_texture = ExtResource("5_rubble")

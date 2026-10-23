@@ -9,7 +9,6 @@
 # в секунду по позициям ремоутов.
 extends Node3D
 
-const MENU_SCENE: String = "res://scenes/main_menu.tscn"
 const PLAYER_SCENE: PackedScene = preload("res://gameplay/player/player.tscn")
 const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -178,7 +177,7 @@ func _exit_to_menu() -> void:
 	else:
 		Net.left_world()
 	Session.leave_world()
-	get_tree().call_deferred("change_scene_to_file", MENU_SCENE)
+	get_tree().call_deferred("change_scene_to_file", Dev.menu_scene_path())
 
 
 func _on_host_lost(_reason: String) -> void:

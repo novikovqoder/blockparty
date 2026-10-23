@@ -1,0 +1,137 @@
+keys,ru,en
+BU_MENU_CONTINUE,ПРОДОЛЖИТЬ,CONTINUE
+BU_MENU_NEW,НОВАЯ ИГРА,NEW GAME
+BU_MENU_CHAPTERS,ГЛАВЫ,CHAPTERS
+BU_MENU_SETTINGS,НАСТРОЙКИ,SETTINGS
+BU_MENU_CREDITS,АВТОРЫ,CREDITS
+BU_MENU_EXIT,ВЫХОД,QUIT
+BU_CONTINUE_SUB,Глава II · Собор Святого Ордена,Chapter II · Cathedral of the Holy Order
+BU_HINT_SELECT,выбрать,select
+BU_HINT_BACK,назад,back
+BU_HINT_PLAY,играть,play
+BU_HINT_TABS,разделы,tabs
+BU_HINT_RESET,по умолчанию,defaults
+BU_VERSION,v0.1 · ранний доступ,v0.1 · early access
+BU_BACK,НАЗАД,BACK
+BU_SETTINGS_TITLE,НАСТРОЙКИ,SETTINGS
+BU_SETTINGS_DIRTY,Есть несохранённые изменения,You have unsaved changes
+BU_SETTINGS_RESET,Сбросить раздел,Reset section
+BU_SETTINGS_APPLY,ПРИМЕНИТЬ,APPLY
+BU_SET_ON,Вкл,On
+BU_SET_OFF,Выкл,Off
+BU_TAB_GFX,ИЗОБРАЖЕНИЕ,DISPLAY
+BU_TAB_AUDIO,ЗВУК,AUDIO
+BU_TAB_CTRL,УПРАВЛЕНИЕ,CONTROLS
+BU_TAB_GAME,ИГРА,GAMEPLAY
+BU_TAB_LANG,ЯЗЫК,LANGUAGE
+BU_SET_MODE,Режим экрана,Display mode
+BU_OPT_FULLSCREEN,Полный экран,Fullscreen
+BU_OPT_BORDERLESS,Окно без рамки,Borderless
+BU_OPT_WINDOWED,В окне,Windowed
+BU_DESC_MODE,"Полный экран даёт наименьшую задержку ввода. Окно без рамки удобнее, если часто переключаетесь на другие программы.",Fullscreen has the lowest input latency. Borderless is handier if you often switch to other apps.
+BU_SET_RES,Разрешение,Resolution
+BU_DESC_RES,Размер окна в режиме «В окне». В полноэкранных режимах используется разрешение монитора.,Window size in windowed mode. Fullscreen modes use the monitor resolution.
+BU_SET_QUALITY,Качество графики,Graphics quality
+BU_OPT_LOW,Низкое,Low
+BU_OPT_MEDIUM,Среднее,Medium
+BU_OPT_HIGH,Высокое,High
+BU_OPT_ULTRA,Ультра,Ultra
+BU_DESC_QUALITY,"Общий пресет: тени, туман, отражения в лужах и плотность частиц.","Overall preset: shadows, fog, puddle reflections and particle density."
+BU_WARN_QUALITY,На «Ультра» объёмный туман и отражения заметно нагружают видеокарту.,"On Ultra, volumetric fog and reflections are heavy on the GPU."
+BU_SET_VSYNC,Вертикальная синхронизация,V-Sync
+BU_DESC_VSYNC,"Убирает разрывы кадра, но может добавить небольшую задержку ввода.",Removes screen tearing but may add a little input latency.
+BU_SET_FPS,Ограничение кадров,Frame rate limit
+BU_OPT_UNLIMITED,Без ограничения,Unlimited
+BU_DESC_FPS,Максимальная частота кадров. Ограничение снижает нагрев и шум ноутбука.,Maximum frame rate. A cap keeps laptops cooler and quieter.
+BU_SET_BRIGHT,Яркость,Brightness
+BU_DESC_BRIGHT,"Игра задумана тёмной. Настройте так, чтобы детали в тени были едва различимы.",The game is meant to be dark. Adjust until details in the shadows are barely visible.
+BU_SET_GRAIN,Зерно плёнки,Film grain
+BU_DESC_GRAIN,Лёгкий шум поверх изображения: больше грязи и кинематографичности.,"Subtle noise over the image for a grittier, cinematic look."
+BU_SET_CAMSHAKE,Дрожь камеры,Camera sway
+BU_DESC_CAMSHAKE,"Покачивание камеры в меню и сценах, толчки от грома. Уменьшите, если укачивает.","Camera sway in menus and scenes, thunder jolts. Lower it if you get motion sick."
+BU_SET_MASTER,Общая громкость,Master volume
+BU_DESC_MASTER,Громкость всех звуков игры.,Volume of all game sounds.
+BU_SET_MUSIC,Музыка,Music
+BU_DESC_MUSIC,"Хоры, дрон и тема главного меню.","Choirs, drones and the main theme."
+BU_SET_SFX,Звуки боя,Combat sounds
+BU_DESC_SFX,"Удары стали, крики, хруст доспехов.","Clashing steel, screams, cracking armor."
+BU_SET_AMB,Окружение,Ambience
+BU_DESC_AMB,"Дождь, ветер в проломах, далёкий гром, скрип цепей.","Rain, wind through the ruins, distant thunder, creaking chains."
+BU_SET_VOICE,Голоса,Voices
+BU_DESC_VOICE,Реплики персонажей и шёпот.,Character lines and whispers.
+BU_SET_BGSOUND,Звук в свёрнутом окне,Sound when unfocused
+BU_DESC_BGSOUND,"Продолжать играть звук, когда окно игры не активно.",Keep playing sound when the game window is not focused.
+BU_SET_K_LIGHT,Лёгкая атака,Light attack
+BU_KEY_LMB,ЛКМ,LMB
+BU_DESC_K_LIGHT,Быстрый удар.,A quick strike.
+BU_SET_K_HEAVY,Тяжёлая атака,Heavy attack
+BU_KEY_RMB,ПКМ,RMB
+BU_DESC_K_HEAVY,"Медленный удар, пробивающий блок. Удерживайте, чтобы зарядить.",A slow strike that breaks guard. Hold to charge.
+BU_SET_K_BLOCK,Блок / парирование,Block / parry
+BU_DESC_K_BLOCK,"Удерживайте для блока. Нажмите в момент удара врага, чтобы парировать.",Hold to block. Press as the enemy strikes to parry.
+BU_SET_K_DODGE,Уклонение,Dodge
+BU_KEY_SPACE,Пробел,Space
+BU_DESC_K_DODGE,Перекат в направлении движения.,Roll in the direction of movement.
+BU_SET_K_FINISH,Добивание,Execution
+BU_DESC_K_FINISH,Казнь оглушённого врага.,Execute a staggered enemy.
+BU_SET_K_USE,Взаимодействие,Interact
+BU_DESC_K_USE,"Открыть дверь, поднять предмет, прочесть надпись.","Open doors, pick up items, read inscriptions."
+BU_SET_SENS,Чувствительность мыши,Mouse sensitivity
+BU_DESC_SENS,Скорость поворота камеры.,Camera turn speed.
+BU_SET_INVERT,Инверсия по вертикали,Invert Y axis
+BU_DESC_INVERT,Камера поворачивается в обратную сторону по вертикали.,Inverts vertical camera movement.
+BU_SET_DIFF,Сложность,Difficulty
+BU_OPT_PILGRIM,Паломник,Pilgrim
+BU_OPT_KNIGHT,Рыцарь,Knight
+BU_OPT_DAMNED,Проклятый,Damned
+BU_DESC_DIFF_0,"Враги медленнее и прощают ошибки. Для тех, кто пришёл за историей.",Enemies are slower and forgiving. For those here for the story.
+BU_DESC_DIFF_1,Задуманный баланс. Каждый бой требует внимания.,The intended balance. Every fight demands attention.
+BU_DESC_DIFF_2,Враги бьют больнее и не ждут. Смерть — частый гость.,Enemies hit harder and never wait. Death is a frequent guest.
+BU_SET_GORE,Кровь и жестокость,Blood and gore
+BU_OPT_GORE_OFF,Отключено,Off
+BU_OPT_GORE_MID,Умеренно,Moderate
+BU_OPT_GORE_FULL,Без цензуры,Uncensored
+BU_DESC_GORE_0,Без крови и расчленения. Подойдёт для стримов с ограничениями.,No blood or dismemberment. Suitable for restricted streams.
+BU_DESC_GORE_1,"Кровь есть, но без подробностей.","Blood, but no graphic detail."
+BU_DESC_GORE_2,"Полная жестокость: кровь, расчленение, добивания крупным планом.","Full brutality: blood, dismemberment, close-up executions."
+BU_WARN_GORE,Изменение вступит в силу после перезагрузки уровня.,Takes effect after the level is reloaded.
+BU_SET_HINTS,Подсказки,Hints
+BU_DESC_HINTS,Показывать подсказки по управлению и механикам.,Show control and mechanic hints.
+BU_SET_SUBS,Субтитры,Subtitles
+BU_DESC_SUBS,Показывать текст реплик внизу экрана.,Show dialogue text at the bottom of the screen.
+BU_SET_SUBSIZE,Размер субтитров,Subtitle size
+BU_OPT_SMALL,Маленький,Small
+BU_OPT_MEDIUM_SIZE,Средний,Medium
+BU_OPT_LARGE,Крупный,Large
+BU_DESC_SUBSIZE,Размер шрифта субтитров.,Subtitle font size.
+BU_SET_HITSHAKE,Тряска при ударах,Hit shake
+BU_DESC_HITSHAKE,"Толчок экрана при попадании. Делает удары весомее, но может утомлять.",Screen jolt on hits. Makes blows feel heavier but can be tiring.
+BU_SET_LANG,Язык интерфейса,Interface language
+BU_DESC_LANG,Язык меню и текстов в игре.,Language of menus and in-game text.
+BU_SET_VOICELANG,Озвучка,Voice-over
+BU_DESC_VOICELANG,Язык голосов персонажей.,Language of character voices.
+BU_SET_SUBLANG,Язык субтитров,Subtitle language
+BU_DESC_SUBLANG,Можно слушать оригинальную озвучку с русскими субтитрами.,You can listen to the original voices with subtitles in your language.
+BU_CREDITS_TITLE,АВТОРЫ,CREDITS
+BU_CR_IDEA,ИДЕЯ И ГЕЙМДИЗАЙН,CONCEPT & GAME DESIGN
+BU_CR_IDEA_NAMES,[ВАШЕ ИМЯ],[YOUR NAME]
+BU_CR_CODE,ПРОГРАММИРОВАНИЕ,PROGRAMMING
+BU_CR_CODE_NAMES,Claude Code · OpenClaw,Claude Code · OpenClaw
+BU_CR_ART,ИЛЛЮСТРАЦИИ,ARTWORK
+BU_CR_ART_NAMES,[АВТОР / ИНСТРУМЕНТ],[ARTIST / TOOL]
+BU_CR_MUSIC,МУЗЫКА,MUSIC
+BU_CR_MUSIC_NAMES,[АВТОР],[COMPOSER]
+BU_CR_FONTS,ШРИФТЫ,FONTS
+BU_CR_FONTS_NAMES,Cormorant — Christian Thalmann · Manrope — Mikhail Sharanda (SIL OFL 1.1),Cormorant — Christian Thalmann · Manrope — Mikhail Sharanda (SIL OFL 1.1)
+BU_CR_ENGINE,ДВИЖОК,ENGINE
+BU_CR_ENGINE_NAMES,Godot Engine (MIT),Godot Engine (MIT)
+BU_CR_THANKS,БЛАГОДАРНОСТИ,SPECIAL THANKS
+BU_CR_THANKS_NAMES,[ИМЕНА],[NAMES]
+BU_CHAPTERS_TITLE,ГЛАВЫ,CHAPTERS
+BU_CHAPTERS_SUB,Пройденные главы можно переиграть — основной прогресс сохранится.,Replay finished chapters — your main progress is kept.
+BU_CH_1,Отлучённый,The Excommunicated
+BU_CH_2,Собор Святого Ордена,Cathedral of the Holy Order
+BU_CH_LOCKED,· · ·,· · ·
+BU_CH_DONE,Пройдена,Completed
+BU_CH_CURRENT,Вы здесь,You are here
+BU_CH_AHEAD,Ещё впереди,Locked

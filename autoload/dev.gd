@@ -2,6 +2,8 @@
 # --dev-host, --dev-join=IP, --dev-name, --dev-spawn=ZONE, --bot, --net-lag,
 # --net-loss, --log-net, --shot-dir, --simple-graphics, --high-quality,
 # --debug-collisions (полупрозрачные формы коллизий мира поверх картинки),
+# --old-menu (старое меню Blockparty вместо меню Born Unblessed — П9:
+# «Мир для друзей», редактор внешности и другие прежние пункты),
 # --selftest-anim (самопроверка анимаций персонажа в запущенной игре:
 # печатает SELFTEST-ANIM: PASS/FAIL и выходит с кодом 1 при FAIL —
 # гоняется и на экспортированных сборках, возврат П5.8),
@@ -34,6 +36,7 @@ var high_quality: bool = false   # --high-quality: тяжёлые эффекты
 var debug_collisions: bool = false  # --debug-collisions: показать формы коллизий
 var selftest_anim: bool = false  # --selftest-anim: проверка анимаций и выход
 var selftest_world: bool = false  # --selftest-world: проверка мира и выход
+var old_menu: bool = false  # --old-menu: старое меню Blockparty (П9)
 
 
 func _init() -> void:
@@ -52,6 +55,7 @@ func _init() -> void:
 	debug_collisions = parsed["debug_collisions"]
 	selftest_anim = parsed["selftest_anim"]
 	selftest_world = parsed["selftest_world"]
+	old_menu = parsed["old_menu"]
 
 
 func _ready() -> void:
@@ -80,6 +84,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"debug_collisions": false,
 		"selftest_anim": false,
 		"selftest_world": false,
+		"old_menu": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -113,7 +118,21 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["selftest_anim"] = true
 		elif arg == "--selftest-world":
 			result["selftest_world"] = true
+		elif arg == "--old-menu":
+			result["old_menu"] = true
 	return result
+
+
+## Сцена главного меню (П9): новое меню Born Unblessed, по --old-menu —
+## прежнее меню Blockparty. Единая точка выбора для boot, выхода из мира
+## и редактора внешности — возврат идёт в то же меню, из которого пришли.
+## MENU_BU_SCENE — обвязка, инстанцирующая сцену комплекта menu_bu как есть.
+const MENU_BU_SCENE: String = "res://scenes/main_menu_game.tscn"
+const MENU_OLD_SCENE: String = "res://scenes/main_menu.tscn"
+
+
+func menu_scene_path() -> String:
+	return MENU_OLD_SCENE if old_menu else MENU_BU_SCENE
 
 
 static func _to_int(text: String, fallback: int) -> int:

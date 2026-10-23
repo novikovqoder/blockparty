@@ -3,10 +3,12 @@
 Правила использования — раздел «Скачивание ресурсов» в CLAUDE.md и план
 доработки графики (docs/VISUAL_PLAN.md): ресурсы только CC0, код аддонов —
 CC0 или MIT (с автором и лицензией), только с разрешённых сайтов, в проекте
-лежат лишь реально используемые файлы (архивы не хранятся). Единственное
-исключение из «только CC0» — модель сруба Kless (CC-BY 4.0, следующая
-строка): явное решение владельца, атрибуция — дословно, как требует
-лицензия, также в титрах игры (экран Credits). Извлечённые
+лежат лишь реально используемые файлы (архивы не хранятся). Исключения из
+«только CC0» — модель сруба Kless (CC-BY 4.0, следующая строка), а с этапа П9
+ещё два (обе строки внизу таблицы, помечены «исключение»): иллюстрации меню
+Born Unblessed (созданы владельцем с помощью ИИ) и шрифты Cormorant/Manrope
+(SIL OFL 1.1) — все по явному решению владельца; атрибуция Kless — дословно,
+как требует лицензия, также в титрах игры (экран Credits). Извлечённые
 из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
 это та же встроенная текстура модели. Наборы KayKit (персонажи и анимации,
 раздел 16 SPEC v2.3) удалены после перехода на персонажей Quaternius
@@ -77,3 +79,5 @@ Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — и
 | dikhololo_night | Poly Haven | https://polyhaven.com/a/dikhololo_night | CC0 | 2026-10-19 | Ночное HDRI — источник звёздного неба (доработка-2 П5.13, П9): `assets/visual/sky_starfield.png` (звёзды — чёткие точки из снимка) и `sky_starmap.png` (Млечный Путь — фон снимка), генератор `tools/make_star_textures.gd`. Сам .hdr (4K) — в локальной библиотеке `library/polyhaven/hdris/`, в git не входит |
 | Fabric085 | ambientCG | https://ambientcg.com/view?id=Fabric085 | CC0 | 2026-10-22 | `ambientcg.com/Fabric085/Fabric085_2K-JPG_Color.jpg` — ткань штор интерьера сруба деревни (`cabin_house.gd`), источник — локальная библиотека |
 | PaintedWood006A | ambientCG | https://ambientcg.com/view?id=PaintedWood006A | CC0 | 2026-10-22 | `ambientcg.com/PaintedWood006A/PaintedWood006A_2K-JPG_Color.jpg` — крашеное дерево стен интерьера сруба деревни (`cabin_house.gd`), источник — локальная библиотека |
+| Иллюстрации меню Born Unblessed | владелец проекта (сгенерировано ИИ, ChatGPT) | — | **исключение** (не CC0): право владельца, ИИ-контент | 2026-10-22 | `assets/menu_bu/bu_bg.jpg` (панорама собора 5974×1882), `bu_knight.png`, `bu_chains.png`, `bu_rubble.png` — слои фона главного меню Born Unblessed (П9). Решение владельца из SPEC П9; для Steam-релиза раскрыть использование ИИ-контента |
+| Шрифты Cormorant и Manrope | Cormorant — Christian Thalmann (Catharsis Fonts); Manrope — Mikhail Sharanda | https://github.com/CatharsisFonts/Cormorant, https://github.com/sharanda/manrope | **исключение**: SIL Open Font License 1.1 | 2026-10-22 | `ui/theme_bu/fonts/Cormorant-Variable.ttf` (заголовки меню), `Manrope-Variable.ttf` (текст), тексты лицензий — `Cormorant-OFL.txt`, `Manrope-OFL.txt` рядом (П9). OFL разрешает встраивание в коммерческие игры; решение владельца из SPEC П9 |

@@ -10,7 +10,6 @@
 class_name AppearanceEditor
 extends Control
 
-const MAIN_MENU: String = "res://scenes/main_menu.tscn"
 const PAL: Palette = preload("res://assets/palette.tres")
 ## tr-ключи названий — параллельно спискам Appearance.
 const HAIR_KEYS: PackedStringArray = [
@@ -330,7 +329,7 @@ func _on_back_pressed() -> void:
 
 
 func _back_to_menu() -> void:
-	get_tree().call_deferred("change_scene_to_file", MAIN_MENU)
+	get_tree().call_deferred("change_scene_to_file", Dev.menu_scene_path())
 
 
 # --- Фототур (--shot-dir) ---

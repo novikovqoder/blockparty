@@ -36,7 +36,11 @@ const MODEL: PackedScene = preload(
 ##     головы и одежда 2K, руки/волосы 1K, глаза — мелкая деталь 256;
 ##   панорамы неба — купол Sky3D, процедурные CC0;
 ##   карта острова — UI-мини-карта;
-##   polyhaven.com — земля Леса (2K, категория сайта).
+##   polyhaven.com — земля Леса (2K, категория сайта);
+##   menu_bu — 2D-иллюстрации главного меню Born Unblessed (П9): панорама
+##     собора и вырезанные слои CanvasItem, планка UI-графики 256 px;
+##     мип-мапы комплект не включает (спрайты канвы, экранный масштаб
+##     0.6–1.6 от исходного — мерцание не проявляется).
 const CATEGORIES: Array = [
 	["assets/third_party/quaternius.com/universal_base_characters/baked/textures/eyes",
 		{"min_side": 256, "mips": true}],
@@ -45,6 +49,7 @@ const CATEGORIES: Array = [
 	["assets/third_party/ambientcg.com/", {"min_side": 1024, "mips": true}],
 	["assets/third_party/polyhaven.com/", {"min_side": 1024, "mips": true}],
 	["assets/visual/", {"min_side": 1024, "mips": true}],
+	["assets/menu_bu/", {"min_side": 256, "mips": false}],
 	["assets/island_map.png", {"min_side": 256, "mips": true}],
 ]
 

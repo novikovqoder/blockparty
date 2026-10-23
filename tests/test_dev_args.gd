@@ -20,7 +20,7 @@ func test_no_args_gives_defaults() -> void:
 func test_flags() -> void:
 	var d: Dictionary = DevScript.parse_args(PackedStringArray([
 		"--dev-host", "--bot", "--log-net", "--simple-graphics",
-		"--high-quality", "--debug-collisions",
+		"--high-quality", "--debug-collisions", "--old-menu",
 	]))
 	assert_true(d["host_mode"])
 	assert_true(d["bot"])
@@ -28,6 +28,7 @@ func test_flags() -> void:
 	assert_true(d["simple_graphics"])
 	assert_true(d["high_quality"])
 	assert_true(d["debug_collisions"], "--debug-collisions разбирается")
+	assert_true(d["old_menu"], "--old-menu разбирается (П9)")
 
 
 func test_values_with_equals() -> void:
@@ -76,3 +77,13 @@ func test_unknown_args_ignored() -> void:
 	var d: Dictionary = DevScript.parse_args(PackedStringArray(["--something-else", "positional"]))
 	assert_false(d["host_mode"])
 	assert_eq(d["join_address"], "")
+
+
+func test_menu_scene_choice() -> void:
+	# П9: меню по умолчанию — Born Unblessed, по --old-menu — прежнее меню
+	# Blockparty; обе сцены должны существовать.
+	var script: GDScript = load("res://autoload/dev.gd") as GDScript
+	assert_eq(script.MENU_BU_SCENE, "res://scenes/main_menu_game.tscn")
+	assert_eq(script.MENU_OLD_SCENE, "res://scenes/main_menu.tscn")
+	assert_true(ResourceLoader.exists(script.MENU_BU_SCENE), "сцена нового меню есть")
+	assert_true(ResourceLoader.exists(script.MENU_OLD_SCENE), "старое меню не потеряно")
