@@ -9,12 +9,12 @@
 class_name RemotePlayer
 extends Node3D
 
-const VISUAL: PackedScene = preload("res://gameplay/player/character_model.tscn")
 const B: Balance = preload("res://gameplay/balance.tres")
 
-## Высота коллайдера головы над ступнями и метки ника, м (как player.tscn).
-const HEAD_TOP_Y: float = 1.65
-const NAME_LABEL_Y: float = 2.15
+## Высота коллайдера головы над ступнями и метки ника, м (как player.tscn;
+## рост героя BU — 1,8 м, П10).
+const HEAD_TOP_Y: float = 1.85
+const NAME_LABEL_Y: float = 2.35
 ## Группа узлов чужих игроков (HangPoint ищет висящих, П5).
 const GROUP: StringName = &"remote_player"
 ## Сглаживание оценки скорости, 1/с (как LOCO_SMOOTH у модели).
@@ -27,7 +27,7 @@ var player_name: String = ""
 var appearance: PackedByteArray = PackedByteArray()
 
 var _model: Node3D
-var _visual: CharacterModel
+var _visual: CharacterVisual
 var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
 ## Флаги последнего снапшота (висит, сидит, за руку — раздел 10).
@@ -52,10 +52,12 @@ func _ready() -> void:
 	_model = Node3D.new()
 	_model.name = "Model"
 	add_child(_model)
-	_visual = VISUAL.instantiate() as CharacterModel
+	# Модель чужого игрока — тот же герой Born Unblessed (П10): внешность
+	# из сети сохраняется структурой протокола, на модель не влияет;
+	# колёсико меча не слушает (меч — локальная механика П10, срез этапа).
+	_visual = HeroModelBU.new()
+	_visual.name = "Visual"
 	_model.add_child(_visual)
-	# Внешность игрока — собранная им в редакторе (П5.8), пришла
-	# с rpc_player_joined. Цвет верхней одежды — по хэшу id того же игрока.
 	_visual.setup_appearance(Appearance.from_bytes(appearance).validated())
 	_visual.setup_palette(peer_id)
 
@@ -72,7 +74,7 @@ func _ready() -> void:
 	# Пузырь эмоций над ником (раздел 9.7) и жест по событию хоста.
 	var bubble := EmoteBubble.new()
 	bubble.name = "EmoteBubble"
-	bubble.position = Vector3(0.0, 2.6, 0.0)
+	bubble.position = Vector3(0.0, 2.8, 0.0)
 	bubble.peer_id = peer_id
 	add_child(bubble)
 	EventBus.player_emoted.connect(_on_player_emoted)

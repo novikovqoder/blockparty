@@ -9,6 +9,12 @@
 # в секунду по позициям ремоутов.
 extends Node3D
 
+## П10 (экран загрузки): мир построен и игрок в нём — LoadingScreenBU уходит
+## только после этого сигнала, ни одного серого кадра. У клиента — после
+## применения world_state (чужие игроки на месте), у хоста и офлайн — после
+## осадки спавна игрока.
+signal world_ready
+
 const PLAYER_SCENE: PackedScene = preload("res://gameplay/player/player.tscn")
 const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -82,8 +88,32 @@ func _ready() -> void:
 	Net.entered_world()
 	EventBus.host_lost.connect(_on_host_lost)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_announce_world_ready()
 	if not Dev.shot_dir.is_empty():
 		_screenshot_tour()
+
+
+## П10 (экран загрузки): объявить мир готовым. Клиент в идущем мире ждёт
+## world_state хоста (replay уже в _wire_network), хост и офлайн — осадку
+## спавна игрока. Лимит 15 c < ready_timeout экрана (30 c): не отпускаем
+## экран навсегда, если хост молчит.
+func _announce_world_ready() -> void:
+	if Net.is_networked() and not Net.is_host():
+		# SPEC П10 4.6: клиент ждёт снимка мира хоста — экран загрузки
+		# показывает «Подключение к миру» вместо стадий по готовности.
+		if LoadingScreenBU.current != null:
+			LoadingScreenBU.current.set_status(&"BU_LOAD_CONNECT")
+		var waited := 0
+		while Net.last_world_state.is_empty():
+			await get_tree().physics_frame
+			waited += 1
+			if waited > 900:
+				Log.warn("world_state не пришёл за 15 c — мир без чужих игроков",
+					"World")
+				break
+	for i: int in 5:
+		await get_tree().physics_frame
+	world_ready.emit()
 
 
 func _process(delta: float) -> void:
@@ -248,19 +278,23 @@ func _selftest_world() -> void:
 	get_tree().quit(1)
 
 
-## Прогон AnimSelfCheck на модели локального игрока и выход (--selftest-anim):
-## полсекунды на успокоение разовых клипов появления (приземление), затем
-## снимки покоя/ходьбы; дальше этап 0 закрытия П5.8: физический
+## Прогон самопроверки анимаций на модели локального игрока и выход
+## (--selftest-anim): герой Born Unblessed (П10) — AnimSelfCheckBU (позы
+## костей покой/ходьба, резолв дорожек библиотеки sword, скиннинг ног);
+## прежняя модель блочного персонажа — AnimSelfCheck + физический
 ## лендинг-сценарий Д2 (бег, прыжок, 2 с после касания) и RealismCheck на
 ## всех комбинациях пол × наряд — скольжение стоп и диапазоны рук
 ## блокирующие, посадка одежды — известный дефект П5.8 (откат Д4),
 ## KNOWN-FAIL без падения кода возврата (закрывается П5.10–П5.11).
 ## Печатает SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL); гоняется
 ## и на экспортированных сборках, чтобы ловить проблемы экспорта.
-func _selftest_anim(visual: CharacterModel) -> void:
+func _selftest_anim(visual: CharacterVisual) -> void:
 	for i: int in 40:
 		await get_tree().physics_frame
-	var result: Dictionary = await AnimSelfCheck.run(visual, true)
+	if visual is HeroModelBU:
+		await _selftest_anim_bu(visual as HeroModelBU)
+		return
+	var result: Dictionary = await AnimSelfCheck.run(visual as CharacterModel, true)
 	var reasons: PackedStringArray = PackedStringArray()
 	if not result["ok"]:
 		for reason: String in result["reasons"]:
@@ -312,6 +346,22 @@ func _selftest_anim(visual: CharacterModel) -> void:
 		return
 	print("SELFTEST-ANIM: FAIL")
 	for reason: String in reasons:
+		print("SELFTEST-ANIM: %s" % reason)
+	get_tree().quit(1)
+
+
+## Самопроверка героя Born Unblessed (--selftest-anim, П10): позы костей
+## покой/ходьба, резолв всех дорожек библиотеки sword, скиннинг ног —
+## всё блокирующее, KNOWN-FAIL нет. Отдельно от UBC-ветки: риг Mixamo,
+## другие кости и клипы.
+func _selftest_anim_bu(model: HeroModelBU) -> void:
+	var result: Dictionary = await AnimSelfCheckBU.run(model, true)
+	if result["ok"]:
+		print("SELFTEST-ANIM: PASS")
+		get_tree().quit(0)
+		return
+	print("SELFTEST-ANIM: FAIL")
+	for reason: String in result["reasons"]:
 		print("SELFTEST-ANIM: %s" % reason)
 	get_tree().quit(1)
 
@@ -392,6 +442,13 @@ func _apply_graphics_quality() -> void:
 ## все 6 зон общим планом и закат — PNG в Dev.shot_dir (создаётся),
 ## после чего закрывает игру. Только для проверок (tools/screenshots.sh).
 func _screenshot_tour() -> void:
+	# П10 (экран загрузки): мир мог открыться через LoadingScreenBU — ждём его
+	# ухода, иначе первый кадр тура снимет экран загрузки, а не мир. Экран сам
+	# уходит не позже ready_timeout (30 с) — страховка 40 с.
+	var load_waited := 0
+	while LoadingScreenBU.current != null and load_waited < 2400:
+		await get_tree().process_frame
+		load_waited += 1
 	var camera := Camera3D.new()
 	add_child(camera)
 	camera.current = true

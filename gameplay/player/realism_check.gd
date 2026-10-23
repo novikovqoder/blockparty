@@ -411,6 +411,15 @@ static func check_landing_blend(player: Player, mode: String = "run",
 	var metrics := {}
 	var hz: int = Engine.physics_ticks_per_second
 	var hold_move: bool = mode != "still"
+	# П10: имена клипов модели — у блочного UBC и героя Born Unblessed
+	# разные (Walk/Jog_Fwd/Sprint против loco_walk/loco_run).
+	var land_clip := "Jump_Land"
+	var idle_clip := "Idle"
+	var loco_clips: PackedStringArray = PackedStringArray(["Walk", "Jog_Fwd", "Sprint"])
+	if player.visual is HeroModelBU:
+		land_clip = "loco_jump_land"
+		idle_clip = "loco_idle"
+		loco_clips = PackedStringArray(["loco_walk", "loco_run"])
 	if hold_move:
 		_face_clear_direction(player)
 		Input.action_press("move_forward")
@@ -449,7 +458,7 @@ static func check_landing_blend(player: Player, mode: String = "run",
 		await player.get_tree().physics_frame
 		var clip := _model_clip(player.visual)
 		var hs := _player_hspeed(player)
-		if clip == "Jump_Land":
+		if clip == land_clip:
 			land_frames += 1
 		# Кадры без контакта с землёй — не скольжение: поза прыжка в
 		# воздухе уместна (состояние FALL — прямое отражение
@@ -462,9 +471,8 @@ static func check_landing_blend(player: Player, mode: String = "run",
 			continue
 		if not hold_move or hs <= B.anim_idle_speed + 0.1:
 			continue
-		var loco: bool = clip == "Walk" or clip == "Jog_Fwd" \
-			or clip == "Sprint"
-		if clip == "Jump_Land" or clip == "Idle" or not loco:
+		var loco: bool = clip in loco_clips
+		if clip == land_clip or clip == idle_clip or not loco:
 			bad_frames += 1
 			if bad_frames <= 3:
 				reasons.append(
@@ -504,11 +512,13 @@ static func _player_hspeed(player: Player) -> float:
 	return Vector2(player.velocity.x, player.velocity.z).length()
 
 
-## Клип, играющий на модели (без имени библиотеки), «-» — ничего.
-static func _model_clip(model: CharacterModel) -> String:
-	if model._player == null or model._player.current_animation.is_empty():
+## Клип, играющий на визуале персонажа (без имени библиотеки), «-» — ничего.
+## П10: работает с любой моделью (CharacterVisual): плеер даёт anim_player().
+static func _model_clip(visual: CharacterVisual) -> String:
+	var ap: AnimationPlayer = visual.anim_player()
+	if ap == null or ap.current_animation.is_empty():
 		return "-"
-	var parts := (model._player.current_animation as String).split("/")
+	var parts := (ap.current_animation as String).split("/")
 	return parts[parts.size() - 1]
 
 

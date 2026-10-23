@@ -13,7 +13,7 @@ extends Node3D
 const B: Balance = preload("res://gameplay/balance.tres")
 
 ## Высота точки взгляда над ступнями персонажа, м.
-const FOLLOW_HEIGHT: float = 1.35
+const FOLLOW_HEIGHT: float = 1.55
 ## Шаг приближения колесом мыши, м.
 const ZOOM_STEP: float = 0.5
 ## Стартовый наклон вниз, рад.

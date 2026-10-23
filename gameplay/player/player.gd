@@ -25,7 +25,7 @@ const STEP_PROBE: float = 0.35
 const STEP_FAIL_COOLDOWN: float = 0.25
 
 @onready var model: Node3D = $Model
-@onready var visual: CharacterModel = $Model/CharacterModel
+@onready var visual: CharacterVisual = $Model/Visual
 @onready var camera: PlayerCamera = $CameraRig
 @onready var attack_area: Area3D = $AttackArea
 
@@ -98,7 +98,7 @@ func _ready() -> void:
 	EventBus.player_emoted.connect(_on_player_emoted)
 	var bubble := EmoteBubble.new()
 	bubble.name = "EmoteBubble"
-	bubble.position = Vector3(0.0, 2.6, 0.0)
+	bubble.position = Vector3(0.0, 2.8, 0.0)
 	bubble.peer_id = Net.local_peer_id
 	add_child(bubble)
 	if Session.bot:
@@ -631,8 +631,9 @@ func _try_attack() -> void:
 	_attack_cooldown = B.attack_cooldown
 	_attack_active = B.attack_active_time
 	attack_area.monitoring = true
-	# Взмах при ударе — та же анимация «Привет!» (мах рукой, раздел 5).
-	visual.play_one_shot(Protocol.AnimState.WAVE, 0.25)
+	# Взмах при ударе: UBC — та же анимация «Привет!» (мах рукой, раздел 5),
+	# герой BU — замах мечом ss_slash (П10).
+	visual.play_attack(0.25)
 
 
 func _end_attack() -> void:

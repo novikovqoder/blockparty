@@ -22,7 +22,7 @@
 # UBC, клипы «Armature/Skeleton3D:<кость>» от корня сцены пола) — ребёнок
 # UbcRoot, как и треки; set_state/play_one_shot переключают клипы.
 class_name CharacterModel
-extends Node3D
+extends CharacterVisual
 
 ## Сцены полов: скелет + все части (видимость переключает setup).
 const SCENES: PackedStringArray = [
@@ -63,10 +63,6 @@ const LOCO_SMOOTH: float = 10.0
 
 const PAL: Palette = preload("res://assets/palette.tres")
 
-## Внешность, зафиксированная в setup_appearance.
-var appearance: Appearance = null
-## Номер пресета (0…count()-1) для старого интерфейса setup(character).
-var character: int = 0
 ## Дистанция переключения LOD (меняют уровни качества).
 var lod_distance: float = LOD_DISTANCE
 
@@ -292,6 +288,11 @@ func _setup_animations() -> void:
 	_root.add_child(_player)
 	_player.add_animation_library(CharacterAnims.LIB_NAME, CharacterAnims.library())
 	set_state(_state)
+
+
+## Плеер анимаций визуала (самопроверки анимаций П10).
+func anim_player() -> AnimationPlayer:
+	return _player
 
 
 ## Точка крепления предмета (задел на бой после MVP): HandL/HandR/Back.

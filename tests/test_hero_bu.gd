@@ -102,3 +102,49 @@ func test_loading_screen_bad_path_fails() -> void:
 	await wait_frames(5)
 	assert_signal_emitted(ls, "failed")
 	ls.queue_free()
+
+
+func _model() -> HeroModelBU:
+	var m: HeroModelBU = HeroModelBU.new()
+	m.name = "Visual"
+	add_child_autofree(m)
+	return m
+
+
+func test_walk_pose_and_leg_mesh_deform() -> void:
+	# Правила CLAUDE.md (этапы с персонажами): позы ключевых костей
+	# (бедро, колено, плечо) в ходьбе ≥0.5 с отличаются от покоя в числах
+	# с порогом; вершины меша ног едут за костями (скиннинг живой).
+	var result: Dictionary = await AnimSelfCheckBU.run(_model(), true)
+	assert_true(result["ok"], "позы/скиннинг: %s"
+		% ";\n".join(PackedStringArray(result["reasons"])))
+
+
+func test_sword_library_tracks_resolve() -> void:
+	# Правила CLAUDE.md (этапы с персонажами): каждая дорожка каждого
+	# клипа библиотеки sword находит узел и кость на риге героя.
+	var model: HeroModelBU = _model()
+	await wait_frames(2)
+	var ap: AnimationPlayer = model.anim_player()
+	assert_not_null(ap, "у героя есть плеер")
+	var skel: Skeleton3D = model.skeleton()
+	assert_not_null(skel, "у героя есть скелет")
+	var root: Node = ap.get_node(ap.root_node)
+	var unresolved: PackedStringArray = PackedStringArray()
+	var tracks: int = 0
+	for lib_name: StringName in ap.get_animation_library_list():
+		var lib: AnimationLibrary = ap.get_animation_library(lib_name)
+		for anim_name: StringName in lib.get_animation_list():
+			var anim: Animation = lib.get_animation(anim_name)
+			for tr: int in anim.get_track_count():
+				tracks += 1
+				var path := String(anim.track_get_path(tr))
+				var node := root.get_node_or_null(NodePath(path.get_slice(":", 0)))
+				if node == null:
+					unresolved.append("%s/%s: узел «%s»" % [lib_name, anim_name, path])
+				elif node is Skeleton3D \
+						and (node as Skeleton3D).find_bone(path.get_slice(":", 1)) < 0:
+					unresolved.append("%s/%s: кость «%s»" % [lib_name, anim_name, path])
+	assert_gt(tracks, 0, "в библиотеке есть дорожки")
+	assert_eq(unresolved.size(), 0, "дорожки без узла/кости: %s"
+		% ", ".join(unresolved))

@@ -45,8 +45,10 @@ func _player_on(parent: Node3D, position: Vector3) -> Player:
 
 # Origin персонажа — в ногах (коллайдер поднят на половину роста внутри
 # player.tscn), поэтому «стоит на полу» — это y ≈ 0, а «встал на голову» —
-# ноги на верхней грани бокса головы 1.7.
+# ноги на верхней грани бокса головы. П10: герой BU ростом 1,8 — бокс на
+# 1.85, его верх 1.9 (прежде 1.7 у блочного 1.6).
 const GROUND_Y: float = 0.0
+const HEAD_TOP_Y: float = 1.9
 
 
 func test_fall_onto_head_lands_and_boosts() -> void:
@@ -55,18 +57,18 @@ func test_fall_onto_head_lands_and_boosts() -> void:
 	_floor(world)
 	var below := _player_on(world, Vector3(0, 0.05, 0))
 	var above := _player_on(world, Vector3(0, 3.0, 0))
-	# Падение сверху: останавливается на коллайдере головы (верх 1.7).
+	# Падение сверху: останавливается на коллайдере головы (верх 1.9, П10).
 	var settled: bool = false
 	for i: int in range(120):
 		await get_tree().physics_frame
-		if above.is_on_floor() and absf(above.global_position.y - 1.7) < 0.1:
+		if above.is_on_floor() and absf(above.global_position.y - HEAD_TOP_Y) < 0.1:
 			settled = true
 			break
-	assert_true(settled, "встал на голову: ноги на верхней грани бокса 1.7")
+	assert_true(settled, "встал на голову: ноги на верхней грани бокса 1.9")
 	assert_almost_eq(below.global_position.y, GROUND_Y, 0.05, "нижний стоит на месте")
 
-	# Прыжок с головы усилен ×1.3: апекс 1.7 + ~2.4 ≈ 4.1 — хватает на
-	# уступ в 3 блока (3.0), без усиления (1.3 + 1.7 = 3.0 впритык) — нет.
+	# Прыжок с головы усилен ×1.3: апекс 1.9 + ~2.4 ≈ 4.3 — хватает на
+	# уступ в 3 блока (3.0), без усиления (1.4 + 1.9 = 3.3 впритык) — нет.
 	Input.action_press("jump")
 	var top: float = above.global_position.y
 	for i: int in range(60):
@@ -74,7 +76,7 @@ func test_fall_onto_head_lands_and_boosts() -> void:
 		top = maxf(top, above.global_position.y)
 	Input.action_release("jump")
 	assert_gt(top, 3.5, "прыжок с головы достаёт уступ в 3 блока")
-	assert_lt(JumpMath.apex_height(B) + 1.7, 3.5, "без усиления так высоко нельзя")
+	assert_lt(JumpMath.apex_height(B) + HEAD_TOP_Y, 3.5, "без усиления так высоко нельзя")
 
 
 func test_fall_beside_head_passes_through() -> void:
@@ -83,7 +85,7 @@ func test_fall_beside_head_passes_through() -> void:
 	_floor(world)
 	var below := _player_on(world, Vector3(0, 0.05, 0))
 	# Сбоку: капсула пересекает бокс головы по x, но ступни (1.0) ниже
-	# грани (1.7) — упереться нельзя, пролетаем насквозь до пола.
+	# грани (1.9) — упереться нельзя, пролетаем насквозь до пола.
 	var beside := _player_on(world, Vector3(0.45, 1.0, 0))
 	var landed := false
 	for i: int in range(120):

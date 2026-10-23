@@ -59,9 +59,9 @@ extends Resource
 @export var anim_walk_run_speed: float = 4.5
 ## Приземление после прыжка, с (Д2: короткое, сразу локомоция по скорости).
 @export var land_time: float = 0.2
-## Капсула персонажа: радиус и высота, м.
+## Капсула персонажа: радиус и высота, м (герой BU — рост 1,8, П10).
 @export var body_radius: float = 0.35
-@export var body_height: float = 1.6
+@export var body_height: float = 1.8
 
 @export_group("Камера (раздел 5)")
 ## Длина SpringArm3D за спиной и пределы колесом мыши, м.
