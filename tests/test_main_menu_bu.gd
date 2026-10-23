@@ -114,3 +114,93 @@ func test_continue_zooms_to_knight_and_emits_start() -> void:
 	assert_eq(_menu.section, MainMenuBU.Section.STARTING)
 	await wait_seconds(3.3)
 	assert_signal_emitted_with_parameters(_menu, "start_requested", [&"continue"])
+
+
+# --- Раскладка (доработка после приёмки П9): подсказки не наезжают ----------
+# Канва меню при stretch canvas_items всегда 1280×720 (keep_height):
+# подсказки внизу каждого раздела не должны пересекать пункты и контент.
+# Проверяются фактические глобальные прямоугольники после показа раздела
+# (твин показа ~0.6 с — ждём секунду).
+
+
+## Все видимые Control-текстовые узлы поддерева (кроме самой полосы подсказок).
+func _visible_texts(node: Node, skip: Array[Control], out: Array[Control]) -> void:
+	for child in node.get_children():
+		_visible_texts(child, skip, out)
+	var c := node as Control
+	if c == null or not c.is_visible_in_tree():
+		return
+	if not (c is Button or c is Label or c is SettingsRowBU):
+		return
+	for s in skip:
+		if c == s or s.is_ancestor_of(c):
+			return
+	out.append(c)
+
+
+func _assert_no_overlap(hints: Control, content: Array[Control], where: String) -> void:
+	var hrect: Rect2 = hints.get_global_rect()
+	for c in content:
+		var r: Rect2 = c.get_global_rect()
+		assert_false(hrect.intersects(r, true),
+			"%s: подсказки [%s] не пересекают %s [%s]" % [
+				where, hrect, c.name, r])
+
+
+func _hints_of(panel: Control) -> Control:
+	var found: Array[Node] = panel.find_children("BarHints", "HBoxContainer", true, false)
+	assert_eq(found.size(), 1, "%s: полоса подсказок одна" % panel.name)
+	return found[0] as Control
+
+
+func test_main_menu_hints_do_not_overlap_items() -> void:
+	await wait_seconds(1.0)
+	var hints: Control = _hints_of(_menu._main_panel)
+	var items: Array[Control] = []
+	for b in _menu.find_children("Btn_*", "MenuButtonBU", true, false):
+		var btn := b as Control
+		if btn.is_visible_in_tree():
+			items.append(btn)
+	assert_gt(items.size(), 5, "пункты главного меню на месте")
+	_assert_no_overlap(hints, items, "главное меню")
+
+
+func test_settings_panel_layout_within_canvas() -> void:
+	_menu.open_section(MainMenuBU.Section.SETTINGS)
+	await wait_seconds(1.2)
+	var settings: SettingsPanelBU = _menu.find_children("*", "SettingsPanelBU", true, false)[0] as SettingsPanelBU
+	var hints: Control = _hints_of(settings)
+	var desc: Control = settings.find_children("Desc", "VBoxContainer", true, false)[0] as Control
+	var scroll: Control = settings.find_children("RowsScroll", "ScrollContainer", true, false)[0] as Control
+	# Описание вернулось на экран канвы 720 и не залезает под полосу подсказок.
+	assert_lt(desc.get_global_rect().end.y, hints.get_global_rect().position.y,
+		"описание выше полосы подсказок")
+	var content: Array[Control] = [scroll, desc]
+	_assert_no_overlap(hints, content, "настройки")
+
+
+func test_credits_panel_hints_do_not_overlap_entries() -> void:
+	_menu.open_section(MainMenuBU.Section.CREDITS)
+	await wait_seconds(1.2)
+	var hints: Control = _hints_of(_menu._credits_panel)
+	var col: Control = _menu._credits_panel.find_children("CreditsCol", "VBoxContainer", true, false)[0] as Control
+	var entries: Array[Control] = []
+	for child in col.get_children():
+		if child is Label:
+			entries.append(child as Control)
+	# Все 7 записей (роль + имя) полностью над полосой «Esc — назад».
+	assert_gte(entries.size(), 14, "записи авторов на месте")
+	for e in entries:
+		assert_lt(e.get_global_rect().end.y, hints.get_global_rect().position.y,
+			"%s: запись выше полосы подсказок" % e.text)
+
+
+func test_chapters_panel_layout_no_overlaps() -> void:
+	_menu.open_section(MainMenuBU.Section.CHAPTERS)
+	await wait_seconds(1.2)
+	var hints: Control = _hints_of(_menu._chapters_panel)
+	var row: Control = _menu._chapters_panel.find_children("ChaptersRow", "HBoxContainer", true, false)[0] as Control
+	var head: Control = _menu._chapters_panel.find_children("ChaptersHead", "VBoxContainer", true, false)[0] as Control
+	_assert_no_overlap(hints, [row], "главы: карточки против полосы")
+	assert_false(head.get_global_rect().intersects(row.get_global_rect(), true),
+		"главы: заголовок не пересекает карточки")

@@ -7,6 +7,14 @@ signal back_requested
 
 const LEFT: float = 144.0
 const WIDTH: float = 900.0
+## Вертикальная сетка под канву 720 px (stretch canvas_items): шапка,
+## вкладки, прокручиваемые строки, описание и нижняя полоса подсказок.
+const HEADER_Y: float = 56.0
+const TABS_Y: float = 152.0
+const TABS_H: float = 44.0
+const ROWS_Y: float = 216.0
+const ROWS_BOTTOM: float = 540.0
+const DESC_Y: float = 548.0
 
 const TABS: Array[StringName] = [&"gfx", &"audio", &"ctrl", &"game", &"lang"]
 
@@ -103,25 +111,25 @@ func _build() -> void:
 	add_child(backing)
 
 	var header: VBoxContainer = VBoxContainer.new()
-	header.position = Vector2(LEFT, 78)
-	header.add_theme_constant_override("separation", 4)
+	header.position = Vector2(LEFT, HEADER_Y)
+	header.add_theme_constant_override("separation", 2)
 	add_child(header)
-	var kicker: Label = _label("BORN UNBLESSED", UiStyleBU.display(700), 20, UiStyleBU.TEXT_FAINT)
+	var kicker: Label = _label("BORN UNBLESSED", UiStyleBU.display(700), 15, UiStyleBU.TEXT_FAINT)
 	kicker.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	header.add_child(kicker)
-	header.add_child(_label("BU_SETTINGS_TITLE", UiStyleBU.display(700), 76, UiStyleBU.TEXT_STRONG))
+	header.add_child(_label("BU_SETTINGS_TITLE", UiStyleBU.display(700), 52, UiStyleBU.TEXT_STRONG))
 
-	_dirty_label = _label("BU_SETTINGS_DIRTY", UiStyleBU.body(500), 15, UiStyleBU.TEXT_FAINT)
-	_dirty_label.position = Vector2(LEFT + WIDTH - 360, 172)
+	_dirty_label = _label("BU_SETTINGS_DIRTY", UiStyleBU.body(500), 13, UiStyleBU.TEXT_FAINT)
+	_dirty_label.position = Vector2(LEFT + WIDTH - 360, 118)
 	_dirty_label.custom_minimum_size = Vector2(360, 0)
 	_dirty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_dirty_label.visible = false
 	add_child(_dirty_label)
 
 	var tabs: HBoxContainer = HBoxContainer.new()
-	tabs.position = Vector2(LEFT, 210)
-	tabs.custom_minimum_size = Vector2(WIDTH, 58)
-	tabs.add_theme_constant_override("separation", 40)
+	tabs.position = Vector2(LEFT, TABS_Y)
+	tabs.custom_minimum_size = Vector2(WIDTH, TABS_H)
+	tabs.add_theme_constant_override("separation", 36)
 	add_child(tabs)
 	for t: StringName in TABS:
 		var b: Button = Button.new()
@@ -129,52 +137,63 @@ func _build() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		b.add_theme_font_override("font", UiStyleBU.display(700))
-		b.add_theme_font_size_override("font_size", 26)
+		b.add_theme_font_size_override("font_size", 21)
 		b.pressed.connect(show_tab.bind(t))
 		b.draw.connect(_draw_tab_line.bind(b, t))
 		tabs.add_child(b)
 		_tab_buttons[t] = b
 	var line: ColorRect = ColorRect.new()
 	line.color = UiStyleBU.HAIRLINE
-	line.position = Vector2(LEFT, 268)
+	line.position = Vector2(LEFT, TABS_Y + TABS_H)
 	line.size = Vector2(WIDTH, 1)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(line)
 
+	# Строки — в контейнере с обрезкой: длинные вкладки не наезжают на
+	# описание и нижнюю полосу (полоса прокрутки — доработка после сдачи П9).
+	var rows_scroll: ScrollContainer = ScrollContainer.new()
+	rows_scroll.name = "RowsScroll"
+	rows_scroll.position = Vector2(LEFT - 16, ROWS_Y)
+	rows_scroll.size = Vector2(WIDTH + 16, ROWS_BOTTOM - ROWS_Y)
+	rows_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	rows_scroll.follow_focus = true
+	add_child(rows_scroll)
 	_rows_box = VBoxContainer.new()
-	_rows_box.position = Vector2(LEFT - 16, 290)
-	_rows_box.custom_minimum_size = Vector2(WIDTH + 16, 0)
+	_rows_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rows_box.custom_minimum_size = Vector2(WIDTH, 0)
 	_rows_box.add_theme_constant_override("separation", 2)
-	add_child(_rows_box)
+	rows_scroll.add_child(_rows_box)
 
 	var desc: VBoxContainer = VBoxContainer.new()
-	desc.position = Vector2(LEFT, 818)
+	desc.name = "Desc"
+	desc.position = Vector2(LEFT, DESC_Y)
 	desc.custom_minimum_size = Vector2(WIDTH, 0)
-	desc.add_theme_constant_override("separation", 6)
+	desc.add_theme_constant_override("separation", 4)
 	add_child(desc)
 	var topline: ColorRect = ColorRect.new()
 	topline.color = UiStyleBU.ACCENT_LINE
 	topline.custom_minimum_size = Vector2(64, 2)
 	topline.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	desc.add_child(topline)
-	_desc_title = _label("", UiStyleBU.display(700), 28, UiStyleBU.TEXT_STRONG)
+	_desc_title = _label("", UiStyleBU.display(700), 22, UiStyleBU.TEXT_STRONG)
 	desc.add_child(_desc_title)
-	_desc_text = _label("", UiStyleBU.body(400), 17, UiStyleBU.TEXT_SOFT)
+	_desc_text = _label("", UiStyleBU.body(400), 14, UiStyleBU.TEXT_SOFT)
 	_desc_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_text.custom_minimum_size = Vector2(WIDTH, 0)
 	desc.add_child(_desc_text)
-	_desc_warn = _label("", UiStyleBU.body(600), 16, UiStyleBU.ACCENT_TEXT)
+	_desc_warn = _label("", UiStyleBU.body(600), 13, UiStyleBU.ACCENT_TEXT)
 	_desc_warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_warn.custom_minimum_size = Vector2(WIDTH, 0)
 	desc.add_child(_desc_warn)
 
 	var bar: HBoxContainer = HBoxContainer.new()
+	bar.name = "BarHints"
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_left = LEFT
 	bar.offset_right = -LEFT
-	bar.offset_top = -96
-	bar.offset_bottom = -40
-	bar.add_theme_constant_override("separation", 28)
+	bar.offset_top = -62
+	bar.offset_bottom = -16
+	bar.add_theme_constant_override("separation", 24)
 	add_child(bar)
 	bar.add_child(_hint("Q / E", "BU_HINT_TABS"))
 	bar.add_child(_hint("R", "BU_HINT_RESET"))
@@ -208,18 +227,18 @@ func _label(text_key: String, font: Font, font_size: int, color: Color) -> Label
 func _hint(key_text: String, label_key: String) -> HBoxContainer:
 	var h: HBoxContainer = HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)
-	var k: Label = _label(key_text, UiStyleBU.body(600), 15, UiStyleBU.TEXT)
+	var k: Label = _label(key_text, UiStyleBU.body(600), 13, UiStyleBU.TEXT)
 	k.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	var sb: StyleBoxFlat = UiStyleBU.flat_box(Color(0, 0, 0, 0), UiStyleBU.BORDER, 1)
-	sb.content_margin_left = 9
-	sb.content_margin_right = 9
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 3
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 2
+	sb.content_margin_bottom = 2
 	sb.set_corner_radius_all(4)
 	k.add_theme_stylebox_override("normal", sb)
 	k.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(k)
-	var t: Label = _label(label_key, UiStyleBU.body(500), 16, UiStyleBU.TEXT_MUTED)
+	var t: Label = _label(label_key, UiStyleBU.body(500), 14, UiStyleBU.TEXT_MUTED)
 	t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(t)
 	return h
@@ -230,25 +249,25 @@ func _bar_button(text_key: String, primary: bool) -> Button:
 	b.text = text_key
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.custom_minimum_size = Vector2(0, 54)
+	b.custom_minimum_size = Vector2(0, 44)
 	var sb: StyleBoxFlat
 	if primary:
 		sb = UiStyleBU.flat_box(UiStyleBU.ACCENT_DEEP, UiStyleBU.ACCENT, 1)
 		b.add_theme_font_override("font", UiStyleBU.display(700))
-		b.add_theme_font_size_override("font_size", 24)
+		b.add_theme_font_size_override("font_size", 20)
 		b.add_theme_color_override("font_color", Color("fff3ee"))
 		b.add_theme_color_override("font_hover_color", Color.WHITE)
 	elif text_key == "BU_BACK":
 		sb = UiStyleBU.flat_box(Color(0, 0, 0, 0), UiStyleBU.BORDER, 1)
 		b.add_theme_font_override("font", UiStyleBU.display(700))
-		b.add_theme_font_size_override("font_size", 24)
+		b.add_theme_font_size_override("font_size", 20)
 	else:
 		sb = UiStyleBU.flat_box()
 		b.add_theme_font_override("font", UiStyleBU.body(600))
-		b.add_theme_font_size_override("font_size", 17)
+		b.add_theme_font_size_override("font_size", 15)
 		b.add_theme_color_override("font_color", UiStyleBU.TEXT_MUTED)
-	sb.content_margin_left = 30
-	sb.content_margin_right = 30
+	sb.content_margin_left = 22
+	sb.content_margin_right = 22
 	var hov: StyleBoxFlat = sb.duplicate() as StyleBoxFlat
 	if primary:
 		hov.bg_color = UiStyleBU.ACCENT

@@ -479,23 +479,26 @@ func _build_main_panel() -> Control:
 	col.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	col.offset_left = 144
 	col.offset_right = 144 + 760
+	# Канва меню при stretch canvas_items всегда 1280×720 (keep_height):
+	# внизу резервируем полосу подсказок, чтобы пункты не наезжали на неё.
+	col.offset_bottom = -132
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 0)
 	root.add_child(col)
 
-	var born: Label = _label("BORN", UiStyleBU.display_spaced(700, 22), 52, UiStyleBU.TEXT_MUTED)
+	var born: Label = _label("BORN", UiStyleBU.display_spaced(700, 22), 44, UiStyleBU.TEXT_MUTED)
 	born.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	col.add_child(born)
-	var unblessed: Label = _label("UNBLESSED", UiStyleBU.display_spaced(700, 6), 112, UiStyleBU.TEXT_STRONG)
+	var unblessed: Label = _label("UNBLESSED", UiStyleBU.display_spaced(700, 6), 92, UiStyleBU.TEXT_STRONG)
 	unblessed.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	unblessed.add_theme_constant_override("line_spacing", -20)
+	unblessed.add_theme_constant_override("line_spacing", -16)
 	col.add_child(unblessed)
 	var gap1: Control = Control.new()
-	gap1.custom_minimum_size = Vector2(0, 18)
+	gap1.custom_minimum_size = Vector2(0, 10)
 	col.add_child(gap1)
 	col.add_child(_accent_line(260))
 	var gap2: Control = Control.new()
-	gap2.custom_minimum_size = Vector2(0, 56)
+	gap2.custom_minimum_size = Vector2(0, 34)
 	col.add_child(gap2)
 
 	var items: Array[Array] = [
@@ -521,10 +524,10 @@ func _build_main_panel() -> Control:
 		col.add_child(b)
 		buttons.append(b)
 		if id == &"continue":
-			var sub: Label = _label(continue_subtitle, UiStyleBU.body(500), 16, UiStyleBU.TEXT_MUTED)
+			var sub: Label = _label(continue_subtitle, UiStyleBU.body(500), 15, UiStyleBU.TEXT_MUTED)
 			var m: MarginContainer = MarginContainer.new()
 			m.add_theme_constant_override("margin_left", int(MenuButtonBU.INDENT))
-			m.add_theme_constant_override("margin_bottom", 14)
+			m.add_theme_constant_override("margin_bottom", 6)
 			m.add_child(sub)
 			m.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			col.add_child(m)
@@ -534,6 +537,7 @@ func _build_main_panel() -> Control:
 	_first_button = buttons[0]
 
 	_main_hints = _hint_row([PackedStringArray(["Enter", "BU_HINT_SELECT"]), PackedStringArray(["Esc", "BU_HINT_BACK"])])
+	_main_hints.name = "BarHints"
 	_main_hints.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_main_hints.offset_left = 144
 	_main_hints.offset_top = -92
@@ -556,18 +560,21 @@ func _build_credits_panel() -> Control:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var col: VBoxContainer = VBoxContainer.new()
+	col.name = "CreditsCol"
 	col.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
 	col.offset_left = -144 - 700
 	col.offset_right = -144
+	# Полоса «Esc — назад» внизу не перекрывается записями.
+	col.offset_bottom = -120
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 6)
 	root.add_child(col)
-	var title: Label = _label("BU_CREDITS_TITLE", UiStyleBU.display_spaced(700, 6), 76, UiStyleBU.TEXT_STRONG)
+	var title: Label = _label("BU_CREDITS_TITLE", UiStyleBU.display_spaced(700, 6), 48, UiStyleBU.TEXT_STRONG)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	col.add_child(title)
-	col.add_child(_accent_line(220, true))
+	col.add_child(_accent_line(180, true))
 	var gap: Control = Control.new()
-	gap.custom_minimum_size = Vector2(0, 30)
+	gap.custom_minimum_size = Vector2(0, 16)
 	col.add_child(gap)
 	var entries: Array[PackedStringArray] = [
 		PackedStringArray(["BU_CR_IDEA", "BU_CR_IDEA_NAMES"]),
@@ -579,17 +586,18 @@ func _build_credits_panel() -> Control:
 		PackedStringArray(["BU_CR_THANKS", "BU_CR_THANKS_NAMES"]),
 	]
 	for e: PackedStringArray in entries:
-		var role: Label = _label(e[0], UiStyleBU.body(600), 15, UiStyleBU.TEXT_FAINT)
+		var role: Label = _label(e[0], UiStyleBU.body(600), 13, UiStyleBU.TEXT_FAINT)
 		role.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		col.add_child(role)
-		var names: Label = _label(e[1], UiStyleBU.display(600), 30, UiStyleBU.TEXT)
+		var names: Label = _label(e[1], UiStyleBU.display(600), 22, UiStyleBU.TEXT)
 		names.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		names.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		col.add_child(names)
 		var g: Control = Control.new()
-		g.custom_minimum_size = Vector2(0, 12)
+		g.custom_minimum_size = Vector2(0, 8)
 		col.add_child(g)
 	var bar: HBoxContainer = _hint_row([PackedStringArray(["Esc", "BU_HINT_BACK"])])
+	bar.name = "BarHints"
 	var back: MenuButtonBU = MenuButtonBU.new("BU_BACK", 28)
 	back.name = "Btn_credits_back"
 	back.pressed.connect(_back_to_main)
@@ -610,17 +618,19 @@ func _build_chapters_panel() -> Control:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var head: VBoxContainer = VBoxContainer.new()
-	head.position = Vector2(144, 90)
+	head.name = "ChaptersHead"
+	head.position = Vector2(144, 56)
 	root.add_child(head)
-	head.add_child(_label("BU_CHAPTERS_TITLE", UiStyleBU.display_spaced(700, 6), 76, UiStyleBU.TEXT_STRONG))
-	head.add_child(_label("BU_CHAPTERS_SUB", UiStyleBU.body(500), 17, UiStyleBU.TEXT_MUTED))
+	head.add_child(_label("BU_CHAPTERS_TITLE", UiStyleBU.display_spaced(700, 6), 48, UiStyleBU.TEXT_STRONG))
+	head.add_child(_label("BU_CHAPTERS_SUB", UiStyleBU.body(500), 15, UiStyleBU.TEXT_MUTED))
 
 	var row: HBoxContainer = HBoxContainer.new()
+	row.name = "ChaptersRow"
 	row.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	row.offset_left = 144
 	row.offset_right = -144
-	row.offset_top = -560
-	row.offset_bottom = -170
+	row.offset_top = -470
+	row.offset_bottom = -150
 	row.add_theme_constant_override("separation", 22)
 	root.add_child(row)
 	# Статусы: 0 — пройдена, 1 — текущая, 2 — закрыта. Заглушка до системы сохранений.
@@ -649,17 +659,17 @@ func _build_chapters_panel() -> Control:
 		card.mouse_entered.connect(card.grab_focus)
 		var v: VBoxContainer = VBoxContainer.new()
 		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		v.offset_left = 28
-		v.offset_right = -24
-		v.offset_top = 26
-		v.offset_bottom = -26
-		v.add_theme_constant_override("separation", 10)
+		v.offset_left = 24
+		v.offset_right = -20
+		v.offset_top = 16
+		v.offset_bottom = -16
+		v.add_theme_constant_override("separation", 8)
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(v)
-		var num: Label = _label(String(c[0]), UiStyleBU.display(700), 84, UiStyleBU.ACCENT_TEXT if status == 1 else Color("8f7570"))
+		var num: Label = _label(String(c[0]), UiStyleBU.display(700), 56, UiStyleBU.ACCENT_TEXT if status == 1 else Color("8f7570"))
 		num.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 		v.add_child(num)
-		var t: Label = _label(String(c[1]), UiStyleBU.display(600), 30, UiStyleBU.TEXT_STRONG)
+		var t: Label = _label(String(c[1]), UiStyleBU.display(600), 24, UiStyleBU.TEXT_STRONG)
 		t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(t)
 		var sp: Control = Control.new()
@@ -667,7 +677,7 @@ func _build_chapters_panel() -> Control:
 		sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.add_child(sp)
 		var st_key: String = ["BU_CH_DONE", "BU_CH_CURRENT", "BU_CH_AHEAD"][status]
-		v.add_child(_label(st_key, UiStyleBU.body(600), 16, UiStyleBU.ACCENT_TEXT if status == 1 else UiStyleBU.TEXT_MUTED))
+		v.add_child(_label(st_key, UiStyleBU.body(600), 14, UiStyleBU.ACCENT_TEXT if status == 1 else UiStyleBU.TEXT_MUTED))
 		row.add_child(card)
 		if status < 2:
 			buttons.append(card)
@@ -676,6 +686,7 @@ func _build_chapters_panel() -> Control:
 	back.name = "Btn_chapters_back"
 	back.pressed.connect(_back_to_main)
 	bar.add_child(back)
+	bar.name = "BarHints"
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	bar.offset_left = 144
 	bar.offset_top = -110
