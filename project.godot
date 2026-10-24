@@ -88,34 +88,6 @@ push_to_talk={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":86)]
 }
-emote_wheel={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":81)]
-}
-emote_1={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":49)]
-}
-emote_2={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":50)]
-}
-emote_3={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":51)]
-}
-emote_4={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":52)]
-}
-emote_5={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":53)]
-}
-emote_6={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":54)]
-}
 player_list={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":4194306)]

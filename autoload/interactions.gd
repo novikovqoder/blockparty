@@ -18,7 +18,6 @@ const KIND_CAMPFIRE: String = "campfire"        # сидели рядом у к�
 const KIND_GATE_OPEN: String = "gate_open"      # вместе открыли ворота руин
 const KIND_BOOST_GOT: String = "boost_got"      # он подсадил меня на уступ
 const KIND_BOOST_GAVE: String = "boost_gave"    # я подсадил его
-const KIND_EMOTE_REPLY: String = "emote_reply"  # ответная эмоция в течение 5 с
 
 ## peer_id -> суммарные очки.
 var _scores: Dictionary = {}

@@ -95,12 +95,6 @@ func _ready() -> void:
 	EventBus.hand_link.connect(_on_hand_link)
 	EventBus.hand_invite.connect(_on_hand_invite)
 	EventBus.campfire_seats.connect(_on_campfire_seats)
-	EventBus.player_emoted.connect(_on_player_emoted)
-	var bubble := EmoteBubble.new()
-	bubble.name = "EmoteBubble"
-	bubble.position = Vector3(0.0, 2.8, 0.0)
-	bubble.peer_id = Net.local_peer_id
-	add_child(bubble)
 	if Session.bot:
 		_bot = BotController.new()
 		_bot.setup(self)
@@ -277,15 +271,6 @@ func _follow_leader() -> Vector3:
 		_jumped = true
 	_leader_was_jumping = leader_jumping
 	return to_target / distance if distance > 0.15 else Vector3.ZERO
-
-
-# --- Эмоции (раздел 9.7: ввод — колесо Q и клавиши 1–6, EmoteWheel) ---
-
-## Хост подтвердил мою эмоцию (раздел 9.7): жест, пузырь рисует EmoteBubble.
-func _on_player_emoted(peer: int, emote: int, _marker: Vector3) -> void:
-	if peer != Net.local_peer_id:
-		return
-	visual.play_one_shot(Protocol.EMOTE_ANIMS[emote], B.emote_bubble_time)
 
 
 # --- Сидение у костра (раздел 9.6) ---

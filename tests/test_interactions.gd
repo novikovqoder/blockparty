@@ -9,9 +9,9 @@ const B: Balance = preload("res://gameplay/balance.tres")
 func test_scores_accumulate_per_peer() -> void:
 	Interactions.reset()
 	Interactions.add_points(7, Interactions.KIND_PULL_GOT, B.pts_pull, 12.5)
-	Interactions.add_points(9, Interactions.KIND_EMOTE_REPLY, B.pts_emote_reply, 3.0)
+	Interactions.add_points(9, Interactions.KIND_BOOST_GOT, B.pts_boost, 3.0)
 	assert_almost_eq(Interactions.score(7), B.pts_pull, 0.001)
-	assert_almost_eq(Interactions.score(9), B.pts_emote_reply, 0.001)
+	assert_almost_eq(Interactions.score(9), B.pts_boost, 0.001)
 	assert_eq(Interactions.score(123), 0.0, "неизвестный пир — 0")
 
 
@@ -22,7 +22,6 @@ func test_points_match_section13_table() -> void:
 	assert_almost_eq(B.pts_boost, 5.0, 0.001)
 	assert_almost_eq(B.pts_hand_held, 4.0, 0.001)
 	assert_almost_eq(B.pts_campfire, 3.0, 0.001)
-	assert_almost_eq(B.pts_emote_reply, 2.0, 0.001)
 	assert_almost_eq(B.pts_proximity, 0.05, 0.0001)
 	assert_almost_eq(B.pts_voice_heard, 0.3, 0.001)
 

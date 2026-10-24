@@ -1,6 +1,8 @@
 # Тесты анимаций UAL на риге UBC (П5.8, часть C): библиотека anims_ubc.res
-# имеет клип для каждого состояния Protocol.AnimState (включая эмоции
-# колеса), у обоих полов каждый трек каждого клипа резолвится в кость
+# имеет клип для каждого живого состояния Protocol.AnimState (мёртвые
+# значения 13–18 — эмоции колеса, удалённые с наследием Blockparty, — клипов
+# не имеют: сетевой формат их держит, код отправки удалён), у обоих полов
+# каждый трек каждого клипа резолвится в кость
 # скелета, циклические состояния играются зацикленными клипами; модель
 # переключает клипы по set_state, разовый play_one_shot возвращается к
 # состоянию, пересборка внешности не роняет аниматор.
@@ -21,14 +23,21 @@ func _make(gender: int) -> CharacterModel:
 
 
 func test_every_state_has_clip() -> void:
-	# Полный покров состояний: у каждого Protocol.AnimState есть клип
-	# в библиотеке (сетевой формат не меняется, раздел 10 SPEC).
+	# Полный покров живых состояний: у каждого состояния с назначенным
+	# клипом (STATE_CLIPS) клип есть в библиотеке. Мёртвые значения enum
+	# 13–18 (эмоции) клипов не имеют — сетевой формат не меняется
+	# (раздел 10 SPEC), но код отправки удалён.
 	var lib := CharacterAnims.library()
-	for state: int in Protocol.AnimState.values():
+	for state: int in CharacterAnims.STATE_CLIPS.keys():
 		var clip := CharacterAnims.clip_for_state(state)
 		assert_ne(clip, &"", "состояние %d: назначен клип" % state)
 		assert_true(lib.has_animation(clip),
 			"состояние %d: клип %s есть в anims_ubc.res" % [state, clip])
+	var live: Array = CharacterAnims.STATE_CLIPS.keys()
+	for state: int in Protocol.AnimState.values():
+		if not live.has(state):
+			assert_gt(state, Protocol.AnimState.WAVE,
+				"состояние %d без клипа может быть только мёртвым (> WAVE)" % state)
 
 
 func test_all_tracks_resolve_on_both_bodies() -> void:

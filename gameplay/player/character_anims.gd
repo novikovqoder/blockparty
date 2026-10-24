@@ -7,9 +7,8 @@
 # не пересобирается (loop-режимы выставлены при запечке). Клипы без
 # аналога в UAL Standard (взмах, «Помогите!», вис у кромки, «за руку»)
 # сгенерированы процедурно поверх rest/запечённых баз — честная запись
-# в docs/STATUS.md (раздел 16). Состояние Protocol.AnimState → клип: у
-# эмоций колеса (раздел 5) жесты по смыслу — полный список клипов UAL
-# и маппинг в docs/STATUS.md.
+# в docs/STATUS.md (раздел 16). Состояние Protocol.AnimState → клип —
+# полный список клипов UAL и маппинг в docs/STATUS.md.
 class_name CharacterAnims
 extends RefCounted
 
@@ -35,16 +34,6 @@ const STATE_CLIPS: Dictionary = {
 	Protocol.AnimState.SIT: &"Sitting_Idle",
 	Protocol.AnimState.HOLD_HAND: &"Walk_Hand",
 	Protocol.AnimState.WAVE: &"Wave_Hand",
-	# Эмоции колеса: «Привет!» — взмах одной рукой (замыкает EMOTE_ANIMS),
-	# «Спасибо» — разговорный жест, «Вон там» — указание вдаль (Rail Call),
-	# «Подожди» — качание головой, «Смешно» — танец, «Помогите!» — обе
-	# руки вверх (процедурный Help_Call).
-	Protocol.AnimState.EMOTE_1: &"Wave_Hand",
-	Protocol.AnimState.EMOTE_2: &"Idle_Talking",
-	Protocol.AnimState.EMOTE_3: &"Idle_Rail_Call",
-	Protocol.AnimState.EMOTE_4: &"Idle_No",
-	Protocol.AnimState.EMOTE_5: &"Dance",
-	Protocol.AnimState.EMOTE_6: &"Help_Call",
 }
 
 ## Циклические состояния (покой, перемещение, полёт, сидение, за руку);

@@ -101,17 +101,6 @@ const FLAG_SITTING: int = 1 << 3
 const FLAG_HAND_HELD: int = 1 << 4
 const FLAG_LED_BY_HAND: int = 1 << 5
 
-# --- Эмоции (раздел 9.7: колесо Q, порядок — быстрые клавиши 1–6) ---
-
-enum Emote { HELLO, THANKS, HERE, WAIT, HAHA, HELP }
-
-## Ключи i18n фраз пузырей (по индексу эмоции).
-const EMOTE_KEYS: Array[String] = [
-	"EMOTE_HELLO", "EMOTE_THANKS", "EMOTE_HERE", "EMOTE_WAIT", "EMOTE_HAHA", "EMOTE_HELP",
-]
-
-## Анимация эмоции (раздел 5): «Привет!» машет, остальные — жесты.
-const EMOTE_ANIMS: Array[int] = [
-	AnimState.WAVE, AnimState.EMOTE_2, AnimState.EMOTE_3,
-	AnimState.EMOTE_4, AnimState.EMOTE_5, AnimState.EMOTE_6,
-]
+# Эмоции (раздел 9.7) удалены с наследием Blockparty: значения AnimState 7–18
+# (HANG, PULLED_UP, HELP_PULL, SIT, HOLD_HAND, WAVE, EMOTE_1..6) остаются
+# в enum как мёртвые — сетевой формат не меняется (PROTOCOL_VERSION 6).

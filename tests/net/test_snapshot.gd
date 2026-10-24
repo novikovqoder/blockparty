@@ -73,7 +73,7 @@ func test_all_flags_and_anim_states_fit() -> void:
 		Protocol.AnimState.JUMP, Protocol.AnimState.FALL, Protocol.AnimState.LAND,
 		Protocol.AnimState.BONK, Protocol.AnimState.HANG, Protocol.AnimState.PULLED_UP,
 		Protocol.AnimState.HELP_PULL, Protocol.AnimState.SIT, Protocol.AnimState.HOLD_HAND,
-		Protocol.AnimState.WAVE, Protocol.AnimState.EMOTE_1, Protocol.AnimState.EMOTE_6,
+		Protocol.AnimState.WAVE,
 	]:
 		var snap := Snapshot.unpack(Snapshot.pack(0, 0, 0, 0, 0, 0, 0, 0, state, all_flags))
 		assert_eq(int(snap["anim"]), state)
