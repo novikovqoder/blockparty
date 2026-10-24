@@ -3,8 +3,8 @@
 # телепорт при расхождении больше 5 м), поворот модели — по кратчайшей дуге.
 # Модель та же, что у локального игрока (визуал заменяем), ник — Label3D
 # в радиусе 40 м (раздел 6). Движение ремоута клиентом владельца, здесь
-# только отображение. Косметика — П5/П8. Подсадка на голову удалена
-# с наследием Blockparty (born-unblessed).
+# только отображение. Косметика — П5/П8. Подсадка на голову и внешность
+# из сети удалены с наследием Blockparty (born-unblessed).
 class_name RemotePlayer
 extends Node3D
 
@@ -17,9 +17,6 @@ const SPEED_SMOOTH: float = 10.0
 
 var peer_id: int = 0
 var player_name: String = ""
-## Внешность байтами индексов редактора (П5.8, пришла с rpc_player_joined;
-## хост уже проверил диапазоны, валидируем ещё раз на случай мусора).
-var appearance: PackedByteArray = PackedByteArray()
 
 var _model: Node3D
 var _visual: CharacterVisual
@@ -38,10 +35,9 @@ var _foot_fx: FootFx = null
 var _was_on_floor: bool = true
 
 
-func setup(p_peer_id: int, p_name: String, p_appearance: PackedByteArray = PackedByteArray()) -> void:
+func setup(p_peer_id: int, p_name: String) -> void:
 	peer_id = p_peer_id
 	player_name = p_name
-	appearance = p_appearance
 
 
 func _ready() -> void:
@@ -49,14 +45,11 @@ func _ready() -> void:
 	_model = Node3D.new()
 	_model.name = "Model"
 	add_child(_model)
-	# Модель чужого игрока — тот же герой Born Unblessed (П10): внешность
-	# из сети сохраняется структурой протокола, на модель не влияет;
-	# колёсико меча не слушает (меч — локальная механика П10, срез этапа).
+	# Модель чужого игрока — тот же герой Born Unblessed (П10): модель одна
+	# на всех; колёсико меча не слушает (меч — локальная механика П10).
 	_visual = HeroModelBU.new()
 	_visual.name = "Visual"
 	_model.add_child(_visual)
-	_visual.setup_appearance(Appearance.from_bytes(appearance).validated())
-	_visual.setup_palette(peer_id)
 
 	# Ник над головой (раздел 6: в радиусе 40 м), к игроку лицом.
 	var label := Label3D.new()

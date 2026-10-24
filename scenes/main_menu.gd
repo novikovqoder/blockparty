@@ -81,12 +81,6 @@ func _on_friends_world_pressed() -> void:
 	SteamService.create_world(SteamService.LOBBY_MODE_FRIENDS)
 
 
-## «Внешность» (раздел 15, П5.8): редактор внешности игрока.
-func _on_character_pressed() -> void:
-	Log.info("MainMenu: «Внешность»", "Menu")
-	get_tree().call_deferred("change_scene_to_file",
-		"res://scenes/appearance_editor.tscn")
-
 
 # --- Steam-поток входа (раздел 11) ---
 

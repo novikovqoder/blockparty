@@ -51,15 +51,6 @@ extends Resource
 	Color("ff8fa3"), Color("ffd166"), Color("c3f584"), Color("bda7ff"),
 ]
 
-@export_group("Цвета игроков (раздел 16)")
-## 6 ярких цветовых вариантов персонажа: тонировка материала PlayerColor
-## (albedo_color материала), один и тот же набор для всех трёх персонажей.
-## Вариант выдаётся по хэшу id — см. CharacterModel.palette_index.
-@export var player_colors: PackedColorArray = [
-	Color("ff5a5f"), Color("ffd23f"), Color("8ee04a"),
-	Color("2ec4b6"), Color("6a5df0"), Color("f15bb5"),
-]
-@export var eye: Color = Color("2b2b33")
 
 @export_group("Мобы и огонь (раздел 8)")
 @export var bird: Color = Color("6a7fcb")

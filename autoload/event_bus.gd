@@ -48,10 +48,8 @@ signal interaction_progress(fraction: float)
 
 ## Снапшот чужого игрока (хост переслал после AOI-фильтра).
 signal peer_snapshot(peer_id: int, snap: Dictionary, recv_msec: int)
-## Игрок вошёл в мир — его персонаж появляется у всех (rpc_player_joined);
-## appearance — внешность байтами индексов редактора (П5.8), проверенная
-## хостом на входе.
-signal peer_joined_world(peer_id: int, player_name: String, appearance: PackedByteArray)
+## Игрок вошёл в мир — его персонаж появляется у всех (rpc_player_joined).
+signal peer_joined_world(peer_id: int, player_name: String)
 
 ## Изменился состав участников мира.
 signal roster_changed(count: int)

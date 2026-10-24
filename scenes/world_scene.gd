@@ -130,25 +130,21 @@ func _wire_network() -> void:
 	# Кто уже в мире (поздний вход): появляем их персонажей.
 	for peer_id: int in Net.players.keys():
 		if peer_id != Net.local_peer_id and Net._peer_in_world(peer_id):
-			_on_peer_joined_world(
-				peer_id, str(Net.players[peer_id]["name"]),
-				Net._slot_appearance_bytes(peer_id)
-			)
+			_on_peer_joined_world(peer_id, str(Net.players[peer_id]["name"]))
 
 
-func _on_peer_joined_world(peer_id: int, player_name: String,
-		appearance: PackedByteArray) -> void:
+func _on_peer_joined_world(peer_id: int, player_name: String) -> void:
 	if peer_id == Net.local_peer_id or _remotes.has(peer_id):
 		return
 	var remote := RemotePlayer.new()
-	remote.setup(peer_id, player_name, appearance)
+	remote.setup(peer_id, player_name)
 	add_child(remote)
 	# Частицы из-под ног чужого игрока — по тем же покрытиям острова (П9).
 	remote.setup_foot_fx(_island.art())
 	_remotes[peer_id] = remote
 	Log.info(
-		"Игрок «%s» (peer %d, внешность %s) появился в мире"
-		% [player_name, peer_id, appearance], "World"
+		"Игрок «%s» (peer %d) появился в мире" % [player_name, peer_id],
+		"World",
 	)
 
 
@@ -199,21 +195,8 @@ func _spawn_player() -> void:
 	_player = PLAYER_SCENE.instantiate() as Player
 	_player.position = _island.spawn_point(Session.spawn_zone)
 	add_child(_player)
-	# Внешность локального игрока — собранная в редакторе внешности (П5.8,
-	# часть B; сохранение в user://, дефолт — мужское тело). Цвет верхней
-	# одежды по хэшу id (раздел 16): в Steam-режиме — Steam id, в ENet и без
-	# сети — peer id. Хэш локальный, по сети не передаётся.
-	var own_id: int = SteamService.steam_id if SteamService.steam_id != 0 \
-		else Net.local_peer_id
-	var appearance := Save.load_appearance()
-	_player.visual.setup_appearance(appearance)
-	_player.visual.setup_palette(own_id)
-	Log.info(
-		"Внешность: пол %d, причёска %d, цвет %d (id=%d)" % [
-			appearance.gender, appearance.hair,
-			CharacterModel.palette_index(own_id), own_id],
-		"World",
-	)
+	# Модель игрока одна на всех (редактор внешности вычищен с наследием
+	# Blockparty, born-unblessed) — настраивать по игроку нечего.
 	# Точки интереса бота (раздел 18): зоны появления и Камни духа.
 	if Session.bot:
 		var targets: Array[Vector3] = []
@@ -255,89 +238,37 @@ func _selftest_world() -> void:
 
 
 ## Прогон самопроверки анимаций на модели локального игрока и выход
-## (--selftest-anim): герой Born Unblessed (П10) — AnimSelfCheckBU (позы
-## костей покой/ходьба, резолв дорожек библиотеки sword, скиннинг ног);
-## прежняя модель блочного персонажа — AnimSelfCheck + физический
-## лендинг-сценарий Д2 (бег, прыжок, 2 с после касания) и RealismCheck на
-## всех комбинациях пол × наряд — скольжение стоп и диапазоны рук
-## блокирующие, посадка одежды — известный дефект П5.8 (откат Д4),
-## KNOWN-FAIL без падения кода возврата (закрывается П5.10–П5.11).
-## Печатает SELFTEST-ANIM: PASS/FAIL и выходит (код 1 при FAIL); гоняется
-## и на экспортированных сборках, чтобы ловить проблемы экспорта.
+## (--selftest-anim): герой Born Unblessed — AnimSelfCheckBU (позы костей
+## покой/ходьба, резолв дорожек библиотеки sword, скиннинг ног) плюс
+## физический лендинг-сценарий Д2 (RealismCheck: бег, прыжок, 2 с после
+## касания — статичный присед не едет по земле). Всё блокирующее,
+## KNOWN-FAIL нет. Прежние проверки блочной UBC-модели (пол × наряд,
+## скольжение стоп на клипах, диапазоны рук, посадка MCO-одежды)
+## вычищены вместе с ней (born-unblessed). Печатает SELFTEST-ANIM:
+## PASS/FAIL и выходит (код 1 при FAIL); гоняется и на экспортированных
+## сборках, чтобы ловить проблемы экспорта.
 func _selftest_anim(visual: CharacterVisual) -> void:
 	for i: int in 40:
 		await get_tree().physics_frame
-	if visual is HeroModelBU:
-		await _selftest_anim_bu(visual as HeroModelBU)
-		return
-	var result: Dictionary = await AnimSelfCheck.run(visual as CharacterModel, true)
+	var result: Dictionary = await AnimSelfCheckBU.run(visual, true)
 	var reasons: PackedStringArray = PackedStringArray()
 	if not result["ok"]:
 		for reason: String in result["reasons"]:
 			reasons.append(reason)
-	# Приземление с зажатым движением (Д2, этап 0): физический сценарий
-	# на локальном игроке — бег, прыжок, 2 с после касания; блокирующий.
-	print("SELFTEST-ANIM: приземление на бегу (сценарий Д2 этапа 0)")
+	# Приземление с зажатым движением (Д2): физический сценарий на
+	# локальном игроке — бег, прыжок, 2 с после касания; блокирующий.
+	print("SELFTEST-ANIM: приземление на бегу (сценарий Д2)")
 	var landing: Dictionary = await RealismCheck.check_landing_blend(
 		_player, "run", true)
 	if not landing["ok"]:
 		for reason: String in landing["reasons"]:
 			reasons.append(reason)
-	# П5.8 этап 0: блоки реалистичности раздельно. Скольжение стоп и руки —
-	# блокирующие. Посадка одежды (посадка тела «по одежде» отката Д4) —
-	# известный дефект П5.8, закрывается П5.10–П5.11: печатается
-	# KNOWN-FAIL и не роняет код возврата (пороги чекера не ослаблены).
-	var model_scene := load("res://gameplay/player/character_model.tscn") \
-		as PackedScene
-	for gender: int in Appearance.GENDERS:
-		for outfit: int in Appearance.OUTFITS.size():
-			var model := model_scene.instantiate() as CharacterModel
-			add_child(model)
-			var ap := Appearance.default_for(gender)
-			ap.top = outfit
-			ap.legs = outfit
-			ap.feet = outfit
-			model.setup_appearance(ap)
-			print("SELFTEST-ANIM: пол %d наряд %s" % [gender,
-				Appearance.OUTFITS[outfit]])
-			var feet: Dictionary = await RealismCheck.check_foot_slide(model)
-			if not feet["ok"]:
-				for reason: String in feet["reasons"]:
-					reasons.append(reason)
-			var arms: Dictionary = RealismCheck.check_arms(model)
-			if not arms["ok"]:
-				for reason: String in arms["reasons"]:
-					reasons.append(reason)
-			var fit: Dictionary = RealismCheck.check_body_fit(model)
-			if not fit["ok"]:
-				print("SELFTEST-ANIM: KNOWN-FAIL (известный дефект П5.8 → "
-					+ "закрывается П5.10–П5.11, см. STATUS.md): посадка одежды")
-				for reason: String in fit["reasons"]:
-					print("  KNOWN-FAIL: %s" % reason)
-			model.set_state(Protocol.AnimState.IDLE)
-			model.queue_free()
 	if reasons.is_empty():
 		print("SELFTEST-ANIM: PASS")
 		get_tree().quit(0)
 		return
 	print("SELFTEST-ANIM: FAIL")
 	for reason: String in reasons:
-		print("SELFTEST-ANIM: %s" % reason)
-	get_tree().quit(1)
-
-
-## Самопроверка героя Born Unblessed (--selftest-anim, П10): позы костей
-## покой/ходьба, резолв всех дорожек библиотеки sword, скиннинг ног —
-## всё блокирующее, KNOWN-FAIL нет. Отдельно от UBC-ветки: риг Mixamo,
-## другие кости и клипы.
-func _selftest_anim_bu(model: HeroModelBU) -> void:
-	var result: Dictionary = await AnimSelfCheckBU.run(model, true)
-	if result["ok"]:
-		print("SELFTEST-ANIM: PASS")
-		get_tree().quit(0)
-		return
-	print("SELFTEST-ANIM: FAIL")
-	for reason: String in result["reasons"]:
 		print("SELFTEST-ANIM: %s" % reason)
 	get_tree().quit(1)
 
@@ -481,12 +412,11 @@ func _screenshot_tour() -> void:
 		await _shot_p57_forest(camera)
 		get_tree().quit()
 		return
-	# Серии кадров для GIF (сборка — tools/make_gif.py): SHOT_FLY=1 —
-	# пролёт камеры над Лесом; SHOT_CLIP=walk|run|jump|wave (актёр —
-	# SHOT_ACTOR=индекс Appearance.SHOWCASE) — анимации персонажа.
-	# Длина — SHOT_SECONDS (по умолчанию 6), темп — SHOT_SERIES_FPS.
-	if OS.get_environment("SHOT_FLY") == "1" \
-			or not OS.get_environment("SHOT_CLIP").is_empty():
+	# Серия кадров для GIF (сборка — tools/make_gif.py): SHOT_FLY=1 —
+	# пролёт камеры над Лесом. Длина — SHOT_SECONDS, темп — SHOT_SERIES_FPS.
+	# Съёмки клипов блочного персонажа (SHOT_CLIP/SHOT_ACTOR) вычищены
+	# вместе с UBC-моделью (born-unblessed).
+	if OS.get_environment("SHOT_FLY") == "1":
 		_player.visible = false
 		await _shot_p58_series(camera)
 		get_tree().quit()
@@ -611,69 +541,21 @@ func _shot_p57_forest(camera: Camera3D) -> void:
 		await _snap(camera, "p57_forest_sunset_%d.png" % (i + 1))
 
 
-## Серии кадров финала П5.8 (GIF — tools/make_gif.py): SHOT_FLY=1 — пролёт
-## над Лесом; SHOT_CLIP=walk|run|jump|wave (+ SHOT_ACTOR=0..5, длина
-## SHOT_SECONDS) — анимации персонажа. Время мира остановлено
-## (Engine.time_scale = 0: часы, ландшафт стоят; шейдерный огонь и вода
-## на TIME — живут), поза и траектория — чистые функции кадра, клипы
-## продвигаются advance_preview на шаг 1/SHOT_SERIES_FPS: рваный темп
-## рендера llvmpipe не ломает равномерность фаз.
+## Серия кадров пролёта над Лесом (GIF — tools/make_gif.py, SHOT_FLY=1):
+## время мира остановлено (Engine.time_scale = 0: часы, ландшафт стоят;
+## шейдерный огонь и вода на TIME — живут), траектория — чистая функция
+## кадра: рваный темп рендера llvmpipe не ломает равномерность фаз.
 func _shot_p58_series(camera: Camera3D) -> void:
-	var fly := OS.get_environment("SHOT_FLY") == "1"
-	var clip_name := OS.get_environment("SHOT_CLIP")
-	var seconds := 8.0 if fly else 6.0
-	match clip_name:
-		"run":
-			seconds = 5.0
-		"forest_walk":
-			seconds = 10.0
+	var seconds := 8.0
 	if not OS.get_environment("SHOT_SECONDS").is_empty():
 		seconds = clampf(
 			OS.get_environment("SHOT_SECONDS").to_float(), 2.0, 12.0)
 	var frames := int(roundf(seconds * SHOT_SERIES_FPS))
-	if fly:
-		_set_day_fraction(SHOT_DAY_FRACTION)
-		await get_tree().create_timer(0.6).timeout
-		await _record_series(camera, "fly_forest", frames,
-			func(i: int, _t: float) -> void:
-				_fly_forest_frame(camera, float(i) / float(frames)))
-		return
 	_set_day_fraction(SHOT_DAY_FRACTION)
 	await get_tree().create_timer(0.6).timeout
-	var actor_index := 0
-	if not OS.get_environment("SHOT_ACTOR").is_empty():
-		actor_index = clampi(OS.get_environment("SHOT_ACTOR").to_int(),
-			0, Appearance.SHOWCASE.size() - 1)
-	var model := CharacterModel.new()
-	add_child(model)
-	model.setup_appearance(
-		Appearance.from_bytes(Appearance.SHOWCASE[actor_index]))
-	model.set_state(Protocol.AnimState.IDLE)
-	model.advance_preview(0.5)  # бленд от rest-позы успевает устояться
-	match clip_name:
-		"walk":
-			await _record_series(camera, "clip_walk", frames,
-				func(_i: int, t: float) -> void:
-					_walk_frame(camera, model, t))
-		"forest_walk":
-			await _record_series(camera, "clip_forest_walk", frames,
-				func(_i: int, t: float) -> void:
-					_forest_walk_frame(camera, model, t, seconds))
-		"run":
-			await _record_series(camera, "clip_run", frames,
-				func(_i: int, t: float) -> void:
-					_run_circle_frame(camera, model, t))
-		"jump":
-			await _record_series(camera, "clip_jump", frames,
-				func(_i: int, t: float) -> void:
-					_jump_frame(camera, model, t))
-		"wave":
-			await _record_series(camera, "clip_wave", frames,
-				func(_i: int, t: float) -> void:
-					_wave_frame(camera, model, t))
-		_:
-			push_error("неизвестный SHOT_CLIP: " + clip_name)
-	model.queue_free()
+	await _record_series(camera, "fly_forest", frames,
+		func(i: int, _t: float) -> void:
+			_fly_forest_frame(camera, float(i) / float(frames)))
 
 
 ## Записать серию: кадры frame_%04d.rgb (сырые RGBA8, размер окна) в
@@ -706,160 +588,6 @@ func _record_series(
 	Engine.time_scale = 1.0
 
 
-## Прямая «южная» дорожка Площади для ходьбы и прыжков (мимо лавок
-## костра): от запада к востоку, камера южнее — в кадре персонаж и костёр.
-const CLIP_PATH_Z: float = 9.2
-const CLIP_PATH_HALF: float = 7.6
-const CLIP_CAM_Z: float = 13.4
-
-
-## Ходьба по прямой (walk_speed 2.5): позиция от времени, камера следит
-## с юга, модель повёрнута по ходу (+X: atan2(1, 0) = PI/2 — модель
-## смотрит +Z, yaw 90° разворачивает её на восток).
-func _walk_frame(camera: Camera3D, model: CharacterModel, t: float) -> void:
-	var x := clampf(-7.5 + 2.5 * t, -CLIP_PATH_HALF, CLIP_PATH_HALF)
-	var ground := _ground_at(Vector2(x, CLIP_PATH_Z))
-	model.global_position = Vector3(x, ground, CLIP_PATH_Z)
-	model.rotation.y = PI / 2.0
-	model.set_state(Protocol.AnimState.WALK)
-	model.advance_preview(1.0 / SHOT_SERIES_FPS)
-	camera.global_position = Vector3(0.0, ground + 1.35, CLIP_CAM_Z)
-	camera.look_at(model.global_position + Vector3.UP * 1.0, Vector3.UP)
-
-
-## Прогулка по Лесу (П5.9 блок 8, GIF «прогулка по Лесу»): модель идёт
-## от опушки к Площади вглубь леса по кривой Безье между точками 1–3 тура
-## П5.7 (хорда ~26 м за 10 с ≈ темп ходьбы). Камера следует сзади-сбоку.
-const FOREST_WALK_P0 := Vector2(-36.0, -44.0)
-const FOREST_WALK_P1 := Vector2(-50.0, -54.0)
-const FOREST_WALK_P2 := Vector2(-60.0, -64.0)
-
-
-## Точка пути Леса на доле u [0, 1] (Безье по XZ, высота — рельеф).
-func _forest_walk_at(u: float) -> Vector3:
-	var p := FOREST_WALK_P0 * (1.0 - u) * (1.0 - u) \
-		+ FOREST_WALK_P1 * 2.0 * u * (1.0 - u) \
-		+ FOREST_WALK_P2 * u * u
-	return Vector3(p.x, _ground_at(p), p.y)
-
-
-func _forest_walk_frame(
-		camera: Camera3D, model: CharacterModel, t: float, seconds: float
-) -> void:
-	var u := clampf(t / seconds, 0.0, 1.0)
-	var pos := _forest_walk_at(u)
-	var ahead := _forest_walk_at(minf(u + 0.02, 1.0))
-	var tangent := (ahead - pos)
-	tangent.y = 0.0
-	tangent = tangent.normalized()
-	model.global_position = pos
-	model.rotation.y = atan2(tangent.x, tangent.z)
-	model.set_state(Protocol.AnimState.WALK)
-	model.advance_preview(1.0 / SHOT_SERIES_FPS)
-	# Сзади-сбоку: позади по пути, на метр правее, взгляд чуть вперёд модели.
-	var right := tangent.cross(Vector3.UP).normalized()
-	camera.global_position = _forest_walk_at(maxf(u - 0.06, 0.0)) \
-		+ Vector3.UP * 1.5 + right * 1.1
-	camera.look_at(pos + Vector3.UP * 1.15 + tangent * 0.6, Vector3.UP)
-
-
-## Бег по кругу вокруг костра (run_speed 6.5, радиус за лавками): модель
-## дважды проходит мимо камеры, костёр и площадь в кадре; поворот — по
-## касательной к кругу.
-const CLIP_RUN_RADIUS: float = 6.4
-const CLIP_RUN_SPEED: float = 6.5
-
-
-func _run_circle_frame(camera: Camera3D, model: CharacterModel, t: float) -> void:
-	var center := Vector2(0.5, 2.5)
-	var ang := PI / 2.0 + CLIP_RUN_SPEED * t / CLIP_RUN_RADIUS
-	var here := center + Vector2(cos(ang), -sin(ang)) * CLIP_RUN_RADIUS
-	var prev_ang := ang + 0.02
-	var prev := center + Vector2(cos(prev_ang), -sin(prev_ang)) * CLIP_RUN_RADIUS
-	var dir := (here - prev).normalized()
-	var ground := _ground_at(here)
-	model.global_position = Vector3(here.x, ground, here.y)
-	model.rotation.y = atan2(dir.x, dir.y)
-	model.set_state(Protocol.AnimState.RUN)
-	model.advance_preview(1.0 / SHOT_SERIES_FPS)
-	var cam_ground := _ground_at(Vector2(0.5, CLIP_CAM_Z))
-	camera.global_position = Vector3(0.5, cam_ground + 2.1, CLIP_CAM_Z)
-	camera.look_at(model.global_position + Vector3.UP * 1.0, Vector3.UP)
-
-
-## Два прыжка с разбегом (3 м/с, прыжок v0 = 7.5, g = 20 — высота ~1.4 м,
-## полёт 0.75 с, как в игре): разбег → прыжок → приземление/пауза →
-## второй разбег и прыжок. Кусочный тайминг ниже; камера следит с юга.
-const CLIP_JUMP_V0: float = 7.5
-const CLIP_JUMP_G: float = 20.0
-
-
-func _jump_pose(t: float) -> Dictionary:
-	# Возвращает {x, y_off, state} по кускам пути (t = 0.7 и 3.3 — прыжки).
-	if t < 0.7:  # разбег
-		return {"x": -5.5 + 3.0 * t, "y": 0.0, "state": Protocol.AnimState.RUN}
-	if t < 1.45:  # первый прыжок
-		return _jump_arc(t - 0.7, -3.4)
-	if t < 2.6:  # приземление и пауза
-		return {"x": -1.15, "y": 0.0,
-			"state": Protocol.AnimState.LAND if t < 2.0
-				else Protocol.AnimState.IDLE}
-	if t < 3.3:  # второй разбег
-		return {"x": -1.15 + 3.0 * (t - 2.6), "y": 0.0,
-			"state": Protocol.AnimState.RUN}
-	if t < 4.05:  # второй прыжок
-		return _jump_arc(t - 3.3, 0.95)
-	return {"x": 3.2, "y": 0.0,
-		"state": Protocol.AnimState.LAND if t < 4.6
-			else Protocol.AnimState.IDLE}
-
-
-func _jump_arc(tau: float, x0: float) -> Dictionary:
-	var state := Protocol.AnimState.FALL
-	if tau < 0.18:
-		state = Protocol.AnimState.JUMP
-	elif tau >= 0.72:
-		state = Protocol.AnimState.LAND
-	return {"x": x0 + 3.0 * tau,
-		"y": CLIP_JUMP_V0 * tau - CLIP_JUMP_G * tau * tau * 0.5,
-		"state": state}
-
-
-func _jump_frame(camera: Camera3D, model: CharacterModel, t: float) -> void:
-	var pose := _jump_pose(t)
-	var ground := _ground_at(Vector2(pose["x"], CLIP_PATH_Z))
-	model.global_position = Vector3(pose["x"], ground + pose["y"], CLIP_PATH_Z)
-	model.rotation.y = PI / 2.0
-	model.set_state(pose["state"])
-	model.advance_preview(1.0 / SHOT_SERIES_FPS)
-	camera.global_position = Vector3(0.0, ground + 1.3, CLIP_CAM_Z)
-	camera.look_at(model.global_position + Vector3.UP * 1.0, Vector3.UP)
-
-
-## Взмахи «Привет!» у костра: окна 0.6–2.6 и 3.2–5.2 с, между ними покой
-## (метка wave_window не даёт перезапускать клип каждый кадр).
-func _wave_frame(camera: Camera3D, model: CharacterModel, t: float) -> void:
-	var pos := Vector3(3.4, _ground_at(Vector2(3.4, 8.2)), 8.2)
-	model.global_position = pos
-	model.rotation.y = 0.0  # модель в покое смотрит +Z — лицом к камере
-	var window := -1
-	if t >= 0.6 and t < 2.6:
-		window = 0
-	elif t >= 3.2 and t < 5.2:
-		window = 1
-	var current: int = model.get_meta("wave_window", -1)
-	if window >= 0 and current != window:
-		model.set_meta("wave_window", window)
-		model.play_one_shot(Protocol.AnimState.WAVE, 2.0)
-	elif window < 0 and current != -1:
-		model.set_meta("wave_window", -1)
-	model.set_state(Protocol.AnimState.IDLE)
-	model.advance_preview(1.0 / SHOT_SERIES_FPS)
-	camera.global_position = pos + Vector3(1.1, 1.25, 3.1)
-	camera.look_at(pos + Vector3.UP * 1.05, Vector3.UP)
-
-
-## Сесть у костра (вечер): секунда стоя перед лавкой, затем поза сидения
 ## Пролёт над Лесом: квадратичная дуга Безье от опушки к Площади через
 ## глубину леса, высота 9 → 5 м; камера смотрит по ходу с наклоном вниз.
 func _fly_forest_frame(camera: Camera3D, u: float) -> void:

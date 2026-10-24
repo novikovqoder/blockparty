@@ -9,13 +9,14 @@ extends GutTest
 
 const ROOT: String = "res://assets/third_party"
 const LICENSES: String = "res://assets/third_party/LICENSES.md"
-## Префиксы каталогов наборов в колонке «Файлы» LICENSES.md.
-const VENDOR_PREFIXES: PackedStringArray = ["kenney.nl/", "quaternius.com/"]
+## Префиксы каталогов наборов в колонке «Файлы» LICENSES.md (наборы
+## kenney и Quaternius-персонажи вычищены с наследием Blockparty,
+## born-unblessed; остались ambientcg и polyhaven).
+const VENDOR_PREFIXES: PackedStringArray = ["ambientcg.com/", "polyhaven.com/"]
 ## Допустимые форматы (CLAUDE.md, «Скачивание ресурсов»); .res и .bin —
 ## производные: .res — децимированные Godot-ArrayMesh со сканами Poly Haven
-## (tools/decimate_polyhaven.gd, исходники glb в проекте не хранятся) и
-## AnimationLibrary с ретаргеченными клипами Quaternius UAL
-## (tools/retarget_anims.gd), .bin — буфер геометрии glTF-модели fern_02.
+## (tools/decimate_polyhaven.gd, исходники glb в проекте не хранятся),
+## .bin — буфер геометрии glTF-модели fern_02.
 const FORMATS: PackedStringArray = [
 	".glb", ".gltf", ".obj", ".png", ".jpg", ".webp", ".hdr", ".exr",
 	".ogg", ".wav", ".ttf", ".otf", ".res", ".bin",

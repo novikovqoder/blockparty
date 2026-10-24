@@ -1,11 +1,11 @@
 # Сериализация состояния мира для входа в любой момент (раздел 10 SPEC):
 # хост отправляет rpc_world_state одним надёжным пакетом — эпоху часов мира,
-# состав игроков (ник, внешность байтами индексов редактора П5.8, флаг
-# «в мире») и словарь активностей. Поздно вошедший клиент применяет пакет
-# и сразу видит то же, что остальные. Формат (little endian): u32 эпоха,
-# u8 n × {i32 peer, u8 len, имя utf8, u8 в мире, 9 байтов внешности
-# (Appearance.to_bytes)}, u8 флаг и словарь активностей. Мёртвые мобы
-# были в формате до протокола 6 (доработка П5.13: мобы удалены).
+# состав игроков (ник, флаг «в мире») и словарь активностей. Поздно
+# вошедший клиент применяет пакет и сразу видит то же, что остальные.
+# Формат (little endian): u32 эпоха, u8 n × {i32 peer, u8 len, имя utf8,
+# u8 в мире}, u8 флаг и словарь активностей. Внешность (9 байтов
+# редактора) была в формате до протокола 7 — вычищена с наследием
+# Blockparty (born-unblessed); мёртвые мобы — ещё раньше (до протокола 6).
 # Чистые функции без узлов — обязательный тест раздела 18 «без потерь».
 class_name WorldState
 extends RefCounted
@@ -15,8 +15,7 @@ const NAME_MAX_CHARS: int = 20
 
 
 ## Собрать состояние в байты. Словарь: {world_epoch_msec: int,
-## players: [{peer_id, name, in_world, appearance: PackedByteArray}],
-## activities: Dictionary}.
+## players: [{peer_id, name, in_world}], activities: Dictionary}.
 static func pack(state: Dictionary) -> PackedByteArray:
 	var buffer := StreamPeerBuffer.new()
 	buffer.big_endian = false
@@ -29,11 +28,6 @@ static func pack(state: Dictionary) -> PackedByteArray:
 		buffer.put_u8(mini(name.size(), 255))
 		buffer.put_data(name)
 		buffer.put_u8(1 if bool(entry.get("in_world", false)) else 0)
-		# Внешность — 9 байтов индексов; короткое/мусорное поле дополняется
-		# дефолтом (клиент ещё раз проверит диапазоны validated()).
-		var appearance: PackedByteArray = entry.get("appearance", PackedByteArray())
-		for i: int in Appearance.NET_SIZE:
-			buffer.put_u8(appearance[i] if i < appearance.size() else 0)
 	# Активности П5 (разделы 7, 9: ворота руин; дальше — костёр):
 	# произвольный словарь в конце пакета, старые клиенты его игнорируют.
 	var activities: Dictionary = state.get("activities", {})
@@ -58,15 +52,10 @@ static func unpack(data: PackedByteArray) -> Dictionary:
 		var name_size: int = buffer.get_u8()
 		var name_bytes := (buffer.get_data(name_size) as Array)[1] as PackedByteArray
 		var in_world: bool = buffer.get_u8() != 0
-		var appearance := PackedByteArray()
-		appearance.resize(Appearance.NET_SIZE)
-		for b: int in Appearance.NET_SIZE:
-			appearance[b] = buffer.get_u8()
 		state["players"].append({
 			"peer_id": peer_id,
 			"name": name_bytes.get_string_from_utf8(),
 			"in_world": in_world,
-			"appearance": appearance,
 		})
 	# Активности — в конце пакета: пакет от хоста без блока (старый формат)
 	# оставляет словарь пустым.

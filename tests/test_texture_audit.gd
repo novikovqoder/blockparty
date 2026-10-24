@@ -20,16 +20,13 @@
 #      нетекстурный материал проходил аудит без замечаний.
 #   6) доработка П9: «ни одной частицы без текстуры» — каждый пасс каждого
 #      эмиттера мира несёт спрайт (нетекстурный квад на экране = белый
-#      квадрат из замечания владельца); исключение — процедурный клуб дыма
-#      костра, который рисует сам шейдер.
+#      квадрат из замечания владельца).
 # Процедурные данные (карты весов земли 128×128) — не текстуры детализации:
 # exempt-порог 256 px по короткой стороне.
 extends GutTest
 
 const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
 const WORLD: PackedScene = preload("res://scenes/world_scene.tscn")
-const MODEL: PackedScene = preload(
-	"res://gameplay/player/character_model.tscn")
 ## Запечённые данные острова — включить частицы бега игрока (срез 6).
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 
@@ -38,8 +35,6 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ## префиксов. Пояснения:
 ##   кора ambientcg — крупные деревья, 1K; у Bark001 сет «1K» — 512×1024,
 ##     в проекте 2K-сет (см. EzTreeMeshes.BARK);
-##   персонажи Quaternius UBC — план П5.9 п.7 «люди не меняются»: кожа
-##     головы и одежда 2K, руки/волосы 1K, глаза — мелкая деталь 256;
 ##   панорамы неба — купол Sky3D, процедурные CC0;
 ##   карта острова — UI-мини-карта;
 ##   polyhaven.com — земля Леса (2K, категория сайта);
@@ -56,10 +51,6 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ##     кромкой, билборды 3D — с мип-мапами, чтобы на отдалении не рябили;
 ##     порог 40 px — размер наименьшего спрайта (лист).
 const CATEGORIES: Array = [
-	["assets/third_party/quaternius.com/universal_base_characters/baked/textures/eyes",
-		{"min_side": 256, "mips": true}],
-	["assets/third_party/quaternius.com/universal_base_characters/baked/textures/",
-		{"min_side": 1024, "mips": true}],
 	["assets/third_party/ambientcg.com/", {"min_side": 1024, "mips": true}],
 	["assets/third_party/polyhaven.com/", {"min_side": 1024, "mips": true}],
 	["assets/visual/", {"min_side": 1024, "mips": true}],
@@ -104,7 +95,6 @@ const TEXTURE_SLOTS: Array[String] = [
 ##   костёр — VFX огня и фотосканы polyhaven, раскрашенные вершинами;
 ##   сундук руин — свечение нутра (VFX, доработка-2 П4);
 ##   небо — меш дымки Sky3D;
-##   жители — процедурные шляпы (персонажи приняты, раздел 16 SPEC);
 ##   тросы лестниц — тонкие планки цвета коры (верёвочный примитив,
 ##     доработка-2 П5: ступени при этом текстурные, WoodMat);
 ##   сруб деревни — оконное стекло (прозрачность без карты) и светящийся
@@ -118,7 +108,6 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 	"/Glow",
 	"/Rope",
 	"_FogMeshI",
-	"hat_",
 	"/EXT_glass", "/INT_glass", "/EXT_lamp",
 ]
 
@@ -282,10 +271,10 @@ func test_world_surfaces_textured_or_whitelisted() -> void:
 
 ## Срез 6, доработка П9 («квадратики при беге» из прогона владельца):
 ## ни одна частица мира — нетекстурный квад (белый квадрат). Каждый пасс
-## каждого эмиттера живого дерева мира несёт albedo_texture. Исключение —
-## дым костра (smoke.gdshader): мягкий клуб с кромкой симплекс-шума рисует
-## сам шейдер, это не плоский квад. Частицы бега включаем вручную: мир
-## строит их по арту острова, тест передаёт запечённый ресурс.
+## каждого эмиттера живого дерева мира несёт спрайт-текстуру (костёр и его
+## процедурный дым удалены с наследием Blockparty, born-unblessed).
+## Частицы бега включаем вручную: мир строит их по арту острова, тест
+## передаёт запечённый ресурс.
 func test_world_particles_textured() -> void:
 	WorldMaterials.textured_headless = true
 	var world := WORLD.instantiate()
@@ -295,15 +284,15 @@ func test_world_particles_textured() -> void:
 		(node as Player).setup_foot_fx(ART)
 	var offenders: Array[String] = []
 	var emitters := _collect_particle_offenders(world, offenders)
-	assert_gt(emitters, 4, "обход видит эмиттеры мира (костёр, атмосфера, бег)")
+	assert_gt(emitters, 4, "обход видит эмиттеры мира (атмосфера, бег)")
 	assert_eq(offenders.size(), 0,
 		"частицы без текстуры (белые квадраты) запрещены:\n"
 		+ "\n".join(offenders))
 
 
 ## Обход дерева: каждый пасс каждого GPUParticles3D/CPUParticles3D —
-## материал с текстурой (дым smoke.gdshader — легитимный процедурный клуб).
-## Возвращает число найденных эмиттеров, нарушения дописывает в out.
+## материал с текстурой. Возвращает число найденных эмиттеров, нарушения
+## дописывает в out.
 func _collect_particle_offenders(node: Node, out: Array[String]) -> int:
 	var emitters := 0
 	if node is GPUParticles3D or node is CPUParticles3D:
@@ -318,8 +307,8 @@ func _collect_particle_offenders(node: Node, out: Array[String]) -> int:
 			if mat == null:
 				out.append("%s: пасс %d без материала" % [node.get_path(), i + 1])
 			elif mat is ShaderMaterial:
-				if (mat as ShaderMaterial).shader != Fx.SMOKE_SHADER:
-					out.append("%s: пасс %d — шейдер не из белого списка"
+				if not _material_has_texture(mat):
+					out.append("%s: пасс %d — ShaderMaterial без текстуры"
 						% [node.get_path(), i + 1])
 			elif mat is StandardMaterial3D:
 				if (mat as StandardMaterial3D).albedo_texture == null:
@@ -335,8 +324,9 @@ func _collect_particle_offenders(node: Node, out: Array[String]) -> int:
 
 func test_runtime_materials_meet_quality_bar() -> void:
 	# Живое дерево острова (рельеф, предметы, деревья с запечённой корой)
-	# и персонажи: материалы без Nearest; текстурные BaseMaterial3D —
-	# анизотропные (мип-мапы + 16x); у текстур от 256 px — мип-мапы.
+	# и героя BU внутри сцены мира: материалы без Nearest; текстурные
+	# BaseMaterial3D — анизотропные (мип-мапы + 16x); у текстур от 256 px —
+	# мип-мапы.
 	var materials := _collect_world_materials()
 	assert_gt(materials.size(), 300,
 		"обход собрал материалы мира и персонажей")
@@ -380,36 +370,6 @@ func test_runtime_materials_meet_quality_bar() -> void:
 	assert_gt(textured, 0, "в мире есть текстурные материалы (кора, кожа)")
 
 
-## Материалы .res персонажей UBC — все 9, независимо от видимости частей.
-func test_ubc_material_resources_meet_quality_bar() -> void:
-	var dir := DirAccess.open(
-		"res://assets/third_party/quaternius.com/universal_base_characters/baked/materials")
-	assert_not_null(dir, "каталог материалов UBC на месте")
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var name := dir.get_next()
-	var count := 0
-	while not name.is_empty():
-		if name.match("*.res"):
-			count += 1
-			var base := load(
-				"res://assets/third_party/quaternius.com/universal_base_characters/baked/materials/" + name) as BaseMaterial3D
-			assert_not_null(base, "%s — BaseMaterial3D" % name)
-			if base == null:
-				continue
-			assert_eq(base.texture_filter,
-				BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC,
-				"%s: анизотропная фильтрация" % name)
-			for prop: String in ["albedo_texture", "normal_texture",
-					"roughness_texture", "orm_texture"]:
-				var tex: Texture2D = base.get(prop)
-				if tex != null:
-					_assert_texture_mips(tex, "%s.%s" % [name, prop])
-		name = dir.get_next()
-	assert_eq(count, 9, "материалы UBC на месте (9)")
-
-
 # --- Служебное ---
 
 
@@ -422,15 +382,8 @@ func _collect_world_surfaces() -> Array[Dictionary]:
 	add_child_autofree(island)
 	var world := WORLD.instantiate()
 	add_child_autofree(world)
-	for gender: int in [0, 1]:
-		var model := MODEL.instantiate() as CharacterModel
-		add_child_autofree(model)
-		model.setup_appearance(Appearance.default_for(gender))
 	_collect_surfaces(island, out)
 	_collect_surfaces(world, out)
-	for child: Node in get_children():
-		if child is CharacterModel:
-			_collect_surfaces(child, out)
 	return out
 
 
@@ -542,18 +495,9 @@ func _collect_world_materials() -> Array[Dictionary]:
 	# того же острова: материалы дедуплицируются, добавляются только небесные.
 	var world := WORLD.instantiate()
 	add_child_autofree(world)
-	for gender: int in [0, 1]:
-		var model := MODEL.instantiate() as CharacterModel
-		add_child_autofree(model)
-		model.setup_appearance(Appearance.default_for(gender))
+	# Персонажи (герой BU) — внутри сцены мира: обычный обход их видит.
 	_collect_materials(island, seen, out)
 	_collect_materials(world, seen, out)
-	# Персонажи — дети теста рядом с островом: обходим их поддеревья
-	# (перекрашенные дубли материалов и текстура глаз — в per-surface
-	# override, обычный обход их не видит).
-	for child: Node in get_children():
-		if child is CharacterModel:
-			_collect_materials(child, seen, out)
 	return out
 
 

@@ -32,7 +32,6 @@ func _player_ready() -> Player:
 	var player := PLAYER.instantiate() as Player
 	world.add_child(player)
 	player.global_position = Vector3(0, 0.05, 0)
-	player.visual.setup_appearance(Appearance.default_for(0))
 	for i: int in range(5):
 		await get_tree().physics_frame
 	return player

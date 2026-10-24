@@ -199,9 +199,7 @@ func entered_world() -> void:
 		if multiplayer.is_server():
 			_send(
 				func() -> void: rpc_player_joined.rpc(
-					local_peer_id,
-					str(players[local_peer_id]["name"]),
-					players[local_peer_id]["appearance"] as PackedByteArray,
+					local_peer_id, str(players[local_peer_id]["name"])
 				), false
 			)
 		else:
@@ -284,10 +282,10 @@ func ping_msec() -> int:
 
 ## Клиент представляется хосту после подключения: мир открыт, добавляем
 ## и сразу высылаем полное состояние (раздел 10: вход в любой момент).
-## appearance — внешность из редактора байтами индексов (П5.8, часть B3):
-## хост не доверяет клиенту и проверяет диапазоны validated().
+## Прежний второй аргумент — байты внешности редактора — вычищен
+## вместе с наследием Blockparty (born-unblessed, PROTOCOL_VERSION 7).
 @rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hello(player_name: String, appearance: PackedByteArray) -> void:
+func rpc_hello(player_name: String) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
@@ -295,13 +293,10 @@ func rpc_hello(player_name: String, appearance: PackedByteArray) -> void:
 		Log.warn("Пир %d отключён: мир заполнен" % sender, "Net")
 		_kick(sender)
 		return
-	var ap := Appearance.from_bytes(appearance).validated()
-	if not ap.same(Appearance.from_bytes(appearance)):
-		Log.warn("Пир %d прислал внешность вне диапазонов — исправлена" % sender, "Net")
-	players[sender] = _new_slot(player_name.left(20), ap.to_bytes())  # раздел 14: ник до 20 символов
+	players[sender] = _new_slot(player_name.left(20))  # раздел 14: ник до 20 символов
 	Log.info(
-		"Игрок подключился: %d «%s», внешность %s (всего %d)"
-		% [sender, player_name, _appearance_log(ap), players.size()], "Net"
+		"Игрок подключился: %d «%s» (всего %d)"
+		% [sender, player_name, players.size()], "Net"
 	)
 	_broadcast_roster()
 	# Полное состояние мира одним пакетом: часы, ростер с флагами «в мире»,
@@ -322,8 +317,7 @@ func rpc_hello(player_name: String, appearance: PackedByteArray) -> void:
 func rpc_roster_update(entries: Array) -> void:
 	var fresh: Dictionary = {}
 	for entry: Dictionary in entries:
-		var slot := _new_slot(
-			str(entry["name"]), entry.get("appearance", PackedByteArray()))
+		var slot := _new_slot(str(entry["name"]))
 		slot["in_world"] = bool(entry.get("in_world", false))
 		fresh[int(entry["peer_id"])] = slot
 	# Кого не стало или кто вышел из мира — сообщить сценам (персонаж
@@ -354,8 +348,7 @@ func rpc_world_state(data: PackedByteArray) -> void:
 	last_world_state = state
 	var fresh: Dictionary = {}
 	for entry: Dictionary in state["players"]:
-		var slot := _new_slot(
-			str(entry["name"]), entry.get("appearance", PackedByteArray()))
+		var slot := _new_slot(str(entry["name"]))
 		slot["in_world"] = bool(entry["in_world"])
 		fresh[int(entry["peer_id"])] = slot
 	players = fresh
@@ -388,23 +381,20 @@ func rpc_client_ready() -> void:
 	Log.info("Игрок %d «%s» в мире" % [sender, players[sender]["name"]], "Net")
 	_send(
 		func() -> void: rpc_player_joined.rpc(
-			sender, str(players[sender]["name"]),
-			players[sender]["appearance"] as PackedByteArray
-		),
-		false,
+			sender, str(players[sender]["name"])
+		), false,
 	)
 
 
 ## Игрок вошёл в мир: у всех появляется его персонаж (rpc_client_ready
-## или вход самого хоста). appearance — внешность байтами индексов
-## (П5.8), проверенная хостом на входе (rpc_hello).
+## или вход самого хоста). Модель у всех одна — внешности в сети больше
+## нет (born-unblessed).
 @rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_player_joined(peer_id: int, player_name: String,
-		appearance: PackedByteArray) -> void:
+func rpc_player_joined(peer_id: int, player_name: String) -> void:
 	if peer_id != local_peer_id and players.has(peer_id):
 		players[peer_id]["in_world"] = true
 	if peer_id != local_peer_id:
-		EventBus.peer_joined_world.emit(peer_id, player_name, appearance)
+		EventBus.peer_joined_world.emit(peer_id, player_name)
 
 
 ## Клиент вышел из мира (в меню), оставшись на связи: персонаж исчезает
@@ -623,10 +613,7 @@ func _on_connected_to_server() -> void:
 	local_peer_id = multiplayer.get_unique_id()
 	if not players.has(local_peer_id):
 		players[local_peer_id] = _new_local_slot()
-	# П5.8/B3: шлём внешность из редактора байтами индексов — хост
-	# проверит диапазоны сам (клиенту не доверяем).
-	_send(func() -> void: rpc_hello.rpc(
-		_display_name(), _slot_appearance_bytes(local_peer_id)), false)
+	_send(func() -> void: rpc_hello.rpc(_display_name()), false)
 	if mode == "steam":
 		# Лобби подключено и хост ответил — можно загружать остров (раздел 11).
 		EventBus.steam_world_ready.emit()
@@ -707,35 +694,13 @@ func _kick(peer_id: int) -> void:
 const _POS_UNKNOWN := Vector3(INF, INF, INF)
 
 
-func _new_slot(player_name: String, appearance: PackedByteArray = PackedByteArray()) -> Dictionary:
-	return {"name": player_name, "in_world": false, "appearance": appearance}
+func _new_slot(player_name: String) -> Dictionary:
+	return {"name": player_name, "in_world": false}
 
 
-## Слот локального игрока: внешность — собранная в редакторе (user://,
-## часть B), байтами индексов; rpc_hello отдаст её хосту как есть.
+## Слот локального игрока (ростер с самого старта — до входа в мир).
 func _new_local_slot() -> Dictionary:
-	return _new_slot(_display_name(), Save.load_appearance().validated().to_bytes())
-
-
-## Байты внешности из слота игрока (мусор/пусто — дефолт): для rpc_hello
-## и записей ростера.
-func _slot_appearance_bytes(peer_id: int) -> PackedByteArray:
-	var raw: Variant = players.get(peer_id, {}).get("appearance", PackedByteArray())
-	var bytes := raw as PackedByteArray
-	if bytes == null or bytes.size() < Appearance.NET_SIZE:
-		return Appearance.default_for(0).to_bytes()
-	return bytes
-
-
-## Внешность игрока в ростере (раздел 16): проверенная хостом на входе,
-## на всякий случай валидируем ещё раз (мусор в слоте — дефолт).
-func peer_appearance(peer_id: int) -> Appearance:
-	return Appearance.from_bytes(_slot_appearance_bytes(peer_id)).validated()
-
-
-## Внешность для лога: пол и причёска, коротко.
-func _appearance_log(ap: Appearance) -> String:
-	return "пол %d, причёска %d" % [ap.gender, ap.hair]
+	return _new_slot(_display_name())
 
 
 func _peer_in_world(peer_id: int) -> bool:
@@ -791,7 +756,6 @@ func _roster_entries() -> Array:
 			"peer_id": peer_id,
 			"name": players[peer_id]["name"],
 			"in_world": bool(players[peer_id].get("in_world", false)),
-			"appearance": _slot_appearance_bytes(peer_id),
 		})
 	return entries
 

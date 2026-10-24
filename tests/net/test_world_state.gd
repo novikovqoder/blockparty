@@ -1,7 +1,8 @@
 # Обязательный тест раздела 18: сериализация и десериализация world_state
 # без потерь (раздел 10: клиент, подключившийся позже, получает те же часы,
 # ростер и активности). Мёртвые мобы были в формате до протокола 6 —
-# мобы удалены в доработке П5.13.
+# мобы удалены в доработке П5.13; внешность (9 байтов редактора) — до
+# протокола 7, вычищена с наследием Blockparty (born-unblessed).
 extends GutTest
 
 const EPS: float = 0.001
@@ -24,14 +25,12 @@ func test_roundtrip_full_state() -> void:
 	assert_eq(int(first["peer_id"]), 1)
 	assert_eq(str(first["name"]), "Host")
 	assert_true(bool(first["in_world"]))
-	# Без поля внешности (старый формат) — дефолтные нули, не мусор.
-	assert_eq((first.get("appearance", PackedByteArray()) as PackedByteArray),
-		PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0, 0]), "без поля внешности — дефолт")
+	assert_false(first.has("appearance"),
+		"поля внешности в пакете больше нет (born-unblessed)")
 	assert_eq(int(second["peer_id"]), 234567890)
 	assert_false(bool(second["in_world"]))
-	assert_eq((second["appearance"] as PackedByteArray),
-		PackedByteArray([1, 3, 1, 0, 1, 1, 7, 5, 2]),
-		"внешность байтами проходит пакет без потерь")
+	assert_eq(str(second["name"]), "Длинное имя игрока",
+		"ник utf8 проходит пакет без потерь")
 
 
 func test_roundtrip_empty_world() -> void:
@@ -62,8 +61,6 @@ func test_full_roster_fits() -> void:
 			"peer_id": i + 1,
 			"name": "P%d" % (i + 1),
 			"in_world": true,
-			"appearance": PackedByteArray([i % 2, i % 6, i % 2, 0, 0, i % 2,
-				i % 10, i % 8, i % 6]),
 		})
 	var state := {
 		"world_epoch_msec": 42,
@@ -72,8 +69,8 @@ func test_full_roster_fits() -> void:
 	var data := WorldState.pack(state)
 	var parsed := WorldState.unpack(data)
 	assert_eq((parsed["players"] as Array).size(), Protocol.MAX_PLAYERS)
-	assert_eq(int(parsed["players"][1]["appearance"][0]), 1,
-		"внешность полного роста проходит")
+	assert_eq(int(parsed["players"][1]["peer_id"]), 2,
+		"полный ростер проходит")
 
 
 func test_activities_roundtrip() -> void:

@@ -1,7 +1,7 @@
-# Герой Born Unblessed (П10): рыцарь в багровом капюшоне (MakeHuman, CC0 —
+# Герой Born Unblessed: рыцарь в багровом капюшоне (MakeHuman, CC0 —
 # assets/hero_bu/LICENSES_hero_bu.md) — модель игрока и чужих игроков.
-# Модель одна на всех, внешность редактора на неё не влияет (структура в
-# сети прежняя, PROTOCOL_VERSION не меняется). Анимации — пак Mixamo
+# Модель одна на всех (редактора внешности больше нет — born-unblessed).
+# Анимации — пак Mixamo
 # «Pro Sword and Shield», перенесённый tools/retarget_mixamo_bu.gd в
 # assets/hero/hero_sword_anims.res и нарезанный tools/slice_locomotion_bu.gd
 # (клипы loco_*: у корня вычищен вшитый «пробег», прыжок разрезан на фазы).
@@ -46,7 +46,7 @@ const NATURAL_SPEED: Dictionary = {
 ## скорость игры 2,5 м/с против natural шага 1,36).
 const SPEED_SCALE_MIN: float = 0.55
 const SPEED_SCALE_MAX: float = 2.0
-## Плавный переход между клипами и сглаживание темпа — как у CharacterModel.
+## Плавный переход между клипами и сглаживание темпа ног.
 const ANIM_BLEND: float = 0.15
 const LOCO_SMOOTH: float = 10.0
 
@@ -101,12 +101,6 @@ func _ready() -> void:
 	equip.equip_finished.connect(_on_equip_finished)
 	_quality_materials()
 	set_state(_state)
-
-
-## Внешность редактора герою BU не применяется: модель одна, структура
-## в сети (байты внешности) сохраняется — PROTOCOL_VERSION не меняется.
-func setup_appearance(ap: Appearance) -> void:
-	super(ap)
 
 
 func set_state(state: int) -> void:

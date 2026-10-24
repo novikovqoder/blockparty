@@ -28,25 +28,14 @@ func _snap(seq: int, x: float, yaw: float, anim: int = 0) -> Dictionary:
 	}
 
 
-func test_model_matches_player_appearance() -> void:
-	# П5.8/B3 → П10: у ремоута тот же герой Born Unblessed, а байты
-	# внешности из rpc_player_joined валидируются и сохраняются структурой
-	# протокола (PROTOCOL_VERSION не меняется; на меш героя не влияют).
+func test_model_is_single_hero_bu() -> void:
+	# born-unblessed: внешности в сети больше нет (PROTOCOL_VERSION 7),
+	# у ремоута тот же единственный герой Born Unblessed, что и у игрока.
 	var remote := RemotePlayer.new()
-	remote.setup(7, "Тест", PackedByteArray([1, 3, 1, 0, 1, 1, 7, 5, 2]))
+	remote.setup(7, "Тест")
 	add_child_autofree(remote)
 	var visual := remote.get_node("Model/Visual") as HeroModelBU
 	assert_not_null(visual, "модель ремоута — герой Born Unblessed")
-	assert_eq(visual.appearance.gender, 1, "внешность из сети: женское тело")
-	assert_eq(visual.appearance.hat, 1, "внешность из сети: капюшон")
-	var junk := RemotePlayer.new()
-	junk.setup(8, "Мусор", PackedByteArray([1, 200, 99, 0, 0, 0, 0, 0, 0]))
-	add_child_autofree(junk)
-	var junk_visual := junk.get_node("Model/Visual") as HeroModelBU
-	var variants: Array = []
-	variants.append_array(Appearance.hair_variants(Appearance.GENDER_FEMALE))
-	assert_has(variants, junk_visual.appearance.hair,
-		"мусорная причёска заменена допустимой для пола")
 
 
 func test_node_has_name_label() -> void:

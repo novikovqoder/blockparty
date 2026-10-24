@@ -1,10 +1,11 @@
-# Самопроверка анимаций героя Born Unblessed (П10) — аналог AnimSelfCheck
+# Самопроверка анимаций героя Born Unblessed — бывший аналог AnimSelfCheck
+# (чекер блочной UBC-модели, вычищен с наследием Blockparty, born-unblessed)
 # (возврат П5.8) для рига Mixamo (mixamorig_*) и библиотеки sword
 # (Pro Sword and Shield). Правила CLAUDE.md «этапы с персонажами»:
 #  1) позы ключевых костей (бедро, колено, плечо) в ходьбе отличаются от
 #     покоя больше порога, в числах;
 #  2) каждая дорожка каждого используемого клипа находит свою кость на риге;
-#  3) вершины меша ног едут за костями (ручной скиннинг, как AnimSelfCheck).
+#  3) вершины меша ног едут за костями (ручной скиннинг).
 # Используется тестом GUT (test_hero_bu) и ключом --selftest-anim в игре.
 class_name AnimSelfCheckBU
 extends RefCounted
@@ -17,7 +18,7 @@ const POSE_BONES: Dictionary = {
 	"mixamorig_LeftArm": 6.0,
 }
 ## Минимальный сдвиг вершин меша ног в ходьбе, м (нога размахивается
-## на ~0,3 м; 0,03 — запас в 10 раз, как AnimSelfCheck).
+## на ~0,3 м; 0,03 — запас в 10 раз).
 const MESH_MIN_SHIFT: float = 0.03
 ## Прокрутка клипа перед снимком поз, с: бленд (0,15 с) закончился,
 ## ходьба — середина шага.
@@ -71,7 +72,7 @@ static func run(model: HeroModelBU, verbose: bool = false) -> Dictionary:
 	if unresolved > 0:
 		reasons.append("не резолвятся %d дорожек из %d" % [unresolved, tracks])
 
-	# 2) Позы костей: покой против ходьбы (кадры физики, как AnimSelfCheck:
+	# 2) Позы костей: покой против ходьбы (кадры физики,
 	# advance() двигает позицию, но применяет бленд только игровой цикл).
 	var idle := await _snapshot(model, skel, Protocol.AnimState.IDLE)
 	var walk := await _snapshot(model, skel, Protocol.AnimState.WALK)
@@ -129,7 +130,7 @@ static func _reach_position(model: HeroModelBU, target: float) -> bool:
 
 
 ## Сдвиг вершин меша ног между снимками (формула рендера Σ w·(pose·bind)·v,
-## как AnimSelfCheck): у героя BU ноги — меш Pants (штаны) или Boots.
+## ручной скиннинг): у героя BU ноги — меш Pants (штаны) или Boots.
 static func _leg_mesh_shift(skel: Skeleton3D, pose_idle: Array[Transform3D],
 		pose_walk: Array[Transform3D]) -> Dictionary:
 	var max_shift := 0.0

@@ -10,17 +10,16 @@ Born Unblessed (созданы владельцем с помощью ИИ) и �
 (SIL OFL 1.1) — все по явному решению владельца; атрибуция Kless — дословно,
 как требует лицензия, также в титрах игры (экран Credits). Извлечённые
 из glb текстуры (`*_texture.png` и подобные) создаёт сам Godot при импорте —
-это та же встроенная текстура модели. Наборы KayKit (персонажи и анимации,
-раздел 16 SPEC v2.3) удалены после перехода на персонажей Quaternius
-Universal Base Characters + Modular Character Outfits и клипы Universal
-Animation Library (П5.7–П5.8).
+это та же встроенная текстура модели. Наборы KayKit (П4.5), затем
+Quaternius Universal Base Characters + Modular Character Outfits и
+Universal Animation Library (П5.7–П5.8) использовались как блочные
+персонажи и их анимации — вычищены вместе с редактором внешности
+(born-unblessed): персонаж один, герой Born Unblessed (MakeHuman + Mixamo,
+см. assets/hero_bu/LICENSES_hero_bu.md).
 
 | Набор | Автор | Страница набора | Лицензия | Дата | Файлы |
 | --- | --- | --- | --- | --- | --- |
 | Log Cabin (Free Download) | Kless | https://sketchfab.com/3d-models/log-cabin-free-download-6zquz | CC-BY 4.0 | 2026-10-18 | Дословная атрибуция лицензии: **"Log Cabin (Free Download)" (https://skfb.ly/6ZQuZ) by Kless is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).** — `visual/cabin/log_cabin.glb` — дом жителей деревни (сруб, очередь владельца после доработки П5.13): исходник 36 МБ/585k треугольников обработан вне репозитория (декимация до 42k снаружи + 14k интерьер + 27k коллизия, встроенные текстуры удалены — материалы назначает `gameplay/world/props/cabin_house.gd` из CC0-наборов ниже); исходный glb в репозитории не хранится. Единственный не-CC0 ресурс проекта — по решению владельца; та же строка — в титрах игры (экран Credits) |
-| Universal Animation Library 1/2 (Standard) | Quaternius | https://quaternius.com/packs/universalanimationlibrary.html, https://quaternius.com/packs/universalanimationlibrary2.html | CC0 | 2026-10-12 | `quaternius.com/universal_animation_library/anims_ubc.res` — 19 скелетных клипов, переложенных с универсального рига UAL на риг Universal Base Characters (`tools/make_ubc_anims.gd`; линейки Quaternius Universal делят один риг); исходные glb наборов и архивы в репозитории не хранятся |
-| Universal Base Characters (Standard) | Quaternius | https://quaternius.com/packs/universalbasecharacters.html | CC0 | 2026-10-12 | `quaternius.com/universal_base_characters/baked/` — риг 65 костей (тела Superhero Male/Female, глаза, брови) и причёски (Long, Buns, Buzzed, BuzzedFemale, SimpleParted, Beard), запечённые `tools/make_ubc_characters.gd` в сцены `ubc_male.res`/`ubc_female.res` (срез головы, меши + `_lod1` + скины, материалы, текстуры — кожа обесцвечена под палитры); исходные gltf и архивы в репозитории не хранятся |
-| Modular Character Outfits — Fantasy (Standard) | Quaternius | https://quaternius.com/packs/modularcharacteroutfits.html | CC0 | 2026-10-12 | внутри `quaternius.com/universal_base_characters/baked/` — модульная одежда Peasant/Ranger (верх, руки, низ, обувь, капюшон) из частей Male/Female, собранная тем же запеканием в `meshes/` и сцены `ubc_*.res`; исходные gltf и архивы в репозитории не хранятся |
 | Bark001 | ambientCG | https://ambientcg.com/view?id=Bark001 | CC0 | 2026-10-16 | `ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg` (сет «1K» у Bark001 — 512×1024, ниже планки качества П5.9; взят 2K-сет из локальной библиотеки); `Bark001_2K-JPG_NormalGL.jpg` добавлен 2026-10-22 — нормали брёвен сруба деревни (`cabin_house.gd`), источник — локальная библиотека |
 | Bark002 | ambientCG | https://ambientcg.com/view?id=Bark002 | CC0 | 2026-10-16 | `ambientcg.com/Bark002/Bark002_1K-JPG_Color.jpg` |
 | Bark003 | ambientCG | https://ambientcg.com/view?id=Bark003 | CC0 | 2026-10-16 | `ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg` |
@@ -68,13 +67,6 @@ HDRI-панорамы Poly Haven (П5.7, блок 3) удалены в П5.9 (б
 мира теперь рисует аддон Sky3D (атмосферное рассеяние вместо запечённых
 панорам), шейдер `assets/shaders/sky.gdshader` и наборы kloofendal /
 grasslands_sunset / rogland_clear_night исключены из проекта.
-Universal Animation Library 1/2 (П5.7 блок 5 → П5.8 часть C) — исходные
-скелетные анимации персонажей: `tools/make_ubc_anims.gd` перекладывает клипы
-покоя/ходьбы/бега/прыжков/эмоций с универсального рига UAL на общий с ним
-риг Universal Base Characters и запекает в `anims_ubc.res` (одна библиотека
-на оба тела); движения без аналогов в Standard-наборах (взмах, «за руку»,
-вис у кромки, «Помогите!») генерируются процедурно поверх rest/запечённых
-баз (подробности — docs/STATUS.md).
 | Boujie Water Shader 1.0.0 | Zach Bernal | https://github.com/Chrisknyfe/boujie_water_shader | MIT | 2026-10-18 | `addons/boujie_water_shader/` — вода мира (доработка-2 П5.13, П3): волны Герстнера, цвет по глубине, береговая пена, френель, LOD-океан; текст лицензии — `addons/boujie_water_shader/LICENSE.md`, скриншоты аддона в проект не вносились. Правки кода аддона: (1) в `shader/water.gdshader` выключены дефайны REFRACTION/REFRACTION_SCALING/SNELLS_WINDOW — SPEC «Простая графика» (README аддона прямо допускает отключение дефайнов), depth-цвет/пена/френель остались; (2) трём сэмплерам текстур добавлен явный хинт `filter_linear_mipmap` — планка качества (никаких фильтров без явного объявления) |
 | old_stone_wall_02 | Poly Haven | https://polyhaven.com/a/old_stone_wall_02 | CC0 | 2026-10-19 | `polyhaven.com/old_stone_wall_02/old_stone_wall_02_diffuse_2k.jpg`, `old_stone_wall_02_nor_gl_2k.jpg` — кладка руин и каменных стен (доработка-2 П5.13, П4): трипланарный шейдер `assets/shaders/ruin_masonry.gdshader`, источник — локальная библиотека |
 | Moss001 | ambientCG | https://ambientcg.com/get?file=Moss001_1K-JPG.zip | CC0 | 2026-10-19 | `ambientcg.com/Moss001/Moss001_1K-JPG_Color.jpg` — текстура мха поверхностей (доработка-2 П5.13, П4: мох кладки руин; 1K намеренно — 2K-нормаль >10 МБ без LFS), источник — локальная библиотека |
