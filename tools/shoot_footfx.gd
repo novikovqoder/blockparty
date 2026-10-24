@@ -9,20 +9,47 @@ extends SceneTree
 ## порции: b0 — порция в этом кадре, b1/b2 — кадр-два спустя, b3 — давно.
 ## Сырая серия — в builds/screenshots/footfx_raw (не в git); отобранные
 ## кадры и склейки кладутся в docs/screenshots/footfx после просмотра.
+## В конец серии добавлены сцены «было» (before_*): точная реконструкция
+## старого RunParticles из П9 (beb4850) — непрерывный поток комьев 8 см,
+## альфа 0.9, на камне крошка — для пар «было–стало»; новый FootFx в этих
+## сценах спрятан. Текстура stone.png удалена из репо — передаётся путём
+## (второй позиционный аргумент, восстановлена из git).
 ## Запуск:
 ##   xvfb-run -a godot --path . --rendering-driver opengl3 \
-##     --resolution 1280x720 -s res://tools/shoot_footfx.gd -- --bot <каталог>
+##     --resolution 1280x720 -s res://tools/shoot_footfx.gd -- --bot \
+##     <каталог> [путь/stone.png]
 ## Выход: 0 — все сцены сняты; 3 — мир не достигнут; 4 — не задан каталог.
 
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
+const B: Balance = preload("res://gameplay/balance.tres")
+## Текстуры «было»: dirt/grass живут в репо, stone передаётся путём.
+const LEGACY_DIRT_TEX: Texture2D = preload("res://assets/vfx/particles/dirt.png")
+const LEGACY_GRASS_TEX: Texture2D = preload("res://assets/vfx/particles/grass.png")
+
+## Параметры «было» — дословно из beb4850 (balance.gd + run_particles.gd):
+## непрерывная эмиссия, 26 частиц, жизнь 0.45 с, комья 0.08 м (масштаб
+## 0.6–1.3 → до 10 см), скорость 0.44–1.1 м/с, разброс 40°, гравитация
+## −9, альфа 0.9, доля эмиссии pow((v−0.3)/(6.5−0.3), 1.6).
+const LEGACY_AMOUNT: int = 26
+const LEGACY_LIFETIME: float = 0.45
+const LEGACY_SIZE: float = 0.08
+const LEGACY_SPEED: float = 1.1
+const LEGACY_SPREAD: float = 40.0
+const LEGACY_ALPHA: float = 0.9
 
 ## Симуляция за кадр рендера: 6-20 с × 0.02 = 0.12-0.4 с (физика вдобавок
 ## ограничена 8 тиками = 0.133 с на кадр — детект шагов по костям это
 ## переживает: порции всё равно попадают в кадры).
 const TIME_SCALE: float = 0.02
-## Кадров на сцену: пара на разгон + ~2 цикла локомоции.
-const FRAMES_PER_SCENE: int = 8
-## Проверяемая длина пробега, м: кадр ~0.7 м, 8 кадров + разбег.
+## Кадров на сцену: пара на разгон + цикл локомоции (замер: кадр llvmpipe
+## на этом сервере стоит ~1,5–2 мин, 8 кадров × 22 сцены не влезают в
+## разумный прогон; 5 кадров = 0,8–2 с симуляции = 2–5 шагов — порции
+## попадают в кадр с маркером возраста).
+const FRAMES_PER_SCENE: int = 5
+## Кадров в ленте-«клипе» (подряд идущие кадры для склейки): чуть больше
+## сцены, чтобы захватить жизнь порции целиком.
+const FRAMES_PER_STRIP: int = 7
+## Проверяемая длина пробега, м: кадр ~0.7 м, 5–7 кадров + разбег.
 const SEGMENT_M: float = 12.0
 ## Минимальная высота земли отрезка: ниже — море/мелководье/лужа у воды.
 const MIN_H: float = 0.45
@@ -32,6 +59,10 @@ const MAX_SLOPE: float = 0.35
 const PLAZA_AVOID: float = 32.0
 
 var _out: String = ""
+var _legacy_stone_path: String = ""
+var _legacy_stone_tex: Texture2D = null
+var _legacy_fx: GPUParticles3D = null
+var _legacy_proc: ParticleProcessMaterial = null
 var _t: float = 0.0
 var _world: Node3D = null
 var _loading_seen: bool = false
@@ -52,7 +83,10 @@ var _frames_since_burst: int = 99
 func _initialize() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if not arg.begins_with("--"):
-			_out = arg
+			if _out.is_empty():
+				_out = arg
+			elif _legacy_stone_path.is_empty():
+				_legacy_stone_path = arg
 	if _out.is_empty():
 		push_error("FOOTFX FAIL: не задан каталог PNG (аргумент после --)")
 		quit(4)
@@ -122,6 +156,18 @@ func _setup_scenes() -> void:
 	if not _segments["mud"].is_empty():
 		_scenes.append({"name": "strip_mud_feet", "seg": "mud",
 			"walk": false, "cam": "feet", "jump": false})
+	# «Было» — в самый конец: главное (новый эффект) снимается первым.
+	if not _legacy_stone_path.is_empty():
+		var img := Image.load_from_file(_legacy_stone_path)
+		if img != null:
+			_legacy_stone_tex = ImageTexture.create_from_image(img)
+			print("FOOTFX: stone.png «было» загружен из %s" % _legacy_stone_path)
+	if not _segments["grass"].is_empty():
+		_scenes.append({"name": "before_run_grass_feet", "seg": "grass",
+			"walk": false, "cam": "feet", "jump": false, "legacy": true})
+	if not _segments["stone"].is_empty() and _legacy_stone_tex != null:
+		_scenes.append({"name": "before_run_stone_feet", "seg": "stone",
+			"walk": false, "cam": "feet", "jump": false, "legacy": true})
 	_next_scene()
 	print("FOOTFX: сцен %d" % _scenes.size())
 
@@ -154,9 +200,13 @@ func _run_scene() -> bool:
 		Input.action_press("jump")
 	elif scene["jump"] and _frame_in_scene == 4:
 		Input.action_release("jump")
+	if scene.get("legacy", false) == true:
+		_update_legacy()
 	_shot("%s_f%02d_b%d" % [scene["name"], _frame_in_scene,
 		mini(_frames_since_burst, 3)])
-	if _frame_in_scene >= FRAMES_PER_SCENE:
+	var frames: int = FRAMES_PER_STRIP \
+		if String(scene["name"]).begins_with("strip_") else FRAMES_PER_SCENE
+	if _frame_in_scene >= frames:
 		print("FOOTFX: %s — шагов %d, порций %d" % [scene["name"],
 			_foot_fx.stats_steps - _base_steps,
 			_foot_fx.stats_bursts - _scene_burst_base])
@@ -174,6 +224,12 @@ func _next_scene() -> void:
 	if _feet_cam != null:
 		_feet_cam.queue_free()
 		_feet_cam = null
+	if _legacy_fx != null:
+		_legacy_fx.queue_free()
+		_legacy_fx = null
+		_legacy_proc = null
+	if _foot_fx != null:
+		_foot_fx.visible = true
 	_scene_i += 1
 	_frame_in_scene = 0
 	_frames_since_burst = 99
@@ -204,6 +260,11 @@ func _teleport(scene: Dictionary) -> void:
 		_world.add_child(_feet_cam)
 		_update_feet_cam()
 		_feet_cam.make_current()
+	if scene.get("legacy", false) == true:
+		# Новый эффект спрятан — в кадке только реконструкция П9.
+		if _foot_fx != null:
+			_foot_fx.visible = false
+		_build_legacy(_kind_of(scene["seg"]))
 	Input.action_press("move_forward")
 	if scene["walk"]:
 		Input.action_press("walk")
@@ -269,6 +330,76 @@ func _plaza_segment() -> Dictionary:
 	var y: float = IslandGen.ground_height(ART.heights, c.x, c.y) + 0.05
 	return {"start": Vector3(c.x - 8.0, y, c.y - 8.0),
 		"dir": Vector3(1.0, 0.0, 1.0).normalized()}
+
+
+# --- «Было»: реконструкция RunParticles из П9 (beb4850) ---
+
+## Собрать старый эмиттер: непрерывный поток, комья 8 см, альфа 0.9.
+## Пассы по покрытию — как в _refresh_surface() старого кода: камень —
+## крошка, трава — комья + травинки, земля — комья. Эмиттер висит в мире
+## (тождественный поворот): направление «назад-вверх» — от хода пробега.
+func _build_legacy(kind: int) -> void:
+	_legacy_fx = GPUParticles3D.new()
+	_legacy_fx.name = "LegacyRunDust"
+	_legacy_fx.amount = LEGACY_AMOUNT
+	_legacy_fx.lifetime = LEGACY_LIFETIME
+	_legacy_fx.local_coords = false
+	_legacy_fx.visibility_aabb = AABB(
+		Vector3(-4.0, -0.5, -4.0), Vector3(8.0, 3.0, 8.0))
+	_legacy_proc = ParticleProcessMaterial.new()
+	_legacy_proc.direction = (Vector3.UP * 0.55 - _run_dir).normalized()
+	_legacy_proc.spread = LEGACY_SPREAD
+	_legacy_proc.initial_velocity_min = LEGACY_SPEED * 0.4
+	_legacy_proc.initial_velocity_max = LEGACY_SPEED
+	_legacy_proc.gravity = Vector3(0.0, -9.0, 0.0)
+	_legacy_proc.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	_legacy_proc.emission_box_extents = Vector3(0.12, 0.03, 0.12)
+	_legacy_proc.scale_min = 0.6
+	_legacy_proc.scale_max = 1.3
+	_legacy_fx.process_material = _legacy_proc
+	match kind:
+		ForestGround.Surface.STONE:
+			_legacy_fx.draw_passes = 1
+			_legacy_fx.draw_pass_1 = _legacy_quad(_legacy_stone_tex, 1.0)
+		ForestGround.Surface.GRASS:
+			_legacy_fx.draw_passes = 2
+			_legacy_fx.draw_pass_1 = _legacy_quad(LEGACY_DIRT_TEX, 1.0)
+			_legacy_fx.draw_pass_2 = _legacy_quad(LEGACY_GRASS_TEX, 0.7)
+		_:
+			_legacy_fx.draw_passes = 1
+			_legacy_fx.draw_pass_1 = _legacy_quad(LEGACY_DIRT_TEX, 1.0)
+	_legacy_fx.emitting = false
+	_world.add_child(_legacy_fx)
+
+
+## Кадр «было»: эмиссия и доля — как в старом update() (кривая по скорости,
+## бег ~1.0 → полные 26 частиц непрерывно).
+func _update_legacy() -> void:
+	if _legacy_fx == null:
+		return
+	var body := _player as CharacterBody3D
+	if body == null:
+		return
+	var hspeed: float = Vector2(body.velocity.x, body.velocity.z).length()
+	var t: float = (hspeed - B.anim_idle_speed) / (B.run_speed - B.anim_idle_speed)
+	_legacy_fx.emitting = body.is_on_floor() and hspeed > B.anim_idle_speed
+	_legacy_fx.amount_ratio = pow(clampf(t, 0.0, 1.0), 1.6)
+	_legacy_fx.global_position = _player.global_position + Vector3(0.0, 0.05, 0.0)
+
+
+## Квад «было» — дословно старый _quad(): альфа 0.9, биллборд, без света.
+func _legacy_quad(tex: Texture2D, scale: float) -> QuadMesh:
+	var quad := QuadMesh.new()
+	var side: float = LEGACY_SIZE * scale
+	quad.size = Vector2(side, side)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.albedo_color = Color(1.0, 1.0, 1.0, LEGACY_ALPHA)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	quad.material = mat
+	return quad
 
 
 func _shot(name: String) -> void:
