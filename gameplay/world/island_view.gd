@@ -56,7 +56,11 @@ func _build_terrain() -> void:
 	shape.map_data = art.heights
 	collision.shape = shape
 	body.add_child(collision)
-	var forest_material := ForestGround.make_material(art)
+	# П12: уровень качества (SIMPLE — упрощённая земля, HIGH/ULTRA —
+	# параллакс и AO-каналы) читается при постройке материала; смена
+	# уровня применяется при следующем входе в мир, как у воды.
+	var forest_material := ForestGround.make_material(
+		art, GraphicsQuality.tier_from_settings())
 	for chunk: Mesh in art.chunks:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = chunk

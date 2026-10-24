@@ -91,30 +91,40 @@ func test_paint_is_deterministic() -> void:
 
 
 func test_material_colors_and_shader() -> void:
-	# П5.9 переделка, П2: земля — текстуры травы/грунта CC0 по схеме демо
-	# (смешивание — симплекс в шейдере), оверлеи — цвета палитры; карты
-	# весов, края и нормалей рельефа запечены ForestGround.
-	var material := ForestGround.make_material(ART)
+	# П12 «Земля»: шесть PBR-слоёв по тем же весам — у каждого слоя
+	# три карты (albedo/nor_gl/ORM) и тинт; карт покраски три. Сэмплеров
+	# пустых нет (SPEC П12 приёмка: «шейдер земли получает все карты
+	# слоёв»), тинты — константы BU из ForestGround.
+	var material := ForestGround.make_material(ART, GraphicsQuality.Tier.HIGH)
 	assert_eq(
 		material.shader.resource_path,
 		"res://assets/shaders/forest_ground.gdshader",
 		"материал на шейдере forest_ground")
-	const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 	for pair: Array in [
-		["wet_color", VPAL.ground_wet],
-		["moss_color", VPAL.ground_moss],
-		["rock_color", VPAL.ground_rock],
-		["path_color", VPAL.ground_path],
+		["litter_tint", ForestGround.TINT_LITTER],
+		["grass_tint", ForestGround.TINT_GRASS],
+		["rock_tint", ForestGround.TINT_ROCK],
+		["mud_tint", ForestGround.TINT_MUD],
+		["moss_tint", ForestGround.TINT_MOSS],
+		["gravel_tint", ForestGround.TINT_GRAVEL],
 	]:
 		var color: Color = material.get_shader_parameter(pair[0])
 		assert_almost_eq(
-			color.r, (pair[1] as Color).r, 0.001, "%s из палитры (r)" % pair[0])
+			color.r, (pair[1] as Color).r, 0.001, "%s — константа BU (r)" % pair[0])
 		assert_almost_eq(
-			color.g, (pair[1] as Color).g, 0.001, "%s из палитры (g)" % pair[0])
+			color.g, (pair[1] as Color).g, 0.001, "%s — константа BU (g)" % pair[0])
 		assert_almost_eq(
-			color.b, (pair[1] as Color).b, 0.001, "%s из палитры (b)" % pair[0])
-	for uniform_name: String in ["grass_tex", "dirt_tex", "dirt_normal",
-			"weight_map", "border_map", "relief_normal"]:
+			color.b, (pair[1] as Color).b, 0.001, "%s — константа BU (b)" % pair[0])
+	assert_almost_eq(
+		material.get_shader_parameter("tint_mix"),
+		ForestGround.TINT_MIX, 0.001, "доля тинта — константа")
+	for layer: String in ["litter", "grass", "rock", "mud", "moss", "gravel"]:
+		for kind: String in ["tex", "normal", "orm"]:
+			var uniform_name := "%s_%s" % [layer, kind]
+			assert_not_null(
+				material.get_shader_parameter(uniform_name),
+				"%s в материале" % uniform_name)
+	for uniform_name: String in ["weight_map", "border_map", "relief_normal"]:
 		assert_not_null(
 			material.get_shader_parameter(uniform_name),
 			"%s в материале" % uniform_name)
