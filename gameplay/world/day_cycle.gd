@@ -169,6 +169,14 @@ func _process(_delta: float) -> void:
 	_environment.ambient_light_energy = DayMath.ambient_energy(world_time)
 	# Ночью экспозиция выше — «мягкая светлая ночь» (глаза адаптировались).
 	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE, 1.0, dayness)
+	# ULTRA (П11 2.1): SDFGI светит и под тёмным небом (отскоки, накопленный
+	# свет) — ночь светлеет. Энергия приглушается от времени суток, как
+	# экспозиция: днём — полная, глубокой ночью — NIGHT_ENERGY. Не-ULTRA
+	# окружения SDFGI не включают, их энергия не трогается.
+	if _environment.sdfgi_enabled:
+		_environment.sdfgi_energy = lerpf(
+			GraphicsQuality.ULTRA_SDFGI_NIGHT_ENERGY,
+			GraphicsQuality.ULTRA_SDFGI_ENERGY, dayness)
 	# Солнце низкое — тени длинные; у горизонта они ещё и мягче (blur
 	# растёт; доработка П5.13 — база мягче, «тёплые мягкие тени»).
 	_sun.shadow_blur = 1.7 + 0.9 * warmth
