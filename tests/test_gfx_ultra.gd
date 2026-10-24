@@ -1,10 +1,15 @@
-# Тесты П11 «Графика на максимум», первая часть — каркас «меню → мир»:
-# пункт меню «Качество графики» (0–3) задаёт уровень мира, dev-флаги имеют
-# приоритет над меню, старый cfg без ключа quality даёт «Высокое», а уровень
-# «Ультра» пока применяется как «Высокое» (полный «Ультра»-рендер — SDFGI,
-# SSIL, SSR, тени 8192, SMAA — следующий этап, ветка bu-gfx; эти тесты
-# дополнятся там).
+# Тесты П11 «Графика на максимум»: каркас «меню → мир» (пункт меню 0–3
+# задаёт уровень мира, dev-флаги имеют приоритет, старый cfg без ключа
+# quality даёт «Высокое») и ULTRA-рендер ветки bu-gfx (SDFGI, SSIL, SSR,
+# тени 8192, качество SSAO/SSIL/тумана, MSAA 4x + SMAA, mesh_lod_threshold
+# 0, пробы отражений срубов). Сервер — Compatibility-рендерер: эффекты
+# не рисуются, проверяются значения свойств, а не картинка. Глобальные
+# настройки RenderingServer (атласы, фильтры, качество SSAO/SSIL, объём
+# тумана) геттеров не имеют — их чистое выключение проверяется свойствами
+# env/viewport и кодом apply() (ставит и базу, и ULTRA при каждом вызове).
 extends GutTest
+
+const B: Balance = preload("res://gameplay/balance.tres")
 
 var _had_cfg: bool = false
 var _saved_cfg: PackedByteArray = PackedByteArray()
@@ -142,9 +147,9 @@ func test_ultra_tier_reaches_world() -> void:
 
 
 func test_ultra_applies_as_high_for_now() -> void:
-	# П11, каркас: на этом этапе «Ультра» применяется как «Высокое» — все
-	# свойства, которыми различаются уровни, у ULTRA совпадают с HIGH
-	# (SDFGI/SSIL/SSR/SMAA добавит ULTRA-рендер в ветке bu-gfx).
+	# П11 раздел 2, ветка bu-gfx: HIGH и ULTRA различаются только
+	# «Ультра»-набором (SDFGI, SSIL, SSR, SMAA, тени 8192) — общая для
+	# уровней картинка (постобработка, туман, MSAA) совпадает.
 	_write_menu_quality(3)
 	var envs: Array[Environment] = [Environment.new(), Environment.new()]
 	var suns: Array[DirectionalLight3D] = [DirectionalLight3D.new(), DirectionalLight3D.new()]
@@ -164,7 +169,7 @@ func test_ultra_applies_as_high_for_now() -> void:
 	for p: String in props:
 		assert_eq(
 			envs[1].get(p), envs[0].get(p),
-			"ULTRA: env.%s как в HIGH (пока)" % p,
+			"ULTRA: env.%s как в HIGH (общая картинка)" % p,
 		)
 	assert_eq(
 		suns[1].shadow_enabled, suns[0].shadow_enabled,
@@ -183,10 +188,6 @@ func test_ultra_applies_as_high_for_now() -> void:
 		"ULTRA: MSAA как в HIGH",
 	)
 	assert_eq(
-		viewports[1].screen_space_aa, viewports[0].screen_space_aa,
-		"ULTRA: screen-space AA как в HIGH",
-	)
-	assert_eq(
 		viewports[1].texture_mipmap_bias, viewports[0].texture_mipmap_bias,
 		"ULTRA: смещение мипов как в HIGH",
 	)
@@ -195,3 +196,195 @@ func test_ultra_applies_as_high_for_now() -> void:
 		suns[i].free()
 		moons[i].free()
 		viewports[i].free()
+
+
+func test_ultra_enables_gi_and_reflections() -> void:
+	# П11 2.1–2.3: на ULTRA включаются SDFGI (глобальное освещение),
+	# SSIL (отражённый свет) и SSR (отражения), числа — константы
+	# graphics_quality.gd («подбирает владелец»).
+	var env := Environment.new()
+	var sun := DirectionalLight3D.new()
+	var moon := DirectionalLight3D.new()
+	var viewport := SubViewport.new()
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.ULTRA, viewport, moon)
+	# SDFGI (2.1).
+	assert_true(env.sdfgi_enabled, "ULTRA: SDFGI включён")
+	assert_between(
+		env.sdfgi_cascades, 4, 6, "ULTRA: каскады SDFGI 4–6 (2.1)")
+	assert_true(env.sdfgi_use_occlusion, "ULTRA: окклюзия SDFGI")
+	assert_true(env.sdfgi_read_sky_light, "ULTRA: SDFGI читает свет неба")
+	assert_almost_eq(
+		env.sdfgi_bounce_feedback, GraphicsQuality.ULTRA_SDFGI_BOUNCE_FEEDBACK,
+		0.001, "ULTRA: отскок SDFGI ≈ 0.5")
+	assert_almost_eq(
+		env.sdfgi_energy, GraphicsQuality.ULTRA_SDFGI_ENERGY, 0.001,
+		"ULTRA: энергия SDFGI (день; ночь ведёт DayCycle)")
+	# SSIL (2.2).
+	assert_true(env.ssil_enabled, "ULTRA: SSIL включён")
+	assert_almost_eq(
+		env.ssil_intensity, GraphicsQuality.ULTRA_SSIL_INTENSITY, 0.001,
+		"ULTRA: интенсивность SSIL ≈ 1.0")
+	assert_almost_eq(
+		env.ssil_radius, GraphicsQuality.ULTRA_SSIL_RADIUS, 0.001,
+		"ULTRA: радиус SSIL ≈ 5")
+	# SSR (2.3).
+	assert_true(env.ssr_enabled, "ULTRA: SSR включён")
+	assert_eq(
+		env.ssr_max_steps, 64, "ULTRA: шаги трассировки SSR 64")
+	assert_almost_eq(
+		env.ssr_fade_in, GraphicsQuality.ULTRA_SSR_FADE_IN, 0.001,
+		"ULTRA: fade_in SSR умеренный")
+	assert_almost_eq(
+		env.ssr_fade_out, GraphicsQuality.ULTRA_SSR_FADE_OUT, 0.001,
+		"ULTRA: fade_out SSR умеренный")
+	sun.free()
+	moon.free()
+	viewport.free()
+
+
+func test_ultra_shadows_aa_and_lod() -> void:
+	# П11 2.5 (светила), 2.7 (сглаживание) и 2.8 (детализация): 4 сплита
+	# PSSM, угловое расхождение 0.5°, дальность теней 200 м; MSAA 4x
+	# плюс SMAA (TAA выключен); модели полной детализации; атлас теней
+	# точечных источников — 8192.
+	var env := Environment.new()
+	var sun := DirectionalLight3D.new()
+	var moon := DirectionalLight3D.new()
+	var viewport := SubViewport.new()
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.ULTRA, viewport, moon)
+	for light: DirectionalLight3D in [sun, moon]:
+		assert_eq(
+			light.directional_shadow_mode,
+			DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS,
+			"ULTRA: солнце/луна — 4 сплита PSSM")
+		assert_almost_eq(
+			light.light_angular_distance,
+			GraphicsQuality.ULTRA_LIGHT_ANGULAR_DISTANCE, 0.001,
+			"ULTRA: угловое расхождение светила ≈ 0.5° (мягкий полутон)")
+		assert_almost_eq(
+			light.directional_shadow_max_distance,
+			GraphicsQuality.ULTRA_SHADOW_MAX_DISTANCE, 0.001,
+			"ULTRA: дальность теней светил 200 м")
+	assert_true(sun.shadow_enabled, "ULTRA: тени солнца включены")
+	assert_true(moon.shadow_enabled, "ULTRA: тени луны включены")
+	assert_eq(
+		viewport.msaa_3d, Viewport.MSAA_4X, "ULTRA: MSAA 4x")
+	assert_eq(
+		viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_SMAA,
+		"ULTRA: screen-space AA — SMAA")
+	assert_false(viewport.use_taa, "ULTRA: TAA выключен (резкое небо)")
+	assert_almost_eq(
+		viewport.mesh_lod_threshold, 0.0, 0.001,
+		"ULTRA: порог LOD 0 — полная детализация моделей")
+	assert_eq(
+		viewport.positional_shadow_atlas_size,
+		GraphicsQuality.ULTRA_POSITIONAL_ATLAS_SIZE,
+		"ULTRA: атлас теней точечных источников 8192")
+	sun.free()
+	moon.free()
+	viewport.free()
+
+
+func test_switching_levels_disables_ultra() -> void:
+	# П11 2.10: уход с ULTRA выключает «Ультра»-набор начисто — на HIGH
+	# возвращаются базовые (движковые) значения, на SIMPLE дополнительно
+	# гаснут тени, MSAA и постобработка.
+	var env := Environment.new()
+	var sun := DirectionalLight3D.new()
+	var moon := DirectionalLight3D.new()
+	var viewport := SubViewport.new()
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.ULTRA, viewport, moon)
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.HIGH, viewport, moon)
+	assert_false(env.sdfgi_enabled, "ULTRA→HIGH: SDFGI выключен")
+	assert_false(env.ssil_enabled, "ULTRA→HIGH: SSIL выключен")
+	assert_false(env.ssr_enabled, "ULTRA→HIGH: SSR выключен")
+	assert_almost_eq(
+		env.sdfgi_energy, GraphicsQuality.SDFGI_ENERGY_BASE, 0.001,
+		"ULTRA→HIGH: энергия SDFGI — база")
+	assert_almost_eq(
+		sun.light_angular_distance,
+		GraphicsQuality.LIGHT_ANGULAR_DISTANCE_BASE, 0.001,
+		"ULTRA→HIGH: угловое расхождение светила — база")
+	assert_almost_eq(
+		sun.directional_shadow_max_distance,
+		GraphicsQuality.SHADOW_MAX_DISTANCE_BASE, 0.001,
+		"ULTRA→HIGH: дальность теней — база")
+	assert_almost_eq(
+		viewport.mesh_lod_threshold, GraphicsQuality.MESH_LOD_THRESHOLD_BASE,
+		0.001, "ULTRA→HIGH: порог LOD — база")
+	assert_eq(
+		viewport.positional_shadow_atlas_size,
+		GraphicsQuality.POSITIONAL_ATLAS_SIZE_BASE,
+		"ULTRA→HIGH: атлас точечных теней — база (2048)")
+	assert_eq(
+		viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_FXAA,
+		"ULTRA→HIGH: screen-space AA — FXAA, как был до «Ультра»")
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.SIMPLE, viewport, moon)
+	assert_false(env.sdfgi_enabled, "ULTRA→SIMPLE: SDFGI выключен")
+	assert_false(env.ssil_enabled, "ULTRA→SIMPLE: SSIL выключен")
+	assert_false(env.ssr_enabled, "ULTRA→SIMPLE: SSR выключен")
+	assert_false(sun.shadow_enabled, "ULTRA→SIMPLE: тени выключены")
+	assert_false(moon.shadow_enabled, "ULTRA→SIMPLE: тени луны выключены")
+	assert_eq(
+		viewport.msaa_3d, Viewport.MSAA_DISABLED, "ULTRA→SIMPLE: MSAA выключен")
+	assert_eq(
+		viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_DISABLED,
+		"ULTRA→SIMPLE: screen-space AA выключен")
+	sun.free()
+	moon.free()
+	viewport.free()
+
+
+func test_taa_disabled_on_all_levels() -> void:
+	# П11 2.7: TAA не включается ни на одном уровне — владелец утвердил
+	# резкое небо и звёзды (test_sky_stays_sharp).
+	var env := Environment.new()
+	var sun := DirectionalLight3D.new()
+	var viewport := SubViewport.new()
+	for tier: int in [
+		GraphicsQuality.Tier.SIMPLE, GraphicsQuality.Tier.NORMAL,
+		GraphicsQuality.Tier.HIGH, GraphicsQuality.Tier.ULTRA,
+	]:
+		GraphicsQuality.apply(env, sun, tier, viewport)
+		assert_false(
+			viewport.use_taa, "уровень %d: TAA выключен" % tier)
+	sun.free()
+	viewport.free()
+
+
+func test_sdfgi_energy_dimmer_at_night() -> void:
+	# П11 2.1: ночь остаётся тёмной — на ULTRA DayCycle приглушает
+	# sdfgi_energy по dayness (как экспозицию): днём полная, глубокой
+	# ночью — NIGHT_ENERGY; без SDFGI энергия не трогается.
+	var sky := Sky3D.new()
+	add_child(sky)
+	var cycle := DayCycle.new()
+	cycle.setup(sky.sun, sky)
+	var saved := Session.world_time
+	sky.environment.sdfgi_enabled = true
+	sky.environment.sdfgi_energy = GraphicsQuality.ULTRA_SDFGI_ENERGY
+	Session.world_time = 0.3 * B.day_cycle_sec  # полдень
+	cycle._process(0.0)
+	var day_energy: float = sky.environment.sdfgi_energy
+	Session.world_time = 0.8 * B.day_cycle_sec  # глубокая ночь
+	cycle._process(0.0)
+	var night_energy: float = sky.environment.sdfgi_energy
+	assert_almost_eq(
+		day_energy, GraphicsQuality.ULTRA_SDFGI_ENERGY, 0.001,
+		"днём энергия SDFGI полная")
+	assert_almost_eq(
+		night_energy, GraphicsQuality.ULTRA_SDFGI_NIGHT_ENERGY, 0.001,
+		"ночью энергия SDFGI приглушена (тёмная ночь)")
+	assert_lt(
+		night_energy, day_energy * 0.5,
+		"ночь с SDFGI заметно темнее дня")
+	# Не-ULTRA: SDFGI выключен — цикл не трогает энергию.
+	sky.environment.sdfgi_enabled = false
+	sky.environment.sdfgi_energy = 1.0
+	cycle._process(0.0)
+	assert_almost_eq(
+		sky.environment.sdfgi_energy, 1.0, 0.001,
+		"без SDFGI цикл энергию не меняет")
+	Session.world_time = saved
+	cycle.free()
+	sky.free()
