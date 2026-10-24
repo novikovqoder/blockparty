@@ -1,7 +1,7 @@
 # Boot-экран: ждёт результата инициализации Steam и решает, куда идти —
 # в главное меню или в окно офлайн-режима (раздел 13 SPEC, экран Boot).
 # В dev-режиме (--dev-host/--dev-join) Steam не используется вовсе — сразу в меню.
-# Меню — Born Unblessed (П9); по --old-menu открывается прежнее меню Blockparty.
+# Меню — Born Unblessed (П9); прежнее меню Blockparty вычищено (born-unblessed).
 # Вид — BootScreenBU (П10): прежние «Blockparty» и серый фон ушли, логика
 # проверки Steam не меняется — кит показывает статус и окно «Steam не запущен».
 extends Control
@@ -33,7 +33,7 @@ func _ready() -> void:
 
 func _go_to_menu() -> void:
 	# Отложенно: из _ready дерево занято добавлением детей.
-	get_tree().call_deferred("change_scene_to_file", Dev.menu_scene_path())
+	get_tree().call_deferred("change_scene_to_file", Dev.MENU_SCENE)
 
 
 func _on_play_offline_pressed() -> void:

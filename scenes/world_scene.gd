@@ -182,7 +182,7 @@ func _exit_to_menu() -> void:
 	else:
 		Net.left_world()
 	Session.leave_world()
-	get_tree().call_deferred("change_scene_to_file", Dev.menu_scene_path())
+	get_tree().call_deferred("change_scene_to_file", Dev.MENU_SCENE)
 
 
 func _on_host_lost(_reason: String) -> void:

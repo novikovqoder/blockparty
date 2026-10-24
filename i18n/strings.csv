@@ -1,27 +1,9 @@
 keys,ru,en
-GAME_TITLE,Blockparty,Blockparty
 BOOT_LOADING,Инициализация…,Initializing…
 OFFLINE_TITLE,Steam не запущен,Steam is not running
 OFFLINE_TEXT,"Запустите Steam и перезапустите игру. Либо продолжите офлайн в режиме разработки (сеть ENet на локальной машине).","Start Steam and relaunch the game. Or continue offline in development mode (ENet networking on the local machine)."
 OFFLINE_PLAY,Играть офлайн (режим разработки),Play offline (development mode)
 OFFLINE_QUIT,Выход,Quit
-MENU_ENTER_WORLD,В мир,Enter world
-MENU_FRIENDS_WORLD,Мир для друзей,World for friends
-MENU_MEETINGS,Встречи,Meetings
-MENU_WARDROBE,Гардероб,Wardrobe
-MENU_SETTINGS,Настройки,Settings
-MENU_CREDITS,Титры,Credits
-MENU_CREDITS_BACK,Назад,Back
-MENU_CREDITS_INTRO,"Игра и процедурный остров — Новиков Руслан. Дом жителей деревни — модель сообщества (лицензия CC-BY 4.0, строка ниже — дословная):","Game and procedural island by Ruslan Novikov. The villagers' house is a community model (CC-BY 4.0, the attribution line below is verbatim):"
-MENU_CREDITS_CC0,"Остальные модели, текстуры и звуки — CC0: ambientcg.com, polyhaven.com, quaternius.com, kenney.nl. Полный список наборов и прямые ссылки — assets/third_party/LICENSES.md в репозитории игры.","Other models, textures and sounds are CC0: ambientcg.com, polyhaven.com, quaternius.com, kenney.nl. Full asset list with direct links — assets/third_party/LICENSES.md in the game repository."
-MENU_QUIT,Выход,Quit
-MENU_NOTE,"«В мир» — быстрый вход в общий мир или свой остров; «Мир для друзей» — с приглашением через Steam.","“Enter world” — quick join a shared world or host your own island; “World for friends” — with a Steam invite."
-MENU_NET_HOST_STATUS,"Вы хост (ENet). Игроков: %d / %d — мир открыт","You are the host (ENet). Players: %d / %d — the world is open"
-MENU_NET_CLIENT_STATUS,Подключено к хосту (ENet). Нажмите «В мир»,Connected to the host (ENet). Press “Enter world”
-MENU_NET_SEARCHING,Ищем мир…,Searching for a world…
-MENU_NET_CREATING,Создаём новый мир…,Creating a new world…
-MENU_NET_JOINING,Подключение к миру…,Joining the world…
-MENU_NET_JOIN_FAILED,"Не удалось войти в мир: %s","Could not enter the world: %s"
 LOBBY_FAIL_CREATE,"не удалось создать мир (код %d)","failed to create the world (code %d)"
 LOBBY_FAIL_FULL,мир заполнен,the world is full
 LOBBY_FAIL_CLOSED,мир уже закрыт,the world is already closed

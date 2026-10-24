@@ -4,7 +4,8 @@ extends Node
 ## scenes/menu_bu/main_menu_bu.tscn встраивается КАК ЕСТЬ: этот узел
 ## инстанцирует её дочерней сценой и связывает с игрой — старт, Steam-поток
 ## входа (раздел 11), приглашения, автовход ботов и самопроверок.
-## Старое меню Blockparty доступно по --old-menu (Dev.menu_scene_path()).
+## Прежнее меню Blockparty (--old-menu) вычищено вместе с наследием
+## (born-unblessed): это меню — единственное.
 
 const WORLD_SCENE: String = "res://scenes/world_scene.tscn"
 const MENU_BU_SCENE: String = "res://scenes/menu_bu/main_menu_bu.tscn"

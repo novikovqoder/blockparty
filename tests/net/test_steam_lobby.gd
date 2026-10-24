@@ -149,10 +149,11 @@ func test_rich_presence_status_text() -> void:
 
 
 ## Все новые ключи Steam-этапа есть в обоих языках (правило: весь текст — tr()).
+## Ключи MENU_NET_* (статусы входа старого меню Blockparty) удалены вместе
+## с ним — born-unblessed; у меню BU строки статуса сети нет.
 func test_steam_strings_exist() -> void:
 	var keys: PackedStringArray = [
-		"MENU_NET_SEARCHING", "MENU_NET_CREATING", "MENU_NET_JOINING",
-		"MENU_NET_JOIN_FAILED", "LOBBY_FAIL_CREATE", "LOBBY_FAIL_FULL",
+		"LOBBY_FAIL_CREATE", "LOBBY_FAIL_FULL",
 		"LOBBY_FAIL_CLOSED", "LOBBY_FAIL_GENERIC", "RP_IN_WORLD",
 		"ESC_INVITE_FRIEND",
 	]
