@@ -1,6 +1,6 @@
 # Сцена мира (раздел 6 SPEC): остров из gameplay/world/island.tscn
 # (сгенерирован tools/generate_island.gd, коммитится — по сети не передаётся),
-# игроки, мобы (в острове), цикл дня (DayCycle), карта (M), HUD.
+# игроки, мобы (в острове), цикл дня (DayCycle), HUD.
 # Спавн — на Площади или в зоне --dev-spawn. «Простая графика» (раздел 15):
 # без теней, ближе туман и дальность камеры — флаг --simple-graphics
 # (экран настроек — П8). По сети (раздел 10): снапшоты локального игрока
@@ -481,27 +481,8 @@ func _screenshot_tour() -> void:
 		await _shot_p57_forest(camera)
 		get_tree().quit()
 		return
-	# SHOT_TRIO=1 — кадры П5.7 блока 8: трое персонажей вместе (Лес днём,
-	# костёр вечером), без общих облётов.
-	if OS.get_environment("SHOT_TRIO") == "1":
-		await _shot_p57_trio(camera)
-		get_tree().quit()
-		return
-	# Съёмки финала П5.8: SHOT_CREW=1 — шесть SHOWCASE-персонажей вместе
-	# (Лес днём, костёр вечером), SHOT_FOLK=1 — трое жителей на своих местах
-	# на Площади. Игрока прячем: в кадрах — материалы для владельца.
-	if OS.get_environment("SHOT_CREW") == "1" \
-			or OS.get_environment("SHOT_FOLK") == "1":
-		_player.visible = false
-		if OS.get_environment("SHOT_CREW") == "1":
-			await _shot_p58_crew(camera)
-		else:
-			_set_day_fraction(SHOT_DAY_FRACTION)
-			await _shot_p58_folks(camera)
-		get_tree().quit()
-		return
 	# Серии кадров для GIF (сборка — tools/make_gif.py): SHOT_FLY=1 —
-	# пролёт камеры над Лесом; SHOT_CLIP=walk|run|jump|wave|sit (актёр —
+	# пролёт камеры над Лесом; SHOT_CLIP=walk|run|jump|wave (актёр —
 	# SHOT_ACTOR=индекс Appearance.SHOWCASE) — анимации персонажа.
 	# Длина — SHOT_SECONDS (по умолчанию 6), темп — SHOT_SERIES_FPS.
 	if OS.get_environment("SHOT_FLY") == "1" \
@@ -588,24 +569,7 @@ func _shot_player_views(camera: Camera3D) -> void:
 	camera.global_position = feet + Vector3(2.8, 1.1, 0.0)
 	camera.look_at(feet + Vector3.UP * 0.9)
 	await _snap(camera, "char_side.png")
-	# SHOT_NPC=1 — Тимьян на пне у костра крупно (визуальная проверка капсулы
-	# коллизии жителя, vfx-fix: камера видит и костёр за ним).
-	# SHOT_NPCHULL=1 — то же место, но визуал жителя скрыт: в кадре остаётся
-	# только полупрозрачная капсула (измерение габарита без модели).
-	if OS.get_environment("SHOT_NPC") == "1":
-		for node in get_tree().get_nodes_in_group(Townsfolk.TOWNSFOLK_GROUP):
-			var folk := node as Townsfolk
-			if folk == null or not folk.sitting:
-				continue
-			if OS.get_environment("SHOT_NPCHULL") == "1":
-				for child: Node in folk.get_children():
-					if child.name != "Body":
-						(child as Node3D).visible = false
-			var stump: Vector3 = folk.global_position
-			camera.global_position = stump + Vector3(2.5, 1.2, 2.6)
-			camera.look_at(stump + Vector3.UP * 0.8)
-			await _snap(camera, "npc_thyme.png")
-			break
+
 
 
 ## Тур П5.7: зона Лес с фиксированных точек на уровне глаз персонажа (1.5 м
@@ -647,201 +611,8 @@ func _shot_p57_forest(camera: Camera3D) -> void:
 		await _snap(camera, "p57_forest_sunset_%d.png" % (i + 1))
 
 
-## Кадры П5.7 блока 8 (SPEC п. 8): три новых персонажа вместе — днём
-## в Лесу (та же первая точка тура) и вечером у костра на Площади.
-## SHOT_TRIO=1. Модели в цветах разных id (как в мире), центральная
-## машет; лица к камере (модель в покое смотрит в +Z — look_at наводит
-## −Z, поэтому цель отражается через позицию модели).
-func _shot_p57_trio(camera: Camera3D) -> void:
-	_set_day_fraction(SHOT_DAY_FRACTION)
-	var point := P57_FOREST_POINTS[0]
-	var ground := _ground_at(point)
-	var yaw := deg_to_rad(P57_FOREST_YAWS[0])
-	var eye := Vector3(point.x, ground + 1.5, point.y)
-	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
-	await _shot_trio_at(
-		camera, eye + forward * 4.0, forward, "p57_trio_forest_day.png")
-	# Вечер у костра (0.62 — сумерки сразу после заката, огонь читается):
-	# тройка полукругом за костром, лица освещены огнём.
-	_set_day_fraction(0.62)
-	await get_tree().create_timer(0.4).timeout
-	var fire := Vector3(0.5, 2.0, 2.5)
-	await _shot_trio_at(
-		camera, fire + Vector3(0.0, 0.7, 5.5), Vector3(0.0, 0.0, 1.0),
-		"p57_trio_campfire_evening.png")
-
-
-## Поставить трёх персонажей полукругом в точке (ноги на землю) лицом
-## к камере и снять кадр. cam_pos/forward задают позицию камеры и
-## направление «от камеры вглубь» (персонажи в 3/4 оборота друг к другу).
-func _shot_trio_at(
-	camera: Camera3D, cam_pos: Vector3, forward: Vector3, file_name: String
-) -> void:
-	var right := forward.cross(Vector3.UP).normalized()
-	var ground := _ground_at(Vector2(cam_pos.x + forward.x * 2.5,
-		cam_pos.z + forward.z * 2.5))
-	var center := cam_pos + forward * 2.5
-	var poses: Array[Vector3] = [
-		center + right * 1.4 - forward * 0.45,
-		center + forward * 0.35,
-		center - right * 1.4 - forward * 0.45,
-	]
-	var ids: Array[int] = [11, 22, 33]  # три разных цвета палитры
-	for i: int in poses.size():
-		var model := CharacterModel.new()
-		add_child(model)
-		model.position = Vector3(poses[i].x, ground, poses[i].z)
-		model.setup(i)
-		model.setup_palette(ids[i])
-		# Лицом к камере: look_at наводит локальную −Z, модель смотрит +Z.
-		model.look_at(model.position * 2.0 - cam_pos, Vector3.UP)
-		if i == 1:
-			model.play_one_shot(Protocol.AnimState.WAVE, 1.2)
-	camera.global_position = cam_pos + Vector3.UP * 0.4
-	camera.look_at(center + Vector3.UP * 0.9, Vector3.UP)
-	await get_tree().create_timer(0.9).timeout
-	await _snap(camera, file_name)
-	for child in get_children():
-		if child is CharacterModel:
-			child.queue_free()
-
-
-## Места у костра (Area3D CampfireSeat на острове) в порядке нод сцены.
-func _campfire_seats() -> Array[CampfireSeat]:
-	var seats: Array[CampfireSeat] = []
-	for node in _island.find_children("*", "CampfireSeat", true, false):
-		seats.append(node as CampfireSeat)
-	seats.sort_custom(
-		func(a: Node, b: Node) -> bool: return a.get_index() < b.get_index())
-	return seats
-
-
-## Кадры финала П5.8: шесть персонажей Appearance.SHOWCASE — те же
-## внешности, что в туре редактора (--shot-dir в appearance_editor).
-## Днём — дуга полукругом в точке 1 Леса (центральный машет); вечером —
-## у костра: трое сидят на дальних лавках (посадка как в игре, _sit_at),
-## трое стоят полукругом за огнём, лица освещены пламенем.
-func _shot_p58_crew(camera: Camera3D) -> void:
-	_set_day_fraction(SHOT_DAY_FRACTION)
-	await get_tree().create_timer(0.4).timeout
-	var point := P57_FOREST_POINTS[0]
-	var ground := _ground_at(point)
-	var yaw := deg_to_rad(P57_FOREST_YAWS[0])
-	var eye := Vector3(point.x, ground + 1.5, point.y)
-	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
-	await _shot_crew_at(
-		camera, eye + forward * 5.0, forward, "p58_crew_forest_day.png", false)
-	_set_day_fraction(0.62)
-	await get_tree().create_timer(0.4).timeout
-	await _shot_crew_at(
-		camera, Vector3(0.5, 2.9, 10.0), Vector3(0.0, 0.0, -1.0),
-		"p58_crew_campfire_evening.png", true)
-
-
-## Поставить шестерых SHOWCASE и снять кадр. Без сидения — дугой ±44°
-## лицом к камере, центральный машет; seated — 0/2/4 сидят на лавках
-## Seat5/6/7 (дальняя дуга), 1/3/5 стоят полукругом за костром.
-func _shot_crew_at(
-		camera: Camera3D, cam_pos: Vector3, forward: Vector3,
-		file_name: String, seated: bool) -> void:
-	var models: Array[CharacterModel] = []
-	for i: int in Appearance.SHOWCASE.size():
-		var model := CharacterModel.new()
-		add_child(model)
-		model.setup_appearance(
-			Appearance.from_bytes(Appearance.SHOWCASE[i]))
-		models.append(model)
-	if seated:
-		var seats := _campfire_seats()
-		var seat_indices: Array[int] = [4, 5, 6]  # Seat5/6/7 — дальняя дуга
-		for k: int in seat_indices.size():
-			var seat := seats[seat_indices[k]]
-			var model := models[k * 2]
-			var to_fire := seat.face_target - seat.global_position
-			to_fire.y = 0.0
-			var dir := to_fire.normalized()
-			model.global_position = seat.global_position + dir * 0.75 \
-				- Vector3(0.0, B.campfire_seat_floor, 0.0)
-			model.rotation.y = atan2(dir.x, dir.z)
-			model.set_state(Protocol.AnimState.SIT)
-		# Стоящие — по флангам позади сидящих (не перекрывают их), лицом
-		# к камере сквозь огонь.
-		var fire := Vector3(0.5, 0.0, 2.5)
-		var stand_angles: Array[float] = [-0.5, 0.0, 0.5]
-		for k: int in stand_angles.size():
-			var model := models[k * 2 + 1]
-			var ang := PI + stand_angles[k]
-			var pos := fire + Vector3(sin(ang), 0.0, cos(ang)) * 4.6
-			model.global_position = Vector3(
-				pos.x, _ground_at(Vector2(pos.x, pos.z)), pos.z)
-			model.look_at(model.global_position * 2.0 - cam_pos, Vector3.UP)
-	else:
-		# Ширина дуги — шаг ~1.3 м между соседями: шесть силуэтов читаются
-		# по отдельности, а не сливаются в толпу.
-		var right := forward.cross(Vector3.UP).normalized()
-		var center := cam_pos + forward * 8.0
-		var ground := _ground_at(Vector2(center.x, center.z))
-		for i: int in models.size():
-			var model := models[i]
-			var t := 0.5 if models.size() == 1 else float(i) / float(models.size() - 1)
-			var ang := (t - 0.5) * deg_to_rad(88.0)
-			var pos := center + right * (sin(ang) * 5.2) \
-				- forward * (cos(ang) * 1.6)
-			model.global_position = Vector3(pos.x, ground, pos.z)
-			model.look_at(model.global_position * 2.0 - cam_pos, Vector3.UP)
-			if i == 2:
-				model.play_one_shot(Protocol.AnimState.WAVE, 2.4)
-	camera.global_position = cam_pos
-	camera.look_at(cam_pos + forward * 6.0 + Vector3.UP * 0.6, Vector3.UP)
-	await get_tree().create_timer(0.9).timeout
-	await _snap(camera, file_name)
-	for model: CharacterModel in models:
-		model.queue_free()
-
-
-## Трое жителей на своих местах (часть E): общий план Площади со всеми
-## тремя и крупный кадр каждого (позы свои — Тимьян сидит на пеньке).
-func _shot_p58_folks(camera: Camera3D) -> void:
-	await get_tree().create_timer(0.4).timeout
-	var folks: Array[Townsfolk] = []
-	for node in get_tree().get_nodes_in_group(Townsfolk.TOWNSFOLK_GROUP):
-		folks.append(node as Townsfolk)
-	folks.sort_custom(
-		func(a: Townsfolk, b: Townsfolk) -> bool: return a.character < b.character)
-	if folks.size() != 3:
-		push_error("ожидали трёх жителей, найдено %d" % folks.size())
-		get_tree().quit()
-		return
-	var names: PackedStringArray = ["finn", "lumi", "thyme"]
-	var center := Vector3.ZERO
-	for folk: Townsfolk in folks:
-		center += folk.global_position
-	center /= folks.size()
-	var spread := 0.0
-	for folk: Townsfolk in folks:
-		spread = maxf(spread, folk.global_position.distance_to(center))
-	# Общий план: сбоку от линии крайних жителей, все трое в кадре.
-	var line := folks[0].global_position - folks[2].global_position
-	line.y = 0.0
-	var cam_dir := line.normalized().cross(Vector3.UP).normalized()
-	var cam_pos := center + cam_dir * clampf(spread * 2.2, 8.0, 24.0) \
-		+ Vector3.UP * clampf(spread * 0.9, 3.0, 10.0)
-	camera.global_position = cam_pos
-	camera.look_at(center + Vector3.UP * 0.8, Vector3.UP)
-	await _snap(camera, "p58_folks_plaza.png")
-	for i: int in folks.size():
-		var folk := folks[i]
-		var pos := folk.global_position
-		var look := Vector3(sin(folk.rotation.y), 0.0, cos(folk.rotation.y))
-		var side := look.cross(Vector3.UP).normalized()
-		var close := pos + look * 2.4 + side * 1.1 + Vector3.UP * 1.15
-		camera.global_position = Vector3(close.x, pos.y + 1.15, close.z)
-		camera.look_at(pos + Vector3.UP * 0.95, Vector3.UP)
-		await _snap(camera, "p58_folk_%s.png" % names[i])
-
-
 ## Серии кадров финала П5.8 (GIF — tools/make_gif.py): SHOT_FLY=1 — пролёт
-## над Лесом; SHOT_CLIP=walk|run|jump|wave|sit (+ SHOT_ACTOR=0..5, длина
+## над Лесом; SHOT_CLIP=walk|run|jump|wave (+ SHOT_ACTOR=0..5, длина
 ## SHOT_SECONDS) — анимации персонажа. Время мира остановлено
 ## (Engine.time_scale = 0: часы, ландшафт стоят; шейдерный огонь и вода
 ## на TIME — живут), поза и траектория — чистые функции кадра, клипы
@@ -867,11 +638,7 @@ func _shot_p58_series(camera: Camera3D) -> void:
 			func(i: int, _t: float) -> void:
 				_fly_forest_frame(camera, float(i) / float(frames)))
 		return
-	match clip_name:
-		"sit":
-			_set_day_fraction(0.62)
-		_:
-			_set_day_fraction(SHOT_DAY_FRACTION)
+	_set_day_fraction(SHOT_DAY_FRACTION)
 	await get_tree().create_timer(0.6).timeout
 	var actor_index := 0
 	if not OS.get_environment("SHOT_ACTOR").is_empty():
@@ -904,19 +671,6 @@ func _shot_p58_series(camera: Camera3D) -> void:
 			await _record_series(camera, "clip_wave", frames,
 				func(_i: int, t: float) -> void:
 					_wave_frame(camera, model, t))
-		"sit":
-			var partner := CharacterModel.new()
-			add_child(partner)
-			partner.setup_appearance(
-				Appearance.from_bytes(Appearance.SHOWCASE[(actor_index + 3)
-					% Appearance.SHOWCASE.size()]))
-			var seats := _campfire_seats()
-			_seat_model_at(partner, seats[7])  # соседняя лавка, сидит с начала
-			partner.set_state(Protocol.AnimState.SIT)
-			await _record_series(camera, "clip_sit", frames,
-				func(_i: int, t: float) -> void:
-					_sit_frame(camera, model, seats[0], t))
-			partner.queue_free()
 		_:
 			push_error("неизвестный SHOT_CLIP: " + clip_name)
 	model.queue_free()
@@ -1106,37 +860,6 @@ func _wave_frame(camera: Camera3D, model: CharacterModel, t: float) -> void:
 
 
 ## Сесть у костра (вечер): секунда стоя перед лавкой, затем поза сидения
-## (бленд 0.15 с — плавный переход), рядом уже сидит второй персонаж.
-func _sit_frame(
-		camera: Camera3D, model: CharacterModel, seat: CampfireSeat, t: float) -> void:
-	if t >= 1.0:
-		_seat_model_at(model, seat)
-		model.set_state(Protocol.AnimState.SIT)
-	else:
-		var to_fire := seat.face_target - seat.global_position
-		to_fire.y = 0.0
-		var dir := to_fire.normalized()
-		model.global_position = seat.global_position + dir * 1.1 \
-			- Vector3(0.0, B.campfire_seat_floor * 0.4, 0.0)
-		model.rotation.y = atan2(dir.x, dir.z)
-		model.set_state(Protocol.AnimState.IDLE)
-	model.advance_preview(1.0 / SHOT_SERIES_FPS)
-	var pos := seat.global_position
-	camera.global_position = pos + Vector3(2.9, 1.35, 2.2)
-	camera.look_at(pos + Vector3(-0.4, 0.55, -0.4), Vector3.UP)
-
-
-## Посадить модель на место как в игре (player._sit_at): origin на землю
-## перед лавкой, лицом к огню.
-func _seat_model_at(model: CharacterModel, seat: CampfireSeat) -> void:
-	var to_fire := seat.face_target - seat.global_position
-	to_fire.y = 0.0
-	var dir := to_fire.normalized()
-	model.global_position = seat.global_position + dir * 0.75 \
-		- Vector3(0.0, B.campfire_seat_floor, 0.0)
-	model.rotation.y = atan2(dir.x, dir.z)
-
-
 ## Пролёт над Лесом: квадратичная дуга Безье от опушки к Площади через
 ## глубину леса, высота 9 → 5 м; камера смотрит по ходу с наклоном вниз.
 func _fly_forest_frame(camera: Camera3D, u: float) -> void:

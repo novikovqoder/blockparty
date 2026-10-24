@@ -12,17 +12,6 @@ const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
 static var _gen_cache: Dictionary = {}
 
 
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
-
-func before_all() -> void:
-	BU_LEGACY.legacy_off()
-
-
-func after_all() -> void:
-	BU_LEGACY.legacy_restore()
-
-
 func _island_data() -> Dictionary:
 	if _gen_cache.is_empty():
 		_gen_cache = IslandGen.generate()
@@ -65,62 +54,18 @@ func test_scene_contents() -> void:
 	add_child_autofree(island)
 	var water := 0
 	var markers := 0
-	var folk := 0
-	var seats := 0
 	for child: Node in island.get_children():
 		if child is WaterArea:
 			water += 1
 		elif child is HangArea:
 			markers = (child as HangArea).point_positions().size()
-		elif child is Townsfolk:
-			folk += 1
-		elif child is CampfireSeat:
-			seats += 1
 	assert_eq(water, 2, "море и озеро")
 	assert_gt(markers, 0, "в расщелине есть HangPoint")
-	assert_eq(folk, 3, "три жителя (Финн, Луми, Тимьян)")
-	assert_eq(seats, 8, "восемь мест у костра (раздел 9.6)")
 	assert_eq(island.zones.size(), 6, "шесть зон")
 	assert_eq(
 		island.spawn_zones.size(), 6,
 		"точки появления всех зон (--dev-spawn)",
 	)
-
-
-## Костёр (доработка П5.13, живой огонь): каменное кострище и поленья —
-## CC0-модели Poly Haven (децимированные .res с вершинным цветом), пламя —
-## шейдер с анимированным шумом, над ним искры и дым, тёплый мерцающий свет.
-func test_campfire_assembly() -> void:
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
-	var fires: Array[Node] = []
-	for child: Node in island.get_children():
-		if child is Campfire:
-			fires.append(child)
-	assert_eq(fires.size(), 1, "костёр на площади один")
-	var fire := fires[0] as Campfire
-	var pit := fire.get_node("FirePit") as MeshInstance3D
-	assert_not_null(pit, "кострище-модель на месте")
-	assert_true(pit.mesh is ArrayMesh
-			and (pit.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_COLOR]
-					is PackedColorArray,
-		"кострище — вершинно-цветный .res (Poly Haven stone_fire_pit)")
-	var logs := fire.get_node("Logs")
-	assert_eq(
-		logs.get_child_count(), 3,
-		"шатёр из трёх поленьев (Poly Haven dry_branches)")
-	for log: Node in logs.get_children():
-		assert_true((log as MeshInstance3D).mesh is ArrayMesh,
-			"полено — .res-меш")
-	var flame := fire.get_node("Flame") as MeshInstance3D
-	assert_not_null(flame, "пламя на месте")
-	assert_true((flame.material_override as ShaderMaterial).shader
-			.resource_path.ends_with("fire.gdshader"),
-		"пламя — шейдер огня")
-	assert_not_null(fire.get_node("Smoke"), "дым над огнём")
-	assert_not_null(fire.get_node("Sparks"), "искры над углями")
-	var light := fire.find_children("*", "OmniLight3D", true, false)
-	assert_eq(light.size(), 1, "тёплый свет костра")
 
 
 func test_water_surfaces_configured() -> void:

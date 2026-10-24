@@ -8,17 +8,6 @@ extends GutTest
 const EPS: float = 0.01
 
 
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
-
-func before_all() -> void:
-	BU_LEGACY.legacy_off()
-
-
-func after_all() -> void:
-	BU_LEGACY.legacy_restore()
-
-
 func test_every_prop_type_is_solid_or_excepted() -> void:
 	# Аудит раскладки: собираем типы из данных острова и сверяем каждый
 	# с рецептом коллизии или списком исключений.
@@ -69,12 +58,6 @@ func test_pass_through_types_have_no_shape() -> void:
 			"исключение %s действительно без коллизии" % type,
 		)
 
-
-func test_campfire_blocks_player() -> void:
-	# Костёр — не призрак: цилиндр по габариту очага на слое 1.
-	var fire := Campfire.new()
-	add_child_autofree(fire)
-	_assert_solid_body(fire, "костёр", Campfire.HEARTH_RADIUS)
 
 
 func test_respawn_stone_is_solid() -> void:

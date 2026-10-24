@@ -24,10 +24,6 @@ signal player_respawned()
 
 # --- Кооп-механики (раздел 9; подтверждает хост) ---
 
-## Занятость мест у костра (раздел 9.6): seats — массив peer по индексам мест
-## (0 — свободно). Один сигнал на все изменения: сел, встал, вышел из мира.
-signal campfire_seats(seats: Array)
-
 ## Состояние лестницы смотровой (раздел 9.3): index — номер смотровой,
 ## active — висит ли, expires_at — время скрытия по world_time (−1 — не висит).
 signal ladder_state(index: int, active: bool, expires_at: float)

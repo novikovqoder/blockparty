@@ -31,18 +31,14 @@ const ARRIVE_XY: float = 1.6
 const ARRIVE_XY_INNER: float = 0.55
 ## Время одного отрезка пути, с (лестница/дверь/комната).
 const LEG_TIME: float = 20.0
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
 
 
 func before_all() -> void:
-	BU_LEGACY.legacy_off()
 	_saved_ticks = Engine.physics_ticks_per_second
 	Engine.physics_ticks_per_second = FAST_TICKS
 
 
 func after_all() -> void:
-	BU_LEGACY.legacy_restore()
 	Engine.physics_ticks_per_second = _saved_ticks
 
 

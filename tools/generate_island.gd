@@ -24,10 +24,7 @@ const WATER_SCRIPT: String = "res://gameplay/world/water_area.gd"
 const HANG_SCRIPT: String = "res://gameplay/activities/hang_area.gd"
 const HANG_POINT_SCRIPT: String = "res://gameplay/activities/hang_point.gd"
 const LADDER_SCRIPT: String = "res://gameplay/activities/lookout_ladder.gd"
-const SEAT_SCRIPT: String = "res://gameplay/activities/campfire_seat.gd"
 const STONE_SCRIPT: String = "res://gameplay/world/respawn_stone.gd"
-const CAMPFIRE_SCRIPT: String = "res://gameplay/world/campfire.gd"
-const FOLK_SCRIPT: String = "res://gameplay/world/townsfolk.gd"
 const CABIN_SCRIPT: String = "res://gameplay/world/props/cabin_house.gd"
 
 const PAL: Palette = preload("res://assets/palette.tres")
@@ -121,7 +118,7 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 		crevasse.add_child(hang_point)
 	root.add_child(crevasse)
 
-	# Камни духа (точки возрождения) и костёр на площади.
+	# Камни духа (точки возрождения) на площади.
 	# Перед ними — лестницы смотровых (раздел 9.3): узел в центре площадки,
 	# порядок имён LookoutLadder1..4 — как LOOKOUTS у IslandGen.
 	for i: int in (data["poi"]["lookouts"] as Array).size():
@@ -135,9 +132,6 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 		stone.name = "RespawnStone%d" % (i + 1)
 		stone.position = stones[i]
 		root.add_child(stone)
-	var campfire: Node3D = load(CAMPFIRE_SCRIPT).new()
-	campfire.position = data["poi"]["campfire"]["center"]
-	root.add_child(campfire)
 	# Деревня (сруб Kless, очередь владельца): три дома жителей на плоских
 	# подушках у Площади — вариации поворота, оттенка дерева и террасы.
 	# Геометрию строит CabinHouse._ready в игре: в сцену попадает узел
@@ -151,29 +145,6 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 		cabin.variant = int(plot["variant"])
 		cabin.terrace = bool(plot["terrace"])
 		root.add_child(cabin)
-	# Жители (Финн, Луми, Тимьян): детерминированная раскладка FolkLayout,
-	# порядок имён Folk1..3 — как npc_spots. Модель строится в игре (_ready).
-	var folk_spots: Array[Dictionary] = FolkLayout.npc_spots(art)
-	for i: int in folk_spots.size():
-		var folk: Node3D = load(FOLK_SCRIPT).new()
-		folk.name = "Folk%d" % (i + 1)
-		folk.character = int(folk_spots[i]["character"])
-		folk.sitting = bool(folk_spots[i]["sitting"])
-		folk.position = folk_spots[i]["pos"]
-		folk.rotation.y = float(folk_spots[i]["yaw"])
-		root.add_child(folk)
-	# Места у костра (раздел 9.6): маркеры на лавках площади, порядок имён
-	# Seat1..Seat8 — как benches у IslandGen; сидящий смотрит на костёр.
-	var fire_center: Vector3 = data["poi"]["campfire"]["center"]
-	var benches: Array = data["poi"]["campfire"]["benches"]
-	for i: int in benches.size():
-		var seat: Node3D = load(SEAT_SCRIPT).new()
-		seat.name = "Seat%d" % (i + 1)
-		seat.position = benches[i]
-		seat.face_target = fire_center
-		seat.seat_index = i
-		root.add_child(seat)
-
 	# Невидимые ограждения по краю мира.
 	var bounds: float = root.world_bounds
 	for i: int in 4:

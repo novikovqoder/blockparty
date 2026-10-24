@@ -15,17 +15,6 @@ static func _pixel(image: Image, wx: float, wz: float) -> Color:
 	return image.get_pixel(int(wx) + 128, int(wz) + 128)
 
 
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
-
-func before_all() -> void:
-	BU_LEGACY.legacy_off()
-
-
-func after_all() -> void:
-	BU_LEGACY.legacy_restore()
-
-
 func test_weights_paint() -> void:
 	# Правила покраски: гравий Площади в углу сектора, тропа от Площади,
 	# морской угол низко — влажная земля, вдали от геометрии троп —

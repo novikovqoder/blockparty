@@ -15,17 +15,6 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 const TANGENT_DOT: float = 0.98
 
 
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
-
-func before_all() -> void:
-	BU_LEGACY.legacy_off()
-
-
-func after_all() -> void:
-	BU_LEGACY.legacy_restore()
-
-
 func test_chunks_have_facet_tangents() -> void:
 	# Каждый квад каждого чанка: массив ARRAY_TANGENT заполнен (4 float на
 	# вершину), направление — аналитике dP/du = normalize(1, dh/dx, 0),

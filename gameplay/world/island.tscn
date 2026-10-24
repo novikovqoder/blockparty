@@ -8,10 +8,7 @@
 [ext_resource type="Script" path="res://gameplay/activities/hang_point.gd" id="6_4xjkw"]
 [ext_resource type="Script" path="res://gameplay/activities/lookout_ladder.gd" id="10_okhm0"]
 [ext_resource type="Script" path="res://gameplay/world/respawn_stone.gd" id="11_1vd5a"]
-[ext_resource type="Script" path="res://gameplay/world/campfire.gd" id="12_s8nd1"]
 [ext_resource type="Script" path="res://gameplay/world/props/cabin_house.gd" id="13_k3njb"]
-[ext_resource type="Script" path="res://gameplay/world/townsfolk.gd" id="14_xq60j"]
-[ext_resource type="Script" path="res://gameplay/activities/campfire_seat.gd" id="15_ycbjf"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_2dwj3"]
 size = Vector3(256, 1.4, 256)
@@ -213,10 +210,6 @@ script = ExtResource("11_1vd5a")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 1.2, 66.5)
 script = ExtResource("11_1vd5a")
 
-[node name="@Node3D@5" type="Node3D" parent="." unique_id=739200753]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 2, 2.5)
-script = ExtResource("12_s8nd1")
-
 [node name="Cabin1" type="Node3D" parent="." unique_id=1230737942]
 transform = Transform3D(-0.9997721, 0, 0.021350343, 0, 1, 0, -0.021350343, 0, -0.9997721, -16.87498, 2, 1.9420755)
 script = ExtResource("13_k3njb")
@@ -231,61 +224,6 @@ terrace = false
 transform = Transform3D(0.99647415, 0, 0.083900325, 0, 1, 0, -0.083900325, 0, 0.99647415, 16.998335, 2, 3.7620237)
 script = ExtResource("13_k3njb")
 variant = 2
-
-[node name="Folk1" type="Node3D" parent="." unique_id=1386701127]
-transform = Transform3D(-0.64978117, 0, -0.7601213, 0, 1, 0, 0.7601213, 0, -0.64978117, 11.40182, 2, 13.746717)
-script = ExtResource("14_xq60j")
-
-[node name="Folk2" type="Node3D" parent="." unique_id=136795461]
-transform = Transform3D(-0.5480262, 0, 0.8364612, 0, 1, 0, -0.8364612, 0, -0.5480262, -12.546917, 2, 12.220394)
-script = ExtResource("14_xq60j")
-character = 1
-
-[node name="Folk3" type="Node3D" parent="." unique_id=1611151151]
-transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 2.7, 2, 2.5)
-script = ExtResource("14_xq60j")
-character = 2
-sitting = true
-
-[node name="Seat1" type="Area3D" parent="." unique_id=936428293]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.157458, 2.45, 3.7220755)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat2" type="Area3D" parent="." unique_id=2053044209]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7220755, 2.45, 6.157458)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat3" type="Area3D" parent="." unique_id=1760591366]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.7220755, 2.45, 6.157458)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat4" type="Area3D" parent="." unique_id=1432880270]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.157458, 2.45, 3.7220755)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat5" type="Area3D" parent="." unique_id=2100196209]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.157458, 2.45, 0.27792454)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat6" type="Area3D" parent="." unique_id=490746395]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.7220755, 2.45, -2.1574578)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat7" type="Area3D" parent="." unique_id=508380715]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7220755, 2.45, -2.1574578)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
-
-[node name="Seat8" type="Area3D" parent="." unique_id=239998537]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.157458, 2.45, 0.27792454)
-script = ExtResource("15_ycbjf")
-face_target = Vector3(0.5, 2, 2.5)
 
 [node name="Bounds1" type="StaticBody3D" parent="." unique_id=600167065]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -128.5, 12, 0)

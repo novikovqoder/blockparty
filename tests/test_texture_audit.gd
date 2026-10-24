@@ -140,17 +140,6 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 const TRANSITIONAL_UNTEXTURED: Array[String] = []
 
 
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
-
-func before_all() -> void:
-	BU_LEGACY.legacy_off()
-
-
-func after_all() -> void:
-	BU_LEGACY.legacy_restore()
-
-
 func test_project_filter_settings() -> void:
 	# Анизотропная фильтрация проекта — 16x (планка Ж: «у всех текстур …
 	# анизотропная фильтрация 16x»); фильтр UI-канвы — не Nearest.

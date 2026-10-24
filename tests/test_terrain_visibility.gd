@@ -14,17 +14,6 @@ const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
 const UP_Y: float = 0.5
 
 
-const BU_LEGACY: Script = preload("res://tests/helpers/bu_flag.gd")
-
-
-func before_all() -> void:
-	BU_LEGACY.legacy_off()
-
-
-func after_all() -> void:
-	BU_LEGACY.legacy_restore()
-
-
 func _terrain_meshes(island: Island) -> Array[MeshInstance3D]:
 	var view := island.get_node("IslandView") as IslandView
 	var meshes: Array[MeshInstance3D] = []

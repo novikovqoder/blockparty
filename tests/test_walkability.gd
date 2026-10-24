@@ -79,10 +79,6 @@ func test_mechanics_reachable_with_fill() -> void:
 		points.append({
 			"name": "мосток %d, южная кромка" % bx,
 			"pos": Vector3(bx + 0.5, IslandGen.CREVASSE_RIM_H, IslandGen.CREVASSE_Z1 + 1.0)})
-	# Жители (Финн, Луми, Тимьян) стоят на краю площади — к ним есть подход.
-	var art: IslandArt = load("res://gameplay/world/island_art.res")
-	for spot: Dictionary in FolkLayout.npc_spots(art):
-		points.append({"name": "житель %d" % int(spot["character"]), "pos": spot["pos"]})
 	var failed: Array[String] = []
 	for point: Dictionary in points:
 		if not _reachable(reach, point["pos"]):
