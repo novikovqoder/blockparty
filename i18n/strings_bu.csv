@@ -76,6 +76,9 @@ BU_SET_K_FINISH,Добивание,Execution
 BU_DESC_K_FINISH,Казнь оглушённого врага.,Execute a staggered enemy.
 BU_SET_K_USE,Взаимодействие,Interact
 BU_DESC_K_USE,"Открыть дверь, поднять предмет, прочесть надпись.","Open doors, pick up items, read inscriptions."
+BU_SET_K_ZOOM,Дистанция камеры,Camera distance
+BU_KEY_ZOOM,+ / − (и нумпад),+ / − (and numpad)
+BU_DESC_K_ZOOM,"Приближение и отдаление камеры, плавно.","Zoom the camera in and out, smoothly."
 BU_SET_SENS,Чувствительность мыши,Mouse sensitivity
 BU_DESC_SENS,Скорость поворота камеры.,Camera turn speed.
 BU_SET_INVERT,Инверсия по вертикали,Invert Y axis

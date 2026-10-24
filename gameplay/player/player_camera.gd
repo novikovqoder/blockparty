@@ -1,8 +1,10 @@
 # Камера от третьего лица (раздел 5 SPEC): узел CameraRig (top_level, поэтому
 # не наследует повороты персонажа) → Pivot (наклон) → SpringArm3D (столкновение
 # с миром, длина 6 м) → Camera3D. Вращение мышью при захваченном курсоре,
-## приближение колесом 3–10 м, наклон от −60° до +35°, мягкое следование
-# за персонажем. Чувствительность и инверсия оси Y — в Settings (экран
+## приближение клавишами «+»/«−» (основной ряд и нумпад, удержание — плавно)
+# 3–10 м, наклон от −60° до +35°, мягкое следование за персонажем. Колесо
+# мыши камеру НЕ двигает — оно листает слоты снаряжения (EquipControllerBU,
+# born-unblessed). Чувствительность и инверсия оси Y — в Settings (экран
 # настроек — П8). Движение персонажа идёт относительно yaw этой камеры.
 # Внутри домов деревни (CabinHouse.player_inside) рука сжимается до
 # INTERIOR_MAX: комнаты уже шести метров, наклон руки вверх вылетал бы
@@ -14,8 +16,8 @@ const B: Balance = preload("res://gameplay/balance.tres")
 
 ## Высота точки взгляда над ступнями персонажа, м.
 const FOLLOW_HEIGHT: float = 1.55
-## Шаг приближения колесом мыши, м.
-const ZOOM_STEP: float = 0.5
+## Скорость приближения клавишами «+»/«−», м/с (пределы — balance).
+const ZOOM_SPEED: float = 4.0
 ## Стартовый наклон вниз, рад.
 const START_PITCH: float = -0.3
 ## Предел руки внутри домов деревни, м (сруб Kless): комната уже шести
@@ -29,7 +31,7 @@ const INTERIOR_SPEED: float = 8.0
 @onready var arm: SpringArm3D = $Pivot/SpringArm
 @onready var camera: Camera3D = $Pivot/SpringArm/Camera3D
 
-## Выбор игрока колесом (границы — balance); arm.spring_length —
+## Выбор игрока клавишами «+»/«−» (границы — balance); arm.spring_length —
 ## сглаженное фактическое значение: внутри дома не длиннее INTERIOR_MAX.
 var _user_length: float = 0.0
 
@@ -54,15 +56,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			deg_to_rad(B.camera_pitch_min_deg),
 			deg_to_rad(B.camera_pitch_max_deg),
 		)
-	elif event is InputEventMouseButton and event.is_pressed():
-		var button := event as InputEventMouseButton
-		if button.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom(-ZOOM_STEP)
-		elif button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom(ZOOM_STEP)
 
 
 func _physics_process(delta: float) -> void:
+	# Приближение «+»/«−» (удержание — плавный непрерывный зум). Колесо
+	# мыши сюда не заведено: оно листает слоты снаряжения героя.
+	if Input.is_action_pressed("camera_zoom_in"):
+		_zoom(-ZOOM_SPEED * delta)
+	if Input.is_action_pressed("camera_zoom_out"):
+		_zoom(ZOOM_SPEED * delta)
 	# Мягкое следование за персонажем (родителем, несмотря на top_level).
 	var parent := get_parent() as Node3D
 	if parent == null:

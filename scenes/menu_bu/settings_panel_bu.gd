@@ -45,6 +45,7 @@ const SCHEMA: Dictionary[StringName, Array] = {
 		{"k": "k4", "t": "key", "label": "BU_SET_K_DODGE", "value": "BU_KEY_SPACE", "desc": "BU_DESC_K_DODGE"},
 		{"k": "k5", "t": "key", "label": "BU_SET_K_FINISH", "value": "F", "desc": "BU_DESC_K_FINISH"},
 		{"k": "k6", "t": "key", "label": "BU_SET_K_USE", "value": "E", "desc": "BU_DESC_K_USE"},
+		{"k": "k7", "t": "key", "label": "BU_SET_K_ZOOM", "value": "BU_KEY_ZOOM", "desc": "BU_DESC_K_ZOOM"},
 		{"k": "sens", "t": "slider", "label": "BU_SET_SENS", "desc": "BU_DESC_SENS"},
 		{"k": "invert", "t": "toggle", "label": "BU_SET_INVERT", "desc": "BU_DESC_INVERT"},
 	],
