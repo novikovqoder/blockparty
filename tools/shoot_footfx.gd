@@ -1,24 +1,47 @@
 extends SceneTree
 ## Съёмка частиц шагов FootFx (переделка П9 по замечанию владельца) под
-## xvfb/llvmpipe: игрок настоящим путём входит в мир (--bot), затем по
-## найденным на запечённом острове отрезкам травы/грязи/земли/камня идёт
-## и бежит, кадры пишутся серией. Замедление Engine.time_scale: кадр
-## llvmpipe стоит 6-20 с, симуляции за кадр должно проходить ~0.15 с —
-## тогда порция (жизнь 0.55 с) живёт 2-4 кадра и попадает в кадр в
-## полёте, а не умирает между кадрами. В имени кадра — «возраст» последней
-## порции: b0 — порция в этом кадре, b1/b2 — кадр-два спустя, b3 — давно.
+## xvfb/llvmpipe. Игрок настоящим путём входит в мир (--bot), затем по
+## найденным на запечённом острове отрезкам травы/грязи/лужи/камня идёт
+## и бежит, кадры пишутся серией.
+##
+## Уроки прогонов 24.10 (кадры выходили бут-экраном, мир не доезжал до
+## пикселей): под opengl3/llvmpipe фоновый рендер мира катастрофически
+## отстаёт (первый кадр мира рендерился >10 мин и не завершился), а
+## get_image() без синхронизации возвращает ЗАВЕРШИВШИЙСЯ кадр — то есть
+## бут-экран. Поэтому здесь:
+##   1) RenderingServer.render_loop_enabled = false в момент появления
+##      мира — фоновые кадры не жуют llvmpipe впустую (бут-флоу не ждёт
+##      отрисовку — проверено grep'ом);
+##   2) каждый снимок — RenderingServer.force_draw(true): ровно один
+##      синхронный рендер, пиксели всегда текущие, отставания нет;
+##   3) камера «у ног» — НЕ вторая камера (make_current() рендер под
+##      llvmpipe игнорирует — вывод tools/diag_series_cam.gd), а перенос
+##      собственной камеры игрока (top_level + позиция каждый кадр);
+##   4) вид у ног — сбоку от игрока, в сторону суши (высота земли через
+##      40 м от ноги), чтобы в кадр не попал океан (шейдер воды под
+##      llvmpipe — главный подозреваемый зависаний);
+##   5) игрок телепортируется на первый отрезок ещё ДО отпускания экрана
+##      загрузки — первый кадр мира рендерится на дешёвом виде (трава),
+##      а не на тяжёлой Площади со спавна.
+## Замедление адаптивное: time_scale = TARGET_SIM / фактическое время
+## итерации — симуляции на кадр проходит ~0.12 с (7 физических тиков,
+## меньше предела 8): анимация прыгает не дальше контакта стопы, порции
+## (жизнь 0.55 с) живут 4-5 кадров и попадают в кадр в полёте. В имени
+## кадра — «возраст» последней порции: b0 — порция в этом кадре, b1/b2 —
+## кадр-два спустя, b3 — давно.
 ## Сырая серия — в builds/screenshots/footfx_raw (не в git); отобранные
 ## кадры и склейки кладутся в docs/screenshots/footfx после просмотра.
-## В конец серии добавлены сцены «было» (before_*): точная реконструкция
-## старого RunParticles из П9 (beb4850) — непрерывный поток комьев 8 см,
-## альфа 0.9, на камне крошка — для пар «было–стало»; новый FootFx в этих
+## В конец серии добавлены сцены «было» (before_*): реконструкция старого
+## RunParticles из П9 (beb4850) — непрерывный поток комьев 8 см, альфа
+## 0.9, на камне крошка — для пар «было–стало»; новый FootFx в этих
 ## сценах спрятан. Текстура stone.png удалена из репо — передаётся путём
-## (второй позиционный аргумент, восстановлена из git).
+## (второй позиционный аргумент, восстановлена из git-lfs).
 ## Запуск:
 ##   xvfb-run -a godot --path . --rendering-driver opengl3 \
 ##     --resolution 1280x720 -s res://tools/shoot_footfx.gd -- --bot \
 ##     <каталог> [путь/stone.png]
-## Выход: 0 — все сцены сняты; 3 — мир не достигнут; 4 — не задан каталог.
+## Выход: 0 — все сцены сняты; 3 — мир не достигнут; 4 — не задан каталог;
+##   5 — лимит времени, серия неполная (снятое сохранено).
 
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -37,19 +60,22 @@ const LEGACY_SPEED: float = 1.1
 const LEGACY_SPREAD: float = 40.0
 const LEGACY_ALPHA: float = 0.9
 
-## Симуляция за кадр рендера: 6-20 с × 0.02 = 0.12-0.4 с (физика вдобавок
-## ограничена 8 тиками = 0.133 с на кадр — детект шагов по костям это
-## переживает: порции всё равно попадают в кадры).
-const TIME_SCALE: float = 0.02
-## Кадров на сцену: пара на разгон + цикл локомоции (замер: кадр llvmpipe
-## на этом сервере стоит ~1,5–2 мин, 8 кадров × 22 сцены не влезают в
-## разумный прогон; 5 кадров = 0,8–2 с симуляции = 2–5 шагов — порции
-## попадают в кадр с маркером возраста).
-const FRAMES_PER_SCENE: int = 5
-## Кадров в ленте-«клипе» (подряд идущие кадры для склейки): чуть больше
-## сцены, чтобы захватить жизнь порции целиком.
-const FRAMES_PER_STRIP: int = 7
-## Проверяемая длина пробега, м: кадр ~0.7 м, 5–7 кадров + разбег.
+## Симуляции на кадр: контакт стопы длится ~0.1 с, прыжок анимации больше
+## этого шага теряет пересечения порога; 0.12 с = 7 тиков физики (< 8).
+const TARGET_SIM_PER_SHOT: float = 0.12
+## Стартовое замедление до калибровки (первая итерация всегда медленная).
+const TS_INIT: float = 0.004
+const TS_MIN: float = 0.0002
+const TS_MAX: float = 0.05
+## Кадров на сцену: 8 × 0.12 с ≈ 1 с симуляции — 2-3 шага бегом, 1-2
+## шагом, порция видна в 4-5 кадрах. Прыжок длиннее: разгон, фаза полёта
+## и приземление ~1.2 с.
+const FRAMES_PER_SCENE: int = 8
+const FRAMES_PER_STRIP: int = 8
+const FRAMES_PER_JUMP: int = 12
+## Общий лимит прогона, мин (страховка: снятое сохраняется, выход 5).
+const WALL_LIMIT_MIN: float = 200.0
+## Проверяемая длина пробега, м: 8 кадров × 0.12 с × 5 м/с + разгон.
 const SEGMENT_M: float = 12.0
 ## Минимальная высота земли отрезка: ниже — море/мелководье/лужа у воды.
 const MIN_H: float = 0.45
@@ -57,6 +83,14 @@ const MIN_H: float = 0.45
 const MAX_SLOPE: float = 0.35
 ## Радиус вокруг Площади, где отрезки не ищем: там своё покрытие — гравий.
 const PLAZA_AVOID: float = 32.0
+## Камера «у ног»: в стороне от игрока, смотрит поперёк хода; сторона
+## выбирается в глубину суши (земля через 40 м выше воды — иначе океан
+## в кадре и шейдер воды в рендере).
+const FEET_CAM_SIDE_M: float = 1.9
+const FEET_CAM_AHEAD_M: float = 0.6
+const FEET_CAM_H: float = 0.55
+const FEET_CAM_FOV: float = 55.0
+const INLAND_CHECK_M: float = 40.0
 
 var _out: String = ""
 var _legacy_stone_path: String = ""
@@ -68,16 +102,22 @@ var _world: Node3D = null
 var _loading_seen: bool = false
 var _player: Node3D = null
 var _foot_fx: FootFx = null
-## Сцены: name, seg, walk, cam ("game"/"feet"), jump.
+## Сцены: name, seg, walk, cam ("game"/"feet"), jump, legacy.
 var _scenes: Array[Dictionary] = []
 var _segments: Dictionary = {}
 var _scene_i: int = -1
 var _frame_in_scene: int = 0
 var _run_dir := Vector3(1.0, 0.0, 0.0)
-var _feet_cam: Camera3D = null
+var _cam_side := Vector3(0.0, 0.0, 1.0)
+var _player_cam: Camera3D = null
+var _player_cam_fov: float = 75.0
+var _feet_cam_on: bool = false
 var _base_steps: int = 0
+var _scene_burst_base: int = 0
 var _seen_bursts: int = 0
 var _frames_since_burst: int = 99
+var _wall0_msec: int = 0
+var _shot_wall: int = 0
 
 
 func _initialize() -> void:
@@ -92,6 +132,7 @@ func _initialize() -> void:
 		quit(4)
 		return
 	DirAccess.make_dir_recursive_absolute(_out)
+	_wall0_msec = Time.get_ticks_msec()
 	root.add_child((load("res://scenes/boot.tscn") as PackedScene).instantiate())
 	print("FOOTFX: старт, кадры в %s" % _out)
 
@@ -104,37 +145,66 @@ func _process(delta: float) -> bool:
 		var found: Node = root.find_child("WorldScene", true, false)
 		if found != null:
 			_world = found as Node3D
-			var p: Node3D = found.get_node_or_null("Player")
-			if p != null:
-				for bot: Node in p.find_children("*", "BotController", true, false):
-					bot.queue_free()
-				_player = p
-				_foot_fx = p.get_node_or_null("FootFx") as FootFx
-			var session: Node = root.get_node_or_null("Session")
-			if session != null:
-				session.set("bot", false)
-			print("FOOTFX: мир в кадре %.1f с" % _t)
+			_grab_player(found)
+			# Фоновый рендер больше не нужен: дальше только наши force_draw.
+			RenderingServer.render_loop_enabled = false
+			_find_segments()
+			# Ранний телепорт на первый отрезок: первый дорогой кадр мира
+			# рендерится на дешёвом виде, а не на Площади спавна.
+			for scene: Dictionary in _scenes:
+				if not scene.get("legacy", false):
+					_park_player(_segments[scene["seg"]])
+					break
+			print("FOOTFX: мир в кадре %.1f с, отрезков %d" % [_t, _segments.size()])
 		elif _t > 240.0:
 			print("FOOTFX FAIL: мир не достигнут")
 			quit(3)
 			return true
 		return false
 	if LoadingScreenBU.current != null:
-		return false  # экран загрузки ещё держит кадр
+		return false  # экран загрузки ещё держит вход
 	if _scene_i < 0:
 		_setup_scenes()
 		return false
 	return _run_scene()
 
 
-## Сценарии. Замер на этом сервере: кадр llvmpipe 5–9 мин, поэтому серия
-## урезана до необходимого для приёмки: ходьба/бег по покрытиям с частицами
-## (трава, грязь, лужа, земля) — крупно у ног; камера игры — по одному
-## представителю (бег по грязи и траве, шаг по грязи); камень — негативный
-## случай (бег, частиц быть не должно); прыжок-приземление; лента подряд
-## идущих кадров для склейки-«клипа»; «было»-реконструкции в конце.
-func _setup_scenes() -> void:
-	Engine.time_scale = TIME_SCALE
+func _grab_player(world: Node) -> void:
+	var p: Node3D = world.get_node_or_null("Player")
+	if p == null:
+		return
+	for bot: Node in p.find_children("*", "BotController", true, false):
+		bot.queue_free()
+	_player = p
+	_foot_fx = p.get_node_or_null("FootFx") as FootFx
+	var session: Node = root.get_node_or_null("Session")
+	if session != null:
+		session.set("bot", false)
+	_player_cam = p.get_node_or_null(
+		"CameraRig/Pivot/SpringArm/Camera3D") as Camera3D
+	if _player_cam != null:
+		_player_cam_fov = _player_cam.fov
+
+
+## Поставить игрока в начало отрезка (без хода) — для раннего телепорта.
+func _park_player(seg: Dictionary) -> void:
+	if _player == null or seg.is_empty():
+		return
+	_player.velocity = Vector3.ZERO
+	_player.global_position = seg["start"]
+	var rig: Node3D = _player.get_node_or_null("CameraRig")
+	if rig != null:
+		var dir: Vector3 = seg["dir"]
+		rig.rotation.y = atan2(-dir.x, -dir.z)
+		rig.global_position = seg["start"] + Vector3.UP * 1.55
+
+
+## Сценарии: ходьба/бег по покрытиям с частицами (трава, грязь, лужа,
+## земля) — крупно у ног; камера игры — по одному представителю (бег по
+## грязи и траве, шаг по грязе); камень — негативный случай (бег, частиц
+## быть не должно); прыжок-приземление; лента подряд идущих кадров для
+## склейки-«клипа»; «было»-реконструкции в конце.
+func _find_segments() -> void:
 	_segments["dirt"] = _plaza_segment()
 	for key: String in ["grass", "mud", "puddle", "stone"]:
 		_segments[key] = _find_segment(_kind_of(key))
@@ -163,20 +233,38 @@ func _setup_scenes() -> void:
 	if not _segments["stone"].is_empty():
 		_scenes.append({"name": "run_stone_feet", "seg": "stone",
 			"walk": false, "cam": "feet", "jump": false})
+
+
+func _setup_scenes() -> void:
+	Engine.time_scale = TS_INIT
 	# «Было» — в самый конец: главное (новый эффект) снимается первым.
 	if not _legacy_stone_path.is_empty():
 		var img := Image.load_from_file(_legacy_stone_path)
 		if img != null:
 			_legacy_stone_tex = ImageTexture.create_from_image(img)
 			print("FOOTFX: stone.png «было» загружен из %s" % _legacy_stone_path)
+		else:
+			print("FOOTFX: stone.png «было» не читается: %s" % _legacy_stone_path)
 	if not _segments["grass"].is_empty():
 		_scenes.append({"name": "before_run_grass_feet", "seg": "grass",
 			"walk": false, "cam": "feet", "jump": false, "legacy": true})
 	if not _segments["stone"].is_empty() and _legacy_stone_tex != null:
 		_scenes.append({"name": "before_run_stone_feet", "seg": "stone",
 			"walk": false, "cam": "feet", "jump": false, "legacy": true})
-	_next_scene()
 	print("FOOTFX: сцен %d" % _scenes.size())
+	# Калибровка: один синхронный кадр мира на первом виде + снимок для
+	# самопроверки, что мир действительно в пикселях (а не бут-экран).
+	_shot_wall = Time.get_ticks_msec()
+	_force_shot("_calibration")
+	_adapt_ts()
+	_next_scene()
+
+
+## Замер итерации → time_scale для следующего кадра: TARGET_SIM симуляции.
+func _adapt_ts() -> void:
+	var wall: float = (Time.get_ticks_msec() - _shot_wall) / 1000.0
+	Engine.time_scale = clampf(TARGET_SIM_PER_SHOT / maxf(wall, 0.5),
+		TS_MIN, TS_MAX)
 
 
 func _kind_of(key: String) -> int:
@@ -189,7 +277,7 @@ func _kind_of(key: String) -> int:
 
 
 ## Один кадр текущей сцены: следящая камера у ног, маркер «возраста»
-## последней порции, снимок.
+## последней порции, синхронный снимок.
 func _run_scene() -> bool:
 	var scene: Dictionary = _scenes[_scene_i]
 	if _frame_in_scene == 0:
@@ -201,37 +289,47 @@ func _run_scene() -> bool:
 	if _foot_fx != null and _foot_fx.stats_bursts > _seen_bursts:
 		_seen_bursts = _foot_fx.stats_bursts
 		_frames_since_burst = 0
-	if scene["cam"] == "feet":
+	if _feet_cam_on:
 		_update_feet_cam()
-	if scene["jump"] and _frame_in_scene == 3:
+	if scene["jump"] and _frame_in_scene == 2:
 		Input.action_press("jump")
-	elif scene["jump"] and _frame_in_scene == 4:
+	elif scene["jump"] and _frame_in_scene == 3:
 		Input.action_release("jump")
 	if scene.get("legacy", false) == true:
 		_update_legacy()
-	_shot("%s_f%02d_b%d" % [scene["name"], _frame_in_scene,
+	_shot_wall = Time.get_ticks_msec()
+	_force_shot("%s_f%02d_b%d" % [scene["name"], _frame_in_scene,
 		mini(_frames_since_burst, 3)])
+	_adapt_ts()
 	_frame_in_scene += 1
 	var frames: int = FRAMES_PER_STRIP \
 		if String(scene["name"]).begins_with("strip_") else FRAMES_PER_SCENE
-	if _frame_in_scene > frames:
-		print("FOOTFX: %s — шагов %d, порций %d" % [scene["name"],
+	if scene["jump"]:
+		frames = FRAMES_PER_JUMP
+	if _frame_in_scene > frames or _ran_past_segment():
+		print("FOOTFX: %s — шагов %d, порций %d, кадр %.1f с" % [scene["name"],
 			_foot_fx.stats_steps - _base_steps,
-			_foot_fx.stats_bursts - _scene_burst_base])
+			_foot_fx.stats_bursts - _scene_burst_base,
+			(Time.get_ticks_msec() - _shot_wall) / 1000.0])
 		_next_scene()
 	return false
 
 
-var _scene_burst_base: int = 0
+## Страховка от медленных кадров: пробег длиннее отрезка — сцена кончена.
+func _ran_past_segment() -> bool:
+	if _player == null:
+		return false
+	var seg: Dictionary = _segments[_scenes[_scene_i]["seg"]]
+	var travelled: float = (_player.global_position
+		- seg["start"]).dot(_run_dir)
+	return travelled > SEGMENT_M + 2.0
 
 
 func _next_scene() -> void:
 	Input.action_release("move_forward")
 	Input.action_release("walk")
 	Input.action_release("jump")
-	if _feet_cam != null:
-		_feet_cam.queue_free()
-		_feet_cam = null
+	_restore_player_cam()
 	if _legacy_fx != null:
 		_legacy_fx.queue_free()
 		_legacy_fx = null
@@ -242,8 +340,14 @@ func _next_scene() -> void:
 	_frame_in_scene = 0
 	_frames_since_burst = 99
 	if _scene_i >= _scenes.size():
-		print("FOOTFX PASS: снято сцен %d" % _scenes.size())
+		print("FOOTFX PASS: снято сцен %d за %.0f мин" % [
+			_scenes.size(), (Time.get_ticks_msec() - _wall0_msec) / 60000.0])
 		quit(0)
+		return
+	if (Time.get_ticks_msec() - _wall0_msec) / 60000.0 > WALL_LIMIT_MIN:
+		print("FOOTFX PARTIAL: лимит времени, снято сцен %d из %d" % [
+			_scene_i, _scenes.size()])
+		quit(5)
 		return
 	if _foot_fx != null:
 		_base_steps = _foot_fx.stats_steps
@@ -252,7 +356,8 @@ func _next_scene() -> void:
 
 
 ## Поставить игрока в начало отрезка, развернуть камеру игрока по
-## направлению пробега, зажать ход; сцене «у ног» — следящая камера.
+## направлению пробега, зажать ход; сцене «у ног» — перенос камеры
+## игрока сбоку от ног (см. шапку: вторая камера под llvmpipe не работает).
 func _teleport(scene: Dictionary) -> void:
 	var seg: Dictionary = _segments[scene["seg"]]
 	var start: Vector3 = seg["start"]
@@ -262,14 +367,15 @@ func _teleport(scene: Dictionary) -> void:
 	var rig: Node3D = _player.get_node_or_null("CameraRig")
 	if rig != null:
 		rig.rotation.y = atan2(-_run_dir.x, -_run_dir.z)
+		# Риг догоняет игрока лерпом несколько кадров — после телепорта
+		# ставим его сразу, чтобы камера игры не летела через полострова.
+		rig.global_position = start + Vector3.UP * 1.55
 	if scene["cam"] == "feet":
-		_feet_cam = Camera3D.new()
-		_feet_cam.fov = 55.0
-		_world.add_child(_feet_cam)
-		_update_feet_cam()
-		_feet_cam.make_current()
+		_hijack_player_cam()
+	else:
+		_restore_player_cam()
 	if scene.get("legacy", false) == true:
-		# Новый эффект спрятан — в кадке только реконструкция П9.
+		# Новый эффект спрятан — в кадре только реконструкция П9.
 		if _foot_fx != null:
 			_foot_fx.visible = false
 		_build_legacy(_kind_of(scene["seg"]))
@@ -278,19 +384,51 @@ func _teleport(scene: Dictionary) -> void:
 		Input.action_press("walk")
 
 
-## Камера у ног: полметра над землёй, сбоку-спереди от бегущего; каждый
-## кадр следует за игроком (рендер и отстаёт на 2-3 кадра, но в отставшем
-## кадре камера и игрок согласованы — стопы в кадре).
+## Камера «у ног»: собственная камера игрока отцепляется от руки
+## (top_level) и ставится сбоку-чуть-впереди ног; каждый кадр — заново,
+## поэтому кадр и камера согласованы даже при скачках позиции.
+func _hijack_player_cam() -> void:
+	if _player_cam == null:
+		return
+	_pick_inland_side()
+	_player_cam.top_level = true
+	_player_cam.fov = FEET_CAM_FOV
+	_feet_cam_on = true
+	_update_feet_cam()
+
+
+## Сторона съёмки — в глубину суши: если через INLAND_CHECK_M от игрока
+## в этой стороне море, снимаем с другой (океан не попадает в кадр).
+func _pick_inland_side() -> void:
+	var side := Vector3(-_run_dir.z, 0.0, _run_dir.x)
+	var feet: Vector3 = _player.global_position
+	var h_side: float = IslandGen.ground_height(
+		ART.heights, feet.x + side.x * INLAND_CHECK_M,
+		feet.z + side.z * INLAND_CHECK_M)
+	var h_other: float = IslandGen.ground_height(
+		ART.heights, feet.x - side.x * INLAND_CHECK_M,
+		feet.z - side.z * INLAND_CHECK_M)
+	_cam_side = side if h_side >= h_other else -side
+
+
+func _restore_player_cam() -> void:
+	_feet_cam_on = false
+	if _player_cam == null:
+		return
+	if _player_cam.top_level:
+		_player_cam.top_level = false
+	_player_cam.fov = _player_cam_fov
+
+
 func _update_feet_cam() -> void:
-	if _feet_cam == null:
+	if _player_cam == null:
 		return
 	var feet: Vector3 = _player.global_position
-	var side := Vector3(-_run_dir.z, 0.0, _run_dir.x)
-	var pos := feet + _run_dir * 1.4 + side * 1.0
-	pos.y = maxf(feet.y + 0.55,
+	var pos := feet + _run_dir * FEET_CAM_AHEAD_M + _cam_side * FEET_CAM_SIDE_M
+	pos.y = maxf(feet.y + FEET_CAM_H,
 		IslandGen.ground_height(ART.heights, pos.x, pos.z) + 0.35)
-	_feet_cam.global_position = pos
-	_feet_cam.look_at(feet + _run_dir * 0.4 + Vector3(0.0, 0.25, 0.0))
+	_player_cam.global_position = pos
+	_player_cam.look_at(feet + _run_dir * 0.4 + Vector3(0.0, 0.25, 0.0))
 
 
 # --- Поиск отрезков покрытий на запечённом острове ---
@@ -410,7 +548,9 @@ func _legacy_quad(tex: Texture2D, scale: float) -> QuadMesh:
 	return quad
 
 
-func _shot(name: String) -> void:
+## Синхронный снимок: ровно один рендер текущего состояния, затем PNG.
+func _force_shot(name: String) -> void:
+	RenderingServer.force_draw(true, 0.0)
 	var img: Image = root.get_texture().get_image()
 	if img != null:
 		img.save_png("%s/%s.png" % [_out, name])
