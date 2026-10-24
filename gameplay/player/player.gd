@@ -73,8 +73,8 @@ var _stand_sent: bool = false
 ## игроки равны, множителей бега/прыжка/кооп-действий нет.
 ## Точка, за которую висим (куда поднимет вытягивание; раздел 9.1).
 var _hang_point: Vector3 = Vector3.ZERO
-## Частицы бега (доработка П9): комья/травинки по покрытию и скорости.
-var _run_dust: RunParticles = null
+## Частицы из-под ног (переделка П9): порция в момент шага по покрытию.
+var _foot_fx: FootFx = null
 
 
 func _ready() -> void:
@@ -105,13 +105,12 @@ func _ready() -> void:
 		_bot = BotController.new()
 		_bot.setup(self)
 		add_child(_bot)
-	# Частицы бега (доработка П9): ребёнок Model — модель повёрнута по
-	# движению, частицы сносит назад; спрайты по покрытию включит
-	# setup_run_particles (сцена мира передаст арт острова).
-	_run_dust = RunParticles.new()
-	_run_dust.name = "RunDust"
-	_run_dust.position = Vector3(0.0, 0.05, -0.1)
-	model.add_child(_run_dust)
+	# Частицы из-под ног (переделка П9): ребёнок самого игрока (origin
+	# в ногах — землю под стопой берём из позиции владельца); порции по
+	# шагам включит setup_foot_fx (сцена мира передаст арт острова).
+	_foot_fx = FootFx.new()
+	_foot_fx.name = "FootFx"
+	add_child(_foot_fx)
 
 
 func _physics_process(delta: float) -> void:
@@ -562,6 +561,9 @@ func _update_jump(delta: float) -> void:
 		_jumped = true
 		_coyote = 0.0
 		_jump_cut_done = false
+		# Порция в толчке прыжка (переделка П9): по покрытию под ногами,
+		# чуть больше обычного шага.
+		_foot_fx.jump(Vector2(velocity.x, velocity.z).length())
 	# Переменная высота: отпускание режет вертикальную скорость (один раз).
 	if not _jump_held() and not _jump_cut_done:
 		velocity.y = JumpMath.jump_cut(velocity.y, B)
@@ -742,10 +744,10 @@ func in_water() -> bool:
 
 # --- Модель и анимации ---
 
-## Подключить частицы бега к острову: сцена мира передаёт запечённый арт —
-## по нему RunParticles определяет покрытие под ногами.
-func setup_run_particles(art: IslandArt) -> void:
-	_run_dust.setup(art)
+## Подключить частицы шагов к острову: сцена мира передаёт запечённый
+## арт — по нему FootFx берёт покрытие и цвет поверхности под стопой.
+func setup_foot_fx(art: IslandArt) -> void:
+	_foot_fx.setup(art)
 
 
 func _update_animation() -> void:
@@ -758,9 +760,9 @@ func _update_animation() -> void:
 		# приземлению почти в стойку (скорость ≈ anim_idle_speed).
 		if hspeed <= B.anim_idle_speed:
 			visual.play_one_shot(Protocol.AnimState.LAND, B.land_time)
-		# Облачко пыли при приземлении (раздел 16); частицы в мировых
-		# координатах — эмиттер едет вместе с игроком, пыль остаётся на месте.
-		Fx.puff(self, Vector3(0.0, 0.06, 0.0), Color(0.86, 0.8, 0.7), 10, 0.12, 1.1)
+		# Порция при приземлении (переделка П9): той же системой шагов,
+		# по покрытию и чуть больше обычной (было — Fx.puff).
+		_foot_fx.land(hspeed)
 	var moving := hspeed > B.anim_idle_speed
 	var linked := _hand_leader_peer != 0 or _hand_follower_peer != 0
 	if _in_water:
@@ -785,9 +787,9 @@ func _update_animation() -> void:
 		if partner >= 0.0:
 			tempo = minf(tempo, partner)
 	visual.set_locomotion_speed(tempo)
-	# Частицы бега (доработка П9): по фактической скорости; в воде их нет
-	# (там круги Fx.water_ring), в воздухе — тоже.
-	_run_dust.update(hspeed, is_on_floor() and not _in_water)
+	# Частицы из-под ног (переделка П9): детект шагов по костям стоп;
+	# в воде их нет (там круги Fx.water_ring), в воздухе — тоже.
+	_foot_fx.update(hspeed, is_on_floor() and not _in_water, global_position)
 	_was_on_floor = is_on_floor()
 
 

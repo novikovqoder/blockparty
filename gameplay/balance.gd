@@ -261,18 +261,53 @@ extends Resource
 @export var pts_emote_reply: float = 2.0
 @export var pts_emote_reply_max: float = 6.0
 
-@export_group("Частицы бега (доработка П9)")
-## Максимум частиц у ног при полном беге; шаг эмитит долю от этого
-## (кривая RunParticles.intensity: покой — 0, бег — 1, шаг — ≈0.2).
-@export var run_dust_amount: int = 26
-## Жизнь комка, с.
-@export var run_dust_lifetime: float = 0.45
-## Сторона спрайта-комка, м (травинка — 0.7 от этого).
-@export var run_dust_size: float = 0.08
-## Скорость вылета из-под ног, м/с.
-@export var run_dust_speed: float = 1.1
-## Разброс вылета, °.
-@export var run_dust_spread_deg: float = 40.0
+@export_group("Частицы шагов (переделка П9)")
+## Порог «стопа на земле» в пространстве скелета героя BU, м: пересечение
+## вниз = касание = шаг (замер по клипам loco_*: контакт 0.05–0.08).
+@export var footfx_contact_y: float = 0.09
+## Выше этой высоты стопа считается улетевшей в замах — детектор взводится.
+@export var footfx_release_y: float = 0.14
+## Бег, трава: травинок/обрывков листа на шаг (таблица владельца 2–4).
+@export var footfx_grass_run: Vector2i = Vector2i(2, 4)
+## Бег, грязь/сырая земля/лужа: капель или крошек на шаг (таблица 2–5).
+@export var footfx_mud_run: Vector2i = Vector2i(2, 5)
+## Бег, земля/тропа: крупинок на шаг (таблица 1–3).
+@export var footfx_dirt_run: Vector2i = Vector2i(1, 3)
+## Шагом (не бегом): максимум частиц на шаг — «почти ничего»; на земле
+## и траве можно 0 (земля — 0).
+@export var footfx_grass_walk: int = 1
+@export var footfx_mud_walk: int = 1
+@export var footfx_dirt_walk: int = 0
+## Облачко пыли на шаге по земле (бег/приземление), спрайтов; альфа —
+## footfx_alpha_dust, «едва видное».
+@export var footfx_dust_count: int = 2
+## Прыжок и приземление: порция «чуть больше обычной», множитель.
+@export var footfx_burst_mult: float = 1.5
+## Стороны спрайтов, м (требование: все частицы 0,5–3 см): травинка,
+## крошка грязи, крупинка земли, капля воды, пылинка.
+@export var footfx_size_blade: float = 0.03
+@export var footfx_size_crumb: float = 0.015
+@export var footfx_size_grain: float = 0.008
+@export var footfx_size_drop: float = 0.01
+@export var footfx_size_dust: float = 0.03
+## Предел размера любой частицы, м (тест сверяет каждый квад).
+@export var footfx_size_max: float = 0.03
+## Жизнь частиц, с (требование 0,3–0,7): твёрдые / пылинка.
+@export var footfx_life_solid: float = 0.55
+@export var footfx_life_dust: float = 0.35
+## Прозрачность (пределы 0,6 и 0,25): твёрдые / пылинка.
+@export var footfx_alpha_solid: float = 0.55
+@export var footfx_alpha_dust: float = 0.25
+## Затемнение цвета поверхности для цвета частиц.
+@export var footfx_color_darken: float = 0.45
+## Скорость вылета из-под стопы, м/с (мин/макс): грязь при −9 м/с² даёт
+## подлёт до ~10 см («летят невысоко и падают»).
+@export var footfx_pop_speed: Vector2 = Vector2(0.35, 1.3)
+## Гравитация твёрдых частиц, м/с² (травинки чуть легче — падают медленно).
+@export var footfx_gravity_solid: float = 9.0
+@export var footfx_gravity_blade: float = 6.0
+## Чужие игроки дальше этого расстояния — эффект выключен, м.
+@export var footfx_remote_range: float = 15.0
 
 @export_group("Born Unblessed (П10)")
 ## Временно спрятать «наследие Blockparty» (П10): жители (Финн/Луми/Тимьян),

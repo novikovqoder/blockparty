@@ -1,9 +1,10 @@
 extends SceneTree
-## Нарезает спрайты частиц (доработка П9, частицы бега) из CC0-текстур
-## проекта: комья земли (forest_ground_05), травинки и лист (Grass001),
-## камень (Rock001). Плюс процедурное мягкое пятно soft.png — маска
-## дымки/искр/светлячков, чтобы ни одна частица мира не была нетекстурным
-## белым квадратом. Выбор участка детерминирован (RandomNumberGenerator
+## Нарезает спрайты частиц (доработка П9; переделка — каменная нарезка
+## Rock001 убрана: у шагов по сухому камню частиц нет) из CC0-текстур
+## проекта: комья земли (forest_ground_05), травинки и лист (Grass001).
+## Плюс процедурное мягкое пятно soft.png — маска капель/пыли/искр/
+## светлячков, чтобы ни одна частица мира не была нетекстурным белым
+## квадратом. Выбор участка детерминирован (RandomNumberGenerator
 ## с фиксированным seed): повторный запуск даёт те же спрайты.
 ## Запуск:
 ##   godot --headless -s res://tools/make_vfx_textures.gd
@@ -16,7 +17,6 @@ const OUT_DIR: String = "res://assets/vfx/particles"
 const SOURCES: Dictionary = {
 	"dirt": "res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_diffuse_2k.jpg",
 	"grass": "res://assets/third_party/ambientcg.com/Grass001/Grass001_1K-JPG_Color.jpg",
-	"stone": "res://assets/third_party/ambientcg.com/Rock001/Rock001_1K-JPG_Color.jpg",
 }
 ## Размер спрайтов, px. Мелкие пятна частиц — 64 px хватает и для бега
 ## у самых ног (кроп в кадре ~5–10 % высоты экрана).

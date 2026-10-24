@@ -303,7 +303,7 @@ func test_world_particles_textured() -> void:
 	add_child_autofree(world)
 	WorldMaterials.textured_headless = false
 	for node: Node in get_tree().get_nodes_in_group(Player.GROUP):
-		(node as Player).setup_run_particles(ART)
+		(node as Player).setup_foot_fx(ART)
 	var offenders: Array[String] = []
 	var emitters := _collect_particle_offenders(world, offenders)
 	assert_gt(emitters, 4, "обход видит эмиттеры мира (костёр, атмосфера, бег)")

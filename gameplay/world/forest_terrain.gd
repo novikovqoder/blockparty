@@ -281,17 +281,24 @@ static func _moss_weight(
 	return patch * (1.0 - w_rock) * (0.45 + 0.55 * w_wet)
 
 
-# --- Покрытие под ногами (частицы бега, доработка П9) ---
+# --- Покрытие под ногами (переделка П9: частицы шагов) ---
 
-## Покрытие земли: земля/трава/камень. Значения — порядок пассов спрайтов
-## RunParticles (DIRT → комья земли, GRASS → земля + травинки, STONE → крошка).
-enum Surface { DIRT, GRASS, STONE }
+## Покрытие земли: земля/трава/камень + грязь и лужа (влажные низины).
+## Значения выбирает FootFx: камень — частиц нет, грязь/лужа — капли
+## и всплеск, трава — травинки, земля/тропа — крупинки и пыль.
+enum Surface { DIRT, GRASS, STONE, MUD, PUDDLE }
+
+## Порог влажности «лужи» (веса WET_H_*): сырая земля темнеет раньше,
+## стоячая вода — в самых низинах (w_wet ≥ 0.9).
+const PUDDLE_WET: float = 0.9
+const MUD_WET: float = 0.6
 
 ## Покрытие точки мира по тем же весам, что красят землю (_weights_image):
-## крутой склон — камень, тропа/гравий Площади и влажные низины — земля
-## (утоптанная/грязь), мшистые пятна — трава, остальное — земля. Вызов
-## дешёвый (пять выборок высот + шум), RunParticles перекладывает спрайты
-## по нему пару раз в секунду. world_pos — позиция ног игрока в мире.
+## крутой склон — камень (сухой, частиц нет), тропа/гравий Площади —
+## утоптанная земля (пыль), самые низкие точки — лужа (всплеск), влажные
+## низины — грязь (капли), мшистые пятна — трава (травинки), остальное —
+## земля. Вызов дешёвый (пять выборок высот + шум), FootFx зовёт его
+## раз на шаг — по точке под самой стопой.
 static func surface_kind(art: IslandArt, world_pos: Vector3) -> int:
 	var x := clampi(roundi(world_pos.x) + MAP_M / 2, 0, MAP_M - 1)
 	var z := clampi(roundi(world_pos.z) + MAP_M / 2, 0, MAP_M - 1)
@@ -301,11 +308,35 @@ static func surface_kind(art: IslandArt, world_pos: Vector3) -> int:
 		return Surface.STONE
 	var h: float = art.heights[z * IslandGen.POINTS + x]
 	var w_wet: float = 1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)
-	if maxf(_path_weight(wx, wz), _plaza_weight(wx, wz)) >= 0.5 or w_wet >= 0.6:
+	if maxf(_path_weight(wx, wz), _plaza_weight(wx, wz)) >= 0.5:
 		return Surface.DIRT
+	if w_wet >= PUDDLE_WET:
+		return Surface.PUDDLE
+	if w_wet >= MUD_WET:
+		return Surface.MUD
 	var noise := FastNoiseLite.new()
 	noise.seed = MOSS_SEED
 	noise.frequency = MOSS_FREQUENCY
 	if _moss_weight(noise, x, z, 0.0, w_wet) >= 0.35:
 		return Surface.GRASS
 	return Surface.DIRT
+
+
+## Цвет частиц — цвет поверхности в точке, затемнённый: база — тот же
+## point_color, что красит low-poly грани и карту тона, поверх — подтон
+## палитры покрытия (влажная земля / мох / тропа — те же цвета, которыми
+## красит землю шейдер ForestGround). darken — доля затемнения (баланс).
+static func surface_color(art: IslandArt, kind: int, world_pos: Vector3,
+	darken: float) -> Color:
+	var x := clampi(roundi(world_pos.x) + MAP_M / 2, 0, MAP_M - 1)
+	var z := clampi(roundi(world_pos.z) + MAP_M / 2, 0, MAP_M - 1)
+	var base: Color = TerrainBuilder.point_color(
+		art.heights, IslandGen.tint_hints(), x - MAP_M / 2, z - MAP_M / 2)
+	match kind:
+		Surface.MUD, Surface.PUDDLE:
+			base = base.lerp(VPAL.ground_wet, 0.55)
+		Surface.GRASS:
+			base = base.lerp(VPAL.ground_moss, 0.35)
+		Surface.DIRT:
+			base = base.lerp(VPAL.ground_path, 0.3)
+	return base.darkened(darken)

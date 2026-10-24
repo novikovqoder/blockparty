@@ -37,8 +37,10 @@ var _flags: int = 0
 var _speed_est: float = 0.0
 var _speed_pos: Vector3 = Vector3.ZERO
 var _speed_msec: int = -1
-## Частицы бега (доработка П9): как у локального, по оценке скорости.
-var _run_dust: RunParticles = null
+## Частицы из-под ног (переделка П9): как у локального, порции по шагам.
+var _foot_fx: FootFx = null
+## Флаг «на полу» прошлого снапшота (порция при приземлении чужого).
+var _was_on_floor: bool = true
 
 
 func setup(p_peer_id: int, p_name: String, p_appearance: PackedByteArray = PackedByteArray()) -> void:
@@ -92,13 +94,12 @@ func _ready() -> void:
 	box.size = Vector3(0.6, 0.1, 0.6)
 	shape.shape = box
 	head.add_child(shape)
-	# Частицы бега (доработка П9): ребёнок Model (поворачивается по снапшоту
-	# — частицы сносит назад); спрайты по покрытию включит
-	# setup_run_particles (сцена мира передаст арт острова).
-	_run_dust = RunParticles.new()
-	_run_dust.name = "RunDust"
-	_run_dust.position = Vector3(0.0, 0.05, -0.1)
-	_model.add_child(_run_dust)
+	# Частицы из-под ног (переделка П9): ребёнок самого узла (origin
+	# в ногах); порции по шагам включит setup_foot_fx (сцена мира передаст
+	# арт острова), дальше порога дальности — эффект выключен.
+	_foot_fx = FootFx.new()
+	_foot_fx.name = "FootFx"
+	add_child(_foot_fx)
 
 
 ## Снапшот чужого игрока (переслал хост после AOI-фильтра).
@@ -151,19 +152,36 @@ func render(now_msec: int) -> void:
 	global_position = pos
 	_model.rotation.y = float(snap["yaw"])
 	var anim: int = int(snap["anim"])
+	var jumped_now: bool = anim == Protocol.AnimState.JUMP \
+		and _last_anim != Protocol.AnimState.JUMP
 	if anim != _last_anim:
 		_last_anim = anim
 		_visual.set_state(anim)
 	_visual.set_locomotion_speed(_speed_est)
-	# Частицы бега (доработка П9): по оцененной скорости и флагу «на полу».
-	if _run_dust != null:
-		_run_dust.update(_speed_est, (_flags & Protocol.FLAG_ON_FLOOR) != 0)
+	# Частицы из-под ног (переделка П9): по оцененной скорости и флагу
+	# «на полу»; смотрящий — локальный игрок (дальше footfx_remote_range
+	# эффект чужого выключен). Приземление — переход флага «на полу»,
+	# отрыв прыжка — состояние JUMP (повтор прыжков ведомым, раздел 10).
+	if _foot_fx != null:
+		var on_floor: bool = (_flags & Protocol.FLAG_ON_FLOOR) != 0
+		if not _was_on_floor and on_floor:
+			_foot_fx.land(_speed_est)
+		if jumped_now:
+			_foot_fx.jump(_speed_est)
+		_foot_fx.update(_speed_est, on_floor, _viewer_pos())
+		_was_on_floor = on_floor
 
 
-## Подключить частицы бега к острову (сцена мира передаёт запечённый арт —
-## по нему определяется покрытие под ногами).
-func setup_run_particles(art: IslandArt) -> void:
-	_run_dust.setup(art)
+## Подключить частицы шагов к острову (сцена мира передаёт запечённый
+## арт — по нему берётся покрытие и цвет поверхности под стопой).
+func setup_foot_fx(art: IslandArt) -> void:
+	_foot_fx.setup(art)
+
+
+## Позиция смотрящего: локальный игрок (для отсечки дальних чужих).
+func _viewer_pos() -> Vector3:
+	var local := get_tree().get_first_node_in_group(Player.GROUP) as Node3D
+	return local.global_position if local != null else global_position
 
 
 ## Оцененная горизонтальная скорость, м/с (для темпа «за руку» у пары).
