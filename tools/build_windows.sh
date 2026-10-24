@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Headless-экспорт Windows-сборки и упаковка в builds/blockparty-windows.zip.
+# Headless-экспорт Windows-сборки и упаковка в builds/born-unblessed-windows.zip.
+# Пресет экспортирует в builds/windows/blockparty.exe; перед упаковкой exe
+# переименовывается в BornUnblessed.exe (pck встроен в exe — embed_pck,
+# переименование безопасно; решение владельца 24.10.2026).
 #
 # Использование:
 #   tools/build_windows.sh          экспорт пресета «Windows Desktop» (x86_64)
-#                                   в builds/windows/blockparty.exe, затем zip
+#                                   в builds/windows/, exe → BornUnblessed.exe,
+#                                   затем zip
 #
 # Требования: godot в PATH, установленные шаблоны экспорта текущей версии,
 # python3 (упаковка zip — стандартным модулем zipfile, утилита zip в системе
@@ -15,8 +19,9 @@ cd "$(dirname "$0")/.."
 
 PRESET="Windows Desktop"
 OUT_DIR="builds/windows"
-ZIP_PATH="builds/blockparty-windows.zip"
-EXE="$OUT_DIR/blockparty.exe"
+ZIP_PATH="builds/born-unblessed-windows.zip"
+EXE="$OUT_DIR/blockparty.exe"        # куда экспортирует пресет
+EXE_NAME="BornUnblessed.exe"         # имя в сборке (решение владельца)
 
 STEAM_DIR="addons/godotsteam/win64"
 GODOTSTEAM_DLL="$STEAM_DIR/libgodotsteam.windows.template_release.x86_64.dll"
@@ -34,6 +39,7 @@ rm -rf "$OUT_DIR" "$ZIP_PATH"
 mkdir -p "$OUT_DIR"
 godot --headless --export-release "$PRESET"
 [[ -f "$EXE" ]] || { echo "ОШИБКА: экспорт не создал $EXE" >&2; exit 1; }
+mv "$EXE" "$OUT_DIR/$EXE_NAME"
 
 # Godot кладёт DLL из godotsteam.gdextension (библиотека + dependencies) рядом
 # с exe сам; если по какой-то причине их нет — докопируем и скажем об этом.
@@ -66,7 +72,7 @@ with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
 PY
 
 # Контроль: обязательные файлы должны быть в архиве.
-python3 - "$ZIP_PATH" blockparty.exe "$(basename "$GODOTSTEAM_DLL")" \
+python3 - "$ZIP_PATH" "$EXE_NAME" "$(basename "$GODOTSTEAM_DLL")" \
          "$(basename "$STEAM_API_DLL")" steam_appid.txt <<'PY'
 import pathlib
 import sys

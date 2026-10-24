@@ -238,7 +238,10 @@ func test_world_surfaces_textured_or_whitelisted() -> void:
 	WorldMaterials.textured_headless = true
 	var surfaces := _collect_world_surfaces()
 	WorldMaterials.textured_headless = false
-	assert_gt(surfaces.size(), 800, "обход видит все поверхности мира")
+	# Порог опущен с 800 до 600 (born-unblessed): из мира ушли жители
+	# UBC (каждый нёс десятки поверхностей) — фактический обход 681;
+	# порог по-прежнему ловит вырождение мира в нетекстурные плоскости.
+	assert_gt(surfaces.size(), 600, "обход видит все поверхности мира")
 	var strict := OS.get_environment("AUDIT_STRICT") == "1"
 	var allow: Array[String] = ALWAYS_UNTEXTURED.duplicate()
 	if not strict:
