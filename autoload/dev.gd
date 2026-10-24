@@ -1,6 +1,7 @@
 # Разбор аргументов командной строки для локальных тестов (раздел 4 SPEC):
 # --dev-host, --dev-join=IP, --dev-name, --dev-spawn=ZONE, --bot, --net-lag,
 # --net-loss, --log-net, --shot-dir, --simple-graphics, --high-quality,
+# --ultra-quality,
 # --debug-collisions (полупрозрачные формы коллизий мира поверх картинки),
 # --selftest-anim (самопроверка анимаций персонажа в запущенной игре:
 # печатает SELFTEST-ANIM: PASS/FAIL и выходит с кодом 1 при FAIL —
@@ -31,6 +32,7 @@ var log_net: bool = false        # --log-net: подробный лог сете
 var shot_dir: String = ""        # --shot-dir=PATH: скриншоты площадок и выход
 var simple_graphics: bool = false  # --simple-graphics: «Простая графика» (раздел 15)
 var high_quality: bool = false   # --high-quality: тяжёлые эффекты, шаг 4 П4.5
+var ultra_quality: bool = false  # --ultra-quality: уровень «Ультра», П11
 var debug_collisions: bool = false  # --debug-collisions: показать формы коллизий
 var selftest_anim: bool = false  # --selftest-anim: проверка анимаций и выход
 var selftest_world: bool = false  # --selftest-world: проверка мира и выход
@@ -49,6 +51,7 @@ func _init() -> void:
 	shot_dir = parsed["shot_dir"]
 	simple_graphics = parsed["simple_graphics"]
 	high_quality = parsed["high_quality"]
+	ultra_quality = parsed["ultra_quality"]
 	debug_collisions = parsed["debug_collisions"]
 	selftest_anim = parsed["selftest_anim"]
 	selftest_world = parsed["selftest_world"]
@@ -60,6 +63,8 @@ func _ready() -> void:
 		Settings.simple_graphics = true
 	if high_quality:
 		Settings.high_quality = true
+	if ultra_quality:
+		Settings.ultra_quality = true
 
 
 ## Разбор списка аргументов в словарь с полями-константами этого автолоада.
@@ -77,6 +82,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"shot_dir": "",
 		"simple_graphics": false,
 		"high_quality": false,
+		"ultra_quality": false,
 		"debug_collisions": false,
 		"selftest_anim": false,
 		"selftest_world": false,
@@ -107,6 +113,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["simple_graphics"] = true
 		elif arg == "--high-quality":
 			result["high_quality"] = true
+		elif arg == "--ultra-quality":
+			result["ultra_quality"] = true
 		elif arg == "--debug-collisions":
 			result["debug_collisions"] = true
 		elif arg == "--selftest-anim":

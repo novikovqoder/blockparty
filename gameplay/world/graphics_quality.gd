@@ -5,6 +5,9 @@
 # постобработка (блок е vfx-fix: аккуратный glow огня и светлячков, SSAO,
 # виньетка) и объёмный туман с локальными сгустками в Лесу и у Озера
 # (тяжёлые эффекты — только по явному выбору игрока).
+# ULTRA (П11, каркас «меню → мир»): пункт меню выбирается и доезжает до
+# мира, но пока применяется как HIGH — полный набор «Ультра»-эффектов
+# (SDFGI, SSIL, SSR, тени 8192, SMAA) — отдельный этап ветки bu-gfx.
 # Compatibility-рендерер (скриншоты на сервере) SSAO и объёмный туман не
 # поддерживает: свойства выставляются, движок молча пропускает их.
 class_name GraphicsQuality
@@ -12,7 +15,14 @@ extends RefCounted
 
 const VIGNETTE_SHADER: Shader = preload("res://assets/shaders/vignette.gdshader")
 
-enum Tier { SIMPLE, NORMAL, HIGH }
+enum Tier { SIMPLE, NORMAL, HIGH, ULTRA }
+
+## Меню Born Unblessed хранит настройки в своём cfg (MenuSettingsBU);
+## «Качество графики» — int: 0 Низкое, 1 Среднее, 2 Высокое, 3 Ультра
+## (DEFAULTS меню — 2, «Высокое»).
+const MENU_SAVE_PATH: String = "user://settings_bu.cfg"
+const MENU_SECTION: String = "settings"
+const MENU_KEY_QUALITY: String = "quality"
 
 ## Радиус зоны локального тумана (Лес, Озеро), м.
 const ZONE_FOG_RADIUS: float = 26.0
@@ -50,13 +60,44 @@ const CHARACTER_LOD_FACTOR: float = 0.45
 const AA_MSAA_HIGH: int = Viewport.MSAA_4X
 
 
-## Активный уровень из настроек (экран настроек — П8; dev-флаги — Dev).
+## Активный уровень из настроек (П11): dev-флаги (Settings через Dev —
+## --simple-graphics, --high-quality, --ultra-quality) имеют приоритет над
+## меню; иначе — пункт «Качество графики» из user://settings_bu.cfg.
+## Вызывается редко (вход в мир, повторное применение), поэтому cfg читается
+## без кэша — каждое применение видит свежее значение меню.
 static func tier_from_settings() -> int:
+	if Settings.ultra_quality:
+		return Tier.ULTRA
 	if Settings.high_quality:
 		return Tier.HIGH
 	if Settings.simple_graphics:
 		return Tier.SIMPLE
-	return Tier.NORMAL
+	return menu_tier()
+
+
+## Уровень из пункта меню «Качество графики» (П11, раздел 1.1): Низкое →
+## SIMPLE, Среднее → NORMAL, Высокое → HIGH, Ультра → ULTRA. Старый cfg без
+## ключа quality — «Высокое», как в DEFAULTS меню; некорректное значение
+## (не int или вне 0–3) — тоже «Высокое».
+static func menu_tier() -> int:
+	var cfg := ConfigFile.new()
+	if cfg.load(MENU_SAVE_PATH) != OK:
+		return Tier.HIGH
+	if not cfg.has_section_key(MENU_SECTION, MENU_KEY_QUALITY):
+		return Tier.HIGH
+	var value: Variant = cfg.get_value(MENU_SECTION, MENU_KEY_QUALITY)
+	if typeof(value) != TYPE_INT:
+		return Tier.HIGH
+	match value:
+		Tier.SIMPLE:
+			return Tier.SIMPLE
+		Tier.NORMAL:
+			return Tier.NORMAL
+		Tier.HIGH:
+			return Tier.HIGH
+		Tier.ULTRA:
+			return Tier.ULTRA
+	return Tier.HIGH
 
 
 ## Тени и пост-эффекты по уровню (блок е: постобработка — только HIGH).
@@ -71,14 +112,15 @@ static func apply(
 	sun.shadow_enabled = tier != Tier.SIMPLE
 	if moon != null:
 		moon.shadow_enabled = tier != Tier.SIMPLE
+	# ULTRA (П11, каркас) применяется как HIGH: набор «Ультра»-эффектов
+	# (SDFGI, SSIL, SSR, тени 8192, SMAA) появляется отдельным этапом.
+	var high := tier >= Tier.HIGH
 	if viewport != null:
 		viewport.texture_mipmap_bias = SIMPLE_MIPMAP_BIAS if tier == Tier.SIMPLE else 0.0
-		viewport.msaa_3d = AA_MSAA_HIGH if tier == Tier.HIGH \
-			else Viewport.MSAA_DISABLED
+		viewport.msaa_3d = AA_MSAA_HIGH if high else Viewport.MSAA_DISABLED
 		viewport.screen_space_aa = (
-			Viewport.SCREEN_SPACE_AA_FXAA if tier == Tier.HIGH
+			Viewport.SCREEN_SPACE_AA_FXAA if high
 			else Viewport.SCREEN_SPACE_AA_DISABLED)
-	var high := tier == Tier.HIGH
 	env.ssao_enabled = high
 	if high:
 		env.ssao_intensity = SSAO_INTENSITY

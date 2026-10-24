@@ -124,15 +124,18 @@ func test_vignette_layer() -> void:
 
 
 func test_tier_from_settings() -> void:
-	# Настройки: по умолчанию NORMAL, флаги поднимают до SIMPLE или HIGH
-	# (HIGH сильнее — «простая графика» важнее для слабых GPU).
+	# Настройки: без dev-флагов уровень берётся из пункта меню «Качество
+	# графики» (П11, раздел 1.1; старое «по умолчанию NORMAL» ушло), флаги
+	# переключают уровни — сильнейший побеждает: ultra > high > simple.
 	var simple := Settings.simple_graphics
 	var high := Settings.high_quality
+	var ultra := Settings.ultra_quality
 	Settings.simple_graphics = false
 	Settings.high_quality = false
+	Settings.ultra_quality = false
 	assert_eq(
-		GraphicsQuality.tier_from_settings(), GraphicsQuality.Tier.NORMAL,
-		"по умолчанию обычное качество",
+		GraphicsQuality.tier_from_settings(), GraphicsQuality.menu_tier(),
+		"без dev-флагов — уровень из меню (П11)",
 	)
 	Settings.simple_graphics = true
 	assert_eq(
@@ -145,8 +148,14 @@ func test_tier_from_settings() -> void:
 		GraphicsQuality.tier_from_settings(), GraphicsQuality.Tier.HIGH,
 		"«Высокое качество»",
 	)
+	Settings.ultra_quality = true
+	assert_eq(
+		GraphicsQuality.tier_from_settings(), GraphicsQuality.Tier.ULTRA,
+		"«Ультра» сильнее «Высокого» (П11)",
+	)
 	Settings.simple_graphics = simple
 	Settings.high_quality = high
+	Settings.ultra_quality = ultra
 
 
 ## Риг неба Sky3D в дереве теста (П5.9 блок 6): Sky3D сам создаёт светила,

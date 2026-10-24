@@ -31,9 +31,10 @@ var _focus: Vector3 = Vector3.ZERO
 
 
 ## Создать системы под уровень графики (GraphicsQuality.Tier).
+## «Ультра» (П11, каркас) пока берёт плотность «Высокого».
 func setup(tier: int) -> void:
 	_simple = tier == GraphicsQuality.Tier.SIMPLE
-	var density := 1.5 if tier == GraphicsQuality.Tier.HIGH else 1.0
+	var density := 1.5 if tier >= GraphicsQuality.Tier.HIGH else 1.0
 	_fireflies = _make(int(48.0 * density), PAL.firefly, 0.16, 7.0, 0.0, true, SOFT_TEX)
 	_fireflies.name = "Fireflies"
 	var fire_process := _fireflies.process_material as ParticleProcessMaterial

@@ -36,8 +36,8 @@ BU_OPT_LOW,Низкое,Low
 BU_OPT_MEDIUM,Среднее,Medium
 BU_OPT_HIGH,Высокое,High
 BU_OPT_ULTRA,Ультра,Ultra
-BU_DESC_QUALITY,"Общий пресет: тени, туман, отражения в лужах и плотность частиц.","Overall preset: shadows, fog, puddle reflections and particle density."
-BU_WARN_QUALITY,На «Ультра» объёмный туман и отражения заметно нагружают видеокарту.,"On Ultra, volumetric fog and reflections are heavy on the GPU."
+BU_DESC_QUALITY,"Общий пресет: тени, туман, постобработка. «Ультра» — глобальное освещение, отражения, мягкие тени высокого разрешения.","Overall preset: shadows, fog, post-processing. Ultra adds global illumination, reflections and high-resolution soft shadows."
+BU_WARN_QUALITY,"«Ультра» нагружает видеокарту: нужен уровень RTX 3060 / RX 6700 и выше.","Ultra is heavy on the GPU: RTX 3060 / RX 6700 or better recommended."
 BU_SET_VSYNC,Вертикальная синхронизация,V-Sync
 BU_DESC_VSYNC,"Убирает разрывы кадра, но может добавить небольшую задержку ввода.",Removes screen tearing but may add a little input latency.
 BU_SET_FPS,Ограничение кадров,Frame rate limit

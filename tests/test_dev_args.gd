@@ -15,18 +15,20 @@ func test_no_args_gives_defaults() -> void:
 	assert_eq(d["net_lag_ms"], 0)
 	assert_eq(d["net_loss_percent"], 0)
 	assert_false(d["log_net"])
+	assert_false(d["ultra_quality"])
 
 
 func test_flags() -> void:
 	var d: Dictionary = DevScript.parse_args(PackedStringArray([
 		"--dev-host", "--bot", "--log-net", "--simple-graphics",
-		"--high-quality", "--debug-collisions",
+		"--high-quality", "--ultra-quality", "--debug-collisions",
 	]))
 	assert_true(d["host_mode"])
 	assert_true(d["bot"])
 	assert_true(d["log_net"])
 	assert_true(d["simple_graphics"])
 	assert_true(d["high_quality"])
+	assert_true(d["ultra_quality"], "--ultra-quality разбирается (П11)")
 	assert_true(d["debug_collisions"], "--debug-collisions разбирается")
 
 

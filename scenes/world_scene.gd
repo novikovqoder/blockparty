@@ -310,11 +310,13 @@ func _draw_debug_collisions(root: Node) -> void:
 ## (блок е: glow, SSAO, виньетка) и объёмный туман с дымкой в Лесу
 ## и у Озера (шаг 4 П4.5; на compatibility-рендерере серверных скриншотов
 ## SSAO и объёмный туман недоступны — проверяет владелец).
+## Уровень «Ультра» (П11, каркас «меню → мир») пока применяется как
+## «Высокое»: полный «Ультра»-рендер — отдельный этап ветки bu-gfx.
 func _apply_graphics_quality() -> void:
 	var tier := GraphicsQuality.tier_from_settings()
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
 	_ambient.setup(tier)
-	_vignette.visible = tier == GraphicsQuality.Tier.HIGH
+	_vignette.visible = tier >= GraphicsQuality.Tier.HIGH
 	# Viewport — для смещения мипов текстур: «Простая графика» сэмплит
 	# 2K-текстуры Леса из мипа 1K (П5.7 блок 7).
 	GraphicsQuality.apply(
@@ -331,7 +333,7 @@ func _apply_graphics_quality() -> void:
 		# (fade 46–66 м) — при far 70 не остаётся видимого обрыва воды.
 		for node: Node in get_tree().get_nodes_in_group("water_surface"):
 			(node as WaterArea).set_fade_distance(46.0, 66.0)
-	if tier == GraphicsQuality.Tier.HIGH:
+	if tier >= GraphicsQuality.Tier.HIGH:
 		# Лес (П5.7 блок 3): сгусток шире зоны деревьев (~56 м) — объёмный
 		# туман стелется по всей реалистичной части; у Озера прежний компакт.
 		var center := _island.spawn_point("forest")
@@ -657,6 +659,8 @@ func _fps_probe(seconds: float) -> void:
 			tier_name = "SIMPLE"
 		GraphicsQuality.Tier.HIGH:
 			tier_name = "HIGH"
+		GraphicsQuality.Tier.ULTRA:
+			tier_name = "ULTRA"
 	print("FPS-PROBE: start seconds=%s players_in_world=%d quality=%s"
 		% [str(seconds), players_in_world, tier_name])
 	var deltas: Array[float] = []
