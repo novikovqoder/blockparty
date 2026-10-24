@@ -127,10 +127,12 @@ func _process(delta: float) -> bool:
 	return _run_scene()
 
 
-## Сценарии: ходьба/бег × камера игры/крупно у ног по покрытиям с частицами
-## (трава, грязь, лужа, земля); камню достаточно бега (отрицательный случай
-## — частиц быть не должно); прыжок-приземление и лента подряд идущих
-## кадров для склейки-«клипа».
+## Сценарии. Замер на этом сервере: кадр llvmpipe 5–9 мин, поэтому серия
+## урезана до необходимого для приёмки: ходьба/бег по покрытиям с частицами
+## (трава, грязь, лужа, земля) — крупно у ног; камера игры — по одному
+## представителю (бег по грязи и траве, шаг по грязи); камень — негативный
+## случай (бег, частиц быть не должно); прыжок-приземление; лента подряд
+## идущих кадров для склейки-«клипа»; «было»-реконструкции в конце.
 func _setup_scenes() -> void:
 	Engine.time_scale = TIME_SCALE
 	_segments["dirt"] = _plaza_segment()
@@ -142,19 +144,24 @@ func _setup_scenes() -> void:
 		if _segments[key].is_empty():
 			continue
 		for speed: String in ["walk", "run"]:
-			for cam: String in ["game", "feet"]:
-				_scenes.append({"name": "%s_%s_%s" % [speed, key, cam],
-					"seg": key, "walk": speed == "walk",
-					"cam": cam, "jump": false})
+			_scenes.append({"name": "%s_%s_feet" % [speed, key],
+				"seg": key, "walk": speed == "walk",
+				"cam": "feet", "jump": false})
+	for extra: Dictionary in [
+			{"name": "run_mud_game", "seg": "mud", "walk": false,
+				"cam": "game", "jump": false},
+			{"name": "run_grass_game", "seg": "grass", "walk": false,
+				"cam": "game", "jump": false},
+			{"name": "walk_mud_game", "seg": "mud", "walk": true,
+				"cam": "game", "jump": false},
+			{"name": "jump_dirt_feet", "seg": "dirt",
+				"walk": false, "cam": "feet", "jump": true},
+			{"name": "strip_mud_feet", "seg": "mud",
+				"walk": false, "cam": "feet", "jump": false}]:
+		if not _segments[extra["seg"]].is_empty():
+			_scenes.append(extra)
 	if not _segments["stone"].is_empty():
-		for cam: String in ["game", "feet"]:
-			_scenes.append({"name": "run_stone_%s" % cam, "seg": "stone",
-				"walk": false, "cam": cam, "jump": false})
-	if not _segments["dirt"].is_empty():
-		_scenes.append({"name": "jump_dirt_feet", "seg": "dirt",
-			"walk": false, "cam": "feet", "jump": true})
-	if not _segments["mud"].is_empty():
-		_scenes.append({"name": "strip_mud_feet", "seg": "mud",
+		_scenes.append({"name": "run_stone_feet", "seg": "stone",
 			"walk": false, "cam": "feet", "jump": false})
 	# «Было» — в самый конец: главное (новый эффект) снимается первым.
 	if not _legacy_stone_path.is_empty():
@@ -204,9 +211,10 @@ func _run_scene() -> bool:
 		_update_legacy()
 	_shot("%s_f%02d_b%d" % [scene["name"], _frame_in_scene,
 		mini(_frames_since_burst, 3)])
+	_frame_in_scene += 1
 	var frames: int = FRAMES_PER_STRIP \
 		if String(scene["name"]).begins_with("strip_") else FRAMES_PER_SCENE
-	if _frame_in_scene >= frames:
+	if _frame_in_scene > frames:
 		print("FOOTFX: %s — шагов %d, порций %d" % [scene["name"],
 			_foot_fx.stats_steps - _base_steps,
 			_foot_fx.stats_bursts - _scene_burst_base])
