@@ -5,8 +5,7 @@
 # без теней, ближе туман и дальность камеры — флаг --simple-graphics
 # (экран настроек — П8). По сети (раздел 10): снапшоты локального игрока
 # шлёт Net, чужие игроки — RemotePlayer по снапшотам хоста, вход в идущий
-# мир — world_state. Проксимити-очки Interactions (раздел 13) — тик раз
-# в секунду по позициям ремоутов.
+# мир — world_state.
 extends Node3D
 
 ## П10 (экран загрузки): мир построен и игрок в нём — LoadingScreenBU уходит
@@ -28,8 +27,6 @@ const SHOT_ZONES: PackedStringArray = ["plaza", "forest", "ruins", "hills", "cre
 ## золотой час заката (тёплый горизонт, низкое солнце, раздел 7).
 const SHOT_DAY_FRACTION: float = 0.3
 const SHOT_SUNSET_FRACTION: float = 0.58
-## Пауза тика проксимити Interactions (раздел 13: «секунда рядом»), с.
-const PROXIMITY_TICK: float = 1.0
 ## Частота кадров GIF-серий (финал П5.8): 12/с — движения читаются, серия
 ## 6 с — 72 кадра (сборка GIF — tools/make_gif.py).
 const SHOT_SERIES_FPS: int = 12
@@ -47,7 +44,6 @@ var _vignette: ColorRect
 var _leaving: bool = false
 var _zone_now: String = ""
 var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
-var _proximity_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -68,9 +64,6 @@ func _ready() -> void:
 	_apply_graphics_quality()
 	_hud = WorldHud.new()
 	add_child(_hud)
-	var map := IslandMap.new()
-	add_child(map)
-	map.track(_island, _player)
 	_esc_menu = EscMenu.new()
 	add_child(_esc_menu)
 	_esc_menu.exit_requested.connect(_exit_to_menu)
@@ -125,7 +118,6 @@ func _process(delta: float) -> void:
 	# Адаптивная тесселяция рельефа вокруг игрока (доработка-2 П5.13, П1):
 	# чанки в радиусе 50 м — квад 0.5 м, с бюджетом на перестройку за кадр.
 	_island.update_viewer(_player.global_position)
-	_proximity_tick(delta)
 
 
 ## Подключение к сети (раздел 10): события чужих игроков, применение
@@ -176,20 +168,6 @@ func _on_peer_left(peer_id: int, _player_name: String) -> void:
 	Log.info("Персонаж игрока %d исчез" % peer_id, "World")
 
 
-## Секунда рядом (раздел 13): очки по всем ремоутам в радиусе proximity_m.
-func _proximity_tick(delta: float) -> void:
-	_proximity_accum += delta
-	if _proximity_accum < PROXIMITY_TICK:
-		return
-	_proximity_accum = 0.0
-	for peer_id: int in _remotes:
-		var remote: RemotePlayer = _remotes[peer_id]
-		if remote.last_position().distance_to(_player.global_position) <= B.proximity_m:
-			Interactions.add_points(
-				peer_id, Interactions.KIND_PROXIMITY, B.pts_proximity, Session.world_time
-			)
-
-
 func _unhandled_input(event: InputEvent) -> void:
 	# Esc — меню (освобождает курсор, раздел 5); мир не на паузе (раздел 15).
 	if event.is_action_pressed("pause"):
@@ -212,7 +190,8 @@ func _exit_to_menu() -> void:
 
 
 func _on_host_lost(_reason: String) -> void:
-	# Хост вышел: мир закрылся у всех; экран «Встречи» на его месте — П7.
+	# Хост вышел: мир закрылся у всех, возврат в меню (экран «Встречи»
+	# вычищен с наследием Blockparty, born-unblessed).
 	_exit_to_menu()
 
 

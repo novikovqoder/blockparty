@@ -179,19 +179,6 @@ extends Resource
 ## Сколько секунд бот держит кнопку прыжка (полная высота).
 @export var bot_jump_hold: float = 0.25
 
-@export_group("Взаимодействия (раздел 13)")
-## Радиус «секунды рядом», м (раздел 13: до 8 м).
-@export var proximity_m: float = 8.0
-## Секунда рядом и лимит за сессию.
-@export var pts_proximity: float = 0.05
-@export var pts_proximity_max: float = 20.0
-## Секунда его голоса и лимит.
-@export var pts_voice_heard: float = 0.3
-@export var pts_voice_heard_max: float = 25.0
-## Каждые 30 с у костра и лимит.
-@export var pts_campfire: float = 3.0
-@export var pts_campfire_max: float = 12.0
-
 @export_group("Частицы шагов (переделка П9)")
 ## Порог «стопа на земле» в пространстве скелета героя BU, м: пересечение
 ## вниз = касание = шаг (замер по клипам loco_*: контакт 0.05–0.08).

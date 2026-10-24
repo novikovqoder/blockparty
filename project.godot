@@ -22,7 +22,6 @@ SteamService="*res://autoload/steam_service.gd"
 Net="*res://autoload/net.gd"
 Session="*res://autoload/session.gd"
 Voice="*res://autoload/voice.gd"
-Interactions="*res://autoload/interactions.gd"
 
 [audio]
 
@@ -63,10 +62,6 @@ move_backward={
 walk={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":4194325)]
-}
-map={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":77)]
 }
 jump={
 "deadzone": 0.5,
