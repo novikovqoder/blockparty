@@ -30,7 +30,6 @@ const STATE_CLIPS: Dictionary = {
 	Protocol.AnimState.RUN: &"loco_run",
 	Protocol.AnimState.JUMP: &"loco_jump_up",
 	Protocol.AnimState.FALL: &"loco_jump_fly",
-	Protocol.AnimState.HOLD_HAND: &"loco_walk",
 	Protocol.AnimState.LAND: &"loco_jump_land",
 }
 ## Разовые клипы (play_one_shot) — только удар с мечом: ss_slash.
@@ -227,8 +226,7 @@ func _on_equip_finished(_slot: StringName) -> void:
 
 
 func _is_locomotion(state: int) -> bool:
-	return state == Protocol.AnimState.WALK or state == Protocol.AnimState.RUN \
-		or state == Protocol.AnimState.HOLD_HAND
+	return state == Protocol.AnimState.WALK or state == Protocol.AnimState.RUN
 
 
 func _apply_locomotion() -> void:

@@ -27,11 +27,6 @@ static func apex_from(v: float, g: float) -> float:
 	return v * v / (2.0 * g)
 
 
-## Скорость прыжка с усилением (прыжок с головы другого игрока).
-static func boosted_jump_speed(b: Balance) -> float:
-	return b.jump_speed * b.head_jump_boost
-
-
 ## Отпускание кнопки прыжка режет вертикальную скорость (переменная высота).
 static func jump_cut(velocity_y: float, b: Balance) -> float:
 	if velocity_y <= 0.0:

@@ -400,7 +400,7 @@ static func collision_size(type: StringName, scale: Vector3) -> Vector3:
 		"ruin_tower":
 			return Vector3(1.9, 3.4, 1.9) * scale.x
 		"ruin_gate":
-			return Vector3.ZERO  # рама проходима; проём закрывает узел RuinGate (П5)
+			return Vector3.ZERO  # рама проходима (декоративный проём, born-unblessed)
 		"ruin_arch":
 			return Vector3(2.1, 2.4, 0.6)
 		"ruin_column":
@@ -513,8 +513,8 @@ static func _ruin_tower() -> ArrayMesh:
 	return _merge(parts)
 
 
-## Ворота руин: каменная рама. Проём закрывает отдельный узел RuinGate
-## (П5, раздел 9.2) — плита-решётка опускается в пол при открытии.
+## Ворота руин: каменная рама. Декоративный проём — механика плит
+## удалена с наследием Blockparty (born-unblessed), решётки нет.
 static func _ruin_gate() -> ArrayMesh:
 	var parts: Array = [
 		_box(Vector3(0.35, 3.2, 0.45), PAL.ruin_brick, Vector3(-1.05, 1.6, 0)),

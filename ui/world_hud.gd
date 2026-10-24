@@ -6,7 +6,6 @@ class_name WorldHud
 extends CanvasLayer
 
 const PAL: Palette = preload("res://assets/palette.tres")
-const B: Balance = preload("res://gameplay/balance.tres")
 
 ## Сколько секунд висит название зоны при переходе.
 const ZONE_HINT_TIME: float = 3.0
@@ -19,9 +18,6 @@ var _toast: Label
 var _toast_left: float = 0.0
 var _hint: Label
 var _hint_hold: ProgressBar
-## Приглашение «за руку» (раздел 9.5): живёт hand_invite_time или до ответа.
-var _invite: Label
-var _invite_left: float = 0.0
 
 
 func _ready() -> void:
@@ -36,8 +32,6 @@ func _ready() -> void:
 	EventBus.interaction_hint.connect(_on_interaction_hint)
 	EventBus.interaction_progress.connect(_on_interaction_progress)
 	EventBus.toast_requested.connect(_on_toast_requested)
-	EventBus.hand_invite.connect(_on_hand_invite)
-	EventBus.hand_link.connect(_on_hand_link)
 
 
 func _process(delta: float) -> void:
@@ -49,10 +43,6 @@ func _process(delta: float) -> void:
 		_toast_left -= delta
 		if _toast_left <= 0.0:
 			_toast.hide()
-	if _invite_left > 0.0:
-		_invite_left -= delta
-		if _invite_left <= 0.0:
-			_invite.hide()
 
 
 func _build() -> void:
@@ -118,17 +108,6 @@ func _build() -> void:
 	_hint_hold.modulate = PAL.gold
 	_hint_hold.hide()
 	root.add_child(_hint_hold)
-	# Приглашение «за руку» (раздел 9.5): над подсказкой E, с обратным
-	# отсчётом; гаснет по таймеру или когда связь подтвердилась/оборвалась.
-	_invite = Label.new()
-	UiLayout.center_bottom(_invite, Vector2(400, 26), 128.0)
-	_invite.add_theme_font_size_override("font_size", 19)
-	_invite.add_theme_color_override("font_color", PAL.gold)
-	_invite.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_invite.add_theme_constant_override("outline_size", 4)
-	_invite.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_invite.hide()
-	root.add_child(_invite)
 
 
 ## Подсказка у интерактивного объекта: ключ действия или пусто (скрыть).
@@ -154,19 +133,6 @@ func _on_interaction_progress(fraction: float) -> void:
 ## ключ i18n, как у подсказок.
 func _on_toast_requested(key: String) -> void:
 	_show_toast(tr(key))
-
-
-## Приглашение «за руку» (раздел 9.5): «F — принять», живёт hand_invite_time.
-func _on_hand_invite(_by_peer: int, by_name: String) -> void:
-	_invite.text = tr("HUD_HAND_INVITE") % by_name
-	_invite.show()
-	_invite_left = B.hand_invite_time
-
-
-## Связь подтвердилась или оборвалась — приглашение больше не актуально.
-func _on_hand_link(_leader_peer: int, _follower_peer: int, _on: bool) -> void:
-	_invite_left = 0.0
-	_invite.hide()
 
 
 ## Показать название зоны (ключ ZONE_<ИМЯ>); пустая зона прячет подсказку.

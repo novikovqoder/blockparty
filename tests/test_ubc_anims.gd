@@ -109,13 +109,6 @@ func test_locomotion_follows_speed() -> void:
 			clampf(pair[0] / natural, CharacterAnims.SPEED_SCALE_MIN,
 				CharacterAnims.SPEED_SCALE_MAX),
 			0.05, "скорость %.1f: темп = скорость/natural" % pair[0])
-	model.set_state(Protocol.AnimState.HOLD_HAND)
-	model.set_locomotion_speed(1.0)
-	for i: int in 90:
-		model._process(1.0 / 60.0)
-	assert_eq(model._playing_clip(), &"Walk_Hand", "за руку — Walk_Hand")
-	assert_almost_eq(model._player.speed_scale, 1.0 / 0.96, 0.05,
-		"за руку: темп по скорости пары")
 
 
 func test_one_shot_returns_to_state() -> void:

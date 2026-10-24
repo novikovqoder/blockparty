@@ -29,16 +29,15 @@ const STATE_CLIPS: Dictionary = {
 	Protocol.AnimState.LAND: &"Jump_Land",
 	Protocol.AnimState.BONK: &"Hit_Chest",
 	Protocol.AnimState.HANG: &"Hang_Pose",
-	Protocol.AnimState.PULLED_UP: &"ClimbUp_1m",
-	Protocol.AnimState.HELP_PULL: &"Interact",
 	Protocol.AnimState.SIT: &"Sitting_Idle",
-	Protocol.AnimState.HOLD_HAND: &"Walk_Hand",
 	Protocol.AnimState.WAVE: &"Wave_Hand",
 }
 
-## Циклические состояния (покой, перемещение, полёт, сидение, за руку);
+## Циклические состояния (покой, перемещение, полёт, сидение);
 ## остальное — разовые, CharacterModel.play_one_shot возвращает состояние
 ## по таймеру. Соответствует LOOP_CLIPS запечки (loop_mode уже в .res).
+## Кооп-состояния Blockparty (PULLED_UP, HELP_PULL, HOLD_HAND) удалены
+## с наследием (born-unblessed) — в enum остались мёртвыми.
 const LOOP_STATES: Array[int] = [
 	Protocol.AnimState.IDLE,
 	Protocol.AnimState.WALK,
@@ -46,7 +45,6 @@ const LOOP_STATES: Array[int] = [
 	Protocol.AnimState.FALL,
 	Protocol.AnimState.HANG,
 	Protocol.AnimState.SIT,
-	Protocol.AnimState.HOLD_HAND,
 ]
 
 static var _library: AnimationLibrary = null

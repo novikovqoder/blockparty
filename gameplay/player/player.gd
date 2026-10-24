@@ -2,11 +2,10 @@
 # движение относительно камеры (бег/шаг, ускорение/торможение, 60% в воздухе),
 # прыжок с coyote time, буфером и переменной высотой, автоподъём на полублоки,
 # плавание на поверхности, состояние «Висит» с переносом к Камню духа, удар
-# («тычок» по игрокам, мобы — один удар, раздел 8), коллайдер головы для
-# подсадки (отдельный слой, столкновение только при падении сверху — HeadStand).
+# («тычок» по игрокам, мобы — один удар, раздел 8).
 # Игроки проходят друг сквозь друга: маска не содержит слой игроков.
-# Не делает: снапшоты в сеть (П3 подключит anim_state()/snapshot_flags()),
-# вытягивание другим игроком и эмоции (П5), светлячка на двоих (П5).
+# Кооп-механики Blockparty (подсадка на голову, вытягивание, «за руку»)
+# удалены с наследием (born-unblessed).
 class_name Player
 extends CharacterBody3D
 
@@ -16,8 +15,6 @@ const B: Balance = preload("res://gameplay/balance.tres")
 const GROUP: StringName = &"player"
 ## Насколько ниже точки HangPoint висит центр тела, м.
 const HANG_BODY_DROP: float = 0.2
-## Голова «под ногами», если её верхняя грань ближе этого, м.
-const HEAD_BELOW_EPS: float = 0.15
 ## Глубина проверки автоподъёма вперёд, м.
 const STEP_PROBE: float = 0.35
 ## Кулдаун после отклонённого авто-шага, с (сруб Kless): повтор «вверх-
@@ -48,22 +45,10 @@ var _hanging: bool = false
 var _hang_left: float = 0.0
 var _in_water: bool = false
 var _water_level: float = 0.0
-var _head_below: bool = false
-## Чью голову нашли под ногами (meta узла HeadTop; 0 — своя/чужая без meta).
-var _head_peer: int = 0
 ## Ближайший интерактивный объект (подсказка HUD, удержание E; П5).
 var _interactable: Interactable = null
 ## Накопленное удержание E у объекта с hold_time > 0, с.
 var _hold_accum: float = 0.0
-## «За руку» (раздел 9.5): peer ведущего, чьим ведомым я являюсь (0 — никого).
-var _hand_leader_peer: int = 0
-## «За руку»: peer моего ведомого (0 — никого; веду не больше одного).
-var _hand_follower_peer: int = 0
-## Приглашение «за руку»: от кого и сколько секунд осталось принимать, с.
-var _invite_peer: int = 0
-var _invite_left: float = 0.0
-## Прыгал ли ведущий в прошлом кадре (повтор прыжков, раздел 9.5).
-var _leader_was_jumping: bool = false
 ## Сидение у костра (раздел 9.6): индекс места и ожидание подтверждения
 ## вставания (движение уже послано хосту, новое событие ещё не пришло).
 var _sitting: bool = false
@@ -79,12 +64,10 @@ var _foot_fx: FootFx = null
 
 func _ready() -> void:
 	add_to_group(GROUP)
-	# Слой 2 — игроки (для Area3D: удар, плита), маска — только мир: игроки
-	# проходят друг сквозь друга (раздел 5), слой голов включается на лету.
+	# Слой 2 — игроки (для Area3D: удар), маска — только мир: игроки
+	# проходят друг сквозь друга (раздел 5).
 	collision_layer = 2
 	collision_mask = 1
-	# Собственная голова не должна ловить собственную капсулу.
-	$HeadTop.add_collision_exception_with(self)
 	# Ходьба по склонам (доработка-2 П5.13, П2): пологие склоны холмов
 	# (включая крутые диагонали ~52°) — пол, отвесные кромки и скалы — стена.
 	floor_max_angle = deg_to_rad(B.walk_max_slope_deg)
@@ -92,8 +75,6 @@ func _ready() -> void:
 	# Player — всегда локальный игрок (RemotePlayer отдельно): с него Net
 	# берёт снапшоты и позицию для проверок хоста (раздел 10).
 	Net.register_local_player(self)
-	EventBus.hand_link.connect(_on_hand_link)
-	EventBus.hand_invite.connect(_on_hand_invite)
 	EventBus.campfire_seats.connect(_on_campfire_seats)
 	if Session.bot:
 		_bot = BotController.new()
@@ -109,7 +90,6 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_jumped = false
-	_update_invite_timer(delta)
 	if _sitting:
 		if _stand_input():
 			stand_up_from_seat()
@@ -126,16 +106,10 @@ func _physics_process(delta: float) -> void:
 			_end_attack()
 
 	var wish := _wish_direction()
-	if _hand_leader_peer != 0:
-		# Ведомый игнорирует свой ввод и идёт за ведущим (раздел 9.5).
-		wish = _follow_leader()
-	else:
-		_move_horizontally(wish, delta)
+	_move_horizontally(wish, delta)
 	_apply_gravity_or_buoyancy(delta)
-	if _hand_leader_peer == 0:
-		_update_jump(delta)
+	_update_jump(delta)
 	_limit_slope_climb()
-	_update_head_collision()
 	var was_floor := is_on_floor()
 	move_and_slide()
 	# Анти-подскок на гребнях (доработка-2 П5.13, П2): срыв с пола без
@@ -156,121 +130,7 @@ func _physics_process(delta: float) -> void:
 	_turn_model(wish, delta)
 	if _attack_pressed():
 		_try_attack()
-	if _hand_pressed():
-		_handle_hand_key()
 	_update_interaction(delta)
-
-
-# --- «За руку» (раздел 9.5) ---
-
-## Хост подтвердил связь (rpc_hand_link): запоминаем роль. Ведущий сбавляет
-## бег до более медленного из цепочки (раздел 17), ведомый начинает следование.
-func _on_hand_link(leader_peer: int, follower_peer: int, on: bool) -> void:
-	if leader_peer == Net.local_peer_id:
-		_hand_follower_peer = follower_peer if on else 0
-	if follower_peer == Net.local_peer_id:
-		_hand_leader_peer = leader_peer if on else 0
-		_leader_was_jumping = false
-	# Любое событие с нами гасит подсказку-приглашение (приняли или разорвали).
-	if leader_peer == Net.local_peer_id or follower_peer == Net.local_peer_id:
-		_invite_peer = 0
-
-
-## Приглашение взять за руку (раздел 9.5): живёт hand_invite_time, ответ — F.
-func _on_hand_invite(by_peer: int, _by_name: String) -> void:
-	if _hand_leader_peer != 0 or _hand_follower_peer != 0:
-		return
-	_invite_peer = by_peer
-	_invite_left = B.hand_invite_time
-
-
-func _update_invite_timer(delta: float) -> void:
-	if _invite_peer != 0:
-		_invite_left -= delta
-		if _invite_left <= 0.0:
-			_invite_peer = 0
-
-
-## F — «взять за руку / отпустить» (разделы 5, 9.5): связан — отпустить,
-## есть приглашение — принять, рядом игрок — позвать.
-func _handle_hand_key() -> void:
-	if _hand_leader_peer != 0 or _hand_follower_peer != 0:
-		Net.request_hand_release()
-		return
-	if _invite_peer != 0:
-		var from_peer := _invite_peer
-		_invite_peer = 0
-		Net.accept_hand_invite(from_peer)
-		return
-	var target := _nearest_remote_for_hand()
-	if target != 0:
-		Net.request_hand_link(target)
-
-
-## Ближайший чужой игрок в радиусе hand_link_radius (0 — никого рядом).
-func _nearest_remote_for_hand() -> int:
-	var best := 0
-	var best_distance := B.hand_link_radius
-	for node in get_tree().get_nodes_in_group(RemotePlayer.GROUP):
-		var remote := node as RemotePlayer
-		if remote == null:
-			continue
-		var distance: float = remote.last_position().distance_to(global_position)
-		if distance <= best_distance:
-			best_distance = distance
-			best = remote.peer_id
-	return best
-
-
-## Узел ведущего на сцене (null — уже исчез: хост разорвёт связь, стоим).
-func _leader_remote() -> RemotePlayer:
-	if _hand_leader_peer == 0:
-		return null
-	for node in get_tree().get_nodes_in_group(RemotePlayer.GROUP):
-		var remote := node as RemotePlayer
-		if remote != null and remote.peer_id == _hand_leader_peer:
-			return remote
-	return null
-
-
-## Шаг ведомого (раздел 9.5): персонаж стремится к точке в
-## hand_follow_distance позади-сбоку интерполированной позиции ведущего
-## (скорость ограничена, коллизии работают через move_and_slide), прыжки
-## ведущего повторяются. Возвращает направление движения (поворот модели
-## и автоподъём) или ноль — стоять.
-func _follow_leader() -> Vector3:
-	var leader := _leader_remote()
-	if leader == null:
-		return Vector3.ZERO
-	var forward := Vector3(sin(leader.model_yaw()), 0.0, cos(leader.model_yaw()))
-	var right := Vector3(forward.z, 0.0, -forward.x)
-	var target: Vector3 = leader.last_position() \
-		- forward * B.hand_follow_distance * 0.8 + right * B.hand_follow_distance * 0.6
-	var to_target := target - global_position
-	to_target.y = 0.0
-	var distance := to_target.length()
-	if distance > B.hand_break_distance + B.ping_slack:
-		# Дальше разрыва: хост вот-вот оборвёт связь — стоим без рывка.
-		velocity.x = 0.0
-		velocity.z = 0.0
-		_leader_was_jumping = leader.is_jumping()
-		return Vector3.ZERO
-	if distance > 0.15:
-		var speed := minf(distance * B.hand_follow_gain, B.hand_follow_speed)
-		velocity.x = to_target.x / distance * speed
-		velocity.z = to_target.z / distance * speed
-	else:
-		velocity.x = 0.0
-		velocity.z = 0.0
-	# Прыжки ведущего повторяются (раздел 9.5): на отрыве и с земли.
-	var leader_jumping := leader.is_jumping()
-	if leader_jumping and not _leader_was_jumping and is_on_floor():
-		velocity.y = B.jump_speed
-		_jump_cut_done = true
-		# Это прыжок (анти-подскок и срезка тяги склона его не гасят).
-		_jumped = true
-	_leader_was_jumping = leader_jumping
-	return to_target / distance if distance > 0.15 else Vector3.ZERO
 
 
 # --- Сидение у костра (раздел 9.6) ---
@@ -436,11 +296,6 @@ func _attack_pressed() -> bool:
 	return Input.is_action_just_pressed("attack")
 
 
-## F — «взять за руку / отпустить» (раздел 9.5); бот за руку не берётся.
-func _hand_pressed() -> bool:
-	return _bot == null and Input.is_action_just_pressed("hand_hold")
-
-
 func _move_horizontally(wish: Vector3, delta: float) -> void:
 	var walking: bool = Input.is_action_pressed("walk") if _bot == null else false
 	var speed: float = B.walk_speed if walking else B.run_speed
@@ -533,15 +388,7 @@ func _update_jump(delta: float) -> void:
 	else:
 		_jump_buffer = maxf(_jump_buffer - delta, 0.0)
 	if _jump_buffer > 0.0 and (_coyote > 0.0 or _in_water):
-		var speed := B.jump_speed
-		if is_on_floor() and _head_below:
-			# Прыжок с головы другого игрока усилен (раздел 5) — базовая
-			# подсадка без бонусов (характеристики убраны, П5.8 часть D).
-			# Факт подсадки — хост рассылает всем для очков «Встреч» (раздел 13).
-			speed = JumpMath.boosted_jump_speed(B)
-			if _head_peer != 0:
-				Net.request_boost(_head_peer)
-		velocity.y = speed
+		velocity.y = B.jump_speed
 		_jump_buffer = 0.0
 		_jumped = true
 		_coyote = 0.0
@@ -580,34 +427,6 @@ func _try_step_up(wish: Vector3) -> void:
 		global_position = before
 		velocity.y = 0.0
 		_step_fail_left = STEP_FAIL_COOLDOWN
-
-
-# --- Голова другого игрока (подсадка) ---
-
-## Включить столкновение со слоем голов, только если падаем и ступни выше
-## верхней грани бокса (условие HeadStand.can_stand); заодно запоминаем,
-## стоим ли прямо на голове (буст прыжка). Origin персонажа — в ногах,
-## поэтому ступни — это global_position.y, а луч ищет голову в полуметре
-## под ногами (чуть больше шага кадра при максимальной скорости падения).
-func _update_head_collision() -> void:
-	_head_below = false
-	_head_peer = 0
-	var allow := false
-	if velocity.y <= 0.0:
-		var from := global_position + Vector3.UP * 0.6
-		var to := from + Vector3.DOWN * (0.6 + 0.5)
-		var query := PhysicsRayQueryParameters3D.create(from, to, 1 << (HeadStand.LAYER_HEAD - 1), [get_rid()])
-		var hit := get_world_3d().direct_space_state.intersect_ray(query)
-		if hit:
-			var head_top_y: float = (hit["position"] as Vector3).y
-			var feet_y: float = global_position.y
-			allow = HeadStand.can_stand(feet_y, head_top_y, velocity.y, B.head_stand_epsilon)
-			_head_below = allow and feet_y - head_top_y < HEAD_BELOW_EPS
-			if _head_below:
-				# Чья это голова (RemotePlayer пишет peer_id в meta) — событие
-				# подсадки для «Встреч» (раздел 13).
-				_head_peer = int((hit["collider"] as Node).get_meta("peer_id", 0))
-	set_collision_mask_value(HeadStand.LAYER_HEAD, allow)
 
 
 # --- Удар (раздел 5) ---
@@ -655,26 +474,7 @@ func start_hang(point: Vector3) -> void:
 	Log.info("Висит у края (%.1f с)" % B.hang_time, "Player")
 
 
-## Помощник тянет: хост подтвердил rpc_pulled (раздел 9.1). Игрок
-## поднимается на кромку в точку цепляния — без штрафа и Камня духа.
-func pulled_up() -> void:
-	if not _hanging:
-		return
-	_hanging = false
-	velocity = Vector3.ZERO
-	global_position = _hang_point + Vector3(0.0, 0.05, 0.0)
-	_set_anim(Protocol.AnimState.IDLE)
-	visual.play_one_shot(Protocol.AnimState.PULLED_UP, 0.5)
-	EventBus.player_hang_ended.emit()
-	Log.info("Вытянут из расщелины", "Player")
-
-
-## Помощник начал тянуть: короткая анимация «помогает» (раздел 5).
-func helper_pull() -> void:
-	visual.play_one_shot(Protocol.AnimState.HELP_PULL, 0.6)
-
-
-## Висит ли у края расщелины (проверка хоста для вытягивания, раздел 9.1).
+## Висит ли у края расщелины (флаг снапшота, раздел 10).
 func is_hanging() -> bool:
 	return _hanging
 
@@ -749,14 +549,10 @@ func _update_animation() -> void:
 		# по покрытию и чуть больше обычной (было — Fx.puff).
 		_foot_fx.land(hspeed)
 	var moving := hspeed > B.anim_idle_speed
-	var linked := _hand_leader_peer != 0 or _hand_follower_peer != 0
 	if _in_water:
 		_set_anim(Protocol.AnimState.WALK if moving else Protocol.AnimState.IDLE)
 	elif not is_on_floor():
 		_set_anim(Protocol.AnimState.JUMP if velocity.y > 0.0 else Protocol.AnimState.FALL)
-	elif moving and linked:
-		# Пара на ходу — рука вытянута к партнёру (клип Walk_Hand).
-		_set_anim(Protocol.AnimState.HOLD_HAND)
 	elif moving:
 		# Ходьба/бег — по фактической скорости (Д2/Д3), не по вводу:
 		# сам клип (Walk/Jog/Sprint) и каденцию модель выбирает по скорости.
@@ -764,30 +560,12 @@ func _update_animation() -> void:
 			else Protocol.AnimState.RUN)
 	else:
 		_set_anim(Protocol.AnimState.IDLE)
-	# Темп ног (Д3): фактическая скорость; «за руку» — по более медленному
-	# из пары, чтобы ведомого не тащило быстрее его шагов.
-	var tempo := hspeed
-	if linked and moving:
-		var partner := _hand_partner_speed()
-		if partner >= 0.0:
-			tempo = minf(tempo, partner)
-	visual.set_locomotion_speed(tempo)
+	# Темп ног (Д3): фактическая скорость.
+	visual.set_locomotion_speed(hspeed)
 	# Частицы из-под ног (переделка П9): детект шагов по костям стоп;
 	# в воде их нет (там круги Fx.water_ring), в воздухе — тоже.
 	_foot_fx.update(hspeed, is_on_floor() and not _in_water, global_position)
 	_was_on_floor = is_on_floor()
-
-
-## Скорость партнёра по руке, м/с; −1 — партнёр недоступен (нет ремоута).
-func _hand_partner_speed() -> float:
-	var peer := _hand_leader_peer if _hand_leader_peer != 0 else _hand_follower_peer
-	if peer == 0:
-		return -1.0
-	for node in get_tree().get_nodes_in_group(RemotePlayer.GROUP):
-		var remote := node as RemotePlayer
-		if remote != null and remote.peer_id == peer:
-			return remote.speed_estimate()
-	return -1.0
 
 
 func _set_anim(state: int) -> void:
@@ -824,10 +602,6 @@ func snapshot_flags() -> int:
 		flags |= Protocol.FLAG_HANGING
 	if _sitting:
 		flags |= Protocol.FLAG_SITTING
-	if _hand_follower_peer != 0:
-		flags |= Protocol.FLAG_HAND_HELD
-	if _hand_leader_peer != 0:
-		flags |= Protocol.FLAG_LED_BY_HAND
 	return flags
 
 

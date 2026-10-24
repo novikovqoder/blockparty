@@ -1,8 +1,8 @@
 # Тесты физических коллизий мира (vfx-fix, баг 2): каждый тип предмета
 # раскладки либо имеет коллизию (PropMeshes.collision_size), либо числится
 # в IslandGen.PASS_THROUGH_TYPES; интерактивные узлы, которые не проходят
-# через IslandGen (костёр, мята, вехи, квестовые маяки, сундук, камни
-# духа), имеют StaticBody3D на слое 1 — его чувствует маска игрока.
+# через IslandGen (костёр, камни духа), имеют StaticBody3D на слое 1 —
+# его чувствует маска игрока.
 extends GutTest
 
 const EPS: float = 0.01
@@ -75,12 +75,6 @@ func test_campfire_blocks_player() -> void:
 	var fire := Campfire.new()
 	add_child_autofree(fire)
 	_assert_solid_body(fire, "костёр", Campfire.HEARTH_RADIUS)
-
-
-func test_ruin_chest_is_solid() -> void:
-	var chest := RuinChest.new()
-	add_child_autofree(chest)
-	_assert_solid_body(chest, "сундук", RuinChest.BODY_SIZE.x * 0.5)
 
 
 func test_respawn_stone_is_solid() -> void:

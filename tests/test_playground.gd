@@ -1,6 +1,6 @@
 # Интеграционные тесты объектов площадки П1 (раздел 6 SPEC): вода — персонаж
-# плавает на поверхности, плита — нажимается стоящим игроком. Числа плавания
-# и хода плиты — в balance.tres, здесь проверяется поведение узлов.
+# плавает на поверхности. Числа плавания — в balance.tres, здесь проверяется
+# поведение узлов. Плита руин удалена с наследием Blockparty (born-unblessed).
 extends GutTest
 
 const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
@@ -46,29 +46,3 @@ func test_swimming_on_water_surface() -> void:
 	assert_true(surfaced, "плавает на поверхности (ноги ≈ −0.9)")
 	# Скорость в воде ограничена шагом — прямая проверка формулы игрока.
 	assert_lt(absf(player.velocity.y), 3.0, "вертикальная скорость плавная")
-
-
-func test_pressure_plate_pressed_by_player() -> void:
-	var world := Node3D.new()
-	add_child_autofree(world)
-	_box(world, Vector3(12, 1, 12), Vector3(0, -0.5, 0))
-	var plate: PressurePlate = load("res://gameplay/activities/pressure_plate.tscn").instantiate()
-	world.add_child(plate)
-	plate.position = Vector3(0, 0, 0)
-	var player := _player_on(world, Vector3(0, 1.3, 0))
-	var pressed := false
-	for i: int in range(60):
-		await get_tree().physics_frame
-		if plate.is_pressed():
-			pressed = true
-			break
-	assert_true(pressed, "плита нажата стоящим игроком")
-	# Сходим с плиты — отпускает.
-	player.global_position = Vector3(5, 1.0, 0)
-	var released := false
-	for i: int in range(60):
-		await get_tree().physics_frame
-		if not plate.is_pressed():
-			released = true
-			break
-	assert_true(released, "плита отпустила")

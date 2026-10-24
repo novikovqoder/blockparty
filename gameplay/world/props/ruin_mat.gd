@@ -10,7 +10,6 @@ class_name RuinMat
 extends RefCounted
 
 const SHADER: Shader = preload("res://assets/shaders/ruin_masonry.gdshader")
-const PAL: Palette = preload("res://assets/palette.tres")
 const MASONRY_TEX: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/old_stone_wall_02/old_stone_wall_02_diffuse_2k.jpg")
 const MASONRY_NORMAL: Texture2D = preload(
@@ -61,9 +60,9 @@ static func for_type(type: StringName) -> Material:
 	return material
 
 
-## Материал плиты ворот (RuinGate) и постаментов плит: та же кладка,
-## темнее и почти без мха — притолока вытерлась руками, плиты ходят
-## в гнёздах. Отдельная запись кэша: узел ворот не из MultiMesh.
+## Материал Камня духа (respawn_stone): та же кладка, темнее и почти
+## без мха — притёртый руками камень. Отдельная запись кэша: Камень —
+## не MultiMesh-предмет.
 static func panel() -> Material:
 	if WorldMaterials.want_flat():
 		return _flat()
@@ -79,22 +78,6 @@ static func panel() -> Material:
 	material.set_shader_parameter("tint", Vector3(0.66, 0.7, 0.78))
 	material.set_shader_parameter("moss_amount", 0.12)
 	_cache["panel"] = material
-	return material
-
-
-## Материал каменного постамента плит (RuinPlate): кладка темнее стен,
-## без мха — рабочий камень у тропы. BaseMaterial3D с текстурой: плит
-## три, материал локальный (эмиссия нажатия переключается у каждого).
-static func plate_stone() -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	if WorldMaterials.want_flat():
-		material.albedo_color = PAL.ruin_dark.darkened(0.1)
-		return material
-	material.albedo_texture = MASONRY_TEX
-	material.albedo_color = Color(0.62, 0.64, 0.68)
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	material.uv1_scale = Vector3(0.6, 0.25, 0.6)
-	material.roughness = 0.9
 	return material
 
 

@@ -6,7 +6,7 @@
 # на радиус игрока). Предмет выше MAX_STEP (забор, ствол) — барьер;
 # ниже (кольцо валунов костра, гребень стены каньона) —
 # ступень, персонаж перешагивает автоподъёмом. Точка достижима, если занята
-# клетка в радиусе подхода 1.6 м — у лавки или плиты игрок останавливается
+# клетка в радиусе подхода 1.6 м — у лавки игрок останавливается
 # рядом, а не в центре.
 extends GutTest
 
@@ -41,9 +41,9 @@ func _reachable(reach: Dictionary, point: Vector3) -> bool:
 func test_mechanics_reachable_with_fill() -> void:
 	# Все механики и соло-пути достижимы с площади при полном наполнении:
 	# спавны зон, камни духа (возрождение), костёр и лавки (посадка),
-	# плиты и ворота руин, сундук (внутри двора — через проломы или
-	# открывшиеся ворота; рама ruin_gate проходима: решётку держит узел
-	# RuinGate по механике плит), конец причала, HangPoint расщелины,
+	# ворота руин (декоративная рама — проём всегда открыт, механика
+	# плит удалена с наследием born-unblessed), конец причала, HangPoint
+	# расщелины,
 	# участки деревни (палисадники без домиков — срубы убраны в доработке
 	# П5.13, подход к будущим домам не зарос), места жителей и обе кромки
 	# обоих мостков через каньон. Смотровых площадок в списке НЕТ —
@@ -61,11 +61,10 @@ func test_mechanics_reachable_with_fill() -> void:
 	points.append({"name": "костёр", "pos": fire["center"]})
 	for bench: Vector3 in fire["benches"]:
 		points.append({"name": "лавка %s" % bench, "pos": bench})
-	var ruins: Dictionary = data["poi"]["ruins"]
-	for plate: Vector3 in ruins["plates"]:
-		points.append({"name": "плита %s" % plate, "pos": plate})
-	points.append({"name": "ворота руин", "pos": ruins["gate_center"]})
-	points.append({"name": "сундук руин", "pos": ruins["chest"]})
+	# Плиты и сундук руин удалены с наследием (born-unblessed) — осталась
+	# рама ворот (проём всегда открыт).
+	points.append({"name": "ворота руин",
+		"pos": data["poi"]["ruins"]["gate_center"]})
 	points.append({"name": "конец причала", "pos": data["poi"]["pier"]["deck_end"]})
 	for point: Vector3 in data["hang"]["points"]:
 		points.append({"name": "HangPoint %s" % point, "pos": point})

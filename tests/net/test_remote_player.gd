@@ -49,18 +49,13 @@ func test_model_matches_player_appearance() -> void:
 		"мусорная причёска заменена допустимой для пола")
 
 
-func test_node_has_name_and_head_collider() -> void:
+func test_node_has_name_label() -> void:
 	var remote := _make_remote()
 	assert_eq(remote.player_name, "Тест", "ник сохранён")
 	var label := remote.get_node_or_null("NameLabel") as Label3D
 	assert_not_null(label, "ник — Label3D над головой")
 	if label != null:
 		assert_eq(label.text, "Тест", "текст ника")
-	var head := remote.get_node_or_null("HeadTop") as AnimatableBody3D
-	assert_not_null(head, "коллайдер головы на месте")
-	if head != null:
-		assert_eq(head.collision_layer, 1 << (HeadStand.LAYER_HEAD - 1), "слой голов")
-		assert_eq(int(head.get_meta("peer_id")), 7, "метка peer_id для подсадки")
 
 
 func test_render_interpolates_between_snapshots() -> void:

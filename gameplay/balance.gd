@@ -74,40 +74,9 @@ extends Resource
 ## Скорость мягкого следования за персонажем (экспоненциальное сглаживание).
 @export var camera_follow_speed: float = 10.0
 
-@export_group("Подсадка на голову (раздел 5)")
-## Коллайдер головы на макушке: плоский бокс, отдельный физический слой.
-@export var head_box_size: Vector3 = Vector3(0.6, 0.1, 0.6)
-## Усиление прыжка с головы другого игрока (хватает на уступ в 3 блока).
-@export var head_jump_boost: float = 1.3
-## Допуск для условия «ступни выше верхней грани бокса», м (кадр контакта).
-@export var head_stand_epsilon: float = 0.05
-
 @export_group("Расщелина: состояние «Висит» (раздел 9.1)")
 ## Сколько секунд упавший висит у края без помощи, с.
 @export var hang_time: float = 10.0
-
-@export_group("Расщелина: вытягивание (раздел 9.1)")
-## Радиус от точки HangPoint, в котором работает помощь, м.
-@export var pull_radius: float = 1.5
-## Удержание E для вытягивания, с — базовое для всех (характеристики
-## убраны, П5.8 часть D: игроки равны).
-@export var pull_hold_time: float = 0.5
-
-@export_group("За руку (раздел 9.5)")
-## Радиус, в котором F берёт ближайшего игрока за руку, м.
-@export var hand_link_radius: float = 2.0
-## Сколько секунд у приглашённого действует подсказка «F — принять», с.
-@export var hand_invite_time: float = 5.0
-## Связь рвётся сама при большем расстоянии между парой, м.
-@export var hand_break_distance: float = 4.0
-## Ведомый держится на этом расстоянии позади-сбоку ведущего, м.
-@export var hand_follow_distance: float = 1.0
-## Жёсткость следования ведомого (скорость = отклонение × жёсткость).
-@export var hand_follow_gain: float = 10.0
-## Предел скорости следования ведомого, м/с.
-@export var hand_follow_speed: float = 7.0
-## Максимум людей в цепочке («C держит B, B держит A», раздел 9.5).
-@export var hand_chain_max: int = 4
 
 @export_group("Места у костра (раздел 9.6)")
 ## Проверка хоста «игрок у лавки»: расстояние по горизонтали до места, м.
@@ -119,20 +88,7 @@ extends Resource
 @export var campfire_seat_floor: float = 0.45
 ## Скольких сидящих огонь принимает за «компанию» (разгорается), раздел 9.6.
 @export var campfire_company_size: int = 2
-
-@export_group("Ворота руин и сундук (разделы 8, 9.2)")
-## Радиус нажимной плиты: игрок «стоит на плите» в нём по горизонтали, м.
-@export var plate_radius: float = 0.9
-## Окно высоты стоящего на плите (плита y ± это), м.
-@export var plate_height_window: float = 1.2
-## Запасной путь одиночки: сколько секунд любой игрок стоит у закрытых
-## ворот, чтобы они открылись сами, с.
-@export var gate_open_wait: float = 60.0
-## Радиус зоны «у ворот» для запасного пути, м.
-@export var gate_near_radius: float = 4.5
-## Открытые ворота и сундук сбрасываются через это время, с (раздел 8: 10 мин).
-@export var gate_reset_sec: float = 600.0
-## Период проверки активностей хостом (плиты, зоны), с.
+## Период проверки активностей хостом (места, лестницы), с.
 @export var activity_tick: float = 0.1
 
 @export_group("Смотровые уступы (раздел 9.3)")
@@ -232,18 +188,9 @@ extends Resource
 ## Секунда его голоса и лимит.
 @export var pts_voice_heard: float = 0.3
 @export var pts_voice_heard_max: float = 25.0
-## Вытянул меня / я вытянул его (одно число на оба вида).
-@export var pts_pull: float = 10.0
-## Каждые 30 с за руку и лимит.
-@export var pts_hand_held: float = 4.0
-@export var pts_hand_held_max: float = 16.0
 ## Каждые 30 с у костра и лимит.
 @export var pts_campfire: float = 3.0
 @export var pts_campfire_max: float = 12.0
-## Вместе открыли ворота руин.
-@export var pts_gate_open: float = 6.0
-## Подсадил меня / я подсадил его.
-@export var pts_boost: float = 5.0
 
 @export_group("Частицы шагов (переделка П9)")
 ## Порог «стопа на земле» в пространстве скелета героя BU, м: пересечение

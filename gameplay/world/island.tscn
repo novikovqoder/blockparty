@@ -6,9 +6,6 @@
 [ext_resource type="Script" path="res://gameplay/world/water_area.gd" id="4_qlma1"]
 [ext_resource type="Script" path="res://gameplay/activities/hang_area.gd" id="5_tnphj"]
 [ext_resource type="Script" path="res://gameplay/activities/hang_point.gd" id="6_4xjkw"]
-[ext_resource type="Script" path="res://gameplay/activities/ruin_gate.gd" id="7_dtivm"]
-[ext_resource type="Script" path="res://gameplay/activities/ruin_chest.gd" id="8_u1jyd"]
-[ext_resource type="Script" path="res://gameplay/activities/ruin_plate.gd" id="9_jkq02"]
 [ext_resource type="Script" path="res://gameplay/activities/lookout_ladder.gd" id="10_okhm0"]
 [ext_resource type="Script" path="res://gameplay/world/respawn_stone.gd" id="11_1vd5a"]
 [ext_resource type="Script" path="res://gameplay/world/campfire.gd" id="12_s8nd1"]
@@ -104,97 +101,77 @@ script = ExtResource("5_tnphj")
 [node name="@CollisionShape3D@4" type="CollisionShape3D" parent="Crevasse" unique_id=702823613]
 shape = SubResource("BoxShape3D_4osf0")
 
-[node name="HangPoint1" type="Area3D" parent="Crevasse" unique_id=487698108]
+[node name="HangPoint1" type="Node3D" parent="Crevasse" unique_id=487698108]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint2" type="Area3D" parent="Crevasse" unique_id=622943871]
+[node name="HangPoint2" type="Node3D" parent="Crevasse" unique_id=622943871]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint3" type="Area3D" parent="Crevasse" unique_id=1245079009]
+[node name="HangPoint3" type="Node3D" parent="Crevasse" unique_id=1245079009]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint4" type="Area3D" parent="Crevasse" unique_id=1061552645]
+[node name="HangPoint4" type="Node3D" parent="Crevasse" unique_id=1061552645]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint5" type="Area3D" parent="Crevasse" unique_id=747986392]
+[node name="HangPoint5" type="Node3D" parent="Crevasse" unique_id=747986392]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint6" type="Area3D" parent="Crevasse" unique_id=2100752808]
+[node name="HangPoint6" type="Node3D" parent="Crevasse" unique_id=2100752808]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint7" type="Area3D" parent="Crevasse" unique_id=1998267668]
+[node name="HangPoint7" type="Node3D" parent="Crevasse" unique_id=1998267668]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint8" type="Area3D" parent="Crevasse" unique_id=670876857]
+[node name="HangPoint8" type="Node3D" parent="Crevasse" unique_id=670876857]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint9" type="Area3D" parent="Crevasse" unique_id=1820419909]
+[node name="HangPoint9" type="Node3D" parent="Crevasse" unique_id=1820419909]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint10" type="Area3D" parent="Crevasse" unique_id=1131492718]
+[node name="HangPoint10" type="Node3D" parent="Crevasse" unique_id=1131492718]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint11" type="Area3D" parent="Crevasse" unique_id=303137593]
+[node name="HangPoint11" type="Node3D" parent="Crevasse" unique_id=303137593]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint12" type="Area3D" parent="Crevasse" unique_id=1230294119]
+[node name="HangPoint12" type="Node3D" parent="Crevasse" unique_id=1230294119]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint13" type="Area3D" parent="Crevasse" unique_id=1890539155]
+[node name="HangPoint13" type="Node3D" parent="Crevasse" unique_id=1890539155]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint14" type="Area3D" parent="Crevasse" unique_id=1840376779]
+[node name="HangPoint14" type="Node3D" parent="Crevasse" unique_id=1840376779]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint15" type="Area3D" parent="Crevasse" unique_id=1845464463]
+[node name="HangPoint15" type="Node3D" parent="Crevasse" unique_id=1845464463]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint16" type="Area3D" parent="Crevasse" unique_id=1987210536]
+[node name="HangPoint16" type="Node3D" parent="Crevasse" unique_id=1987210536]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 3.6, 6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint17" type="Area3D" parent="Crevasse" unique_id=124225538]
+[node name="HangPoint17" type="Node3D" parent="Crevasse" unique_id=124225538]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 3.6, -6)
 script = ExtResource("6_4xjkw")
 
-[node name="HangPoint18" type="Area3D" parent="Crevasse" unique_id=2013485461]
+[node name="HangPoint18" type="Node3D" parent="Crevasse" unique_id=2013485461]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 3.6, 6)
 script = ExtResource("6_4xjkw")
-
-[node name="RuinGate" type="Node3D" parent="." unique_id=667649429]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 58, 3, -37.5)
-script = ExtResource("7_dtivm")
-
-[node name="RuinChest" type="Node3D" parent="." unique_id=2025939649]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 58, 3, -50)
-script = ExtResource("8_u1jyd")
-
-[node name="Plate1" type="Node3D" parent="." unique_id=464052551]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 54, 3, -41)
-script = ExtResource("9_jkq02")
-
-[node name="Plate2" type="Node3D" parent="." unique_id=277214012]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 58, 3, -41)
-script = ExtResource("9_jkq02")
-
-[node name="Plate3" type="Node3D" parent="." unique_id=1965280084]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 62, 3, -41)
-script = ExtResource("9_jkq02")
 
 [node name="LookoutLadder1" type="Area3D" parent="." unique_id=2070226841]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -72, 10, 34)

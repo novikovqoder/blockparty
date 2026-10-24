@@ -32,9 +32,6 @@ var world_time_offset_sec: float = 0.0
 
 ## Авторитет хоста: активности и социальные механики П5 (разделы 7, 9).
 var activity := ActivityAuthority.new()
-## Связи «за руку» (раздел 9.5): leader → follower; заполняется rpc_hand_link
-## у всех одинаково — для скорости цепочки (раздел 17) и HUD.
-var hand_links: Dictionary = {}
 ## Последнее состояние мира от хоста (клиент; применяется сценой мира).
 var last_world_state: Dictionary = {}
 
@@ -50,7 +47,7 @@ var _snap_accum: float = 0.0
 var _aoi := AoiFilter.new()
 ## peer_id -> последняя позиция из снапшота (AOI на хосте, проверки ударов).
 var _peer_pos: Dictionary = {}
-## peer_id -> флаги последнего снапшота (висит/сидит/за руку — проверки хоста П5).
+## peer_id -> флаги последнего снапшота (сидит — проверки хоста П5).
 var _peer_flags: Dictionary = {}
 var _traffic_accum: float = 0.0
 var _traffic_sent_prev: int = 0
@@ -58,7 +55,7 @@ var _traffic_log_accum: int = 0
 var _traffic_received_prev: int = 0
 var _net_log: bool = false
 var _ping_accum: float = 0.0
-## Накопитель тика активностей хоста (плиты, зоны; разделы 9.2+).
+## Накопитель тика активностей хоста (зоны; разделы 9.3+).
 var _activity_accum: float = 0.0
 
 
@@ -89,7 +86,6 @@ func _ready() -> void:
 				# Мир создан вместе с сервером: часы мира пошли (раздел 7).
 				_start_world_clock()
 				activity.clear()
-				hand_links.clear()
 				_aoi.clear()
 				_peer_pos.clear()
 				_peer_flags.clear()
@@ -150,7 +146,6 @@ func _on_steam_lobby_joined(lobby_id: int, as_owner: bool) -> void:
 		# Мир создан вместе с хостом: часы мира пошли (раздел 7), как в dev-host.
 		_start_world_clock()
 		activity.clear()
-		hand_links.clear()
 		_aoi.clear()
 		_peer_pos.clear()
 		_peer_flags.clear()
@@ -316,7 +311,6 @@ func rpc_hello(player_name: String, appearance: PackedByteArray) -> void:
 		"world_time_offset_sec": world_time_offset_sec,
 		"players": _roster_entries(),
 		"activities": {
-			"ruins": activity.ruins_state(),
 			"ladders": activity.ladders_state(),
 			"seats": activity.seats_state(),
 		},
@@ -506,226 +500,6 @@ func _send_own_snapshot(delta: float) -> void:
 		_send(func() -> void: rpc_id(1, "rpc_snapshot", data), true)
 
 
-# --- Подсадка на голову: событие для «Встреч» (разделы 5, 13) ---
-
-## Прыжок с головы другого игрока (раздел 5): прыгнувший клиент сообщает
-## хосту, с чьей головы прыгнул (meta узла HeadTop) — хост рассылает факт
-## всем, очки «подсадил меня / я подсадил его» считает каждый клиент
-## (Interactions, раздел 13). Хост проверяет только, что оба в мире.
-func request_boost(base_peer: int) -> void:
-	if is_host():
-		_broadcast_boosted(local_peer_id, base_peer)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_boost", base_peer), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_boost(base_peer: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_broadcast_boosted(multiplayer.get_remote_sender_id(), base_peer)
-
-
-func _broadcast_boosted(jumper_peer: int, base_peer: int) -> void:
-	if base_peer == jumper_peer or not _peer_in_world(jumper_peer) or not _peer_in_world(base_peer):
-		return
-	if is_networked():
-		_send(func() -> void: rpc_boosted.rpc(jumper_peer, base_peer), false)
-	else:
-		rpc_boosted(jumper_peer, base_peer)
-
-
-## Хост разослал факт подсадки (раздел 13): jumper прыгнул с головы base.
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_boosted(jumper_peer: int, base_peer: int) -> void:
-	EventBus.player_boosted.emit(base_peer, jumper_peer)
-
-
-# --- Кооп-механики П5 (раздел 9; исходы подтверждает хост) ---
-
-## Помощник удержал E у точки, где висит target (раздел 9.1): просим хост
-## подтвердить вытягивание.
-func request_pull(target_peer: int) -> void:
-	if is_host():
-		_handle_pull(local_peer_id, target_peer)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_request_pull", target_peer), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_request_pull(target_peer: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_pull(multiplayer.get_remote_sender_id(), target_peer)
-
-
-## Проверка хоста (раздел 9.1): target висит (флаг снапшота), helper рядом
-## (дистанция с допуском на пинг). Подтверждение — всем.
-func _handle_pull(helper_peer: int, target_peer: int) -> void:
-	var target_pos: Vector3 = _peer_position(target_peer)
-	var helper_pos: Vector3 = _peer_position(helper_peer)
-	if target_pos == _POS_UNKNOWN or helper_pos == _POS_UNKNOWN:
-		Log.warn("Вытягивание %d → %d отклонено: нет позиций" % [helper_peer, target_peer], "Net")
-		return
-	var target_hanging: bool = (
-		(int(_peer_flags.get(target_peer, 0)) & Protocol.FLAG_HANGING) != 0
-		if target_peer != local_peer_id
-		else (_local_player != null and _local_player.is_hanging())
-	)
-	var event := activity.try_pull(
-		target_peer, helper_peer, world_time_sec(), target_hanging,
-		target_pos.distance_to(helper_pos), B,
-	)
-	if event.is_empty():
-		return
-	Log.info(
-		"Вытягивание подтверждено: %d вытащил %d" % [helper_peer, target_peer], "Net"
-	)
-	_broadcast_pulled(helper_peer, target_peer)
-
-
-## Хост подтвердил вытягивание (раздел 9.1): анимации у обоих,
-## событие для Interactions (у каждого клиента свои очки).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_pulled(helper_peer: int, target_peer: int) -> void:
-	EventBus.player_pulled.emit(helper_peer, target_peer)
-	if target_peer == local_peer_id and _local_player != null:
-		_local_player.pulled_up()
-
-
-func _broadcast_pulled(helper_peer: int, target_peer: int) -> void:
-	if is_networked():
-		_send(func() -> void: rpc_pulled.rpc(helper_peer, target_peer), false)
-	else:
-		rpc_pulled(helper_peer, target_peer)
-
-
-# --- «За руку» (раздел 9.5; хост рассылает факт, движение — клиент ведомого) ---
-
-## Игрок нажал F рядом с другим (раздел 9.5): просим хост переслать
-## приглашение («F — принять» на 5 с).
-func request_hand_link(target_peer: int) -> void:
-	if is_host():
-		_handle_hand_invite(local_peer_id, target_peer)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_hand_invite", target_peer), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hand_invite(target_peer: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_hand_invite(multiplayer.get_remote_sender_id(), target_peer)
-
-
-## Релей приглашения: имя инициатора знает ростер хоста. Дистанцию и прочее
-## проверит логика при согласии — приглашение просто доходит.
-func _handle_hand_invite(from_peer: int, target_peer: int) -> void:
-	if from_peer == target_peer \
-			or not _peer_in_world(from_peer) or not _peer_in_world(target_peer):
-		return
-	var from_name := str(players[from_peer]["name"])
-	if is_networked() and target_peer != local_peer_id:
-		_send(func() -> void: rpc_id(target_peer, "rpc_hand_invited", from_peer, from_name), false)
-	else:
-		rpc_hand_invited(from_peer, from_name)
-
-
-## Приглашение дошло до адресата: подсказка «F — принять» (HUD, раздел 9.5).
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hand_invited(from_peer: int, from_name: String) -> void:
-	EventBus.hand_invite.emit(from_peer, from_name)
-
-
-## Приглашённый согласился (F в ответ, раздел 9.5).
-func accept_hand_invite(from_peer: int) -> void:
-	if is_host():
-		_handle_hand_accept(local_peer_id, from_peer)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_hand_accept", from_peer), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hand_accept(from_peer: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_hand_accept(multiplayer.get_remote_sender_id(), from_peer)
-
-
-## Проверка хоста: инициатор ведёт (leader), согласившийся ведомый (follower);
-## дистанция с допуском на пинг, роли и длина цепочки — в ActivityAuthority.
-func _handle_hand_accept(follower_peer: int, leader_peer: int) -> void:
-	var leader_pos := _peer_position(leader_peer)
-	var follower_pos := _peer_position(follower_peer)
-	if leader_pos == _POS_UNKNOWN or follower_pos == _POS_UNKNOWN:
-		return
-	var event := activity.try_hand_link(
-		leader_peer, follower_peer, leader_pos.distance_to(follower_pos), B
-	)
-	if event.is_empty():
-		return
-	Log.info(
-		"За руку: %d ведёт %d" % [int(event["leader"]), int(event["follower"])], "Net"
-	)
-	_broadcast_hand_link(int(event["leader"]), int(event["follower"]), true)
-
-
-## Отпустить (F любого из двоих, раздел 9.5).
-func request_hand_release() -> void:
-	if is_host():
-		_handle_hand_release(local_peer_id)
-	else:
-		_send(func() -> void: rpc_id(1, "rpc_hand_release"), false)
-
-
-@rpc("any_peer", "call_remote", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hand_release() -> void:
-	if not multiplayer.is_server():
-		return
-	_handle_hand_release(multiplayer.get_remote_sender_id())
-
-
-func _handle_hand_release(peer: int) -> void:
-	var event := activity.try_hand_release(peer)
-	if event.is_empty():
-		return
-	Log.info(
-		"За руку: %d и %d расцепились" % [int(event["leader"]), int(event["follower"])], "Net"
-	)
-	_broadcast_hand_link(int(event["leader"]), int(event["follower"]), false)
-
-
-## Хост разослал факт связи (раздел 9.5): клиент ведомого начинает следование,
-## оба игрока — анимации и скорость более медленного из цепочки (раздел 17).
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_hand_link(leader_peer: int, follower_peer: int, on: bool) -> void:
-	if on:
-		hand_links[leader_peer] = follower_peer
-	else:
-		hand_links.erase(leader_peer)
-	EventBus.hand_link.emit(leader_peer, follower_peer, on)
-
-
-func _broadcast_hand_link(leader: int, follower: int, on: bool) -> void:
-	if is_networked():
-		_send(func() -> void: rpc_hand_link.rpc(leader, follower, on), false)
-	else:
-		rpc_hand_link(leader, follower, on)
-
-
-## Цепочка связей вниз от игрока (сам + ведомые; раздел 9.5: цепочки до 4):
-## ведущий сбавляет бег до более медленного из всей цепочки (раздел 17).
-func hand_chain_below(peer_id: int) -> Array[int]:
-	var chain: Array[int] = [peer_id]
-	var current := peer_id
-	while hand_links.has(current) and chain.size() < Protocol.MAX_PLAYERS_HARD:
-		current = int(hand_links[current])
-		if chain.has(current):
-			break  # страховка от цикла в испорченном состоянии
-		chain.append(current)
-	return chain
-
-
 # --- Места у костра (раздел 9.6) ---
 
 ## Нажали E у свободной лавки (раздел 9.6): просим хоста подтвердить место.
@@ -868,38 +642,15 @@ func _broadcast_ladder(index: int, active: bool, expires_at: float) -> void:
 		rpc_ladder(index, active, expires_at)
 
 
-# --- Тик активностей хоста (раздел 9: плиты и зоны по снапшотам) ---
+# --- Тик активностей хоста (раздел 9: зоны по снапшотам) ---
 
-## Периодическая проверка активностей хостом: кто стоит на плитах руин,
-## есть ли игрок у закрытых ворот (запасной путь, раздел 9.2), истекли ли
-## лестницы смотровых (раздел 9.3). Узлы берёт из групп — остров у всех
-## одинаковый (раздел 6).
+## Периодическая проверка активностей хостом: освободились ли места у
+## костра (раздел 9.6), истекли ли лестницы смотровых (раздел 9.3).
+## Узлы берёт из групп — остров у всех одинаковый (раздел 6).
 func _tick_activities() -> void:
 	if not Session.in_world:
 		return
 	var entries := _world_player_entries()
-	var plates := _ruin_plates()
-	var plate_peers: Array[int] = []
-	for plate: RuinPlate in plates:
-		plate_peers.append(_peer_on_plate(plate, entries))
-	var gate := _first_node(RuinGate.GROUP)
-	var anyone_at_gate := false
-	if gate != null:
-		anyone_at_gate = _anyone_in_radius(entries, gate.global_position, B.gate_near_radius)
-	var event := activity.update_ruins_gate(
-		plate_peers, in_world_count(), anyone_at_gate, world_time_sec(), B
-	)
-	if not event.is_empty():
-		_open_ruins_event(event, entries)
-	# «За руку» (раздел 9.5): связь рвётся при расстоянии больше 4 м и когда
-	# кто-то из пары вышел из мира (событие — всем, как разрыв по F).
-	var hand_event := activity.update_hand_links(entries, B)
-	if not hand_event.is_empty():
-		Log.info(
-			"За руку: %d и %d расцепились (расстояние/выход из мира)"
-			% [int(hand_event["leader"]), int(hand_event["follower"])], "Net"
-		)
-		_broadcast_hand_link(int(hand_event["leader"]), int(hand_event["follower"]), false)
 	# Места у костра (раздел 9.6): вышедший из мира освобождает лавку.
 	activity.setup_seats(_campfire_seats().size())
 	var seat_event := activity.update_seats(entries)
@@ -916,18 +667,6 @@ func _tick_activities() -> void:
 	if not ladder_event.is_empty():
 		Log.info("Лестница смотровой %d скрылась (60 с истекли)" % [int(ladder_event["index"]) + 1], "Net")
 		_broadcast_ladder(int(ladder_event["index"]), false, -1.0)
-
-
-## Событие ворот руин от authority: лог и рассылка состояния всем.
-func _open_ruins_event(event: Dictionary, entries: Array[Dictionary]) -> void:
-	var openers: Array[int] = event.get("openers", [])
-	if event.has("opened"):
-		var how: String = "плиты" if not openers.is_empty() else "запасной путь"
-		Log.info("Ворота руин открыты (%s)" % how, "Net")
-	elif event.has("closed"):
-		Log.info("Ворота руин закрылись (10 минут истекли), сундук сброшен", "Net")
-	var state := activity.ruins_state()
-	_broadcast_ruins(bool(state["gate_open"]), state["plates"], openers)
 
 
 ## Все игроки в мире: {peer, pos, floor} — позиции и флаг «на земле»
@@ -949,43 +688,6 @@ func _world_player_entries() -> Array[Dictionary]:
 	return entries
 
 
-## Peer игрока, стоящего на плите (раздел 9.2): в радиусе по горизонтали,
-## в окне высоты и на земле; 0 — плита свободна.
-func _peer_on_plate(plate: RuinPlate, entries: Array[Dictionary]) -> int:
-	for entry: Dictionary in entries:
-		if not bool(entry["floor"]):
-			continue
-		var pos: Vector3 = entry["pos"]
-		if absf(pos.y - plate.global_position.y) > B.plate_height_window:
-			continue
-		var flat := pos - plate.global_position
-		flat.y = 0.0
-		if flat.length() <= B.plate_radius:
-			return int(entry["peer"])
-	return 0
-
-
-func _anyone_in_radius(entries: Array[Dictionary], center: Vector3, radius: float) -> bool:
-	for entry: Dictionary in entries:
-		var flat: Vector3 = entry["pos"] - center
-		flat.y = 0.0
-		if flat.length() <= radius:
-			return true
-	return false
-
-
-## Плиты у ворот в порядке имени узла (Plate1..Plate3 генерирует остров).
-func _ruin_plates() -> Array[RuinPlate]:
-	var plates: Array[RuinPlate] = []
-	for node in get_tree().get_nodes_in_group(RuinPlate.GROUP):
-		if node is RuinPlate:
-			plates.append(node as RuinPlate)
-	plates.sort_custom(
-		func(a: RuinPlate, b: RuinPlate) -> bool: return a.name.naturalcasecmp_to(b.name) < 0
-	)
-	return plates
-
-
 ## Лестницы смотровых в порядке имени узла (LookoutLadder1..4 — как LOOKOUTS).
 func _lookout_ladders() -> Array[LookoutLadder]:
 	var ladders: Array[LookoutLadder] = []
@@ -998,41 +700,12 @@ func _lookout_ladders() -> Array[LookoutLadder]:
 	return ladders
 
 
-func _first_node(group: StringName) -> Node3D:
-	for node in get_tree().get_nodes_in_group(group):
-		if node is Node3D:
-			return node as Node3D
-	return null
-
-
-## Хост разослал состояние ворот руин (раздел 9.2): узлы рисуют плиту/плиты/
-## крышку сундука, очки Interactions — участникам плит.
-@rpc("authority", "call_local", "reliable", Protocol.CHANNEL_RELIABLE)
-func rpc_ruins(open: bool, plates: Array, openers: Array) -> void:
-	EventBus.ruins_state.emit(open, plates, openers)
-
-
-func _broadcast_ruins(open: bool, plates: Array, openers: Array) -> void:
-	if is_networked():
-		_send(func() -> void: rpc_ruins.rpc(open, plates, openers), false)
-	else:
-		rpc_ruins(open, plates, openers)
-
-
 ## Применить активности из world_state (вход в любой момент, раздел 10):
-## открытые ворота и сундук — без повторных очков, висящие
-## лестницы — узлы рисуют сразу.
+## висящие лестницы — узлы рисуют сразу, сидящие у костра — места.
 func _apply_activities(state: Dictionary) -> void:
 	var activities: Dictionary = state.get("activities", {})
 	if activities.is_empty():
 		return
-	var ruins: Dictionary = activities.get("ruins", {})
-	if not ruins.is_empty():
-		EventBus.ruins_state.emit(
-			bool(ruins.get("gate_open", false)),
-			ruins.get("plates", []),
-			[],
-		)
 	for ladder: Dictionary in activities.get("ladders", []):
 		EventBus.ladder_state.emit(
 			int(ladder.get("index", -1)), true, float(ladder.get("until", -1.0))
@@ -1136,7 +809,6 @@ func _teardown_network() -> void:
 	_aoi.clear()
 	_seq = 0
 	last_world_state = {}
-	hand_links.clear()
 	activity.clear()
 	_activity_accum = 0.0
 	if was_steam:

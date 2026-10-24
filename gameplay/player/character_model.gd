@@ -239,8 +239,7 @@ func _process(delta: float) -> void:
 ## Применить локомоцию: клип по сглаженной скорости (граница Walk/Jog/
 ## Sprint — середины natural), темп scale = скорость/natural.
 func _apply_locomotion() -> void:
-	var clip := &"Walk_Hand" if _state == Protocol.AnimState.HOLD_HAND \
-		else CharacterAnims.locomotion_clip(_loco_display)
+	var clip := CharacterAnims.locomotion_clip(_loco_display)
 	if _playing_clip() != clip:
 		_play_clip(clip, CharacterAnims.speed_scale(clip, _loco_display))
 	else:
@@ -249,8 +248,7 @@ func _apply_locomotion() -> void:
 
 ## Локомоционные состояния: клип и каденция выбираются по скорости.
 func _is_locomotion(state: int) -> bool:
-	return state == Protocol.AnimState.WALK or state == Protocol.AnimState.RUN \
-		or state == Protocol.AnimState.HOLD_HAND
+	return state == Protocol.AnimState.WALK or state == Protocol.AnimState.RUN
 
 
 ## Покадровое продвижение анимации (съёмка GIF-серий, финал П5.8): при

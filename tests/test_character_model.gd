@@ -46,7 +46,7 @@ func test_attachment_points_on_skeleton() -> void:
 
 func test_feet_at_zero_and_head_under_collision() -> void:
 	# Точка опоры — у ступней, рост подогнан под коллизию
-	# (HEAD_TOP_Y 1.65 у player.tscn и remote_player.gd).
+	# (HEAD_TOP_Y 1.65 у player.tscn).
 	for gender: int in Appearance.GENDERS:
 		var model := _make(gender)
 		assert_between(

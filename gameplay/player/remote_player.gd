@@ -2,18 +2,15 @@
 # интерполяция буфера снапшотов (задержка 100 мс, экстраполяция до 150 мс,
 # телепорт при расхождении больше 5 м), поворот модели — по кратчайшей дуге.
 # Модель та же, что у локального игрока (визуал заменяем), ник — Label3D
-# в радиусе 40 м (раздел 6). Коллайдер головы — как у своего: плоский бокс
-# на макушке, слой LAYER_HEAD — на голову можно встать и подпрыгнуть выше
-# (подсадка, раздел 5). Движение ремоута клиентом владельца, здесь только
-# отображение. Эмоции/косметика — П5/П8.
+# в радиусе 40 м (раздел 6). Движение ремоута клиентом владельца, здесь
+# только отображение. Косметика — П5/П8. Подсадка на голову удалена
+# с наследием Blockparty (born-unblessed).
 class_name RemotePlayer
 extends Node3D
 
-## Высота коллайдера головы над ступнями и метки ника, м (как player.tscn;
-## рост героя BU — 1,8 м, П10).
-const HEAD_TOP_Y: float = 1.85
+## Высота метки ника над ступнями, м (рост героя BU — 1,8 м, П10).
 const NAME_LABEL_Y: float = 2.35
-## Группа узлов чужих игроков (HangPoint ищет висящих, П5).
+## Группа узлов чужих игроков (жители ищут для реакции, П6).
 const GROUP: StringName = &"remote_player"
 ## Сглаживание оценки скорости, 1/с (как LOCO_SMOOTH у модели).
 const SPEED_SMOOTH: float = 10.0
@@ -28,7 +25,7 @@ var _model: Node3D
 var _visual: CharacterVisual
 var _buffer := SnapshotBuffer.new()
 var _last_anim: int = -1
-## Флаги последнего снапшота (висит, сидит, за руку — раздел 10).
+## Флаги последнего снапшота (висит, сидит — раздел 10).
 var _flags: int = 0
 ## Оценка скорости по дельтам интерполированной позиции (Д3: темп ног
 ## ремоута — по фактической скорости, как у локального игрока).
@@ -71,19 +68,6 @@ func _ready() -> void:
 	label.outline_size = 12
 	label.visibility_range_end = 40.0
 	add_child(label)
-	# Голова — плоский бокс на макушке, слой голов (подсадка, раздел 5).
-	var head := AnimatableBody3D.new()
-	head.name = "HeadTop"
-	head.collision_layer = 1 << (HeadStand.LAYER_HEAD - 1)
-	head.collision_mask = 0
-	head.position = Vector3(0.0, HEAD_TOP_Y, 0.0)
-	head.set_meta("peer_id", peer_id)  # «с чьей головы прыгнул» — П5
-	add_child(head)
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(0.6, 0.1, 0.6)
-	shape.shape = box
-	head.add_child(shape)
 	# Частицы из-под ног (переделка П9): ребёнок самого узла (origin
 	# в ногах); порции по шагам включит setup_foot_fx (сцена мира передаст
 	# арт острова), дальше порога дальности — эффект выключен.
@@ -101,17 +85,6 @@ func apply_snapshot(snap: Dictionary, recv_msec: int) -> void:
 ## Висит ли игрок у края расщелины сейчас (флаг снапшота, раздел 10).
 func is_hanging() -> bool:
 	return (_flags & Protocol.FLAG_HANGING) != 0
-
-
-## Поворот модели из последнего снапшота (следование «за руку», раздел 9.5).
-func model_yaw() -> float:
-	return _model.rotation.y
-
-
-## Состояние аниматора из последнего снапшота (повтор прыжков ведущего):
-## только отрыв прыжка — падение с уступа ведомый повторяет «сходом» с края.
-func is_jumping() -> bool:
-	return _last_anim == Protocol.AnimState.JUMP
 
 
 ## Отрисовать интерполированное состояние на момент now_msec (обычно «сейчас
@@ -145,7 +118,7 @@ func render(now_msec: int) -> void:
 	# Частицы из-под ног (переделка П9): по оцененной скорости и флагу
 	# «на полу»; смотрящий — локальный игрок (дальше footfx_remote_range
 	# эффект чужого выключен). Приземление — переход флага «на полу»,
-	# отрыв прыжка — состояние JUMP (повтор прыжков ведомым, раздел 10).
+	# отрыв прыжка — состояние JUMP.
 	if _foot_fx != null:
 		var on_floor: bool = (_flags & Protocol.FLAG_ON_FLOOR) != 0
 		if not _was_on_floor and on_floor:
@@ -166,11 +139,6 @@ func setup_foot_fx(art: IslandArt) -> void:
 func _viewer_pos() -> Vector3:
 	var local := get_tree().get_first_node_in_group(Player.GROUP) as Node3D
 	return local.global_position if local != null else global_position
-
-
-## Оцененная горизонтальная скорость, м/с (для темпа «за руку» у пары).
-func speed_estimate() -> float:
-	return _speed_est
 
 
 func _process(_delta: float) -> void:

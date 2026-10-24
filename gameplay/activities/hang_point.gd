@@ -1,61 +1,21 @@
-# Точка цепляния на кромке расщелины (раздел 9.1 SPEC): светящаяся точка
-# над кромкой. Когда рядом с точкой висит другой игрок, становится
-# интерактивной — удержание E вытягивает его (Сила помощника сокращает
-# удержание, раздел 16). Подтверждает хост: узел только шлёт запрос
-# rpc_request_pull и рисует подсказку. Дети Crevasse в island.tscn.
+# Точка цепляния на кромке расщелины (раздел 9.1 SPEC): светящийся
+# маячок над кромкой, за который цепляется упавший (HangArea выбирает
+# ближайшую точку). Механика вытягивания другим игроком удалена с
+# наследием Blockparty (born-unblessed): провисев hang_time, игрок
+# переносится к Камню духа. Дети Crevasse в island.tscn.
 class_name HangPoint
-extends Interactable
+extends Node3D
 
-const B: Balance = preload("res://gameplay/balance.tres")
 const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Шарик-маячок точки (радиус, м; доработка-2 П5.13 П5 — сфера, не куб).
 const POINT_SIZE: float = 0.09
 ## Подъём кубика над кромкой, м.
 const POINT_LIFT: float = 0.12
-## Висящего ищем от точки не дальше этого, м.
-const HANGING_SEARCH: float = 2.0
 
 
 func _ready() -> void:
-	super()
-	use_radius = B.pull_radius + 0.5
 	_build_glow()
-
-
-## «E — Вытянуть», если рядом с точкой висит чужой игрок (свой — не может
-## тянуть себя; висящего видно по флагу снапшота FLAG_HANGING).
-func hint_key() -> String:
-	return "HINT_PULL" if hanging_peer_nearby() != 0 else ""
-
-
-## Удержание E: базовое время для всех — характеристики убраны (П5.8,
-## часть D), вытянуть может любой за одинаковое время.
-func hold_time(_player: Node3D) -> float:
-	return B.pull_hold_time
-
-
-func use(player: Node3D) -> void:
-	var target := hanging_peer_nearby()
-	if target == 0:
-		return
-	if player is Player:
-		(player as Player).helper_pull()
-	Net.request_pull(target)
-
-
-## Peer чужого игрока, висящего у этой точки (0 — рядом никто не висит;
-## свой персонаж не считается: тянуть может только другой).
-func hanging_peer_nearby() -> int:
-	for node in get_tree().get_nodes_in_group(RemotePlayer.GROUP):
-		var remote := node as RemotePlayer
-		if remote == null or not remote.is_hanging():
-			continue
-		var flat := remote.last_position() - global_position
-		flat.y = 0.0
-		if flat.length() <= HANGING_SEARCH:
-			return remote.peer_id
-	return 0
 
 
 ## Светящаяся точка на кромке (цвет светлячка; доработка-2 П5.13 П5 —

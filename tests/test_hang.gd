@@ -1,7 +1,8 @@
 # Обязательный тест этапа П1 (разделы 9.1, 17, 18 SPEC): состояние «Висит» —
 # логика таймера 10 с и выбор ближайшей точки HangPoint, интеграционно:
 # падение в CrevasseArea цепляет за край, по истечении времени — перенос
-# к Камню духа без штрафа. Вытягивание другим игроком — этап П5.
+# к Камню духа без штрафа. Вытягивание другим игроком удалено с наследием
+# Blockparty (born-unblessed).
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
@@ -117,41 +118,3 @@ func test_fall_into_crevasse_hangs_then_respawns() -> void:
 	assert_true(respawned[0], "через hang_time — перенос")
 	assert_almost_eq(player.global_position.x, 6.0, 0.15, "у Камня духа")
 	assert_almost_eq(player.global_position.z, 4.0, 0.15)
-
-
-# --- Вытягивание (раздел 9.1, П5) ---
-
-## Вытянутый поднимается на кромку в точку цепляния и больше не висит:
-## сам переносит тело, хост только подтвердил событие (rpc_pulled).
-func test_pulled_up_returns_to_edge() -> void:
-	var world := Node3D.new()
-	add_child_autofree(world)
-	var player := PLAYER.instantiate() as Player
-	world.add_child(player)
-	await get_tree().physics_frame
-	var edge := Vector3(5.0, 0.0, 5.0)
-	player.start_hang(edge)
-	assert_true(player.is_hanging())
-	player.pulled_up()
-	assert_false(player.is_hanging())
-	assert_almost_eq(player.global_position.x, edge.x, EPS, "вернулся на кромку")
-	assert_almost_eq(player.global_position.y, edge.y + 0.05, EPS)
-	assert_almost_eq(player.global_position.z, edge.z, EPS)
-	# Повторное подтверждение (поздний пакет) — не телепортирует.
-	player.pulled_up()
-	assert_almost_eq(player.global_position.x, edge.x, EPS)
-
-
-## Вытягивание — базовое время для всех (П5.8, часть D): характеристики
-## убраны, любой тянет за одинаковое B.pull_hold_time.
-func test_pull_hold_time_same_for_everyone() -> void:
-	var point := HangPoint.new()
-	add_child_autofree(point)
-	var player := PLAYER.instantiate() as Player
-	add_child(player)
-	await get_tree().physics_frame
-	assert_almost_eq(
-		point.hold_time(player), B.pull_hold_time, 0.001,
-		"удержание — базовое, без множителей",
-	)
-	player.queue_free()

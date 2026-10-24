@@ -24,25 +24,9 @@ signal player_respawned()
 
 # --- Кооп-механики (раздел 9; подтверждает хост) ---
 
-## Хост подтвердил вытягивание: helper вытащил target из расщелины (раздел 9.1).
-signal player_pulled(helper_peer: int, target_peer: int)
-
-## «За руку» (раздел 9.5): связь leader ↔ follower включилась или оборвалась
-## (F любого из двоих, расстояние больше hand_break_distance, выход из мира).
-signal hand_link(leader_peer: int, follower_peer: int, on: bool)
-
-## Игрок предлагает локальному взять его за руку (раздел 9.5): подсказка
-## «F — принять» живёт hand_invite_time; согласие и отказ — hand_link/таймер.
-signal hand_invite(by_peer: int, by_name: String)
-
 ## Занятость мест у костра (раздел 9.6): seats — массив peer по индексам мест
 ## (0 — свободно). Один сигнал на все изменения: сел, встал, вышел из мира.
 signal campfire_seats(seats: Array)
-
-## Состояние ворот руин (раздел 9.2): open — открыты, plates — peer на каждой
-## плите (0 — пусто), openers — кто открыл плитами (пусто при запасном пути).
-## При закрытии — open=false, остальные списки пусты.
-signal ruins_state(open: bool, plates: Array, openers: Array)
 
 ## Состояние лестницы смотровой (раздел 9.3): index — номер смотровой,
 ## active — висит ли, expires_at — время скрытия по world_time (−1 — не висит).
@@ -63,9 +47,6 @@ signal interaction_progress(fraction: float)
 ## Мобы (раздел 8) удалены в доработке П5.13: события mob_killed,
 ## firefly_weakened и world_state_applied(dead_mobs) убраны вместе
 ## с подсистемой.
-
-## Хост разослал факт подсадки (раздел 13): jumper прыгнул с головы base.
-signal player_boosted(base_peer: int, jumper_peer: int)
 
 # --- Сеть (раздел 10) ---
 
