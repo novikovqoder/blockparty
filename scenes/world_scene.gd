@@ -310,8 +310,9 @@ func _draw_debug_collisions(root: Node) -> void:
 ## (блок е: glow, SSAO, виньетка) и объёмный туман с дымкой в Лесу
 ## и у Озера (шаг 4 П4.5; на compatibility-рендерере серверных скриншотов
 ## SSAO и объёмный туман недоступны — проверяет владелец).
-## Уровень «Ультра» (П11, каркас «меню → мир») пока применяется как
-## «Высокое»: полный «Ультра»-рендер — отдельный этап ветки bu-gfx.
+## «Ультра» (П11, раздел 2): всё из «Высокого» плюс SDFGI, SSIL, SSR,
+## тени 8192 с Soft Ultra, туман высокого качества и SMAA — набор ставит
+## GraphicsQuality.apply(); срубам включаются «Ультра»-детали (2.5/2.9).
 func _apply_graphics_quality() -> void:
 	var tier := GraphicsQuality.tier_from_settings()
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
@@ -322,6 +323,11 @@ func _apply_graphics_quality() -> void:
 	GraphicsQuality.apply(
 		$WorldEnvironment.environment, $WorldEnvironment/SunLight, tier,
 		get_viewport(), $WorldEnvironment/MoonLight)
+	# Срубы (П11 2.5/2.9): на ULTRA у ламп-«факелов» включаются тени,
+	# в комнатах появляются пробы отражений; уход с «Ультра» выключает
+	# их начисто (2.10).
+	for node: Node in get_tree().get_nodes_in_group(CabinHouse.GROUP):
+		(node as CabinHouse).set_ultra(tier == GraphicsQuality.Tier.ULTRA)
 	# Трава и мелкие предметы: «Простая графика» прячет lowpoly-траву
 	# и приближает дальность предметов. Метод существовал с П4.5, но
 	# не вызывался (найдено в П5.7 блоке 7).

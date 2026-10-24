@@ -388,3 +388,52 @@ func test_sdfgi_energy_dimmer_at_night() -> void:
 	Session.world_time = saved
 	cycle.free()
 	sky.free()
+
+
+func test_cabin_ultra_probes_and_torch_shadows() -> void:
+	# П11 2.5/2.9: на ULTRA у сруба включаются тени ламп-«факелов»
+	# (крыльцо, крыло, зал) и в комнатах появляются пробы отражений
+	# (UPDATE_ONCE, коробочная проекция); уход с «Ультра» выключает
+	# всё начисто (2.10) — проб в дереве нет, тени выключены.
+	var cabin := CabinHouse.new()
+	add_child(cabin)  # _ready → _build грузит модель и ставит лампы
+	assert_true(
+		cabin.is_in_group(CabinHouse.GROUP),
+		"сруб регистрируется в группе для применения уровня миром")
+	cabin.set_ultra(true)
+	var wing := cabin.get_node_or_null("WingProbe") as ReflectionProbe
+	var hall := cabin.get_node_or_null("HallProbe") as ReflectionProbe
+	assert_not_null(wing, "ULTRA: проба отражений в крыле у входа")
+	assert_not_null(hall, "ULTRA: проба отражений в зале")
+	for probe: ReflectionProbe in [wing, hall]:
+		assert_eq(
+			probe.update_mode, ReflectionProbe.UPDATE_ONCE,
+			"%s: печётся один раз (интерьер статичен)" % probe.name)
+		assert_true(
+			probe.box_projection,
+			"%s: коробочная проекция (отражение внутри стен)" % probe.name)
+	var lights: Array[OmniLight3D] = []
+	for child: Node in cabin.get_children():
+		var light := child as OmniLight3D
+		if light != null:
+			lights.append(light)
+	assert_eq(lights.size(), 3, "у сруба три лампы-«факела»")
+	for light: OmniLight3D in lights:
+		assert_true(
+			light.shadow_enabled,
+			"ULTRA: тени лампы %s включены" % light.name)
+	cabin.set_ultra(false)
+	assert_null(
+		cabin.get_node_or_null("WingProbe"), "уход с ULTRA: пробы крыла нет")
+	assert_null(
+		cabin.get_node_or_null("HallProbe"), "уход с ULTRA: пробы зала нет")
+	for light: OmniLight3D in lights:
+		assert_false(
+			light.shadow_enabled,
+			"уход с ULTRA: тени лампы %s выключены" % light.name)
+	# Возвращение на ULTRA после выключения снова ставит пробы.
+	cabin.set_ultra(true)
+	assert_not_null(
+		cabin.get_node_or_null("WingProbe"),
+		"повторный ULTRA: проба крыла возвращается")
+	cabin.free()

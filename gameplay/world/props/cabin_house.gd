@@ -79,12 +79,24 @@ const INSIDE_MIN_Z: float = -6.7
 const INSIDE_MAX_Z: float = 7.3
 const INSIDE_TOP_Y: float = 4.4
 
+## Группа срубов мира (П11): сцена мира включает им «Ультра»-детали
+## (тени ламп, пробы отражений), не зная устройства дома.
+const GROUP: StringName = &"cabin_house"
+## Пробы отражений ULTRA (П11 2.9): по одной на комнату — крыло у входа
+## и основной зал. Коробки — по габаритам полов (INSIDE_*, свет комнат),
+## подбирает владелец. UPDATE_ONCE: комната статична, проба печётся раз.
+const PROBE_WING_LOCAL: Vector3 = Vector3(2.2, 2.0, -4.0)
+const PROBE_WING_SIZE: Vector3 = Vector3(6.0, 3.2, 5.0)
+const PROBE_HALL_LOCAL: Vector3 = Vector3(-0.5, 2.2, 2.2)
+const PROBE_HALL_SIZE: Vector3 = Vector3(10.0, 3.4, 9.6)
+
 static var _material_cache: Dictionary = {}
 static var _instances: Array[CabinHouse] = []
 
 
 func _ready() -> void:
 	_instances.append(self)
+	add_to_group(GROUP)
 	_build()
 
 
@@ -114,6 +126,44 @@ static func player_inside(pos: Vector3) -> bool:
 ## Позиция дверного проёма в мире (для теста входа и навигации ботов).
 func door_world_pos() -> Vector3:
 	return global_transform * DOOR_LOCAL
+
+
+## «Ультра»-детали дома (П11): на ULTRA лампы-«факелы» (крыльцо, крыло,
+## зал) отбрасывают тени (2.5) и в комнатах появляются пробы отражений
+## (2.9); уход с «Ультра» выключает и то и другое начисто (2.10).
+func set_ultra(ultra: bool) -> void:
+	for child: Node in get_children():
+		var light := child as OmniLight3D
+		if light != null:
+			light.shadow_enabled = ultra
+	if ultra:
+		if get_node_or_null("WingProbe") == null:
+			add_child(_make_reflection_probe(
+				"WingProbe", PROBE_WING_LOCAL, PROBE_WING_SIZE))
+		if get_node_or_null("HallProbe") == null:
+			add_child(_make_reflection_probe(
+				"HallProbe", PROBE_HALL_LOCAL, PROBE_HALL_SIZE))
+	else:
+		for probe_name: String in ["WingProbe", "HallProbe"]:
+			var probe := get_node_or_null(probe_name)
+			if probe != null:
+				remove_child(probe)
+				probe.queue_free()
+
+
+## Проба отражений комнаты: печётся один раз (UPDATE_ONCE — интерьер
+## статичен), коробочная проекция держит отражение внутри стен.
+func _make_reflection_probe(
+	probe_name: String, local: Vector3, box: Vector3
+) -> ReflectionProbe:
+	var probe := ReflectionProbe.new()
+	probe.name = probe_name
+	probe.position = local
+	probe.size = box
+	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	probe.box_projection = true
+	probe.interior = true
+	return probe
 
 
 ## Направление «из двери наружу» в мире (на террасу, локально −X).
