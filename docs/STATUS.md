@@ -14,13 +14,13 @@
 Отчёты по этапам v1 (0–3) сохранены ниже для истории.
 
 ## Текущий этап
-П9 «Главное меню Born Unblessed» сдан (ветка `born-unblessed`, интеграция —
-коммит 7273b9a): меню встроено комплектом как есть, без единой правки
-кода комплекта; прежнее меню Blockparty — по dev-аргументу `--old-menu`.
-Полный GUT: 301 тест — 300 passed + 1 known-pending П5.8, 0 failing,
-796 206 ассертов; `--selftest-anim` PASS на экспортированной Linux-сборке
-(код 0). Windows-сборка builds/blockparty-windows.zip (2026-10-23 00:46,
-код после неё не менялся, целостность проверена) — ждём приёмки владельца
+П10 «Герой Born Unblessed, экран запуска, экран загрузки, уборка мира» сдан
+(ветка `born-unblessed`, коммиты ce6d06c…d039101): герой-рыцарь BU — свой и
+чужие, локомоция из пака «Pro Sword and Shield», рост 1,8; меч на поясе с
+выхватом колёсиком; экраны запуска и загрузки; жители, костёр и сидения
+спрятаны флагом `bu_legacy_hidden` (код и ассеты на месте). Кадры серии —
+`docs/screenshots/П10/` (14). Отчёт и проверки — в блоке П10 ниже.
+Windows-сборка `builds/blockparty-windows.zip` — ждём приёмки владельца
 по exe. В `main` не сливать.
 
 ## Зафиксированные версии
@@ -4012,6 +4012,143 @@ zip `679c6e9fec57d9e9a4738459ede7ff4bc671e21fcb5af09e5b364d93a829e1cb`.
 Steam-шатдауна — не менялась, вне рамок мини-фикса.
 
 **Известные проблемы:** дефект П5.8 (тело под одеждой) — без изменений.
+
+### П10 — Герой Born Unblessed, экран запуска, экран загрузки, уборка мира (2026-10-23…24, ветка `born-unblessed`)
+
+**Сделано (коммиты ce6d06c…d039101):**
+
+- **Киты этапа** (ce6d06c): `assets/hero_bu` (knight_bu.glb под Git LFS,
+  hero_bu.tscn с BlinkLidsBU, лицензии), `assets/sword_bu` (sword_bu.glb,
+  EquipControllerBU/WeaponMountsBU/HandGripBU), `scenes/boot_bu`
+  (BootScreenBU), `scenes/loading_bu` (LoadingScreenBU, фон
+  loading_bg.jpg 1920×1080), переводы `i18n/strings_bu_boot.csv` (ru/en),
+  `tests/test_hero_bu.gd`, `tests/test_sword_bu.gd`, тулы съёмки китов.
+  Исходники Mixamo FBX в git не входят (лицензия Mixamo запрещает
+  распространение файлов) — `assets_src/` в .gitignore.
+- **Ретаргет** (8cb0dbc): `tools/retarget_mixamo_bu.gd` запёк все 51
+  анимацию пака «Pro Sword and Shield» (`assets_src/mixamo_sword/`) на
+  скелет героя в `assets/hero/hero_sword_anims.res`. Герой в A-позе, пак в
+  T-позе: для рук и ног поправка с выравниванием по направлению кости, для
+  таза/позвоночника/шеи/головы — без него; запекание в игровом цикле
+  (вне его Godot не обновляет позу скелета при seek), static=1.
+- **Герой в игре** (3eb365b): `CharacterVisual` — единый интерфейс визуала
+  (player/remote/world зовут один); `CharacterModel` — прежняя сборка UBC
+  (жители, `--old-menu`); `HeroModelBU` — рыцарь BU: hero_bu.tscn +
+  библиотека sword + EquipControllerBU, моргание BlinkLidsBU поверх любой
+  анимации, в т. ч. у чужих (локально). Внешность сети хранится
+  (PROTOCOL_VERSION не менялся), на модель не влияет. Кнопка редактора
+  внешности в меню скрыта (код и сцена живут). Рост 1,8 м: капсула и
+  HeadTop 1,85, взгляд камеры 1,55, бокс головы 1,9, ник/пузырь 2,35/2,8.
+  `world_scene`: сигнал `world_ready`, у клиента статус BU_LOAD_CONNECT.
+- **Меч** (a0e20ce): на левом бедре, колёсико мыши «руки ↔ меч», выхват/
+  уборка клипами draw_sword_2/sheath_sword_1 с перецеплением меча в момент
+  контакта ладони, стойка с мечом ss_idle, удар ss_slash (клавиша attack,
+  раздел 5); на время смены слота клипы состояния не перебивают анимацию
+  снаряжения. Текстуры меча 1K (basecolor, metalrough).
+- **Уборка мира** (59f10f4): флаг `bu_legacy_hidden=true` в balance.tres;
+  Townsfolk, Campfire (очаг/огонь/свет) и CampfireSeat уходят через
+  queue_free в _ready, у костра процесс гасится сразу. Код и ассеты не
+  удаляются — выключил флаг, всё вернулось. Заданий в HUD/карте нет с
+  П5.9; мобы (птица, зверёк, светлячок) не тронуты. Аудит текстур:
+  категории hero_bu/sword_bu/loading_bu; материалы героя — анизотропный
+  фильтр (GLB-дефолт 3 → 5, планка П5.9).
+- **Фикс --selftest-world** (2aa415e): аддон моря вешает материал
+  per-surface override'ом, WorldSelfCheck смотрел только material_override
+  и mesh.surface_get_material — 83 LOD-меша считались «голыми» и валили
+  selftest. Теперь get_active_material(surface): PASS, 429 поверхностей,
+  0 голых (484 − 55 спрятанных жителей/костра), код возврата 0.
+- **Экраны** (6a03bb2): boot.tscn показывает BootScreenBU («Инициализация…»,
+  окно «Steam не запущен» с офлайном и выходом, Esc — выход; логика
+  проверки Steam не менялась), заголовок окна «Born Unblessed»
+  (DisplayServer.window_set_title; application/config/name не тронут — от
+  него зависят пути user://). Оба меню (BU и `--old-menu`) открывают мир
+  через LoadingScreenBU.open вместо change_scene_to_file: фон, прогресс,
+  подсказки, уход после world_ready корня мира; повторное нажатие за время
+  загрузки игнорируется. У клиента — «Подключение к миру» (BU_LOAD_CONNECT)
+  до world_state. strings_bu_boot.csv подключён в project.godot.
+- **Серия кадров** (4ba6e66, d039101): тулы `tools/shoot_series.sh` /
+  `shoot_series_bu.gd` (покадровая съёмка входа в мир: boot → загрузка →
+  герой → мир) и `tools/diag_series_cam.gd` (диагностика камеры). 14 кадров
+  в `docs/screenshots/П10/`: 01_boot_init, 02_boot_steam_missing,
+  03_loading, 10_hero_front, 11_hero_34, 12_hero_back, 13_hero_face,
+  20_world_idle, 21_world_run, 22_world_jump, 23_world_sword, 24_world_plaza,
+  25_world_face_blink, 26_world_face. Серого кадра между меню и миром нет.
+
+**Выбор клипов локомоции (SPEC 1.2).** Пак «Pro Sword and Shield» →
+hero_sword_anims.res (имена ss_* по файлам пака), нарезка
+`tools/slice_locomotion_bu.gd` (префикс loco_):
+
+| Состояние | Клип | Исходник пака |
+| --- | --- | --- |
+| покой | loco_idle | ss_idle ← «sword and shield idle» |
+| шаг | loco_walk | ss_walk ← «sword and shield walk» |
+| бег | loco_run | ss_run ← «sword and shield run» |
+| прыжок: взлёт | loco_jump_up | ss_jump_2 ← «sword and shield jump (2)», фаза 0…12/30 (присед+толчок) |
+| прыжок: полёт | loco_jump_fly | тот же, фаза 12/30…22/30, Y таза выровнен (дугу даёт физика) |
+| прыжок: приземление | loco_jump_land | тот же, фаза 22/30…конец (касание+амортизация) |
+| поворот на месте | loco_turn | ss_turn ← «sword and shield turn» |
+
+У всех loco_* из трека позиции Hips убраны ключи X/Z: клипы пака записаны
+«с пробегом» (walk едет 1,5 м за цикл), горизонтальное движение задаёт
+физика игрока. Темп шага/бега — speed_scale = скорость/естественная
+(walk 1,36 м/с, run 3,84 м/с — замер по треку Hips пака), стопы не
+скользят; циклы idle/walk/run/fly — LOOP_LINEAR. С мечом: стойка ss_idle,
+выхват draw_sword_2, уборка sheath_sword_1, удар ss_slash. Остальные ~40
+клипов пака (блоки, атаки, приседы, смерть…) — в библиотеке, в игре пока
+не назначены.
+
+**Недостающие клипы — механики без анимации (SPEC 1.2).** В паке их нет:
+сесть (у костра), жесты эмоций (пузырь без анимации тела), вытягивание из
+расщелины, «за руку» (ведомый идёт клипом loco_walk). Состояние SIT
+держит loco_idle. Клипы найдём отдельно.
+
+**Все правки кода комплектов (приёмка SPEC).** Киты встроены без единой
+правки кода комплекта — как меню в П9: `git diff ce6d06c..HEAD` по
+scripts/hero_bu, scenes/boot_bu, scenes/loading_bu и hero_bu.tscn — пусто.
+Добавлены только спутники Godot (.uid трёх скриптов кита меча в
+a0e20ce/4ba6e66, .import текстур героя/меча/фона) и текстуры меча 1K
+(basecolor/metalrough) в assets/sword_bu. Вся интеграция — в игровых
+файлах: player/remote/world_scene/boot/main_menu/balance/world_self_check.
+
+**Тесты жителей/костра при выключенном флаге (SPEC 2.4).** В balance.tres
+флаг по умолчанию true (в мире BU наследия нет); тесты «наследия» гоняются
+при выключенном: `tests/helpers/bu_flag.gd` выключает флаг в before_all и
+возвращает дефолт игры в after_all (флаг — статика Balance.set_legacy_hidden:
+перезагрузки скриптов в GUT создают копии ресурса balance.tres, статика
+одна на всех). Хелпер подключён в 11 скриптах: test_cabin_house,
+test_forest_terrain, test_island_gen, test_island_scene, test_npc_presets,
+test_slope_walking, test_terrain_lod, test_terrain_visibility,
+test_texture_audit, test_world_collisions, test_world_ground. Новый
+test_bu_legacy_flag проверяет оба состояния: спрятаны при true, на месте
+при false.
+
+**Как проверить вручную (Windows-сборка):**
+- Запуск: экран «Born Unblessed», «Инициализация…» → меню; без Steam —
+  окно «Steam не запущен» («Играть офлайн», «Выход»); Esc на boot — выход;
+  заголовок окна — Born Unblessed.
+- Вход в мир («Новая игра»/офлайн): экран загрузки с фоном, прогрессом и
+  подсказками, серых кадров нет; у клиента при подключении —
+  «Подключение к миру».
+- Герой — рыцарь 1,8 м (свой и чужие): покой, шаг (Shift), бег, прыжок
+  (взлёт/полёт/приземление), разворот на месте — стопы не скользят по
+  земле; моргает (лицо крупно).
+- Меч: колёсико мыши — выхват (draw_sword_2, стойка ss_idle) и уборка
+  (sheath_sword_1), перецепление в момент контакта ладони; клавиша удара —
+  ss_slash.
+- Площадь: ни костра, ни жителей, ни сидений; мобы на месте.
+- Склоны Леса (`--dev-spawn=forest` и окрестности): ноги на земле, не
+  проваливаются и не висят.
+- Эмоции (Q) — только пузырь; «за руку» — оба идут шагом; вытягивание —
+  без анимации (клипов нет, см. выше).
+- `--old-menu`: прежнее меню работает, мир открывается тоже через
+  LoadingScreenBU.
+
+**Отложено:** клипы «сесть/эмоции/вытягивание/за руку» (в паке нет, найдём
+отдельно); назначение остальных клипов пака (блоки/атаки/приседы);
+наследие (жители/костёр/сидения) спрятано флагом до решения по миру BU.
+
+**Известные проблемы:** known-pending П5.8 (тело под одеждой) — без
+изменений; крестик окна завершает без Steam-шатдауна (П9, не менялся).
 
 <!-- Шаблон:
 ### Этап N — название (дата)
