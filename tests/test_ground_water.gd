@@ -37,6 +37,21 @@ func test_ground_licenses_cover_all_layers() -> void:
 	assert_true(licenses.contains("CC0"), "лицензии CC0 в файле есть")
 
 
+func test_ground_all_layer_textures_set() -> void:
+	# SPEC П12 приёмка: шейдер земли получает все карты слоёв — у каждого
+	# uniform-сэмплера материала стоит Texture2D (нет пустых сэмплеров).
+	var material := ForestGround.make_material(ART, GraphicsQuality.Tier.HIGH)
+	var regex := RegEx.new()
+	regex.compile("uniform sampler2D\\s+(\\w+)")
+	var matches := regex.search_all(GROUND_SHADER.code)
+	assert_between(matches.size(), 12, 24,
+		"карт слоёв найдено разумно: %d" % matches.size())
+	for match: RegExMatch in matches:
+		var name := match.get_string(1)
+		assert_true(material.get_shader_parameter(name) is Texture2D,
+			"карта %s задана текстурой" % name)
+
+
 func test_ground_material_quality_by_tier() -> void:
 	# SPEC П12 2.6: uniform quality в материале следует уровню графики —
 	# SIMPLE/NORMAL/HIGH/ULTRA передаются в шейдер без искажений.
