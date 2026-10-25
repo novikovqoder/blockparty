@@ -71,6 +71,11 @@ func _ready() -> void:
 	add_child(_debug)
 	_debug.watch_player(_player)
 	_debug.watch_island(_island)
+	_debug.watch_graphics(
+		$WorldEnvironment.environment,
+		_island.get_node("IslandView") as IslandView,
+		GraphicsQuality.tier_from_settings(),
+	)
 	if Dev.debug_collisions:
 		_draw_debug_collisions(_island)
 	_wire_network()
@@ -359,6 +364,14 @@ func _apply_graphics_quality() -> void:
 		center = _island.spawn_point("lake")
 		color = IslandGen.zone_blend(Vector2(center.x, center.z), PAL.zone_fog)
 		add_child(GraphicsQuality.make_zone_fog(center, color))
+	# Панель замера F3 (П13 3): знает уровень и окружение; повторное
+	# применение возвращает эффекты уровня — галочки сбрасываются.
+	if _debug != null:
+		_debug.watch_graphics(
+			$WorldEnvironment.environment,
+			_island.get_node("IslandView") as IslandView,
+			tier,
+		)
 
 
 ## Фототур (шаг 2 П4.5, «Самопроверка картинки»): временная камера снимает

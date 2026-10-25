@@ -146,3 +146,16 @@ BU_CH_LOCKED,· · ·,· · ·
 BU_CH_DONE,Пройдена,Completed
 BU_CH_CURRENT,Вы здесь,You are here
 BU_CH_AHEAD,Ещё впереди,Locked
+BU_DBG_EFFECTS,Эффекты (выключить по одному),Effects (toggle one by one)
+BU_DBG_SDFGI,SDFGI (глобальное освещение),SDFGI (global illumination)
+BU_DBG_SSIL,SSIL (отражённый свет),SSIL (indirect light)
+BU_DBG_SSR,SSR (отражения),SSR (reflections)
+BU_DBG_SSAO,SSAO (затенение контактов),SSAO (contact shadows)
+BU_DBG_VFOG,Объёмный туман,Volumetric fog
+BU_DBG_GLOW,Свечение (glow),Glow
+BU_DBG_AA,Сглаживание (MSAA/SMAA),Antialiasing (MSAA/SMAA)
+BU_DBG_LAMPS,Тени ламп,Shadows of lamps
+BU_DBG_GRASS,Трава-буст,Grass boost
+BU_DBG_PARALLAX,Параллакс земли,Ground parallax
+BU_DBG_WATER,Преломление воды,Water refraction
+BU_DBG_COPY,Скопировать отчёт,Copy report

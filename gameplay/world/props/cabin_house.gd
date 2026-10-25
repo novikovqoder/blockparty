@@ -162,6 +162,15 @@ func set_quality(tier: int) -> void:
 				probe.queue_free()
 
 
+## Тени ламп на лету (панель замера F3, П13 3.2): включить/выключить
+## без смены уровня — расстояние distance_fade не трогается.
+func set_lamp_shadows(on: bool) -> void:
+	for child: Node in get_children():
+		var light := child as OmniLight3D
+		if light != null:
+			light.shadow_enabled = on
+
+
 ## Проба отражений комнаты: печётся один раз (UPDATE_ONCE — интерьер
 ## статичен), коробочная проекция держит отражение внутри стен.
 func _make_reflection_probe(

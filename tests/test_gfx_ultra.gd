@@ -147,9 +147,9 @@ func test_ultra_tier_reaches_world() -> void:
 
 
 func test_ultra_applies_as_high_for_now() -> void:
-	# П11 раздел 2, ветка bu-gfx: HIGH и ULTRA различаются только
-	# «Ультра»-набором (SDFGI, SSIL, SSR, SMAA, тени 8192) — общая для
-	# уровней картинка (постобработка, туман, MSAA) совпадает.
+	# П11 раздел 2, ветка bu-gfx; П13: HIGH и ULTRA различаются «Ультра»-
+	# набором (SDFGI полное, SSIL/SSR полноценные, MSAA 4x, тени 8192);
+	# общая картинка (постобработка, туман, SMAA) совпадает.
 	_write_menu_quality(3)
 	var envs: Array[Environment] = [Environment.new(), Environment.new()]
 	var suns: Array[DirectionalLight3D] = [DirectionalLight3D.new(), DirectionalLight3D.new()]
@@ -183,9 +183,13 @@ func test_ultra_applies_as_high_for_now() -> void:
 		moons[1].shadow_enabled, moons[0].shadow_enabled,
 		"ULTRA: тени луны как в HIGH",
 	)
-	assert_eq(
+	assert_ne(
 		viewports[1].msaa_3d, viewports[0].msaa_3d,
-		"ULTRA: MSAA как в HIGH",
+		"П13: MSAA только на ULTRA (HIGH — без MSAA)",
+	)
+	assert_eq(
+		viewports[1].screen_space_aa, viewports[0].screen_space_aa,
+		"ULTRA: SMAA как в HIGH",
 	)
 	assert_eq(
 		viewports[1].texture_mipmap_bias, viewports[0].texture_mipmap_bias,
@@ -286,39 +290,60 @@ func test_ultra_shadows_aa_and_lod() -> void:
 
 
 func test_switching_levels_disables_ultra() -> void:
-	# П11 2.10: уход с ULTRA выключает «Ультра»-набор начисто — на HIGH
-	# возвращаются базовые (движковые) значения, на SIMPLE дополнительно
-	# гаснут тени, MSAA и постобработка.
+	# П11 2.10; П13: уход с ULTRA выключает «Ультра»-набор начисто — на HIGH
+	# живут HIGH-значения (лёгкий SDFGI/SSIL/SSR остаются, атласы 4096,
+	# полутень уже, дальность 120 м, fade сплитов), на SIMPLE гаснут
+	# тени, AA и постобработка. Возврат на ULTRA возвращает всё обратно.
 	var env := Environment.new()
 	var sun := DirectionalLight3D.new()
 	var moon := DirectionalLight3D.new()
 	var viewport := SubViewport.new()
 	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.ULTRA, viewport, moon)
 	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.HIGH, viewport, moon)
-	assert_false(env.sdfgi_enabled, "ULTRA→HIGH: SDFGI выключен")
-	assert_false(env.ssil_enabled, "ULTRA→HIGH: SSIL выключен")
-	assert_false(env.ssr_enabled, "ULTRA→HIGH: SSR выключен")
+	assert_true(env.sdfgi_enabled, "ULTRA→HIGH: SDFGI остаётся (П13 1.1)")
+	assert_false(env.sdfgi_use_occlusion, "ULTRA→HIGH: без окклюзии SDFGI")
+	assert_eq(
+		env.sdfgi_cascades, GraphicsQuality.HIGH_SDFGI_CASCADES,
+		"ULTRA→HIGH: каскады SDFGI — HIGH (4)")
+	assert_true(env.ssil_enabled, "ULTRA→HIGH: SSIL остаётся (П13 1.2)")
 	assert_almost_eq(
-		env.sdfgi_energy, GraphicsQuality.SDFGI_ENERGY_BASE, 0.001,
-		"ULTRA→HIGH: энергия SDFGI — база")
+		env.ssil_radius, GraphicsQuality.HIGH_SSIL_RADIUS, 0.001,
+		"ULTRA→HIGH: радиус SSIL — HIGH")
+	assert_true(env.ssr_enabled, "ULTRA→HIGH: SSR остаётся (П13 1.3)")
+	assert_eq(
+		env.ssr_max_steps, GraphicsQuality.HIGH_SSR_MAX_STEPS,
+		"ULTRA→HIGH: шаги SSR — HIGH (32)")
+	assert_almost_eq(
+		env.sdfgi_energy, GraphicsQuality.ULTRA_SDFGI_ENERGY, 0.001,
+		"ULTRA→HIGH: энергия SDFGI — дневная константа")
 	assert_almost_eq(
 		sun.light_angular_distance,
-		GraphicsQuality.LIGHT_ANGULAR_DISTANCE_BASE, 0.001,
-		"ULTRA→HIGH: угловое расхождение светила — база")
+		GraphicsQuality.HIGH_LIGHT_ANGULAR_DISTANCE, 0.001,
+		"ULTRA→HIGH: угловое расхождение светила — HIGH")
 	assert_almost_eq(
 		sun.directional_shadow_max_distance,
-		GraphicsQuality.SHADOW_MAX_DISTANCE_BASE, 0.001,
-		"ULTRA→HIGH: дальность теней — база")
+		GraphicsQuality.HIGH_SHADOW_MAX_DISTANCE, 0.001,
+		"ULTRA→HIGH: дальность теней — 120 м")
+	assert_almost_eq(
+		sun.directional_shadow_fade_start,
+		GraphicsQuality.HIGH_SHADOW_FADE_START, 0.001,
+		"ULTRA→HIGH: fade_start сплитов — 0.85")
+	assert_true(
+		sun.directional_shadow_blend_splits,
+		"ULTRA→HIGH: сплиты смешиваются (без резкой границы)")
 	assert_almost_eq(
 		viewport.mesh_lod_threshold, GraphicsQuality.MESH_LOD_THRESHOLD_BASE,
 		0.001, "ULTRA→HIGH: порог LOD — база")
 	assert_eq(
 		viewport.positional_shadow_atlas_size,
-		GraphicsQuality.POSITIONAL_ATLAS_SIZE_BASE,
-		"ULTRA→HIGH: атлас точечных теней — база (2048)")
+		GraphicsQuality.HIGH_POSITIONAL_ATLAS_SIZE,
+		"ULTRA→HIGH: атлас точечных теней — 4096")
 	assert_eq(
-		viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_FXAA,
-		"ULTRA→HIGH: screen-space AA — FXAA, как был до «Ультра»")
+		viewport.msaa_3d, Viewport.MSAA_DISABLED,
+		"ULTRA→HIGH: MSAA выключен (П13 1.5)")
+	assert_eq(
+		viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_SMAA,
+		"ULTRA→HIGH: screen-space AA — SMAA")
 	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.SIMPLE, viewport, moon)
 	assert_false(env.sdfgi_enabled, "ULTRA→SIMPLE: SDFGI выключен")
 	assert_false(env.ssil_enabled, "ULTRA→SIMPLE: SSIL выключен")
@@ -330,6 +355,35 @@ func test_switching_levels_disables_ultra() -> void:
 	assert_eq(
 		viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_DISABLED,
 		"ULTRA→SIMPLE: screen-space AA выключен")
+	# Замыкание цикла (П13 6.3): возврат на ULTRA после ухода возвращает
+	# «Ультра»-набор — ничего от HIGH/SIMPLE не остаётся.
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.ULTRA, viewport, moon)
+	assert_true(env.sdfgi_use_occlusion, "HIGH→SIMPLE→ULTRA: окклюзия SDFGI")
+	assert_eq(
+		env.sdfgi_cascades, GraphicsQuality.ULTRA_SDFGI_CASCADES,
+		"HIGH→SIMPLE→ULTRA: каскады SDFGI — ULTRA")
+	assert_almost_eq(
+		sun.light_angular_distance,
+		GraphicsQuality.ULTRA_LIGHT_ANGULAR_DISTANCE, 0.001,
+		"HIGH→SIMPLE→ULTRA: угловое расхождение светила — ULTRA")
+	assert_almost_eq(
+		sun.directional_shadow_max_distance,
+		GraphicsQuality.ULTRA_SHADOW_MAX_DISTANCE, 0.001,
+		"HIGH→SIMPLE→ULTRA: дальность теней — 200 м")
+	assert_almost_eq(
+		sun.directional_shadow_fade_start,
+		GraphicsQuality.SHADOW_FADE_START_BASE, 0.001,
+		"HIGH→SIMPLE→ULTRA: fade_start сплитов — база")
+	assert_false(
+		sun.directional_shadow_blend_splits,
+		"HIGH→SIMPLE→ULTRA: смешение сплитов — база (выключено)")
+	assert_eq(
+		viewport.msaa_3d, GraphicsQuality.AA_MSAA_ULTRA,
+		"HIGH→SIMPLE→ULTRA: MSAA 4x возвращается")
+	assert_eq(
+		viewport.positional_shadow_atlas_size,
+		GraphicsQuality.ULTRA_POSITIONAL_ATLAS_SIZE,
+		"HIGH→SIMPLE→ULTRA: атлас точечных теней — 8192")
 	sun.free()
 	moon.free()
 	viewport.free()
@@ -395,12 +449,13 @@ func test_cabin_ultra_probes_and_torch_shadows() -> void:
 	# (крыльцо, крыло, зал) и в комнатах появляются пробы отражений
 	# (UPDATE_ONCE, коробочная проекция); уход с «Ультра» выключает
 	# всё начисто (2.10) — проб в дереве нет, тени выключены.
+	# П13: уровнем управляет set_quality(tier), set_ultra больше нет.
 	var cabin := CabinHouse.new()
 	add_child(cabin)  # _ready → _build грузит модель и ставит лампы
 	assert_true(
 		cabin.is_in_group(CabinHouse.GROUP),
 		"сруб регистрируется в группе для применения уровня миром")
-	cabin.set_ultra(true)
+	cabin.set_quality(GraphicsQuality.Tier.ULTRA)
 	var wing := cabin.get_node_or_null("WingProbe") as ReflectionProbe
 	var hall := cabin.get_node_or_null("HallProbe") as ReflectionProbe
 	assert_not_null(wing, "ULTRA: проба отражений в крыле у входа")
@@ -422,7 +477,7 @@ func test_cabin_ultra_probes_and_torch_shadows() -> void:
 		assert_true(
 			light.shadow_enabled,
 			"ULTRA: тени лампы %s включены" % light.name)
-	cabin.set_ultra(false)
+	cabin.set_quality(GraphicsQuality.Tier.SIMPLE)
 	assert_null(
 		cabin.get_node_or_null("WingProbe"), "уход с ULTRA: пробы крыла нет")
 	assert_null(
@@ -432,7 +487,7 @@ func test_cabin_ultra_probes_and_torch_shadows() -> void:
 			light.shadow_enabled,
 			"уход с ULTRA: тени лампы %s выключены" % light.name)
 	# Возвращение на ULTRA после выключения снова ставит пробы.
-	cabin.set_ultra(true)
+	cabin.set_quality(GraphicsQuality.Tier.ULTRA)
 	assert_not_null(
 		cabin.get_node_or_null("WingProbe"),
 		"повторный ULTRA: проба крыла возвращается")
