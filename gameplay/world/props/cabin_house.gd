@@ -128,15 +128,26 @@ func door_world_pos() -> Vector3:
 	return global_transform * DOOR_LOCAL
 
 
-## «Ультра»-детали дома (П11): на ULTRA лампы-«факелы» (крыльцо, крыло,
-## зал) отбрасывают тени (2.5) и в комнатах появляются пробы отражений
-## (2.9); уход с «Ультра» выключает и то и другое начисто (2.10).
-func set_ultra(ultra: bool) -> void:
+## «Ультра»-детали дома (П11; П13 1.6/1.8): на ULTRA лампы-«факелы»
+## (крыльцо, крыло, зал) отбрасывают тени (2.5) и в комнатах появляются
+## пробы отражений (2.9); на HIGH (П13) пробы тоже включаются (UPDATE_ONCE
+## дёшевы), тени ламп — с distance_fade (гаснут дальше ~20 м); ниже HIGH —
+## без теней и проб, уход с уровня выключает всё начисто (2.10).
+func set_quality(tier: int) -> void:
+	var hi := tier >= GraphicsQuality.Tier.HIGH
+	var high_fade := tier == GraphicsQuality.Tier.HIGH
 	for child: Node in get_children():
 		var light := child as OmniLight3D
 		if light != null:
-			light.shadow_enabled = ultra
-	if ultra:
+			light.shadow_enabled = hi
+			# П13 1.6: тени ламп на HIGH гаснут дальше ~20 м — сам свет
+			# живёт дольше (distance_fade_begin), тени исчезают раньше.
+			light.distance_fade_enabled = high_fade
+			if high_fade:
+				light.distance_fade_shadow = GraphicsQuality.HIGH_LAMP_FADE_SHADOW
+				light.distance_fade_begin = GraphicsQuality.HIGH_LAMP_FADE_BEGIN
+				light.distance_fade_length = GraphicsQuality.HIGH_LAMP_FADE_LENGTH
+	if hi:
 		if get_node_or_null("WingProbe") == null:
 			add_child(_make_reflection_probe(
 				"WingProbe", PROBE_WING_LOCAL, PROBE_WING_SIZE))

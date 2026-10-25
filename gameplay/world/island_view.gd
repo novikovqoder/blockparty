@@ -24,6 +24,8 @@ var _base_ranges: Dictionary = {}
 var _grass_fade: Dictionary = {}
 ## Меши чанков рельефа (для адаптивной тесселяции, П1).
 var _chunk_instances: Array[MeshInstance3D] = []
+## Материал земли всех чанков (общий; панель замера F3 гасит им параллакс).
+var _ground_material: ShaderMaterial = null
 ## Текущий шаг тесселяции чанка (1.0 — печёный меш, NEAR_STEP — ближний).
 var _chunk_steps: Array[float] = []
 ## Центр последней перестройки (быстрый выход, если игрок не сдвинулся).
@@ -42,6 +44,9 @@ var _detail_colliders: Array[Dictionary] = []
 ## чанку дёргаться между уровнями, стоя на границе.
 const LOD_RADIUS: float = 50.0
 const LOD_HYSTERESIS: float = 6.0
+## Базовая сила параллакса земли (движковое значение uniform шейдера
+## forest_ground; сюда панель F3 возвращает параллакс после замера).
+const FOREST_PARALLAX_SCALE: float = 0.06
 
 
 func _ready() -> void:
@@ -72,6 +77,7 @@ func _build_terrain() -> void:
 	# уровня применяется при следующем входе в мир, как у воды.
 	var forest_material := ForestGround.make_material(
 		art, GraphicsQuality.tier_from_settings())
+	_ground_material = forest_material
 	for chunk: Mesh in art.chunks:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = chunk
@@ -289,7 +295,9 @@ func _build_details() -> void:
 ## Уровень качества мира (П12 E; переданный из П11 пункт 2.8): SIMPLE —
 ## без травы (печёные пучки, буст и папоротники наполнения) и с дальностью
 ## мелких предметов ×0.6 (минимум 25 м); ULTRA — дальность травы и мелких
-## предметов ×1.5 и спад густоты травы отодвинут ×1.5; NORMAL/HIGH — база.
+## предметов ×1.5 и спад густоты травы отодвинут ×1.5; HIGH (П13 1.9) —
+## дальность и спад как в базе, но спад травы-буста начинается ближе
+## (×HIGH_GRASS_FADE_MULT); NORMAL — база.
 ## Применяется ко всем группам типа и к наполнению земли.
 func set_quality(tier: int) -> void:
 	var simple := tier == GraphicsQuality.Tier.SIMPLE
@@ -305,7 +313,34 @@ func set_quality(tier: int) -> void:
 			if simple else base * (1.5 if ultra else 1.0)
 		for instance: MultiMeshInstance3D in _props_by_type.get(type, []):
 			instance.visibility_range_end = range
-	_apply_grass_fade(1.5 if ultra else 1.0)
+	_apply_grass_fade(_grass_fade_mult(tier))
+
+
+## Множитель спада густоты травы по уровню (П13 1.9): ULTRA ×1.5,
+## HIGH — ближе базы, прочие — база.
+func _grass_fade_mult(tier: int) -> float:
+	if tier == GraphicsQuality.Tier.ULTRA:
+		return 1.5
+	if tier == GraphicsQuality.Tier.HIGH:
+		return GraphicsQuality.HIGH_GRASS_FADE_MULT
+	return 1.0
+
+
+## Панель замера F3 (П13 3.2): показать/спрятать слой травы-буста
+## (gd_grass_*) без смены уровня — печёные пучки не трогаются.
+func set_grass_boost_visible(on: bool) -> void:
+	for type: String in _props_by_type:
+		if String(type).begins_with("gd_grass"):
+			_set_type_visible(String(type), on)
+
+
+## Панель замера F3 (П13 3.2): выключить/вернуть параллакс земли
+## (parallax_scale в 0 — выборка высоты подстилки не делается).
+func set_parallax(on: bool) -> void:
+	if _ground_material == null:
+		return
+	_ground_material.set_shader_parameter(
+		"parallax_scale", FOREST_PARALLAX_SCALE if on else 0.0)
 
 
 ## Видимость всех групп типа («Простая графика» прячет траву и цветы).
@@ -316,7 +351,8 @@ func _set_type_visible(type: String, visible: bool) -> void:
 
 ## Спад густоты травы шейдера (трава «садится» в землю от fade_start до
 ## fade_end): на ULTRA отодвигается ×1.5 — вместе с дальностью MultiMesh
-## (П11 2.8). Материалы кэшируются по типу — достаточно одной записи.
+## (П11 2.8); на HIGH начинается ближе базы (П13 1.9). Материалы
+## кэшируются по типу — достаточно одной записи.
 func _apply_grass_fade(mult: float) -> void:
 	for type: String in _grass_fade:
 		var instances: Array = _props_by_type.get(type, [])

@@ -7,6 +7,8 @@
 # (тяжёлые эффекты — только по явному выбору игрока).
 # ULTRA (П11, раздел 2 SPEC): всё из HIGH плюс SDFGI, SSIL, SSR, мягкие
 # тени высокого разрешения, объёмный туман высокого качества и SMAA.
+# П13: HIGH — «почти как Ультра, но дешевле» — лёгкий SDFGI и SSIL/SSR
+# в половинном разрешении, SMAA без MSAA, атласы 4096, туман 128×64.
 # Compatibility-рендерер (скриншоты на сервере) SSAO и объёмный туман не
 # поддерживает: свойства выставляются, движок молча пропускает их.
 class_name GraphicsQuality
@@ -52,11 +54,12 @@ const SIMPLE_MIPMAP_BIAS: float = 1.0
 ## Доля обычной дистанции LOD персонажей в «Простой графике» (П5.7 блок 7):
 ## облегчённые копии включаются заметно ближе (18 м → ~8 м).
 const CHARACTER_LOD_FACTOR: float = 0.45
-## Сглаживание «Высокого качества» (планка качества П5.9): MSAA 4x плюс
-## FXAA — края без «лесенок» (TAA недоступен в Compatibility-рендерере,
-## на котором снимаются серверные скриншоты). Обычный и простой уровни —
-## без AA: планка требует сглаживания именно в «Высоком качестве».
-const AA_MSAA_HIGH: int = Viewport.MSAA_4X
+## Сглаживание «Ультра» (П11 2.7): MSAA 4x плюс SMAA — края без
+## «лесенок». П13 1.5: «Высокое» перешло на SMAA без MSAA (MSAA 4x
+## упирается в пропускную способность общей памяти встроенной графики);
+## обычный и простой уровни — без AA. TAA не включается нигде
+## (утверждённые резкие звёзды).
+const AA_MSAA_ULTRA: int = Viewport.MSAA_4X
 
 # --- ULTRA (П11, раздел 2 SPEC): числа стартовые, подбирает владелец ---
 
@@ -93,6 +96,74 @@ const ULTRA_SHADOW_MAX_DISTANCE: float = 200.0
 ## утверждены (VOLUMETRIC_DENSITY, ZONE_FOG_DENSITY), вид не меняется.
 const ULTRA_VF_WIDTH: int = 256
 const ULTRA_VF_DEPTH: int = 128
+
+# --- HIGH (П13 «Оптимизированное Высокое», Radeon 780M): визуально близко
+# --- к ULTRA, но дешевле — числа стартовые, подбирает владелец ---
+
+## Лёгкий SDFGI (П13 1.1): каскадов 3–4 (берём 4), без окклюзии (самый
+## дорогой SDFGI-проход), GI в половинном разрешении, лучей меньше
+## (8 вместо движковых 16), схождение медленнее (30 кадров вместо 10) и
+## реже обновляется свет (16 кадров вместо 2) — шум сходится дольше,
+## но каждый кадр дешевле. Ночь ведёт DayCycle той же логикой, что на
+## ULTRA (sdfgi_energy по dayness).
+const HIGH_SDFGI_CASCADES: int = 4
+const HIGH_SDFGI_BOUNCE_FEEDBACK: float = 0.5
+const HIGH_SDFGI_RAY_COUNT: int = RenderingServer.ENV_SDFGI_RAY_COUNT_8
+const HIGH_SDFGI_FRAMES_TO_CONVERGE: int = \
+	RenderingServer.ENV_SDFGI_CONVERGE_IN_30_FRAMES
+const HIGH_SDFGI_FRAMES_TO_UPDATE_LIGHT: int = \
+	RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_16_FRAMES
+## Движковые дефолты SDFGI (ProjectSettings 4.7 их не переопределяет):
+## в них уход с HIGH возвращает лучи/кадры, ULTRA живёт на них же.
+const SDFGI_RAY_COUNT_BASE: int = RenderingServer.ENV_SDFGI_RAY_COUNT_16
+const SDFGI_FRAMES_TO_CONVERGE_BASE: int = \
+	RenderingServer.ENV_SDFGI_CONVERGE_IN_10_FRAMES
+const SDFGI_FRAMES_TO_UPDATE_LIGHT_BASE: int = \
+	RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_2_FRAMES
+## SSIL (П13 1.2): отражённый свет ближних поверхностей, качество Low
+## и половинное разрешение (half_size у environment_set_ssil_quality),
+## радиус меньше ULTRA.
+const HIGH_SSIL_INTENSITY: float = 1.0
+const HIGH_SSIL_RADIUS: float = 3.0
+const HIGH_SSIL_QUALITY: int = RenderingServer.ENV_SSIL_QUALITY_LOW
+## SSR (П13 1.3): шагов 24–32 (берём 32) — лужи и вода не теряют
+## отражения; шероховатые отражения — минимальное качество (LOW — он же
+## движковый дефолт, хвоста при уходе нет). SSR всегда считается
+## в половинном разрешении экрана — отдельного API в 4.7.2 нет.
+const HIGH_SSR_MAX_STEPS: int = 32
+const HIGH_SSR_FADE_IN: float = 0.15
+const HIGH_SSR_FADE_OUT: float = 2.0
+## Тени (П13 1.6): атласы 4096, фильтр Soft Medium (дешевле Ultra),
+## полутень чуть уже ULTRA, дальность ~120 м, сплиты с плавным
+## растворением (fade_start + blend) — без резкой границы.
+const HIGH_SHADOW_ATLAS_SIZE: int = 4096
+const HIGH_POSITIONAL_ATLAS_SIZE: int = 4096
+const HIGH_SOFT_SHADOW_QUALITY: int = RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM
+const HIGH_LIGHT_ANGULAR_DISTANCE: float = 0.4
+const HIGH_SHADOW_MAX_DISTANCE: float = 120.0
+const HIGH_SHADOW_FADE_START: float = 0.85
+## Объёмный туман (П13 1.7): сетка 128×64 между базой и ULTRA, фильтр
+## включён (ставится ниже для всех уровней); плотности не меняются.
+const HIGH_VF_WIDTH: int = 128
+const HIGH_VF_DEPTH: int = 64
+## Трава-буст (П13 1.9): спад густоты травы начинается ближе, чем на
+## ULTRA (×1.5) — множитель к базовым fade_start/fade_end шейдера травы.
+const HIGH_GRASS_FADE_MULT: float = 0.85
+## Параллакс земли (П13 1.9): до ~15 м (на ULTRA — 25, как было);
+## дальше параллакс почти не виден, а выборка ORM стоит.
+const HIGH_PARALLAX_NEAR: float = 10.0
+const HIGH_PARALLAX_FAR: float = 15.0
+## База шейдера (движковые значения uniform параллакса, ULTRA).
+const PARALLAX_NEAR_BASE: float = 15.0
+const PARALLAX_FAR_BASE: float = 25.0
+## Тени ламп срубов (П13 1.6): на HIGH включены, но гаснут дальше ~20 м
+## (distance_fade тени), сам свет живёт до HIGH_LAMP_FADE_BEGIN.
+const HIGH_LAMP_FADE_SHADOW: float = 20.0
+const HIGH_LAMP_FADE_BEGIN: float = 45.0
+const HIGH_LAMP_FADE_LENGTH: float = 15.0
+## Движковые базы для возврата с HIGH (fade сплитов и смешение).
+const SHADOW_FADE_START_BASE: float = 0.1
+const BLEND_SPLITS_BASE: bool = false
 
 ## База не-«Ультра» (2.10): значения движка 4.7 по умолчанию (проект
 ## рендер-настройок не перекрывает) — в них возвращает картинку уход
@@ -166,72 +237,129 @@ static func apply(
 	viewport: Viewport = null, moon: DirectionalLight3D = null
 ) -> void:
 	var ultra := tier == Tier.ULTRA
+	# П13-рецепт HIGH: уровень ровно HIGH (постобработка ниже — для HIGH+).
+	var hi := tier == Tier.HIGH
 	var high := tier >= Tier.HIGH
-	# Тени (2.5): атлас направленных теней и мягкость фильтра — глобально;
-	# у солнца и луны — сплиты, угловое расхождение и дальность. База —
-	# дефолты движка (PSSM_SPLITS_BASE — как раз 4 сплита).
+	# Тени (2.5; П13 1.6): атлас направленных теней, мягкость фильтра,
+	# полутень, дальность и плавное растворение сплитов — глобально;
+	# у солнца и луны одинаково. База — дефолты движка (PSSM_SPLITS_BASE —
+	# как раз 4 сплита; fade_start 0.1, blend выключен).
 	RenderingServer.directional_shadow_atlas_set_size(
-		ULTRA_SHADOW_ATLAS_SIZE if ultra else SHADOW_ATLAS_SIZE_BASE, true)
+		ULTRA_SHADOW_ATLAS_SIZE if ultra
+		else HIGH_SHADOW_ATLAS_SIZE if hi
+		else SHADOW_ATLAS_SIZE_BASE, true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(
-		ULTRA_SOFT_SHADOW_QUALITY if ultra else SOFT_SHADOW_QUALITY_BASE)
+		ULTRA_SOFT_SHADOW_QUALITY if ultra
+		else HIGH_SOFT_SHADOW_QUALITY if hi
+		else SOFT_SHADOW_QUALITY_BASE)
 	RenderingServer.positional_soft_shadow_filter_set_quality(
-		ULTRA_SOFT_SHADOW_QUALITY if ultra else SOFT_SHADOW_QUALITY_BASE)
+		ULTRA_SOFT_SHADOW_QUALITY if ultra
+		else HIGH_SOFT_SHADOW_QUALITY if hi
+		else SOFT_SHADOW_QUALITY_BASE)
 	sun.shadow_enabled = tier != Tier.SIMPLE
 	sun.directional_shadow_mode = (
 		DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if ultra else PSSM_SPLITS_BASE)
 	sun.light_angular_distance = (
-		ULTRA_LIGHT_ANGULAR_DISTANCE if ultra else LIGHT_ANGULAR_DISTANCE_BASE)
+		ULTRA_LIGHT_ANGULAR_DISTANCE if ultra
+		else HIGH_LIGHT_ANGULAR_DISTANCE if hi
+		else LIGHT_ANGULAR_DISTANCE_BASE)
 	sun.directional_shadow_max_distance = (
-		ULTRA_SHADOW_MAX_DISTANCE if ultra else SHADOW_MAX_DISTANCE_BASE)
+		ULTRA_SHADOW_MAX_DISTANCE if ultra
+		else HIGH_SHADOW_MAX_DISTANCE if hi
+		else SHADOW_MAX_DISTANCE_BASE)
+	# П13 1.6: на HIGH сплиты растворяются плавно (fade_start + blend),
+	# без резкой границы на дальности теней.
+	sun.directional_shadow_fade_start = (
+		HIGH_SHADOW_FADE_START if hi else SHADOW_FADE_START_BASE)
+	sun.directional_shadow_blend_splits = (
+		true if hi else BLEND_SPLITS_BASE)
 	if moon != null:
 		moon.shadow_enabled = tier != Tier.SIMPLE
 		moon.directional_shadow_mode = sun.directional_shadow_mode
 		moon.light_angular_distance = sun.light_angular_distance
 		moon.directional_shadow_max_distance = sun.directional_shadow_max_distance
+		moon.directional_shadow_fade_start = sun.directional_shadow_fade_start
+		moon.directional_shadow_blend_splits = sun.directional_shadow_blend_splits
 	if viewport != null:
 		viewport.texture_mipmap_bias = SIMPLE_MIPMAP_BIAS if tier == Tier.SIMPLE else 0.0
-		viewport.msaa_3d = AA_MSAA_HIGH if high else Viewport.MSAA_DISABLED
-		# Сглаживание (2.7): на ULTRA поверх MSAA 4x — SMAA. TAA не включаем
-		# ни на одном уровне (владелец утвердил резкое небо и звёзды).
+		# Сглаживание (П13 1.5): ULTRA — MSAA 4x + SMAA; HIGH — только SMAA
+		# (MSAA 4x на общей памяти встроенной графики — главный тормоз);
+		# NORMAL/SIMPLE — без AA. TAA не включаем ни на одном уровне
+		# (владелец утвердил резкое небо и звёзды).
+		viewport.msaa_3d = AA_MSAA_ULTRA if ultra else Viewport.MSAA_DISABLED
 		viewport.screen_space_aa = (
-			Viewport.SCREEN_SPACE_AA_SMAA if ultra
-			else Viewport.SCREEN_SPACE_AA_FXAA if high
+			Viewport.SCREEN_SPACE_AA_SMAA if high
 			else Viewport.SCREEN_SPACE_AA_DISABLED)
 		viewport.use_taa = false
 		# Детализация (2.8): модели всегда полной детализации (порог
-		# переключения LOD — 0 пикселей); атлас теней ламп (2.5).
+		# переключения LOD — 0 пикселей); атлас теней ламп (2.5, П13 1.6).
 		viewport.mesh_lod_threshold = 0.0 if ultra else MESH_LOD_THRESHOLD_BASE
 		viewport.positional_shadow_atlas_size = (
-			ULTRA_POSITIONAL_ATLAS_SIZE if ultra else POSITIONAL_ATLAS_SIZE_BASE)
-	# Глобальное освещение SDFGI (2.1). Ночью энергию ведёт DayCycle
-	# (lerp по dayness), здесь — дневное значение.
-	env.sdfgi_enabled = ultra
+			ULTRA_POSITIONAL_ATLAS_SIZE if ultra
+			else HIGH_POSITIONAL_ATLAS_SIZE if hi
+			else POSITIONAL_ATLAS_SIZE_BASE)
+	# Глобальное освещение SDFGI (2.1; П13 1.1 — лёгкий SDFGI на HIGH).
+	# Ночью энергию ведёт DayCycle (lerp по dayness), здесь — дневное.
+	env.sdfgi_enabled = high
 	if ultra:
 		env.sdfgi_cascades = ULTRA_SDFGI_CASCADES
 		env.sdfgi_use_occlusion = true
 		env.sdfgi_read_sky_light = true
 		env.sdfgi_bounce_feedback = ULTRA_SDFGI_BOUNCE_FEEDBACK
 		env.sdfgi_energy = ULTRA_SDFGI_ENERGY
+	elif hi:
+		env.sdfgi_cascades = HIGH_SDFGI_CASCADES
+		env.sdfgi_use_occlusion = false
+		env.sdfgi_read_sky_light = true
+		env.sdfgi_bounce_feedback = HIGH_SDFGI_BOUNCE_FEEDBACK
+		env.sdfgi_energy = ULTRA_SDFGI_ENERGY
 	else:
 		env.sdfgi_energy = SDFGI_ENERGY_BASE
-	# SSIL (2.2) и SSR (2.3): только ULTRA, значения умеренные.
-	env.ssil_enabled = ultra
+	# П13 1.1: GI в половинном разрешении — только на HIGH; ULTRA и база —
+	# полное (глобальный флаг, ставится при каждом вызове — без хвостов).
+	RenderingServer.gi_set_use_half_resolution(hi)
+	# Лучи и кадры SDFGI (П13 1.1): на HIGH дешевле и медленнее, на остальных —
+	# движковые дефолты (глобальные, уход с HIGH возвращает их).
+	RenderingServer.environment_set_sdfgi_ray_count(
+		HIGH_SDFGI_RAY_COUNT if hi else SDFGI_RAY_COUNT_BASE)
+	RenderingServer.environment_set_sdfgi_frames_to_converge(
+		HIGH_SDFGI_FRAMES_TO_CONVERGE if hi
+		else SDFGI_FRAMES_TO_CONVERGE_BASE)
+	RenderingServer.environment_set_sdfgi_frames_to_update_light(
+		HIGH_SDFGI_FRAMES_TO_UPDATE_LIGHT if hi
+		else SDFGI_FRAMES_TO_UPDATE_LIGHT_BASE)
+	# SSIL (2.2; П13 1.2) и SSR (2.3; П13 1.3): на ULTRA полноценно,
+	# на HIGH — дешевле, ниже HIGH выключены.
+	env.ssil_enabled = high
 	if ultra:
 		env.ssil_intensity = ULTRA_SSIL_INTENSITY
 		env.ssil_radius = ULTRA_SSIL_RADIUS
-	env.ssr_enabled = ultra
+	elif hi:
+		env.ssil_intensity = HIGH_SSIL_INTENSITY
+		env.ssil_radius = HIGH_SSIL_RADIUS
+	env.ssr_enabled = high
 	if ultra:
 		env.ssr_max_steps = ULTRA_SSR_MAX_STEPS
 		env.ssr_fade_in = ULTRA_SSR_FADE_IN
 		env.ssr_fade_out = ULTRA_SSR_FADE_OUT
-	# Качество SSAO/SSIL (2.4): Ultra и без полуразрешения на ULTRA,
-	# на остальных — база движка (Medium, полуразрешение). Остальные
-	# аргументы — дефолты движка (адаптивный порог, проходы блюра, отступ).
+	elif hi:
+		env.ssr_max_steps = HIGH_SSR_MAX_STEPS
+		env.ssr_fade_in = HIGH_SSR_FADE_IN
+		env.ssr_fade_out = HIGH_SSR_FADE_OUT
+		# Минимальное качество шероховатых SSR (LOW — движковый дефолт,
+		# поэтому на остальных уровнях явно возвращать не нужно).
+		RenderingServer.environment_set_ssr_roughness_quality(
+			RenderingServer.ENV_SSR_ROUGHNESS_QUALITY_LOW)
+	# Качество SSAO/SSIL (2.4; П13 1.2/1.4): Ultra и без полуразрешения
+	# на ULTRA; на HIGH SSIL Low и полуразрешение, SSAO — база (Medium,
+	# полуразрешение, как было). Остальные аргументы — дефолты движка.
 	RenderingServer.environment_set_ssao_quality(
 		RenderingServer.ENV_SSAO_QUALITY_ULTRA if ultra else SSAO_QUALITY_BASE,
 		not ultra, 0.5, 2, 50.0, 300.0)
 	RenderingServer.environment_set_ssil_quality(
-		RenderingServer.ENV_SSIL_QUALITY_ULTRA if ultra else SSIL_QUALITY_BASE,
+		RenderingServer.ENV_SSIL_QUALITY_ULTRA if ultra
+		else HIGH_SSIL_QUALITY if hi
+		else SSIL_QUALITY_BASE,
 		not ultra, 0.5, 2, 50.0, 300.0)
 	env.ssao_enabled = high
 	if high:
@@ -246,11 +374,16 @@ static func apply(
 	env.volumetric_fog_enabled = high
 	if high:
 		env.volumetric_fog_density = VOLUMETRIC_DENSITY
-	# Качество объёмного тумана (2.6): сетка плотнее (свет в сгустках
-	# зон считается точнее) и фильтр активен; плотности не меняются.
+	# Качество объёмного тумана (2.6; П13 1.7): сетка плотнее (свет
+	# в сгустках зон считается точнее) и фильтр активен; плотности
+	# не меняются. HIGH — 128×64, между базой и ULTRA.
 	RenderingServer.environment_set_volumetric_fog_volume_size(
-		ULTRA_VF_WIDTH if ultra else VF_WIDTH_BASE,
-		ULTRA_VF_DEPTH if ultra else VF_DEPTH_BASE)
+		ULTRA_VF_WIDTH if ultra
+		else HIGH_VF_WIDTH if hi
+		else VF_WIDTH_BASE,
+		ULTRA_VF_DEPTH if ultra
+		else HIGH_VF_DEPTH if hi
+		else VF_DEPTH_BASE)
 	RenderingServer.environment_set_volumetric_fog_filter_active(true)
 	# Лучи сквозь кроны (П5.7 блок 3): вклад солнца в объёмный туман
 	# заметнее дефолтного — световые столбы между деревьями.

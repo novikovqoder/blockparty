@@ -320,6 +320,40 @@ func set_fade_distance(fade_min: float, fade_max: float) -> void:
 		material.set_shader_parameter("shore_fade_max", fade_min * 0.85)
 
 
+## Растворение воды по уровню графики (баг-фикс П13 п. 5): 46–66 м —
+## «Простая графика» (камера far 70, Доработка-2 П5.13 П3); прочие уровни —
+## базовая дальность шейдера (700–1400 м, пена 280–620) без видимого
+## обрыва: дальняя плоскость воды уходит за горизонт.
+const FADE_SIMPLE_MIN: float = 46.0
+const FADE_SIMPLE_MAX: float = 66.0
+const FADE_BASE_MIN: float = 700.0
+const FADE_BASE_MAX: float = 1400.0
+const FOAM_BASE_MIN: float = 280.0
+const FOAM_BASE_MAX: float = 620.0
+
+
+func set_tier_fade(tier: int) -> void:
+	if tier == GraphicsQuality.Tier.SIMPLE:
+		set_fade_distance(FADE_SIMPLE_MIN, FADE_SIMPLE_MAX)
+		return
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("distance_fade_min", FADE_BASE_MIN)
+		material.set_shader_parameter("distance_fade_max", FADE_BASE_MAX)
+		material.set_shader_parameter("foam_fade_min", FOAM_BASE_MIN)
+		material.set_shader_parameter("foam_fade_max", FOAM_BASE_MAX)
+		material.set_shader_parameter("shore_fade_min", FOAM_BASE_MIN)
+		material.set_shader_parameter("shore_fade_max", FOAM_BASE_MAX)
+
+
+## Преломление воды на лету (панель замера F3, П13 3.2): включено на
+## HIGH/ULTRA (SPEC П12 4.4) — переключает шейдер копии материалов
+## (параметры ShaderMaterial переживают смену шейдера).
+func set_refraction(on: bool) -> void:
+	var shader := WATER_REFRACTION if on else WATER_PLAIN
+	for material: ShaderMaterial in _water_materials:
+		material.shader = shader
+
+
 ## Отражение неба и яркость глубинных цветов (П5.13, блок 2; доработка-2
 ## П3 — Boujie Water): френелевский цвет поверхности берёт горизонт неба
 ## (закат — тёплая вода без «бордовой полосы»), глубинные цвета гаснут

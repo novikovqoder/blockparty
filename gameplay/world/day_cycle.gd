@@ -169,10 +169,11 @@ func _process(_delta: float) -> void:
 	_environment.ambient_light_energy = DayMath.ambient_energy(world_time)
 	# Ночью экспозиция выше — «мягкая светлая ночь» (глаза адаптировались).
 	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE, 1.0, dayness)
-	# ULTRA (П11 2.1): SDFGI светит и под тёмным небом (отскоки, накопленный
-	# свет) — ночь светлеет. Энергия приглушается от времени суток, как
-	# экспозиция: днём — полная, глубокой ночью — NIGHT_ENERGY. Не-ULTRA
-	# окружения SDFGI не включают, их энергия не трогается.
+	# SDFGI (П11 2.1; П13 1.1 — и на HIGH): SDFGI светит и под тёмным небом
+	# (отскоки, накопленный свет) — ночь светлеет. Энергия приглушается
+	# от времени суток, как экспозиция: днём — полная, глубокой ночью —
+	# NIGHT_ENERGY. Уровни без SDFGI (SIMPLE/NORMAL) его не включают,
+	# их энергия не трогается.
 	if _environment.sdfgi_enabled:
 		_environment.sdfgi_energy = lerpf(
 			GraphicsQuality.ULTRA_SDFGI_NIGHT_ENERGY,

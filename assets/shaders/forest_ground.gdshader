@@ -112,10 +112,13 @@ const float PUDDLE_ROUGH = 0.05;
 uniform float wet_specular = 0.03;
 const float PUDDLE_SPEC = 0.22;
 
-// Параллакс (SPEC 2.6): HIGH/ULTRA, до PARALLAX_FAR м с затуханием.
+// Параллакс (SPEC 2.6; П13 1.9): HIGH/ULTRA, гаснет от parallax_near
+// до parallax_far (HIGH — 10–15 м, ULTRA — 15–25, ставит ForestGround
+// по уровню; раньше — константы 15/25). parallax_scale = 0 выключает
+// параллакс на лету (панель замера F3).
 uniform float parallax_scale = 0.06;
-const float PARALLAX_NEAR = 15.0;
-const float PARALLAX_FAR = 25.0;
+uniform float parallax_near = 15.0;
+uniform float parallax_far = 25.0;
 
 // AO-канал: вклад в ALBEDO (в кастомном light() нет встроенного AO-выхода,
 // поэтому эквивалент AO_LIGHT_AFFECT — доля затемнения альбедо).
@@ -267,13 +270,13 @@ void fragment() {
 	vec3 tri_w = pow(abs(relief_world), vec3(4.0));
 	tri_w /= (tri_w.x + tri_w.y + tri_w.z);
 
-	// Параллакс (HIGH/ULTRA, до 25 м с затуханием): смещение координат
+	// Параллакс (HIGH/ULTRA, гаснет к parallax_far): смещение координат
 	// верхней плоскости по высоте подстилки (ORM.b) против взгляда.
 	// ORM читается до основных сэмплов — один лишний фетч только вблизи.
 	vec2 parallax_off = vec2(0.0);
 	if (quality >= QUALITY_HIGH) {
 		float dist = length(-VERTEX);
-		float p_amt = (1.0 - smoothstep(PARALLAX_NEAR, PARALLAX_FAR, dist))
+		float p_amt = (1.0 - smoothstep(parallax_near, parallax_far, dist))
 			* step(0.05, tri_w.y);
 		if (p_amt > 0.001) {
 			vec3 wdir = normalize(

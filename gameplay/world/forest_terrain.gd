@@ -151,6 +151,13 @@ static func make_material(art: IslandArt, quality: int) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
 	material.set_shader_parameter("quality", quality)
+	# Параллакс (П13 1.9): на HIGH гаснет ближе (10–15 м), на ULTRA —
+	# прежние 15–25 м (движковые значения шейдера).
+	if quality == GraphicsQuality.Tier.HIGH:
+		material.set_shader_parameter(
+			"parallax_near", GraphicsQuality.HIGH_PARALLAX_NEAR)
+		material.set_shader_parameter(
+			"parallax_far", GraphicsQuality.HIGH_PARALLAX_FAR)
 	material.set_shader_parameter("litter_tint", TINT_LITTER)
 	material.set_shader_parameter("grass_tint", TINT_GRASS)
 	material.set_shader_parameter("rock_tint", TINT_ROCK)

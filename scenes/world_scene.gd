@@ -310,9 +310,12 @@ func _draw_debug_collisions(root: Node) -> void:
 ## (блок е: glow, SSAO, виньетка) и объёмный туман с дымкой в Лесу
 ## и у Озера (шаг 4 П4.5; на compatibility-рендерере серверных скриншотов
 ## SSAO и объёмный туман недоступны — проверяет владелец).
-## «Ультра» (П11, раздел 2): всё из «Высокого» плюс SDFGI, SSIL, SSR,
-## тени 8192 с Soft Ultra, туман высокого качества и SMAA — набор ставит
-## GraphicsQuality.apply(); срубам включаются «Ультра»-детали (2.5/2.9).
+## «Ультра» (П11, раздел 2): всё из «Высокого» плюс полноценные SDFGI, SSIL,
+## SSR, тени 8192 с Soft Ultra, туман 256×128 — набор ставит
+## GraphicsQuality.apply(). П13: «Высокое» — тот же набор эффектов, но
+## дешевле (лёгкий SDFGI и SSIL/SSR в половинном разрешении, SMAA без MSAA,
+## атласы 4096, туман 128×64); срубам на HIGH включаются пробы и тени ламп
+## с distance_fade (П13 1.6/1.8).
 func _apply_graphics_quality() -> void:
 	var tier := GraphicsQuality.tier_from_settings()
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
@@ -323,14 +326,15 @@ func _apply_graphics_quality() -> void:
 	GraphicsQuality.apply(
 		$WorldEnvironment.environment, $WorldEnvironment/SunLight, tier,
 		get_viewport(), $WorldEnvironment/MoonLight)
-	# Срубы (П11 2.5/2.9): на ULTRA у ламп-«факелов» включаются тени,
-	# в комнатах появляются пробы отражений; уход с «Ультра» выключает
-	# их начисто (2.10).
+	# Срубы (П11 2.5/2.9; П13 1.6/1.8): на ULTRA у ламп-«факелов» включаются
+	# тени, в комнатах появляются пробы отражений; на HIGH пробы тоже есть,
+	# тени ламп — с distance_fade; уход с уровня выключает всё начисто (2.10).
 	for node: Node in get_tree().get_nodes_in_group(CabinHouse.GROUP):
-		(node as CabinHouse).set_ultra(tier == GraphicsQuality.Tier.ULTRA)
+		(node as CabinHouse).set_quality(tier)
 	# Трава и мелкие предметы (П12 E): уровень применяет IslandView.set_quality
 	# — SIMPLE прячет траву и приближает дальность мелочи, ULTRA отодвигает
-	# дальность травы и мелких предметов ×1.5 (переданный пункт П11 2.8).
+	# дальность травы и мелких предметов ×1.5 (переданный пункт П11 2.8);
+	# на HIGH спад травы-буста начинается ближе (П13 1.9).
 	(_island.get_node("IslandView") as IslandView).set_quality(tier)
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
@@ -338,10 +342,12 @@ func _apply_graphics_quality() -> void:
 	# базовой из баланса (после «Простого» far 70 возвращается).
 	if tier == GraphicsQuality.Tier.ULTRA:
 		_player.camera.set_view_distance(B.view_distance)
-		# Доработка-2 П5.13, П3: вода Boujie растворяется ближе к камере
-		# (fade 46–66 м) — при far 70 не остаётся видимого обрыва воды.
-		for node: Node in get_tree().get_nodes_in_group("water_surface"):
-			(node as WaterArea).set_fade_distance(46.0, 66.0)
+	# Вода (Доработка-2 П5.13, П3; баг-фикс П13 п. 5): растворение 46–66 м
+	# принадлежит «Простой графике» (камера far 70) — после слияний П11/П12
+	# ветка уехала в ULTRA и гасила воду на «Ультра» уже с 66 м. Прочие
+	# уровни — базовая дальность растворения шейдера.
+	for node: Node in get_tree().get_nodes_in_group("water_surface"):
+		(node as WaterArea).set_tier_fade(tier)
 	if tier >= GraphicsQuality.Tier.HIGH:
 		# Лес (П5.7 блок 3): сгусток шире зоны деревьев (~56 м) — объёмный
 		# туман стелется по всей реалистичной части; у Озера прежний компакт.
