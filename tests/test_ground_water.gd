@@ -83,8 +83,8 @@ func test_ground_shader_gates_by_quality() -> void:
 		text.contains("if (quality >= QUALITY_HIGH) {"),
 		"параллакс — только HIGH/ULTRA")
 	assert_true(
-		text.contains("PARALLAX_NEAR") and text.contains("PARALLAX_FAR"),
-		"затухание параллакса по дистанции")
+		text.contains("parallax_near") and text.contains("parallax_far"),
+		"затухание параллакса по дистанции (П13: дальности — uniform уровня)")
 	assert_true(
 		text.contains("AO_MIX") and text.contains("quality == QUALITY_SIMPLE"),
 		"AO-канал и roughness из карт — не на SIMPLE")

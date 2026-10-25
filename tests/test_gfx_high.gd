@@ -168,7 +168,8 @@ func test_high_recipe_applied_to_env_and_viewport() -> void:
 
 func test_high_grass_parallax_in_ground_material() -> void:
 	# П13 1.9: материал земли на HIGH получает параллакс 10–15 м
-	# (uniform шейдера), на ULTRA — базовые 15–25.
+	# (uniform шейдера); на прочих уровнях uniform не ставится — живут
+	# дефолты шейдера 15–25 (база ULTRA), их проверяем исходником.
 	var high_material := ForestGround.make_material(
 		ART, GraphicsQuality.Tier.HIGH)
 	assert_almost_eq(
@@ -179,16 +180,20 @@ func test_high_grass_parallax_in_ground_material() -> void:
 		float(high_material.get_shader_parameter("parallax_far")),
 		GraphicsQuality.HIGH_PARALLAX_FAR, 0.001,
 		"HIGH: параллакс до 15 м")
-	var ultra_material := ForestGround.make_material(
-		ART, GraphicsQuality.Tier.ULTRA)
 	assert_almost_eq(
-		float(ultra_material.get_shader_parameter("parallax_near")),
-		GraphicsQuality.PARALLAX_NEAR_BASE, 0.001,
-		"ULTRA: параллакс от базы (15 м)")
+		GraphicsQuality.PARALLAX_NEAR_BASE, 15.0, 0.001,
+		"база параллакса (ULTRA) — от 15 м")
 	assert_almost_eq(
-		float(ultra_material.get_shader_parameter("parallax_far")),
-		GraphicsQuality.PARALLAX_FAR_BASE, 0.001,
-		"ULTRA: параллакс до базы (25 м)")
+		GraphicsQuality.PARALLAX_FAR_BASE, 25.0, 0.001,
+		"база параллакса (ULTRA) — до 25 м")
+	var shader_text: String = load(
+		"res://assets/shaders/forest_ground.gdshader").code
+	assert_true(
+		shader_text.contains("uniform float parallax_near = 15.0;"),
+		"ULTRA/база: дефолт шейдера — параллакс от 15 м")
+	assert_true(
+		shader_text.contains("uniform float parallax_far = 25.0;"),
+		"ULTRA/база: дефолт шейдера — параллакс до 25 м")
 
 
 func test_cabin_high_shadows_and_probes() -> void:
@@ -371,11 +376,10 @@ func test_f3_panel_toggles_effects() -> void:
 		panel._boxes[id].button_pressed = true
 		assert_true(
 			env.get(env_props[id]), "галочка %s вернула эффект" % id)
-	# AA: снятая галочка гасит SMAA на viewport сцены.
+	# AA: снятая галочка гасит SMAA на viewport сцены. Уровень мир применяет
+	# к корневому viewport — в тесте ставим SMAA так же, как apply(HIGH).
 	var root_viewport := get_viewport()
-	assert_eq(
-		root_viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_SMAA,
-		"HIGH: SMAA на viewport (применён применением уровня выше)")
+	root_viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_SMAA
 	panel._boxes[&"aa"].button_pressed = false
 	assert_eq(
 		root_viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_DISABLED,
@@ -385,14 +389,17 @@ func test_f3_panel_toggles_effects() -> void:
 		root_viewport.screen_space_aa, Viewport.SCREEN_SPACE_AA_SMAA,
 		"галочка aa вернула SMAA")
 	root_viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
-	sun.free()
-	# Повторное применение качества сбрасывает галочки (эффекты включены).
+	# Повторное применение качества миром (apply + watch_graphics) включает
+	# эффекты заново и сбрасывает галочки.
 	panel._boxes[&"sdfgi"].button_pressed = false
+	assert_false(env.sdfgi_enabled, "галочка sdfgi выключила SDFGI")
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.HIGH)
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	assert_true(
 		panel._boxes[&"sdfgi"].button_pressed,
 		"повторное применение сбросило галочку sdfgi")
 	assert_true(env.sdfgi_enabled, "повторное применение вернуло SDFGI")
+	sun.free()
 
 
 func test_f3_panel_restores_tier_not_everything() -> void:
@@ -461,7 +468,11 @@ func test_f3_and_menu_texts_translated() -> void:
 				csv[key][1], "", "ключ %s: есть русский текст" % key)
 			assert_ne(
 				csv[key][2], "", "ключ %s: есть английский текст" % key)
-	# П13 4: формулировка про «Высокое» — почти та же картинка, встройка.
+	# П13 4: формулировка про «Высокое» — почти та же картинка, встройка
+	# (русский текст из CSV — локаль в тестах не гарантирована).
 	assert_string_contains(
-		tr("BU_DESC_QUALITY_2"), "почти та же картинка",
+		String(csv["BU_DESC_QUALITY_2"][1]), "почти та же картинка",
 		"описание «Высокого» — из SPEC")
+	assert_string_contains(
+		String(csv["BU_DESC_QUALITY_3"][1]), "максимальное качество",
+		"описание «Ультра» — из SPEC")
