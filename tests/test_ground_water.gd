@@ -104,6 +104,159 @@ func test_no_oversized_files() -> void:
 	assert_eq(oversize.size(), 0, "файлов > 10 МБ нет: %s" % str(oversize))
 
 
+# --- П12 E: наполнение земли ---
+
+func test_ground_detail_models_licensed() -> void:
+	# SPEC П12 приёмка: у всех моделей-наполнителей есть запись в LICENSES.md
+	# (CC0, polyhaven), файлы реально лежат в third_party.
+	for pair: Array in [
+		["namaqualand_boulder_02/boulder_02_lo.res", "namaqualand_boulder_02"],
+		["namaqualand_boulder_03/boulder_03_lo.res", "namaqualand_boulder_03"],
+		["namaqualand_stones_01/stones_lo.res", "namaqualand_stones_01"],
+		["tree_stump_01/stump_01_lo.res", "tree_stump_01"],
+		["tree_stump_02/stump_02_lo.res", "tree_stump_02"],
+		["root_cluster_01/roots_lo.res", "root_cluster_01"],
+		["single_root/root_lo.res", "single_root"],
+		["bark_debris_01/debris_lo.res", "bark_debris_01"],
+		["fern_02/fern_lo.res", "fern_02"],
+	]:
+		var path := "%s/polyhaven.com/%s" % [THIRD_PARTY, pair[0]]
+		assert_true(ResourceLoader.exists(path), "модель лежит в проекте: %s" % path)
+		assert_true(
+			_licenses_mention(_read_licenses(), "%s | Poly Haven" % pair[1]),
+			"LICENSES.md покрывает набор %s" % pair[1],
+		)
+
+
+func test_details_deterministic_and_sane() -> void:
+	# SPEC П12 3.1: разброс детерминирован (два построения — те же
+	# трансформы), всё на суше в пределах острова, вне Площади, коллизии —
+	# только у крупных (валуны и пни). Инстанс-данные MultiMesh в headless
+	# не читаются (пустой RenderingServer) — проверка по сырым трансформам
+	# сборки, в игре узел строится из них же.
+	var first: Dictionary = GroundDetails.build(ART, GraphicsQuality.Tier.HIGH)
+	var second: Dictionary = GroundDetails.build(ART, GraphicsQuality.Tier.HIGH)
+	var transforms: Dictionary = first["transforms"]
+	assert_gte(transforms.size(), 8, "видов наполнения построено (из 10)")
+	var colliders: Array[Dictionary] = first["colliders"]
+	assert_gte(colliders.size(), 20, "коллизии крупных есть: %d" % colliders.size())
+	var total := 0
+	for type: String in transforms:
+		var list: Array = transforms[type]
+		var mirror: Array = second["transforms"].get(type, [])
+		assert_eq(list.size(), mirror.size(),
+			"вид %s: то же число экземпляров" % type)
+		var same := true
+		for i: int in list.size():
+			if list[i] != mirror[i]:
+				same = false
+				break
+		assert_true(same, "вид %s: трансформы совпадают (детерминизм)" % type)
+		total += list.size()
+		for xf_variant: Variant in list:
+			var pos: Vector3 = (xf_variant as Transform3D).origin
+			assert_gt(pos.y, 0.0, "вид %s: над водой (y=%.2f)" % [type, pos.y])
+			assert_true(absf(pos.x) <= 128.0 and absf(pos.z) <= 128.0,
+				"вид %s: в пределах острова" % type)
+			var plaza: float = ForestGround._plaza_weight(pos.x, pos.z)
+			assert_lt(plaza, 0.5, "вид %s: не на Площади (%.1f, %.1f)"
+				% [type, pos.x, pos.z])
+	for collider: Dictionary in colliders:
+		var size: Vector3 = collider["size"]
+		assert_true(size.x > 0.5 and size.y > 0.2,
+			"бокс коллизии крупного адекватен: %s" % str(size))
+	assert_between(total, 300, 4000,
+		"экземпляров наполнения разумно (300–4000): %d" % total)
+	print("П12 E: наполнение — %d экземпляров, коллизий %d"
+		% [total, colliders.size()])
+
+
+func test_grass_boost_by_tier() -> void:
+	# SPEC П12 3.2: слой травы-буста только на HIGH/ULTRA, на ULTRA плотнее.
+	for tier: int in [
+		GraphicsQuality.Tier.SIMPLE,
+		GraphicsQuality.Tier.NORMAL,
+	]:
+		var types: Array = (
+			GroundDetails.build(ART, tier)["transforms"] as Dictionary).keys()
+		assert_eq(
+			types.filter(func(type: String) -> bool:
+				return type.begins_with("gd_grass")).size(),
+			0, "буст-травы нет на Tier.%d" % tier,
+		)
+	var high: int = _grass_total(
+		GroundDetails.build(ART, GraphicsQuality.Tier.HIGH))
+	var ultra: int = _grass_total(
+		GroundDetails.build(ART, GraphicsQuality.Tier.ULTRA))
+	assert_gt(high, 500, "буст на HIGH заметен: %d пучков" % high)
+	assert_almost_eq(
+		float(ultra) / float(high),
+		GroundDetails.GRASS_BOOST_ULTRA / GroundDetails.GRASS_BOOST_HIGH,
+		0.15, "ULTRA плотнее HIGH пропорционально константе (%d/%d)" % [ultra, high],
+	)
+
+
+func test_island_view_quality_ranges() -> void:
+	# П12 E / П11 2.8: SIMPLE прячет траву и приближает дальность мелочи,
+	# ULTRA отодвигает дальность ×1.5 и спад густоты травы в шейдере.
+	WorldMaterials.textured_headless = true
+	var view := IslandView.new()
+	view.art = ART
+	add_child_autofree(view)
+	var ranges: Dictionary = {}
+	for child: Node in view.get_children():
+		if child is MultiMeshInstance3D:
+			var type := String((child as MultiMeshInstance3D).name)
+			if type.begins_with("gd_") or type.begins_with("Props_rgrass"):
+				ranges[type] = (child as MultiMeshInstance3D).visibility_range_end
+	assert_gte(ranges.size(), 5, "группы наполнения в острове: %d" % ranges.size())
+	# SIMPLE: трава и папоротники скрыты, дальность мелочи ×0.6 (мин. 25 м).
+	view.set_quality(GraphicsQuality.Tier.SIMPLE)
+	for child: Node in view.get_children():
+		if child is MultiMeshInstance3D:
+			var instance := child as MultiMeshInstance3D
+			var type := String(instance.name)
+			if type.begins_with("Props_rgrass") \
+					or type.begins_with("gd_grass") or type == "gd_fern":
+				assert_false(instance.visible, "SIMPLE прячет %s" % type)
+			if ranges.has(type):
+				assert_almost_eq(instance.visibility_range_end,
+					maxf(25.0, float(ranges[type]) * 0.6), 0.01,
+					"SIMPLE: дальность %s ×0.6" % type)
+	# ULTRA: всё видно, дальность ×1.5, спад травы отодвинут ×1.5.
+	view.set_quality(GraphicsQuality.Tier.ULTRA)
+	for child: Node in view.get_children():
+		if child is MultiMeshInstance3D:
+			var instance := child as MultiMeshInstance3D
+			var type := String(instance.name)
+			if type.begins_with("Props_rgrass") \
+					or type.begins_with("gd_grass") or type == "gd_fern":
+				assert_true(instance.visible, "ULTRA возвращает %s" % type)
+			if ranges.has(type):
+				assert_almost_eq(instance.visibility_range_end,
+					float(ranges[type]) * 1.5, 0.01,
+					"ULTRA: дальность %s ×1.5" % type)
+			if type == "Props_rgrass_0":
+				var material := instance.material_override
+				assert_true(material is ShaderMaterial,
+					"материал травы шейдерный (textured_headless)")
+				if material is ShaderMaterial:
+					var fade: float = float(
+						(material as ShaderMaterial).get_shader_parameter(
+							"fade_start"))
+					assert_almost_eq(fade, 40.0 * 1.5, 0.01,
+						"ULTRA: спад травы ×1.5 (fade_start %.1f)" % fade)
+	WorldMaterials.textured_headless = false
+
+
+static func _grass_total(built: Dictionary) -> int:
+	var total := 0
+	for type: String in built["transforms"]:
+		if type.begins_with("gd_grass"):
+			total += (built["transforms"][type] as Array).size()
+	return total
+
+
 # --- вспомогательные ---
 
 func _read_licenses() -> String:

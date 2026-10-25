@@ -328,13 +328,16 @@ func _apply_graphics_quality() -> void:
 	# их начисто (2.10).
 	for node: Node in get_tree().get_nodes_in_group(CabinHouse.GROUP):
 		(node as CabinHouse).set_ultra(tier == GraphicsQuality.Tier.ULTRA)
-	# Трава и мелкие предметы: «Простая графика» прячет lowpoly-траву
-	# и приближает дальность предметов. Метод существовал с П4.5, но
-	# не вызывался (найдено в П5.7 блоке 7).
-	(_island.get_node("IslandView") as IslandView).set_simple_graphics(
-		tier == GraphicsQuality.Tier.SIMPLE)
+	# Трава и мелкие предметы (П12 E): уровень применяет IslandView.set_quality
+	# — SIMPLE прячет траву и приближает дальность мелочи, ULTRA отодвигает
+	# дальность травы и мелких предметов ×1.5 (переданный пункт П11 2.8).
+	(_island.get_node("IslandView") as IslandView).set_quality(tier)
 	if tier == GraphicsQuality.Tier.SIMPLE:
 		_player.camera.set_view_distance(B.view_distance_simple)
+	# П11 2.8 (передано в П12 E): на ULTRA дальность камеры не меньше
+	# базовой из баланса (после «Простого» far 70 возвращается).
+	if tier == GraphicsQuality.Tier.ULTRA:
+		_player.camera.set_view_distance(B.view_distance)
 		# Доработка-2 П5.13, П3: вода Boujie растворяется ближе к камере
 		# (fade 46–66 м) — при far 70 не остаётся видимого обрыва воды.
 		for node: Node in get_tree().get_nodes_in_group("water_surface"):
