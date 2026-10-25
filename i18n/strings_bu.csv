@@ -36,8 +36,16 @@ BU_OPT_LOW,Низкое,Low
 BU_OPT_MEDIUM,Среднее,Medium
 BU_OPT_HIGH,Высокое,High
 BU_OPT_ULTRA,Ультра,Ultra
-BU_DESC_QUALITY,"Общий пресет: тени, туман, постобработка. «Ультра» — глобальное освещение, отражения, мягкие тени высокого разрешения.","Overall preset: shadows, fog, post-processing. Ultra adds global illumination, reflections and high-resolution soft shadows."
+BU_DESC_QUALITY_0,Минимум эффектов: без глобального освещения и отражений, максимально быстро.,No global illumination or reflections, runs as fast as possible.
+BU_DESC_QUALITY_1,Базовые тени и постобработка без тяжёлых эффектов.,Basic shadows and post-processing without heavy effects.
+BU_DESC_QUALITY_2,"Почти та же картинка, рассчитано на встроенную графику и средние видеокарты.","Nearly the same picture, tuned for integrated graphics and mid-range GPUs."
+BU_DESC_QUALITY_3,Максимальное качество для мощных видеокарт.,Maximum quality for powerful GPUs.
 BU_WARN_QUALITY,"«Ультра» нагружает видеокарту: нужен уровень RTX 3060 / RX 6700 и выше.","Ultra is heavy on the GPU: RTX 3060 / RX 6700 or better recommended."
+BU_SET_RES3D,Разрешение 3D,3D resolution
+BU_DESC_RES3D_0,Мир рисуется в полном разрешении.,The world renders at the full resolution.
+BU_DESC_RES3D_1,Лёгкое ускорение, разница почти незаметна.,A slight speedup, the difference is barely noticeable.
+BU_DESC_RES3D_2,Заметное ускорение, мелкие детали чуть мягче.,A noticeable speedup, fine details get slightly softer.
+BU_DESC_RES3D_3,Самый большой прирост скорости на встроенной графике почти без потери качества.,The biggest speedup on integrated graphics with almost no quality loss.
 BU_SET_VSYNC,Вертикальная синхронизация,V-Sync
 BU_DESC_VSYNC,"Убирает разрывы кадра, но может добавить небольшую задержку ввода.",Removes screen tearing but may add a little input latency.
 BU_SET_FPS,Ограничение кадров,Frame rate limit

@@ -23,7 +23,8 @@ const SCHEMA: Dictionary[StringName, Array] = {
 	&"gfx": [
 		{"k": "mode", "t": "choice", "label": "BU_SET_MODE", "opts": ["BU_OPT_FULLSCREEN", "BU_OPT_BORDERLESS", "BU_OPT_WINDOWED"], "desc": "BU_DESC_MODE"},
 		{"k": "res", "t": "choice", "label": "BU_SET_RES", "opts": ["1920 × 1080", "2560 × 1440", "3840 × 2160", "1600 × 900", "1280 × 720"], "desc": "BU_DESC_RES"},
-		{"k": "quality", "t": "choice", "label": "BU_SET_QUALITY", "opts": ["BU_OPT_LOW", "BU_OPT_MEDIUM", "BU_OPT_HIGH", "BU_OPT_ULTRA"], "desc": "BU_DESC_QUALITY", "warn": "BU_WARN_QUALITY"},
+		{"k": "quality", "t": "choice", "label": "BU_SET_QUALITY", "opts": ["BU_OPT_LOW", "BU_OPT_MEDIUM", "BU_OPT_HIGH", "BU_OPT_ULTRA"], "descs": ["BU_DESC_QUALITY_0", "BU_DESC_QUALITY_1", "BU_DESC_QUALITY_2", "BU_DESC_QUALITY_3"], "warn": "BU_WARN_QUALITY"},
+		{"k": "res3d", "t": "choice", "label": "BU_SET_RES3D", "opts": ["100 %", "85 %", "75 %", "67 %"], "descs": ["BU_DESC_RES3D_0", "BU_DESC_RES3D_1", "BU_DESC_RES3D_2", "BU_DESC_RES3D_3"]},
 		{"k": "vsync", "t": "toggle", "label": "BU_SET_VSYNC", "desc": "BU_DESC_VSYNC"},
 		{"k": "fps", "t": "choice", "label": "BU_SET_FPS", "opts": ["30", "60", "120", "144", "BU_OPT_UNLIMITED"], "desc": "BU_DESC_FPS"},
 		{"k": "bright", "t": "slider", "label": "BU_SET_BRIGHT", "desc": "BU_DESC_BRIGHT"},

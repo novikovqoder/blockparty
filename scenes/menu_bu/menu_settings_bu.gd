@@ -13,6 +13,12 @@ const RESOLUTIONS: Array[Vector2i] = [
 	Vector2i(1920, 1080), Vector2i(2560, 1440), Vector2i(3840, 2160),
 	Vector2i(1600, 900), Vector2i(1280, 720),
 ]
+## «Разрешение 3D» (SPEC П13 2.1): масштаб внутреннего рендера, UI всегда
+## в полном разрешении. Ниже 100 % — апскейл FSR 1.0 (пространственный,
+## без временного размытия — звёзды резкие), 67 % ≈ 2×2 пикселя.
+const RES3D_STEPS: Array[float] = [1.0, 0.85, 0.75, 0.67]
+## Резкость FSR (SPEC П13 2.2): умеренная, 0.2–0.4.
+const RES3D_FSR_SHARPNESS: float = 0.3
 const FPS_CAPS: Array[int] = [30, 60, 120, 144, 0]
 const LOCALES: Array[String] = ["ru", "en"]
 
@@ -22,7 +28,7 @@ const AUDIO_BUSES: Dictionary[StringName, String] = {
 }
 
 const DEFAULTS: Dictionary[StringName, Variant] = {
-	&"mode": 0, &"res": 0, &"quality": 2, &"vsync": true, &"fps": 1,
+	&"mode": 0, &"res": 0, &"quality": 2, &"res3d": 0, &"vsync": true, &"fps": 1,
 	&"bright": 50, &"grain": true, &"camshake": 70,
 	&"master": 80, &"music": 60, &"sfx": 85, &"amb": 70, &"voice": 90, &"bgsound": false,
 	&"sens": 45, &"invert": false,
@@ -71,10 +77,34 @@ func camera_shake_factor() -> float:
 	return clampf(float(get_int(&"camshake")) / 100.0, 0.0, 1.0)
 
 
+## Пункт «Разрешение 3D» первого запуска (SPEC П13 2.3): встроенная
+## графика (общая память с процессором) — 85 %, прочие адаптеры — 100 %.
+static func first_run_res3d(adapter_type: int) -> int:
+	return 1 if adapter_type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU else 0
+
+
+## Применить «Разрешение 3D» (SPEC П13 2.1–2.2) к viewport: 100 % — полный
+## рендер (BILINEAR, scale 1.0), ниже — рендер в пониженном разрешении
+## с апскейлом FSR 1.0 (пространственный — резкие звёзды остаются резкими,
+## FSR 2 не используется: он временной, как TAA). UI не масштабируется.
+func apply_render_scale(viewport: Viewport) -> void:
+	var scale: float = RES3D_STEPS[
+		clampi(get_int(&"res3d"), 0, RES3D_STEPS.size() - 1)]
+	viewport.scaling_3d_scale = scale
+	if scale >= 1.0:
+		viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		return
+	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+	viewport.fsr_sharpness = RES3D_FSR_SHARPNESS
+
+
 func load_from_disk() -> void:
 	reset_all()
 	var cfg: ConfigFile = ConfigFile.new()
 	if cfg.load(SAVE_PATH) != OK:
+		# Первый запуск (SPEC П13 2.3): на встроенной графике по умолчанию
+		# 85 % — «Высокое» рассчитано на неё.
+		values[&"res3d"] = first_run_res3d(RenderingServer.get_video_adapter_type())
 		return
 	for k: StringName in DEFAULTS.keys():
 		if cfg.has_section_key(SECTION, String(k)):
@@ -114,6 +144,9 @@ func apply_runtime() -> void:
 		DisplayServer.VSYNC_ENABLED if get_bool(&"vsync") else DisplayServer.VSYNC_DISABLED
 	)
 	Engine.max_fps = FPS_CAPS[clampi(get_int(&"fps"), 0, FPS_CAPS.size() - 1)]
+	# «Разрешение 3D» (П13 2.1): корневой viewport — мир рендерится
+	# в выбранном масштабе, интерфейс всегда полный.
+	apply_render_scale((Engine.get_main_loop() as SceneTree).root)
 	_apply_audio()
 	_apply_locale()
 
