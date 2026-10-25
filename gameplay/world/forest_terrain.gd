@@ -67,30 +67,110 @@ const CH_PATH: int = 3
 const SHADER: Shader = preload("res://assets/shaders/forest_ground.gdshader")
 const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 
-## Текстуры базы земли (П5.9 переделка, П2): трава ambientcg Grass001 и
-## грунт polyhaven forest_ground_05 — CC0-замены текстур демо ez-tree
-## (ground/*.jpg), чья лицензия не описана в репозитории. Смешивание
-## и тайлинг — схема демо (симплекс-шум, константы в шейдере).
-const GRASS_TEX: Texture2D = preload(
-	"res://assets/third_party/ambientcg.com/Grass001/Grass001_1K-JPG_Color.jpg")
-const DIRT_TEX: Texture2D = preload(
+# --- П12 «Земля»: слои с полным PBR (albedo + nor_gl + ORM) ---
+# Текстуры CC0: polyhaven (forest_ground_05, leafy_grass, mud_forest,
+# rock_face_03, rocky_trail), ambientcg (Moss001); ORM (R AO / G Roughness /
+# B Height) собирает tools/make_orm_textures.gd из карт локальной библиотеки.
+
+const LITTER_TEX: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_diffuse_2k.jpg")
-const DIRT_NORMAL: Texture2D = preload(
+const LITTER_NORMAL: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_nor_gl_2k.jpg")
+const LITTER_ORM: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/forest_ground_05/forest_ground_05_orm_2k.jpg")
+const GRASS_TEX: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/leafy_grass/leafy_grass_diffuse_1k.jpg")
+const GRASS_NORMAL: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/leafy_grass/leafy_grass_nor_gl_1k.jpg")
+const GRASS_ORM: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/leafy_grass/leafy_grass_orm_1k.jpg")
+const ROCK_TEX: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/rock_face_03/rock_face_03_diffuse_2k.jpg")
+const ROCK_NORMAL: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/rock_face_03/rock_face_03_nor_gl_2k.jpg")
+const ROCK_ORM: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/rock_face_03/rock_face_03_orm_2k.jpg")
+const MUD_TEX: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/mud_forest/mud_forest_diffuse_1k.jpg")
+const MUD_NORMAL: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/mud_forest/mud_forest_nor_gl_1k.jpg")
+const MUD_ORM: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/mud_forest/mud_forest_orm_1k.jpg")
+const MOSS_TEX: Texture2D = preload(
+	"res://assets/third_party/ambientcg.com/Moss001/Moss001_1K-JPG_Color.jpg")
+const MOSS_NORMAL: Texture2D = preload(
+	"res://assets/third_party/ambientcg.com/Moss001/Moss001_1K-JPG_NormalGL.jpg")
+const MOSS_ORM: Texture2D = preload(
+	"res://assets/third_party/ambientcg.com/Moss001/Moss001_1K-JPG_ORM.jpg")
+const GRAVEL_TEX: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/rocky_trail/rocky_trail_diffuse_2k.jpg")
+const GRAVEL_NORMAL: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/rocky_trail/rocky_trail_nor_gl_2k.jpg")
+const GRAVEL_ORM: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/rocky_trail/rocky_trail_orm_2k.jpg")
+
+# --- Тинты Born Unblessed (SPEC П12 2.7): приглушённые холодные, значения
+# стартовые — тон и яркость каждого слоя подбирает владелец в сборке
+# (mix с текстурой, доля — uniform tint_mix в шейдере). ---
+
+## Подстилка: тот же тон, что сводил CC0-грунт к демо (холодный, чуть синее).
+const TINT_LITTER: Color = Color(0.83, 0.84, 1.07)
+## Трава лугов: холодная, без пастельной сочности.
+const TINT_GRASS: Color = Color(0.88, 0.94, 0.92)
+## Скала склонов: серая палитры (VPAL.ground_rock).
+const TINT_ROCK: Color = Color(0.53, 0.54, 0.55)
+## Грязь низин: тёмная бурая (VPAL.ground_wet).
+const TINT_MUD: Color = Color(0.31, 0.26, 0.20)
+## Мох: приглушённый зелёный (VPAL.ground_moss).
+const TINT_MOSS: Color = Color(0.33, 0.44, 0.24)
+## Гравий тропы и Площади: серо-бурый (VPAL.ground_path).
+const TINT_GRAVEL: Color = Color(0.61, 0.50, 0.36)
+## Доля плоского тинта в цвете слоя (0 — чистая карта, 1 — плоский цвет).
+const TINT_MIX: float = 0.35
+
+## Мокрая земля (SPEC П12 2.5): затемнение albedo и падение roughness
+## по весу влаги; лужи начинаются от того же порога, что FootFx
+## (PUDDLE_WET ниже) — всплески совпадают с лужами.
+const WET_DARKEN: float = 0.65
+const WET_ROUGH_FACTOR: float = 0.55
 
 
-## Материал земли острова: карты покраски запекаются из высот запечённого
-## острова, цвета пятен берутся из палитры. Детерминирован.
-static func make_material(art: IslandArt) -> ShaderMaterial:
+## Материал земли острова (П12): шесть PBR-слоёв по тем же весам, карты
+## покраски запекаются из высот запечённого острова (детерминированно),
+## тон слоёв — константами-тинтами BU. quality — уровень графики
+## (GraphicsQuality.Tier, читает IslandView._build_terrain): на SIMPLE
+## шейдер не сэмплит слой травы, AO-канал, лужи и параллакс.
+static func make_material(art: IslandArt, quality: int) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
-	material.set_shader_parameter("wet_color", VPAL.ground_wet)
-	material.set_shader_parameter("moss_color", VPAL.ground_moss)
-	material.set_shader_parameter("rock_color", VPAL.ground_rock)
-	material.set_shader_parameter("path_color", VPAL.ground_path)
+	material.set_shader_parameter("quality", quality)
+	material.set_shader_parameter("litter_tint", TINT_LITTER)
+	material.set_shader_parameter("grass_tint", TINT_GRASS)
+	material.set_shader_parameter("rock_tint", TINT_ROCK)
+	material.set_shader_parameter("mud_tint", TINT_MUD)
+	material.set_shader_parameter("moss_tint", TINT_MOSS)
+	material.set_shader_parameter("gravel_tint", TINT_GRAVEL)
+	material.set_shader_parameter("tint_mix", TINT_MIX)
+	material.set_shader_parameter("wet_darken", WET_DARKEN)
+	material.set_shader_parameter("wet_rough_factor", WET_ROUGH_FACTOR)
+	material.set_shader_parameter("litter_tex", LITTER_TEX)
+	material.set_shader_parameter("litter_normal", LITTER_NORMAL)
+	material.set_shader_parameter("litter_orm", LITTER_ORM)
 	material.set_shader_parameter("grass_tex", GRASS_TEX)
-	material.set_shader_parameter("dirt_tex", DIRT_TEX)
-	material.set_shader_parameter("dirt_normal", DIRT_NORMAL)
+	material.set_shader_parameter("grass_normal", GRASS_NORMAL)
+	material.set_shader_parameter("grass_orm", GRASS_ORM)
+	material.set_shader_parameter("rock_tex", ROCK_TEX)
+	material.set_shader_parameter("rock_normal", ROCK_NORMAL)
+	material.set_shader_parameter("rock_orm", ROCK_ORM)
+	material.set_shader_parameter("mud_tex", MUD_TEX)
+	material.set_shader_parameter("mud_normal", MUD_NORMAL)
+	material.set_shader_parameter("mud_orm", MUD_ORM)
+	material.set_shader_parameter("moss_tex", MOSS_TEX)
+	material.set_shader_parameter("moss_normal", MOSS_NORMAL)
+	material.set_shader_parameter("moss_orm", MOSS_ORM)
+	material.set_shader_parameter("gravel_tex", GRAVEL_TEX)
+	material.set_shader_parameter("gravel_normal", GRAVEL_NORMAL)
+	material.set_shader_parameter("gravel_orm", GRAVEL_ORM)
 	material.set_shader_parameter("weight_map", _weights_texture(art))
 	material.set_shader_parameter("border_map", _border_texture(art))
 	material.set_shader_parameter("relief_normal", _relief_texture(art))

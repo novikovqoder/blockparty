@@ -3,18 +3,25 @@
 # и мешами чанков, MultiMeshInstance3D предметов (по одному на тип и
 # вариант; трава и цветы исчезают вдали — раздел 16) и боксы коллизий
 # предметов. Логики нет: остров генерируется одинаково у всех, по сети не
-# передаётся. «Простая графика» (set_simple_graphics) прячет траву
-# и приближает дальность прорисовки мелких предметов.
+# передаётся. «Простая графика» (set_quality, П12 E) прячет траву
+# и приближает дальность прорисовки мелких предметов; ULTRA отодвигает
+# дальность травы и мелочи ×1.5 (П11 2.8). П12 E добавляет наполнение
+# земли — сканы Poly Haven (GroundDetails): валуны, пни, корни, ветки,
+# папоротник и трава-буст на HIGH/ULTRA.
 class_name IslandView
 extends Node3D
 
 ## Запечённый остров (island_art.res): высоты, меши чанков, MultiMesh.
 @export var art: IslandArt
 
-## MultiMesh предметов по типу (для «Простой графики»).
+## MultiMesh предметов по типу (для «Простой графики»); типов с вариантами
+## несколько (rgrass:0..2 — три группы), поэтому список.
 var _props_by_type: Dictionary = {}
-## Базовая дальность видимости типов (для «Простой графики»).
+## Базовая дальность видимости типов (для «Простой графики» и ULTRA ×1.5).
 var _base_ranges: Dictionary = {}
+## Базовый спад густоты травы в шейдере (fade_start, fade_end) — на ULTRA
+## отодвигается ×1.5 (П11 2.8, передано в П12 E).
+var _grass_fade: Dictionary = {}
 ## Меши чанков рельефа (для адаптивной тесселяции, П1).
 var _chunk_instances: Array[MeshInstance3D] = []
 ## Текущий шаг тесселяции чанка (1.0 — печёный меш, NEAR_STEP — ближний).
@@ -24,6 +31,9 @@ var _lod_center: Vector2 = Vector2(1e9, 1e9)
 ## Карты производных рельефа для нормалей ближних чанков (строятся лениво
 ## при первой перестройке — боты и сервер без перестроек за них не платят).
 var _slope_maps: Dictionary = {}
+## Коллизии наполнения П12 E (валуны и пни) — ставятся вместе с коллизиями
+## печёных предметов в _ready.
+var _detail_colliders: Array[Dictionary] = []
 
 
 ## Радиус ближней тесселяции (доработка-2 П5.13, П1): чанки ближе этого
@@ -37,7 +47,8 @@ const LOD_HYSTERESIS: float = 6.0
 func _ready() -> void:
 	_build_terrain()
 	_build_props()
-	_build_colliders()
+	_build_details()
+	_build_colliders(_detail_colliders)
 
 
 ## Рельеф: одна карта высот и на коллизию (HeightMapShape3D — вся физика
@@ -56,7 +67,11 @@ func _build_terrain() -> void:
 	shape.map_data = art.heights
 	collision.shape = shape
 	body.add_child(collision)
-	var forest_material := ForestGround.make_material(art)
+	# П12: уровень качества (SIMPLE — упрощённая земля, HIGH/ULTRA —
+	# параллакс и AO-каналы) читается при постройке материала; смена
+	# уровня применяется при следующем входе в мир, как у воды.
+	var forest_material := ForestGround.make_material(
+		art, GraphicsQuality.tier_from_settings())
 	for chunk: Mesh in art.chunks:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = chunk
@@ -171,7 +186,7 @@ func _build_props() -> void:
 			instance.visibility_range_end = range
 			_base_ranges[type] = range
 		add_child(instance)
-		_props_by_type[type] = instance
+		_register(String(type), instance)
 
 
 ## Деревья по уровням дальности (раздел 16): полная модель до 45 м, LOD1 —
@@ -201,16 +216,20 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
 		if index == 0:
-			_props_by_type[type] = instance
+			_register(type, instance)
 
 
-## Коллизии предметов: бокс с нижней гранью в точке предмета.
-func _build_colliders() -> void:
-	if art.colliders.is_empty():
+## Коллизии предметов: бокс с нижней гранью в точке предмета. extra —
+## коллизии рантайм-наполнения П12 E (валуны и пни), тот же формат.
+func _build_colliders(extra: Array[Dictionary] = []) -> void:
+	var colliders: Array[Dictionary] = []
+	colliders.append_array(art.colliders)
+	colliders.append_array(extra)
+	if colliders.is_empty():
 		return
 	var body := StaticBody3D.new()
 	body.name = "PropsCollision"
-	for collider: Dictionary in art.colliders:
+	for collider: Dictionary in colliders:
 		var shape := CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = collider["size"]
@@ -224,13 +243,97 @@ func _build_colliders() -> void:
 	add_child(body)
 
 
-## «Простая графика» (раздел 15): без травы (включая пучки Леса, П5.9),
-## мелкие предметы ближе.
-func set_simple_graphics(simple: bool) -> void:
-	for type: String in ["rgrass", "rflower", "riris", "reed"]:
-		if _props_by_type.has(type):
-			(_props_by_type[type] as MultiMeshInstance3D).visible = not simple
+## Запомнить группу типа: у rgrass их три (rgrass:0..2), у травы-буста
+## три варианта меша — «Простая графика» и ULTRA применяются ко всем группам
+## типа. Заодно фиксируется базовый спад густоты травы её материала
+## (fade_start/fade_end шейдера grass_field) — ULTRA отодвигает его ×1.5.
+func _register(type: String, instance: MultiMeshInstance3D) -> void:
+	if not _props_by_type.has(type):
+		_props_by_type[type] = [] as Array[MultiMeshInstance3D]
+	(_props_by_type[type] as Array[MultiMeshInstance3D]).append(instance)
+	if type == "rgrass" or type.begins_with("gd_grass"):
+		var material := instance.material_override
+		if material is ShaderMaterial:
+			var shader := material as ShaderMaterial
+			var fade_start: Variant = shader.get_shader_parameter("fade_start")
+			if fade_start != null:
+				_grass_fade[type] = Vector2(
+					float(fade_start),
+					float(shader.get_shader_parameter("fade_end")))
+
+
+## Наполнение земли П12 E (SPEC 3.1–3.2, GroundDetails): сканы Poly Haven —
+## валуны, россыпь камней, пни, корни, ветки, щепа, папоротник (гуще в Лесу
+## и у руин, коллизия у крупных) и слой травы-буста на HIGH/ULTRA. Строится
+## один раз при входе в мир по текущему уровню (как вода); дальности
+## регистрируются в общих таблицах — set_quality применяет к ним те же
+## правила, что к печёным предметам.
+func _build_details() -> void:
+	var built: Dictionary = GroundDetails.build(
+		art, GraphicsQuality.tier_from_settings())
+	for node: Variant in built["instances"]:
+		var instance := node as MultiMeshInstance3D
+		add_child(instance)
+		var type := String(instance.name)
+		_base_ranges[type] = built["ranges"][type]
+		_register(type, instance)
+	for node: Variant in built["grass"]:
+		var instance := node as MultiMeshInstance3D
+		add_child(instance)
+		var type := String(instance.name)
+		_base_ranges[type] = instance.visibility_range_end
+		_register(type, instance)
+	_detail_colliders = built["colliders"]
+
+
+## Уровень качества мира (П12 E; переданный из П11 пункт 2.8): SIMPLE —
+## без травы (печёные пучки, буст и папоротники наполнения) и с дальностью
+## мелких предметов ×0.6 (минимум 25 м); ULTRA — дальность травы и мелких
+## предметов ×1.5 и спад густоты травы отодвинут ×1.5; NORMAL/HIGH — база.
+## Применяется ко всем группам типа и к наполнению земли.
+func set_quality(tier: int) -> void:
+	var simple := tier == GraphicsQuality.Tier.SIMPLE
+	var ultra := tier == GraphicsQuality.Tier.ULTRA
+	for type: String in ["rgrass", "rflower", "riris", "reed", "gd_fern"]:
+		_set_type_visible(type, not simple)
+	for type: String in _props_by_type:
+		if String(type).begins_with("gd_grass"):
+			_set_type_visible(String(type), not simple)
 	for type: String in _base_ranges:
-		var instance: MultiMeshInstance3D = _props_by_type[type]
-		instance.visibility_range_end = maxf(25.0, float(_base_ranges[type]) * 0.6) \
-			if simple else float(_base_ranges[type])
+		var base: float = float(_base_ranges[type])
+		var range := maxf(25.0, base * 0.6) \
+			if simple else base * (1.5 if ultra else 1.0)
+		for instance: MultiMeshInstance3D in _props_by_type.get(type, []):
+			instance.visibility_range_end = range
+	_apply_grass_fade(1.5 if ultra else 1.0)
+
+
+## Видимость всех групп типа («Простая графика» прячет траву и цветы).
+func _set_type_visible(type: String, visible: bool) -> void:
+	for instance: MultiMeshInstance3D in _props_by_type.get(type, []):
+		instance.visible = visible
+
+
+## Спад густоты травы шейдера (трава «садится» в землю от fade_start до
+## fade_end): на ULTRA отодвигается ×1.5 — вместе с дальностью MultiMesh
+## (П11 2.8). Материалы кэшируются по типу — достаточно одной записи.
+func _apply_grass_fade(mult: float) -> void:
+	for type: String in _grass_fade:
+		var instances: Array = _props_by_type.get(type, [])
+		if instances.is_empty():
+			continue
+		var material := (instances[0] as MultiMeshInstance3D).material_override
+		if material is ShaderMaterial:
+			var base: Vector2 = _grass_fade[type]
+			(material as ShaderMaterial).set_shader_parameter(
+				"fade_start", base.x * mult)
+			(material as ShaderMaterial).set_shader_parameter(
+				"fade_end", base.y * mult)
+
+
+## «Простая графика» (раздел 15): обёртка над set_quality (П12 E) — прежние
+## вызовы работают; снятие флага возвращает уровень из настроек.
+func set_simple_graphics(simple: bool) -> void:
+	set_quality(
+		GraphicsQuality.Tier.SIMPLE if simple
+		else GraphicsQuality.tier_from_settings())

@@ -11,6 +11,10 @@ extends RefCounted
 const GRASS_SHADER: Shader = preload("res://assets/shaders/grass_field.gdshader")
 const ROCK_SHADER: Shader = preload("res://assets/shaders/rock_moss.gdshader")
 const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
+# П12 E (SPEC 3.2): тон травы приглушён под палитру Born Unblessed — темнее
+# и холоднее «пастельной сочности» Blockparty; правка общего файла — только
+# константа тона (согласовано с владельцем на П11).
+const GRASS_MUTE: Color = Color(0.80, 0.90, 0.76)
 # Доработка-2 П5.13, П7: фактура мха камней — ambientCG Moss001 (CC0,
 # та же, что мох кладки руинов).
 const MOSS_TEX: Texture2D = preload(
@@ -39,8 +43,10 @@ static func for_type(type: StringName) -> Material:
 		"rgrass":
 			material.shader = GRASS_SHADER
 			material.set_shader_parameter("use_gradient", 1.0)
-			material.set_shader_parameter("base_color", VPAL.grass_base)
-			material.set_shader_parameter("tip_color", VPAL.grass_tip)
+			# П12 E: приглушённый тон (GRASS_MUTE) — и у печёных пучков,
+			# и у рантайм-буста IslandView (материал общий).
+			material.set_shader_parameter("base_color", VPAL.grass_base * GRASS_MUTE)
+			material.set_shader_parameter("tip_color", VPAL.grass_tip * GRASS_MUTE)
 			# Доработка под эталон: ветер заметен волнами по поляне —
 			# кончик травинки гуляет до ~15 см в порыве.
 			material.set_shader_parameter("wind_amplitude", 0.11)
