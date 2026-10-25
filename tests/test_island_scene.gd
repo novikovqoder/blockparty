@@ -142,9 +142,10 @@ func test_water_is_boujie_ocean_and_lake() -> void:
 	assert_lt(lake_amp, sea_amp * 0.5,
 		"волны озера заметно спокойнее морских (%.2f < %.2f)" % [
 			lake_amp, sea_amp])
-	# Материал текстурный (П8): альбедо и пена — текстуры аддона.
-	assert_true(sea_material.get_shader_parameter("texture_albedo")
-		is Texture2D, "текстура волн альбедо задана")
+	# Материал текстурный (П8): пена — текстура аддона. П12 F: нарисованные
+	# волны ocean_albedo выключены (SPEC 4.2, копия шейдера без texture_albedo).
+	assert_false(sea_material.get_shader_parameter("texture_albedo")
+		is Texture2D, "текстура волн альбедо не задаётся (П12)")
 	assert_true(sea_material.get_shader_parameter("texture_foam")
 		is Texture2D, "текстура пены задана")
 	# Цвет по глубине: глубокая темнее и непрозрачнее мелководья.

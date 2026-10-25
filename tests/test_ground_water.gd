@@ -257,6 +257,101 @@ static func _grass_total(built: Dictionary) -> int:
 	return total
 
 
+# --- П12 F: вода ---
+
+func test_water_palette_not_turquoise() -> void:
+	# SPEC П12 4.1: палитра BU — озеро торфяное, море стальное; бирюза
+	# Blockparty (PAL.water) не используется, глубина темнее мелководья,
+	# мелководье прозрачное (дно видно).
+	var pal: Palette = load("res://assets/palette.tres")
+	for pair: Array in [
+		["озеро глубина", WaterArea.LAKE_DEEP],
+		["озеро мелководье", WaterArea.LAKE_SHALLOW],
+		["море глубина", WaterArea.SEA_DEEP],
+		["море мелководье", WaterArea.SEA_SHALLOW],
+	]:
+		var color: Color = pair[1]
+		assert_gt(
+			Vector3(color.r, color.g, color.b).distance_to(
+				Vector3(pal.water.r, pal.water.g, pal.water.b)),
+			0.1, "%s: не бирюза палитры" % pair[0])
+		assert_lt(color.get_luminance(), 0.25, "%s: тёмная" % pair[0])
+	assert_lt(
+		(WaterArea.LAKE_DEEP as Color).get_luminance(),
+		(WaterArea.LAKE_SHALLOW as Color).get_luminance(),
+		"озеро: глубина темнее мелководья")
+	assert_lt(
+		(WaterArea.SEA_DEEP as Color).get_luminance(),
+		(WaterArea.SEA_SHALLOW as Color).get_luminance(),
+		"море: глубина темнее мелководья")
+	assert_lt((WaterArea.LAKE_SHALLOW as Color).a, 0.35, "мелководье прозрачно")
+	assert_lt((WaterArea.SEA_SHALLOW as Color).a, 0.40, "мелководье прозрачно")
+
+
+func test_water_shader_no_painted_albedo() -> void:
+	# SPEC П12 4.2: нарисованные волны ocean_albedo выключены в обеих
+	# копиях шейдера (аддон не тронут) — цвет дают глубина, небо и френель.
+	for shader: Shader in [WaterArea.WATER_PLAIN, WaterArea.WATER_REFRACTION]:
+		var code := shader.code
+		assert_false(code.contains("uniform sampler2D texture_albedo"),
+			"%s: текстура ocean_albedo не сэмплится" % shader.resource_path)
+		assert_false(code.contains("#define ALBEDO_WAVE\n"),
+			"%s: ALBEDO_WAVE выключен" % shader.resource_path)
+	assert_true(WaterArea.WATER_REFRACTION.code.contains("#define REFRACTION\n"),
+		"refraction-копия включает REFRACTION")
+	assert_false(WaterArea.WATER_PLAIN.code.contains("#define REFRACTION\n"),
+		"plain-копия без REFRACTION")
+
+
+func test_water_refraction_by_tier() -> void:
+	# SPEC П12 4.4: преломление — только HIGH/ULTRA (выбор копии шейдера).
+	for pair: Array in [
+		[GraphicsQuality.Tier.SIMPLE, WaterArea.WATER_PLAIN],
+		[GraphicsQuality.Tier.NORMAL, WaterArea.WATER_PLAIN],
+		[GraphicsQuality.Tier.HIGH, WaterArea.WATER_REFRACTION],
+		[GraphicsQuality.Tier.ULTRA, WaterArea.WATER_REFRACTION],
+	]:
+		assert_eq(
+			WaterArea.shader_for_tier(pair[0]), pair[1],
+			"Tier.%d выбирает %s" % [pair[0], (pair[1] as Shader)
+				.resource_path.get_file()],
+		)
+
+
+func test_water_material_bu_settings() -> void:
+	# SPEC П12 4.3/4.5/4.6: почти зеркало (roughness 0.02–0.05), цвета BU
+	# в материале, озеро плотнее моря по закону Бера, береговая пена узкая.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var lake := area._surface_material(true) as ShaderMaterial
+	var sea := area._surface_material(false) as ShaderMaterial
+	for pair: Array in [["озеро", lake, true], ["море", sea, false]]:
+		var material := pair[1] as ShaderMaterial
+		var calm: bool = pair[2]
+		assert_true(material is ShaderMaterial,
+			"вода %s — шейдерный материал" % pair[0])
+		assert_between(
+			float(material.get_shader_parameter("roughness")), 0.02, 0.05,
+			"%s: почти зеркало (roughness)" % pair[0])
+		var deep: Color = WaterArea.LAKE_DEEP if calm else WaterArea.SEA_DEEP
+		var shallow: Color = WaterArea.LAKE_SHALLOW if calm else WaterArea.SEA_SHALLOW
+		assert_eq(material.get_shader_parameter("color_deep"), deep,
+			"%s: глубинный цвет — палитра BU" % pair[0])
+		assert_eq(material.get_shader_parameter("color_shallow"), shallow,
+			"%s: цвет мелководья — палитра BU" % pair[0])
+		assert_between(
+			float(material.get_shader_parameter("shore_end_blend")), 0.5, 1.5,
+			"%s: полоса прибоя узкая" % pair[0])
+	assert_gt(
+		float(lake.get_shader_parameter("beers_law")),
+		float(sea.get_shader_parameter("beers_law")),
+		"озеро глотает свет плотнее моря (торфяная мгла)")
+	assert_ne(WaterArea.RING_COLOR, load("res://assets/palette.tres").water,
+		"круги на воде — не бирюза палитры")
+	WorldMaterials.textured_headless = false
+
+
 # --- вспомогательные ---
 
 func _read_licenses() -> String:
