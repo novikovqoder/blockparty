@@ -417,15 +417,15 @@ func test_f3_report_contents() -> void:
 	var env := Environment.new()
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	var report := panel.build_report()
-	assert_contains(report, "GPU:", "строка видеокарты есть")
-	assert_contains(report, "Quality:", "строка уровня есть")
-	assert_contains(report, "3D resolution:", "строка разрешения 3D есть")
-	assert_contains(report, "FPS avg", "строка средних FPS есть")
-	assert_contains(report, "GPU ms avg", "строка средних GPU-мс есть")
-	assert_contains(report, "Disabled:", "строка выключенного есть")
-	assert_contains(report, "—", "без выключенных — прочерк")
+	assert_string_contains(report, "GPU:", "строка видеокарты есть")
+	assert_string_contains(report, "Quality:", "строка уровня есть")
+	assert_string_contains(report, "3D resolution:", "строка разрешения 3D есть")
+	assert_string_contains(report, "FPS avg", "строка средних FPS есть")
+	assert_string_contains(report, "GPU ms avg", "строка средних GPU-мс есть")
+	assert_string_contains(report, "Disabled:", "строка выключенного есть")
+	assert_string_contains(report, "—", "без выключенных — прочерк")
 	panel._boxes[&"glow"].button_pressed = false
-	assert_contains(
+	assert_string_contains(
 		panel.build_report(), tr("BU_DBG_GLOW"),
 		"выключенный glow попадает в отчёт (локализованное имя)")
 
@@ -462,6 +462,6 @@ func test_f3_and_menu_texts_translated() -> void:
 			assert_ne(
 				csv[key][2], "", "ключ %s: есть английский текст" % key)
 	# П13 4: формулировка про «Высокое» — почти та же картинка, встройка.
-	assert_contains(
+	assert_string_contains(
 		tr("BU_DESC_QUALITY_2"), "почти та же картинка",
 		"описание «Высокого» — из SPEC")
