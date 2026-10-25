@@ -424,16 +424,15 @@ func test_f3_report_contents() -> void:
 	var env := Environment.new()
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	var report := panel.build_report()
-	assert_string_contains(report, "GPU:", "строка видеокарты есть")
-	assert_string_contains(report, "Quality:", "строка уровня есть")
-	assert_string_contains(report, "3D resolution:", "строка разрешения 3D есть")
-	assert_string_contains(report, "FPS avg", "строка средних FPS есть")
-	assert_string_contains(report, "GPU ms avg", "строка средних GPU-мс есть")
-	assert_string_contains(report, "Disabled:", "строка выключенного есть")
-	assert_string_contains(report, "—", "без выключенных — прочерк")
+	for part: String in [
+		"GPU:", "Quality:", "3D resolution:", "FPS avg", "GPU ms avg",
+		"Disabled:", "—",
+	]:
+		assert_true(
+			report.contains(part), "в отчёте есть «%s»" % part)
 	panel._boxes[&"glow"].button_pressed = false
-	assert_string_contains(
-		panel.build_report(), tr("BU_DBG_GLOW"),
+	assert_true(
+		panel.build_report().contains(tr("BU_DBG_GLOW")),
 		"выключенный glow попадает в отчёт (локализованное имя)")
 
 
@@ -469,10 +468,12 @@ func test_f3_and_menu_texts_translated() -> void:
 			assert_ne(
 				csv[key][2], "", "ключ %s: есть английский текст" % key)
 	# П13 4: формулировка про «Высокое» — почти та же картинка, встройка
-	# (русский текст из CSV — локаль в тестах не гарантирована).
-	assert_string_contains(
-		String(csv["BU_DESC_QUALITY_2"][1]), "почти та же картинка",
+	# (русский текст из CSV, регистронезависимо — фраза в начале предложения).
+	assert_true(
+		String(csv["BU_DESC_QUALITY_2"][1]).to_lower()
+			.contains("почти та же картинка"),
 		"описание «Высокого» — из SPEC")
-	assert_string_contains(
-		String(csv["BU_DESC_QUALITY_3"][1]), "максимальное качество",
+	assert_true(
+		String(csv["BU_DESC_QUALITY_3"][1]).to_lower()
+			.contains("максимальное качество"),
 		"описание «Ультра» — из SPEC")
