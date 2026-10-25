@@ -5,12 +5,13 @@
 # (хеш острова тот же; Terrain3D больше не используется). ForestGround
 # печёт из карты высот три карты 256 × 256 (1 пиксель = 1 м, весь остров):
 # веса оверлеев (уклон → камень, низины → влажная земля, пятна мха —
-# фиксированный шум FastNoiseLite, тропа и полоса Площади — утоптанная
-# земля), тон (RGB — цвет «материала» точки по TerrainBuilder.point_color:
+# фиксированный шум FastNoiseLite, тропа и полоса Площади — утоптанный
+# гравий), тон (RGB — цвет «материала» точки по TerrainBuilder.point_color:
 # пляж, снег, террасы, зональные луга; A — вес тона) и нормали рельефа.
 # В секторе Леса [−128..0)² формулы те же, что в принятом П5.9/П5.13 —
 # вид Леса не меняется. Вне Леса вес тона — max(краевой вес границы Леса,
-# вес материала: пляж/снег/террасы 1, луг 0.35 → скала 0.9), поэтому
+# вес материала: пляж/снег/террасы 1, луг 0.35 → скала 0.9; терраса
+# Площади — исключение, PLAZA_TONE, фикс П12), поэтому
 # переходы между зонами и через границу Леса плавные, без шва. Всё
 # детерминировано: высоты, уклоны и фиксированный seed.
 class_name ForestGround
@@ -51,6 +52,12 @@ const EDGE_SOFT: float = 12.0
 ## (smoothstep до ROCK_TONE по уклону вокруг STONE_SLOPE террас TerrainBuilder).
 const MEADOW_TONE: float = 0.35
 const ROCK_TONE: float = 0.9
+
+## Тон гравийной Площади (фикс-задача П12, «коричневое пятно»): терраса
+## Площади — не плоский камень зоны (тон 1, как у прочих террас), а утоптанный
+## гравий: тон снижен до доли луга, текстура rocky_trail читается, цвет лишь
+## сводится с низкополигональными плитами зоны.
+const PLAZA_TONE: float = 0.35
 const ROCK_TONE_FROM: float = TerrainBuilder.STONE_SLOPE - 0.2
 const ROCK_TONE_TO: float = TerrainBuilder.STONE_SLOPE + 0.2
 
@@ -192,11 +199,16 @@ static func _weights_image(art: IslandArt) -> Image:
 			var h: float = art.heights[z * IslandGen.POINTS + x]
 			var w_rock: float = smoothstep(
 				ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z))
-			var w_wet: float = 1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)
-			var w_moss: float = _moss_weight(noise, x, z, w_rock, w_wet)
 			# Тропа и гравий Площади — один слот утоптанной земли.
 			var w_plaza: float = _plaza_weight(wx, wz)
 			var w_path: float = maxf(_path_weight(wx, wz), w_plaza)
+			# Фикс-задача П12: вымощенная Площадь — сухая утоптанная терраса:
+			# полувлажный вес низины (h = PLAZA_H даёт g = 0.5) красил гравий
+			# сырой грязью; влага на террасе гасится, мох редеет вместе с ней.
+			# Низины Леса и остальных зон не тронуты.
+			var w_wet: float = (1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)) \
+				* (1.0 - w_plaza)
+			var w_moss: float = _moss_weight(noise, x, z, w_rock, w_wet)
 			# П5.9 переделка, П3: в русле оврага тропа гасится — утоптанная
 			# земля по дну читалась коричневой лентой поперёк склонов. Дно
 			# красят свои веса (камень стенок, влага низины), подходы
@@ -218,7 +230,10 @@ static func _weights_image(art: IslandArt) -> Image:
 ## Карта тона: RGB — цвет «материала» точки (та же функция, что красит
 ## грани low-poly чанков и карту-миниатюру, включая подсказки террас
 ## Площади), A — вес тона. В секторе Леса вес — прежний краевой (у границы
-## 1, вглубь 0), вне Леса — max(краевой, вес материала точки).
+## 1, вглубь 0), вне Леса — max(краевой, вес материала точки). Фикс-задача
+## П12: на диске Площади краевой вес гасится (как уже гасится в карте
+## весов) — угол границы сектора Леса (0, 0) проходит в 4 м от центра
+## Площади, и краевая полоса держала бы на ней плоский камень зоны.
 static func _border_image(art: IslandArt) -> Image:
 	var image := Image.create_empty(MAP_M, MAP_M, false, Image.FORMAT_RGBA8)
 	var tint: Dictionary = IslandGen.tint_hints()
@@ -228,13 +243,18 @@ static func _border_image(art: IslandArt) -> Image:
 			var wz: float = float(z) - 128.0
 			var low_poly: Color = TerrainBuilder.point_color(
 				art.heights, tint, int(wx), int(wz))
+			# Вымощенная Площадь не гасится краем Леса — она сама себе сосед:
+			# тон на ней задаёт материал точки (гравий читается, фикс П12).
+			var edge: float = _border_weight(wx, wz) \
+				* (1.0 - _plaza_weight(wx, wz))
 			var weight: float
 			if wx < 0.0 and wz < 0.0:
-				# Сектор Леса: точный прежний вес — вид принятого Леса не меняется.
-				weight = _border_weight(wx, wz)
+				# Сектор Леса: прежний краевой вес (вне Площади — в точности
+				# тот же, вид принятого Леса не меняется).
+				weight = edge
 			else:
 				weight = maxf(
-					_border_weight(wx, wz),
+					edge,
 					_material_tone_weight(art, tint, x, z))
 			image.set_pixel(x, z, Color(low_poly.r, low_poly.g, low_poly.b, weight))
 	return image
@@ -242,11 +262,18 @@ static func _border_image(art: IslandArt) -> Image:
 
 ## Вес тона материала точки вне Леса: пляж, снег вершин и террасы — чистый
 ## цвет point_color; луг и склоны — смесь с текстурной землёй по уклону.
+## Фикс-задача П12: тон 1 на террасе Площади превращал её в сплошное
+## коричневое пятно — плоский камень зоны закрывал слой гравия (w.a = 1)
+## целиком. На гравийной зоне Площади тон снижен до PLAZA_TONE (гравий
+## читается, цвет сведён с плитами зоны), прочие террасы — как прежде,
+## плоский камень своей зоны.
 static func _material_tone_weight(
 	art: IslandArt, tint: Dictionary, x: int, z: int,
 ) -> float:
 	if not tint.get(Vector2i(x - 128, z - 128), {}).is_empty():
-		return 1.0
+		return lerpf(
+			1.0, PLAZA_TONE,
+			_plaza_weight(float(x) - 128.0, float(z) - 128.0))
 	var h: float = art.heights[z * IslandGen.POINTS + x]
 	if h < TerrainBuilder.SAND_H or h >= TerrainBuilder.SNOW_H:
 		return 1.0

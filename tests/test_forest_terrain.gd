@@ -242,3 +242,71 @@ func test_outside_tone_paints_zones() -> void:
 		_pixel(border, -1.0, -60.0).a, 1.0, 0.05, "у границы изнутри Леса")
 	assert_almost_eq(
 		_pixel(border, 1.0, -60.0).a, 1.0, 0.05, "у границы снаружи Леса")
+
+
+## Средний B-канал (Height) ORM-карты слоя: coarse-сэмпл по сетке.
+static func _orm_height_avg(tex: Texture2D) -> Dictionary:
+	var img := tex.get_image()
+	img.decompress()
+	var sum := 0.0
+	var mn := 1.0
+	var mx := 0.0
+	var n := 0
+	for y: int in range(0, img.get_height(), 53):
+		for x: int in range(0, img.get_width(), 53):
+			var v: float = img.get_pixel(x, y).b
+			sum += v
+			mn = minf(mn, v)
+			mx = maxf(mx, v)
+			n += 1
+	return {"avg": sum / n, "min": mn, "max": mx}
+
+
+## Масса слоя в softmax height-blend шейдера forest_ground (вес + ORM.b ×
+## HEIGHT_TEX, резкость BLEND_SHARP — константы шейдера, продублированы
+## здесь, чтобы тест падал при их смене без обновления).
+static func _softmax_mass(weight: float, h_map: float) -> float:
+	return weight * exp((weight + h_map * 0.35) * 6.0)
+
+
+func test_plaza_gravel_dominates() -> void:
+	# Фикс-задача П12 («на Площади сплошное коричневое пятно»): терраса
+	# Площади — tint-подсказка зоны 0, и тон 1 закрывал слой гравия (w.a = 1)
+	# плоским камнем зоны целиком. После фикса: тон террасы не глушит
+	# текстуру (a ≤ PLAZA_TONE), канал гравия полный, вымощенная терраса
+	# сухая, а по softmax шейдера гравий — главный слой в центре Площади.
+	var weights := ForestGround._weights_image(ART)
+	var border := ForestGround._border_image(ART)
+	for p: Vector2 in [
+		Vector2(0, 4), Vector2(8, 4), Vector2(-8, 4), Vector2(0, 14),
+		Vector2(0, -8),
+	]:
+		var w: Color = _pixel(weights, p.x, p.y)
+		assert_gt(
+			w[ForestGround.CH_PATH], 0.9, "гравий Площади — полный вес")
+		assert_lt(
+			_pixel(border, p.x, p.y).a, ForestGround.PLAZA_TONE + 0.05,
+			"тон террасы Площади не глушит текстуру гравия")
+		assert_lt(
+			w[ForestGround.CH_WET], 0.05, "вымощенная Площадь — сухая")
+	# Прочие террасы (руины) — как прежде, плоский камень зоны: тон 1.
+	assert_almost_eq(
+		_pixel(border, 58.0, -48.0).a, 1.0, 0.01,
+		"терраса руин — по-прежнему плоский камень зоны")
+	# Высота гравия — из карты (ORM.b с реальным разбросом), не плоскость.
+	var gravel_h := _orm_height_avg(ForestGround.GRAVEL_ORM)
+	assert_gt(
+		float(gravel_h["max"]) - float(gravel_h["min"]), 0.05,
+		"высота гравия — карта высот rocky_trail")
+	# Доля гравия в центре Площади — формулы softmax шейдера: масса гравия
+	# против грязи и мха вместе (база на Площади выключена — сумма весов 1).
+	var w: Color = _pixel(weights, 0.0, 4.0)
+	var e_gravel := _softmax_mass(
+		w[ForestGround.CH_PATH], float(gravel_h["avg"]))
+	var e_mud := _softmax_mass(
+		w[ForestGround.CH_WET], float(_orm_height_avg(ForestGround.MUD_ORM)["avg"]))
+	var e_moss := _softmax_mass(
+		w[ForestGround.CH_MOSS], float(_orm_height_avg(ForestGround.MOSS_ORM)["avg"]))
+	assert_gt(
+		e_gravel, 3.0 * (e_mud + e_moss),
+		"гравий в softmax минимум втрое тяжелее грязи и мха вместе")
