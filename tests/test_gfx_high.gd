@@ -356,9 +356,9 @@ func test_water_fade_simple_only() -> void:
 # --- П13 3: панель замера F3 ---
 
 func test_f3_panel_toggles_effects() -> void:
-	# П13 3.2: 11 галочек; снятая выключает эффект, повторная возвращает
-	# состояние уровня (не «всё включено»); повторное применение качества
-	# сбрасывает галочки.
+	# П13 3.2 + П14 5.2: 14 галочек; снятая выключает эффект, повторная
+	# возвращает состояние уровня (не «всё включено»); повторное применение
+	# качества сбрасывает галочки.
 	var panel := DebugPanel.new()
 	add_child_autofree(panel)
 	var env := Environment.new()
@@ -366,14 +366,14 @@ func test_f3_panel_toggles_effects() -> void:
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	assert_eq(
 		panel._boxes.size(), panel.EFFECTS.size(),
-		"галочек столько же, сколько эффектов (11)")
+		"галочек столько же, сколько эффектов (14)")
 	var checks: Array[CheckBox] = []
 	for id: StringName in panel.EFFECTS:
 		assert_true(
 			panel._boxes[id].button_pressed,
 			"галочка %s включена после применения уровня" % id)
 		checks.append(panel._boxes[id])
-	assert_eq(checks.size(), 11, "эффектов — 11")
+	assert_eq(checks.size(), 14, "эффектов — 14")
 	var env_props: Dictionary[StringName, String] = {
 		&"sdfgi": "sdfgi_enabled", &"ssil": "ssil_enabled",
 		&"ssr": "ssr_enabled", &"ssao": "ssao_enabled",
@@ -426,6 +426,40 @@ func test_f3_panel_restores_tier_not_everything() -> void:
 		"SIMPLE: повторная галочка не включает SDFGI (не уровень)")
 
 
+func test_f3_panel_p14_effect_hooks() -> void:
+	# П14 5.2: пять новых галочек замера — «Детальная сетка земли», «POM»,
+	# «Мелочь на земле», «Преломление воды», «Рябь воды» — каждая дергает
+	# свой метод выключения (IslandView/WaterArea). Поведение самих методов
+	# (видимость кольца/мелочи, parallax_scale, refraction_amount,
+	# ripple_layers) проверяют тесты блоков 3–4; здесь — связка
+	# «галочка → метод» и уровневая логика возврата.
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	var code := FileAccess.get_file_as_string("res://ui/debug_panel.gd")
+	var hooks: Dictionary[StringName, String] = {
+		&"detail": "_view.set_detail_ring_visible(value)",
+		&"pom": "_view.set_parallax(value)",
+		&"clutter": "_view.set_clutter_visible(value)",
+		&"refr": "WaterArea).set_refraction(value)",
+		&"ripple": "WaterArea).set_ripple(value)",
+	}
+	for id: StringName in hooks:
+		assert_true(panel.EFFECTS.has(id), "галочка %s есть в панели" % id)
+		assert_true(code.contains(hooks[id]),
+			"галочка %s выключает свой эффект" % id)
+	# Возврат галочки возвращает состояние уровня: земляные эффекты и
+	# преломление — только HIGH/ULTRA, рябь есть на всех (1 слой ниже HIGH).
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.HIGH)
+	for id: StringName in hooks:
+		assert_true(panel._tier_effect_on(id), "HIGH: %s — уровень" % id)
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.SIMPLE)
+	for id: StringName in [&"detail", &"pom", &"clutter", &"refr"]:
+		assert_false(panel._tier_effect_on(id),
+			"SIMPLE: %s — не уровень, возврат не включает" % id)
+	assert_true(panel._tier_effect_on(&"ripple"),
+		"SIMPLE: рябь возвращается (1 слой — уровень)")
+
+
 func test_f3_report_contents() -> void:
 	# П13 3.4: отчёт содержит видеокарту, уровень, разрешение 3D,
 	# средние FPS/GPU за окно и список выключенного.
@@ -453,8 +487,11 @@ func test_f3_and_menu_texts_translated() -> void:
 	var keys: Array[String] = [
 		"BU_DBG_EFFECTS", "BU_DBG_COPY", "BU_DBG_SDFGI", "BU_DBG_SSIL",
 		"BU_DBG_SSR", "BU_DBG_SSAO", "BU_DBG_VFOG", "BU_DBG_GLOW",
-		"BU_DBG_AA", "BU_DBG_LAMPS", "BU_DBG_GRASS", "BU_DBG_PARALLAX",
-		"BU_DBG_WATER", "BU_SET_RES3D", "BU_DESC_RES3D_0", "BU_DESC_RES3D_1",
+		"BU_DBG_AA", "BU_DBG_LAMPS", "BU_DBG_GRASS",
+		# П14 5.2: пять новых галочек панели замера.
+		"BU_DBG_DETAIL", "BU_DBG_POM", "BU_DBG_CLUTTER",
+		"BU_DBG_REFRACTION", "BU_DBG_RIPPLE",
+		"BU_SET_RES3D", "BU_DESC_RES3D_0", "BU_DESC_RES3D_1",
 		"BU_DESC_RES3D_2", "BU_DESC_RES3D_3", "BU_DESC_QUALITY_0",
 		"BU_DESC_QUALITY_1", "BU_DESC_QUALITY_2", "BU_DESC_QUALITY_3",
 	]

@@ -17,25 +17,29 @@ extends CanvasLayer
 const UPDATE_INTERVAL: float = 0.25
 ## Окно усреднения отчёта, с (П13 3.4).
 const REPORT_WINDOW_SEC: float = 5.0
-## Галочки эффектов (П13 3.2): порядок = порядок в панели.
+## Галочки эффектов (П13 3.2; П14 5.2 — пять новых для замеров земли
+## и воды): порядок = порядок в панели.
 const EFFECTS: Array[StringName] = [
 	&"sdfgi", &"ssil", &"ssr", &"ssao", &"vfog", &"glow", &"aa",
-	&"lamps", &"grass", &"parallax", &"water",
+	&"lamps", &"grass", &"detail", &"pom", &"clutter", &"refr", &"ripple",
 ]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"sdfgi": "BU_DBG_SDFGI", &"ssil": "BU_DBG_SSIL", &"ssr": "BU_DBG_SSR",
 	&"ssao": "BU_DBG_SSAO", &"vfog": "BU_DBG_VFOG", &"glow": "BU_DBG_GLOW",
 	&"aa": "BU_DBG_AA", &"lamps": "BU_DBG_LAMPS", &"grass": "BU_DBG_GRASS",
-	&"parallax": "BU_DBG_PARALLAX", &"water": "BU_DBG_WATER",
+	&"detail": "BU_DBG_DETAIL", &"pom": "BU_DBG_POM",
+	&"clutter": "BU_DBG_CLUTTER", &"refr": "BU_DBG_REFRACTION",
+	&"ripple": "BU_DBG_RIPPLE",
 }
 ## Названия уровней для строк панели и отчёта (индекс = Tier).
 const TIER_LABELS: Array[String] = [
 	"BU_OPT_LOW", "BU_OPT_MEDIUM", "BU_OPT_HIGH", "BU_OPT_ULTRA",
 ]
 ## Позиция блока эффектов: правее нижнего информационного блока,
-## вмещается в минимальную канву 1280×720.
-const EFFECTS_POS: Vector2 = Vector2(690, 360)
+## вмещается в минимальную канву 1280×720 (П14 5.2 — галочек стало 14,
+## блок поднят, чтобы не вылезал за нижний край).
+const EFFECTS_POS: Vector2 = Vector2(690, 290)
 
 var _label: Label
 var _effects: PanelContainer
@@ -254,12 +258,21 @@ func _on_effect_toggled(on: bool, id: StringName) -> void:
 		&"grass":
 			if _view != null:
 				_view.set_grass_boost_visible(value)
-		&"parallax":
+		&"detail":
+			if _view != null:
+				_view.set_detail_ring_visible(value)
+		&"pom":
 			if _view != null:
 				_view.set_parallax(value)
-		&"water":
+		&"clutter":
+			if _view != null:
+				_view.set_clutter_visible(value)
+		&"refr":
 			for node: Node in get_tree().get_nodes_in_group("water_surface"):
 				(node as WaterArea).set_refraction(value)
+		&"ripple":
+			for node: Node in get_tree().get_nodes_in_group("water_surface"):
+				(node as WaterArea).set_ripple(value)
 
 
 ## Включён ли эффект на активном уровне: возврат галочки возвращает
@@ -270,10 +283,19 @@ func _tier_effect_on(id: StringName) -> bool:
 			return _tier >= GraphicsQuality.Tier.HIGH
 		&"grass":
 			return _tier != GraphicsQuality.Tier.SIMPLE
-		&"parallax":
-			return true
-		&"water":
+		&"detail":
 			return _tier >= GraphicsQuality.Tier.HIGH
+		&"pom":
+			# POM — только HIGH/ULTRA (П14 3.2); на NORMAL/SIMPLE рельефной
+			# выборки в шейдере нет, включать нечего.
+			return _tier >= GraphicsQuality.Tier.HIGH
+		&"clutter":
+			return _tier >= GraphicsQuality.Tier.HIGH
+		&"refr":
+			return _tier >= GraphicsQuality.Tier.HIGH
+		&"ripple":
+			# Рябь есть на всех уровнях (1 слой на SIMPLE/NORMAL — П14 4.7).
+			return true
 	return true
 
 

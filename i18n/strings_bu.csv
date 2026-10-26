@@ -156,6 +156,9 @@ BU_DBG_GLOW,Свечение (glow),Glow
 BU_DBG_AA,Сглаживание (MSAA/SMAA),Antialiasing (MSAA/SMAA)
 BU_DBG_LAMPS,Тени ламп,Shadows of lamps
 BU_DBG_GRASS,Трава-буст,Grass boost
-BU_DBG_PARALLAX,Параллакс земли,Ground parallax
-BU_DBG_WATER,Преломление воды,Water refraction
+BU_DBG_DETAIL,Детальная сетка земли,Detailed ground mesh
+BU_DBG_POM,POM,POM
+BU_DBG_CLUTTER,Мелочь на земле,Ground clutter
+BU_DBG_REFRACTION,Преломление воды,Water refraction
+BU_DBG_RIPPLE,Рябь воды,Water ripple
 BU_DBG_COPY,Скопировать отчёт,Copy report
