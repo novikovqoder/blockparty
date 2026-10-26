@@ -328,18 +328,28 @@ func test_water_fade_simple_only() -> void:
 			float(material.get_shader_parameter("distance_fade_max")),
 			WaterArea.FADE_BASE_MAX, 0.001,
 			"Tier.%d: вода уходит за горизонт" % tier)
-		assert_almost_eq(
-			float(material.get_shader_parameter("foam_fade_min")),
-			WaterArea.FOAM_BASE_MIN, 0.001,
-			"Tier.%d: базовая дальность пены" % tier)
-	# П13 3.2: преломление на лету (панель F3).
+	# П14 4.2: преломление на лету (панель F3) — сила смещения выборки
+	# экрана в 0 и обратно, шейдер не меняется (экранная текстура —
+	# только полная версия на HIGH/ULTRA).
 	area.set_refraction(false)
-	assert_eq(
-		material.shader, WaterArea.WATER_PLAIN, "F3: без преломления — plain")
+	assert_almost_eq(
+		float(material.get_shader_parameter("refraction_amount")),
+		0.0, 0.001, "F3: без преломления — смещение выборки в 0")
 	area.set_refraction(true)
-	assert_eq(
-		material.shader, WaterArea.WATER_REFRACTION,
-		"F3: преломление вернулось")
+	assert_almost_eq(
+		float(material.get_shader_parameter("refraction_amount")),
+		1.0, 0.001, "F3: преломление вернулось")
+	# П14 4.3: рябь на лету (панель F3) — 0 слоёв и номинал уровня.
+	area.set_ripple(false)
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_layers")),
+		0.0, 0.001, "F3: без ряби — 0 слоёв")
+	area.set_ripple(true)
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_layers")),
+		float(WaterArea.ripple_layers_for_tier(
+			GraphicsQuality.tier_from_settings())), 0.001,
+		"F3: рябь вернулась — номинал уровня")
 	WorldMaterials.textured_headless = false
 
 

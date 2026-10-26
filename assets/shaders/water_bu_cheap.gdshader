@@ -1,0 +1,165 @@
+// Дешёвая вода Born Unblessed (SPEC П14 4.7) для SIMPLE/NORMAL — копия
+// water_bu.gdshader без экранной и глубинной текстур (копия экрана не
+// бесплатна, уровень экономит): полупрозрачная поверхность цветом
+// рассеяния, 8 волн Герстнера, один слой ряби, френель Шлика цветами
+// DayCycle, пены и преломления нет. Спектр, палитра и френель — те же
+// константы и те же uniform-имена, что у полной версии (WaterArea
+// ставит одни и те же параметры обоим шейдерам).
+shader_type spatial;
+render_mode blend_mix, depth_draw_always, cull_disabled,
+	ambient_light_disabled, specular_schlick_ggx;
+
+group_uniforms Colors;
+uniform vec4 color_shallow : source_color = vec4(0.10, 0.14, 0.10, 1.0);
+uniform vec4 color_deep : source_color = vec4(0.016, 0.035, 0.028, 1.0);
+uniform vec3 absorption = vec3(1.6, 0.75, 0.45);
+uniform vec3 sky_horizon : source_color = vec3(0.7, 0.75, 0.8);
+uniform vec3 sky_top : source_color = vec3(0.3, 0.45, 0.7);
+group_uniforms;
+
+group_uniforms Surface;
+uniform float roughness : hint_range(0.0, 1.0) = 0.03;
+uniform float specular : hint_range(0.0, 1.0) = 0.5;
+uniform float metallic : hint_range(0.0, 1.0) = 0.0;
+// Нет ни преломления, ни depth — параметры приняты (общие имена), не
+// используются: материал один и тот же у WaterArea на всех уровнях.
+uniform float refraction_amount : hint_range(0.0, 4.0) = 1.0;
+uniform float ripple_layers : hint_range(0.0, 3.0) = 1.0;
+group_uniforms;
+
+group_uniforms Waves;
+uniform vec4 waves_a[32];
+uniform vec4 waves_b[32];
+uniform int wave_count = 8;
+group_uniforms;
+
+group_uniforms Fades;
+uniform float distance_fade_min = 700.0;
+uniform float distance_fade_max = 1400.0;
+uniform float vertex_wave_fade_min = 380.0;
+uniform float vertex_wave_fade_max = 800.0;
+uniform float depth_fog_fade_min = 70.0;
+uniform float depth_fog_fade_max = 130.0;
+uniform float far_thickness = 8.0;
+group_uniforms;
+
+// Постоянная полупрозрачность дешёвой воды: без depth-буфера толщины
+// нет, мелкое/глубокое не различить — лёгкая вуаль цвета рассеяния.
+const float CHEAP_ALPHA = 0.82;
+
+// Симплекс-шум 2D (Ian McEwan / Ashima Arts) — как в water_bu.
+vec3 mod289(vec3 x) {
+	return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+vec2 mod289(vec2 x) {
+	return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+vec3 permute(vec3 x) {
+	return mod289(((x * 34.0) + 10.0) * x);
+}
+float snoise(vec2 v) {
+	const vec4 C = vec4(
+		0.211324865405187, 0.366025403784439,
+		-0.577350269189626, 0.024390243902439);
+	vec2 i = floor(v + dot(v, C.yy));
+	vec2 x0 = v - i + dot(i, C.xx);
+	vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+	vec4 x12 = x0.xyxy + C.xxzz;
+	x12.xy -= i1;
+	i = mod289(i);
+	vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+		+ i.x + vec3(0.0, i1.x, 1.0));
+	vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy),
+		dot(x12.zw, x12.zw)), 0.0);
+	m = m * m;
+	m = m * m;
+	vec3 x = 2.0 * fract(p * C.www) - 1.0;
+	vec3 h = abs(x) - 0.5;
+	vec3 ox = floor(x + 0.5);
+	vec3 a0 = x - ox;
+	m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+	vec3 g;
+	g.x = a0.x * x0.x + h.x * x0.y;
+	g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+	return 130.0 * dot(m, g);
+}
+
+vec2 ripple_slope(vec2 p, vec2 dir, float scale, float speed, float t) {
+	vec2 uv = p * scale + dir * (t * speed);
+	float e = 0.35;
+	float h0 = snoise(uv);
+	float hx = snoise(uv + vec2(e, 0.0));
+	float hz = snoise(uv + vec2(0.0, e));
+	return vec2(hx - h0, hz - h0) / e;
+}
+
+varying vec3 world_pos;
+varying vec3 wave_normal;
+
+void vertex() {
+	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 cam_pos = INV_VIEW_MATRIX[3].xyz;
+	float wave_fade = 1.0 - smoothstep(
+		vertex_wave_fade_min, vertex_wave_fade_max,
+		distance(wp.xz, cam_pos.xz));
+	vec3 disp = vec3(0.0);
+	vec3 nrm = vec3(0.0, 1.0, 0.0);
+	for (int i = 0; i < 32; i++) {
+		if (i >= wave_count) {
+			break;
+		}
+		vec4 wa = waves_a[i];
+		vec4 wb = waves_b[i];
+		float amp = wa.w * wave_fade;
+		float phi = wa.z * dot(wa.xy, wp.xz) - wb.x * TIME + wb.z;
+		float s = sin(phi);
+		float c = cos(phi);
+		float qa = wb.y * amp;
+		disp += vec3(wa.x * qa * c, amp * s, wa.y * qa * c);
+		nrm.x -= wa.x * wa.z * amp * c;
+		nrm.z -= wa.y * wa.z * amp * c;
+		nrm.y -= wb.y * wa.z * amp * s;
+	}
+	wp += disp;
+	VERTEX += disp;
+	wave_normal = normalize(nrm);
+	world_pos = wp;
+}
+
+void fragment() {
+	vec3 nrm = normalize(
+		(INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
+	float dist = length(CAMERA_POSITION_WORLD - world_pos);
+
+	if (ripple_layers > 0.5 && dist < 120.0) {
+		float ripple_fade = 1.0 - smoothstep(30.0, 110.0, dist);
+		vec2 slope = ripple_slope(world_pos.xz,
+			vec2(0.84, 0.54), 0.45, 0.35, TIME) * 0.030;
+		nrm = normalize(nrm + vec3(slope.x, 0.0, slope.y)
+			* ripple_fade * 2.2);
+	}
+
+	// Без depth-буфера: дно не показываем, вода — вуаль рассеянного
+	// цвета между мелководьем и глубиной (на глаз середина). Композит —
+	// в EMISSION с ALBEDO = 0 (как у полной версии: диффуз и окружение
+	// не подсвечивают толщу), но ALPHA < 1 — полупрозрачная вуаль.
+	vec3 water = mix(color_shallow.rgb, color_deep.rgb, 0.55);
+
+	float fresnel = 0.02 + 0.98
+		* pow(1.0 - max(dot(nrm, view_dir), 0.0), 5.0);
+	vec3 refl_dir = reflect(-view_dir, nrm);
+	vec3 sky_refl = mix(sky_horizon, sky_top,
+		clamp(pow(max(refl_dir.y, 0.0), 0.6), 0.0, 1.0));
+	vec3 color = water + sky_refl * fresnel;
+
+	float dist_fade = 1.0 - smoothstep(
+		distance_fade_min, distance_fade_max, dist);
+	EMISSION = mix(sky_horizon, color, dist_fade);
+	ALBEDO = vec3(0.0);
+	ALPHA = CHEAP_ALPHA;
+	ROUGHNESS = roughness;
+	SPECULAR = specular;
+	METALLIC = metallic;
+	NORMAL = normalize((VIEW_MATRIX * vec4(nrm, 0.0)).xyz);
+}

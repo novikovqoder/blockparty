@@ -299,32 +299,57 @@ func test_water_palette_not_turquoise() -> void:
 		(WaterArea.SEA_DEEP as Color).get_luminance(),
 		(WaterArea.SEA_SHALLOW as Color).get_luminance(),
 		"море: глубина темнее мелководья")
-	assert_lt((WaterArea.LAKE_SHALLOW as Color).a, 0.35, "мелководье прозрачно")
-	assert_lt((WaterArea.SEA_SHALLOW as Color).a, 0.40, "мелководье прозрачно")
+	# Прозрачность мелководья — в поглощении Бера, см.
+	# test_water_palette_absorption_beer ниже (П14 4.1).
+
+
+func test_water_palette_absorption_beer() -> void:
+	# П14 4.1: прозрачность переехала из альфы цветов в поглощение Бера
+	# по каналам (альфа-каналы палитры больше не несут смысла и равны 1):
+	# на 20 см воды дно видно насквозь, на 5 м — исчезло. Проверяется
+	# именно пара констант, которой пользуется шейдер.
+	for pair: Array in [
+		["озеро", WaterArea.LAKE_ABSORPTION],
+		["море", WaterArea.SEA_ABSORPTION],
+	]:
+		var absorb: Vector3 = pair[1]
+		for channel: int in 3:
+			assert_gt(
+				exp(-absorb[channel] * 0.2), 0.5,
+				"%s: на 20 см дно видно (канал %d)" % [pair[0], channel])
+			# Синий гаснет медленнее (красный первым) — порог 20 %:
+			# на 5 м вклад дна мал, цвет задаёт рассеяние глубины.
+			assert_lt(
+				exp(-absorb[channel] * 5.0), 0.2,
+				"%s: на 5 м дно почти исчезло (канал %d)" % [pair[0], channel])
 
 
 func test_water_shader_no_painted_albedo() -> void:
-	# SPEC П12 4.2: нарисованные волны ocean_albedo выключены в обеих
-	# копиях шейдера (аддон не тронут) — цвет дают глубина, небо и френель.
-	for shader: Shader in [WaterArea.WATER_PLAIN, WaterArea.WATER_REFRACTION]:
+	# SPEC П14 4: свой шейдер water_bu вместо Boujie — текстур аддона
+	# нет вовсе (пена и рябь процедурные), цвет дают толщина воды,
+	# небо и френель; экранная текстура — только у полной версии.
+	for shader: Shader in [WaterArea.WATER_BU, WaterArea.WATER_BU_CHEAP]:
 		var code := shader.code
-		assert_false(code.contains("uniform sampler2D texture_albedo"),
-			"%s: текстура ocean_albedo не сэмплится" % shader.resource_path)
-		assert_false(code.contains("#define ALBEDO_WAVE\n"),
-			"%s: ALBEDO_WAVE выключен" % shader.resource_path)
-	assert_true(WaterArea.WATER_REFRACTION.code.contains("#define REFRACTION\n"),
-		"refraction-копия включает REFRACTION")
-	assert_false(WaterArea.WATER_PLAIN.code.contains("#define REFRACTION\n"),
-		"plain-копия без REFRACTION")
+		var path: String = shader.resource_path.get_file()
+		assert_false(code.contains("addons/boujie_water_shader"),
+			"%s: текстур Boujie нет" % path)
+		assert_false(code.contains("uniform sampler2D texture_"),
+			"%s: текстурных сэмплеров нет (всё процедурно)" % path)
+	assert_true(WaterArea.WATER_BU.code.contains("hint_screen_texture"),
+		"полная версия читает экран (преломление)")
+	assert_false(
+		WaterArea.WATER_BU_CHEAP.code.contains("hint_screen_texture"),
+		"дешёвая версия без экранной выборки (SPEC П14 4.7)")
 
 
 func test_water_refraction_by_tier() -> void:
-	# SPEC П12 4.4: преломление — только HIGH/ULTRA (выбор копии шейдера).
+	# SPEC П14 4.1/4.7: полная версия с экранной текстурой — только
+	# HIGH/ULTRA, SIMPLE/NORMAL — дешёвая полупрозрачная.
 	for pair: Array in [
-		[GraphicsQuality.Tier.SIMPLE, WaterArea.WATER_PLAIN],
-		[GraphicsQuality.Tier.NORMAL, WaterArea.WATER_PLAIN],
-		[GraphicsQuality.Tier.HIGH, WaterArea.WATER_REFRACTION],
-		[GraphicsQuality.Tier.ULTRA, WaterArea.WATER_REFRACTION],
+		[GraphicsQuality.Tier.SIMPLE, WaterArea.WATER_BU_CHEAP],
+		[GraphicsQuality.Tier.NORMAL, WaterArea.WATER_BU_CHEAP],
+		[GraphicsQuality.Tier.HIGH, WaterArea.WATER_BU],
+		[GraphicsQuality.Tier.ULTRA, WaterArea.WATER_BU],
 	]:
 		assert_eq(
 			WaterArea.shader_for_tier(pair[0]), pair[1],
@@ -334,8 +359,9 @@ func test_water_refraction_by_tier() -> void:
 
 
 func test_water_material_bu_settings() -> void:
-	# SPEC П12 4.3/4.5/4.6: почти зеркало (roughness 0.02–0.05), цвета BU
-	# в материале, озеро плотнее моря по закону Бера, береговая пена узкая.
+	# SPEC П14 4.1/4.4: почти зеркало (roughness 0.02–0.05), цвета BU
+	# в материале, поглощение Бера по каналам с красным первым, озеро
+	# (торфяная мгла) глотает свет плотнее стального моря.
 	WorldMaterials.textured_headless = true
 	var area := WaterArea.new()
 	add_child_autofree(area)
@@ -355,13 +381,18 @@ func test_water_material_bu_settings() -> void:
 			"%s: глубинный цвет — палитра BU" % pair[0])
 		assert_eq(material.get_shader_parameter("color_shallow"), shallow,
 			"%s: цвет мелководья — палитра BU" % pair[0])
-		assert_between(
-			float(material.get_shader_parameter("shore_end_blend")), 0.5, 1.5,
-			"%s: полоса прибоя узкая" % pair[0])
-	assert_gt(
-		float(lake.get_shader_parameter("beers_law")),
-		float(sea.get_shader_parameter("beers_law")),
-		"озеро глотает свет плотнее моря (торфяная мгла)")
+		# Поглощение по каналам: красный гаснет первым (SPEC П14 4.1).
+		var absorb: Vector3 = material.get_shader_parameter("absorption")
+		assert_gt(absorb.x, absorb.y,
+			"%s: красный гаснет первым" % pair[0])
+		assert_gt(absorb.y, absorb.z,
+			"%s: зелёный плотнее синего" % pair[0])
+	for channel: int in 3:
+		assert_gt(
+			(WaterArea.LAKE_ABSORPTION as Vector3)[channel],
+			(WaterArea.SEA_ABSORPTION as Vector3)[channel],
+			"озеро глотает свет плотнее моря (торфяная мгла), канал %d"
+				% channel)
 	assert_ne(WaterArea.RING_COLOR, load("res://assets/palette.tres").water,
 		"круги на воде — не бирюза палитры")
 	WorldMaterials.textured_headless = false

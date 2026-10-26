@@ -341,6 +341,175 @@ func test_ground_clutter_blocks_zones() -> void:
 				"мелочи нет на террасе руин (%s)" % type)
 
 
+# --- П14 блок 4: свой шейдер воды вместо Boujie ---
+
+func test_water_new_shader_on_all_surfaces() -> void:
+	# П14 4: шейдер воды — water_bu (полный на HIGH/ULTRA) или
+	# water_bu_cheap (SIMPLE/NORMAL); копий Boujie в материалах нет,
+	# текстур аддона шейдер не читает вовсе.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	for pair: Array in [["озеро", true], ["море", false]]:
+		var material := area._surface_material(pair[1]) as ShaderMaterial
+		assert_true(material.shader == WaterArea.WATER_BU
+			or material.shader == WaterArea.WATER_BU_CHEAP,
+			"%s: новый шейдер water_bu*" % pair[0])
+	WorldMaterials.textured_headless = false
+	var area_text := FileAccess.get_file_as_string(
+		"res://gameplay/world/water_area.gd")
+	assert_false(area_text.contains("addons/boujie_water_shader"),
+		"WaterArea не грузит текстуры Boujie")
+	assert_true(WaterArea.WATER_BU.code.contains("hint_screen_texture"),
+		"полная версия читает экран")
+	assert_true(WaterArea.WATER_BU.code.contains("hint_depth_texture"),
+		"полная версия читает буфер глубины")
+	assert_false(
+		WaterArea.WATER_BU_CHEAP.code.contains("hint_screen_texture"),
+		"дешёвая версия без экранной выборки (4.7)")
+	assert_false(
+		WaterArea.WATER_BU_CHEAP.code.contains("hint_depth_texture"),
+		"дешёвая версия без буфера глубины (4.7)")
+
+
+func test_water_wave_spectrum_deterministic() -> void:
+	# П14 4.3: спектр волн детерминирован (фиксированный seed) —
+	# повторная сборка даёт те же волны; длинные первые (HIGH = 16 —
+	# подмножество ULTRA = 32).
+	for sea: bool in [true, false]:
+		var first: Array = WaterArea.wave_spectrum(sea)
+		var again: Array = WaterArea.wave_spectrum(sea)
+		var a1: PackedVector4Array = first[0]
+		var a2: PackedVector4Array = again[0]
+		assert_eq(a1.size(), WaterArea.MAX_WAVES,
+			"в спектре %d волн" % WaterArea.MAX_WAVES)
+		for i: int in a1.size():
+			assert_true((a1[i] as Vector4).is_equal_approx(a2[i]),
+				"детерминизм волн (%s, %d)" % ["море" if sea else "озеро", i])
+		# Длинные волны первые: k = 2π/λ не убывает (λ не растёт).
+		for i: int in a1.size() - 1:
+			assert_gt((a1[i] as Vector4).z, 0.0, "k > 0")
+			assert_gte(
+				(a1[i + 1] as Vector4).z, (a1[i] as Vector4).z - 0.0001,
+				"длинные волны первые (%s, %d)" % ["море" if sea else "озеро", i])
+
+
+func test_water_spectrum_sea_vs_lake() -> void:
+	# П14 4.3: море — зыбь 12–60 м (60 %) и средние 2.5–10 м, суммарная
+	# высота ~0.2 м RMS; озеро — почти гладь: длины 0.6–3 м, RMS ~1–3 см;
+	# пена гребней — только у моря.
+	var sea: Array = WaterArea.wave_spectrum(true)
+	var lake: Array = WaterArea.wave_spectrum(false)
+	var sea_a: PackedVector4Array = sea[0]
+	var lake_a: PackedVector4Array = lake[0]
+	var sea_b: PackedVector4Array = sea[1]
+	var lake_b: PackedVector4Array = lake[1]
+	var swell: int = 0
+	var sum_sq_sea := 0.0
+	var sum_sq_lake := 0.0
+	for i: int in WaterArea.MAX_WAVES:
+		var wave: Vector4 = sea_a[i]
+		var length: float = TAU / wave.z
+		sum_sq_sea += wave.w * wave.w
+		sum_sq_lake += (lake_a[i] as Vector4).w * (lake_a[i] as Vector4).w
+		if length > 10.0:
+			swell += 1
+			assert_between(length, WaterArea.SEA_SWELL_LEN.x,
+				WaterArea.SEA_SWELL_LEN.y, "море: зыбь 12–60 м")
+		else:
+			assert_between(length, WaterArea.SEA_MEDIUM_LEN.x,
+				WaterArea.SEA_MEDIUM_LEN.y, "море: средние 2.5–10 м")
+		assert_between(TAU / (lake_a[i] as Vector4).z,
+			WaterArea.LAKE_LEN.x, WaterArea.LAKE_LEN.y,
+			"озеро: длины 0.6–3 м (почти гладь)")
+		assert_almost_eq((lake_b[i] as Vector4).w, 0.0, 0.0001,
+			"озеро: пены на гребнях нет")
+	assert_between(swell, 15, 22, "море: зыби ~60 % спектра")
+	assert_between(sqrt(sum_sq_sea), 0.12, 0.30,
+		"море: суммарная высота волн ~0.2 м RMS (не шторм)")
+	assert_between(sqrt(sum_sq_lake), 0.008, 0.035,
+		"озеро: почти гладь, амплитуды 1–3 см")
+	# Пена гребней у моря нормирована на совпадение фаз ≈ 0.55
+	# (порог шейдера smoothstep(0.35, 0.55, crest)).
+	var crest: float = 0.0
+	for i: int in WaterArea.MAX_WAVES:
+		var wa: Vector4 = sea_a[i]
+		var wb: Vector4 = sea_b[i]
+		crest += wb.w * wb.y * wa.z * wa.w
+	assert_almost_eq(crest, 0.55, 0.02,
+		"веса пены нормированы под порог шейдера")
+
+
+func test_water_waves_and_ripple_by_tier() -> void:
+	# П14 4.7: волны Герстнера 32 ULTRA / 16 HIGH / 8 SIMPLE и NORMAL;
+	# рябь 3 / 2 / 1 слоя.
+	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.ULTRA), 32,
+		"ULTRA — 32 волны")
+	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.HIGH), 16,
+		"HIGH — 16 волн")
+	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.NORMAL), 8,
+		"NORMAL — 8 волн")
+	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.SIMPLE), 8,
+		"SIMPLE — 8 волн")
+	assert_eq(WaterArea.ripple_layers_for_tier(GraphicsQuality.Tier.ULTRA), 3,
+		"ULTRA — 3 слоя ряби")
+	assert_eq(WaterArea.ripple_layers_for_tier(GraphicsQuality.Tier.HIGH), 2,
+		"HIGH — 2 слоя ряби")
+	assert_eq(WaterArea.ripple_layers_for_tier(GraphicsQuality.Tier.NORMAL), 1,
+		"NORMAL — 1 слой ряби")
+	assert_lte(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.HIGH),
+		WaterArea.MAX_WAVES, "HIGH — подмножество полного спектра")
+
+
+func test_water_beer_and_fresnel_in_shader() -> void:
+	# П14 4.1/4.2/4.4: поглощение Бера по каналам в коде шейдера
+	# (exp по vec3), преломление смещает выборку экрана, френель —
+	# Шлик (степень 5), пена процедурная (без текстур).
+	var code := WaterArea.WATER_BU.code
+	assert_true(code.contains("exp(-absorption * thickness)"),
+		"поглощение Бера по каналам")
+	assert_true(code.contains("vec3 transmit = exp("),
+		"пропускание — вектор (красный гаснет первым)")
+	assert_true(code.contains("refr_uv = SCREEN_UV + refr_off"),
+		"преломление — смещение выборки экрана")
+	assert_true(code.contains("-check_pos.z < surf_dist"),
+		"выборка над водой не рвётся (проверка глубины)")
+	assert_true(code.contains("pow(1.0 - max(dot(nrm, view_dir), 0.0), 5.0)"),
+		"френель Шлика (степень 5)")
+	assert_false(code.contains("texture_foam"),
+		"пены-текстуры нет (процедурная)")
+	assert_false(code.contains("texture_refraction"),
+		"текстуры преломления Boujie нет")
+	assert_true(code.contains("ALPHA = 1.0"),
+		"композит воды собирается в шейдере (поканальное поглощение)")
+
+
+func test_water_night_follows_sky() -> void:
+	# П14 4.6: ночь — тёмная вода: update_sky красит отражение реальным
+	# небом и гасит глубинные цвета вместе с яркостью горизонта.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	# День: светлый горизонт.
+	area.update_sky(
+		Color(0.3, 0.5, 0.8), Color(0.75, 0.75, 0.72),
+		Vector3.UP, Color(1.0, 0.95, 0.85))
+	var day_deep: Color = material.get_shader_parameter("color_deep")
+	var day_horizon: Vector3 = material.get_shader_parameter("sky_horizon")
+	# Ночь: тёмный горизонт — глубинные цвета гаснут, отражение тёмное.
+	area.update_sky(
+		Color(0.02, 0.03, 0.06), Color(0.05, 0.06, 0.09),
+		Vector3.DOWN, Color(0.4, 0.4, 0.5))
+	var night_deep: Color = material.get_shader_parameter("color_deep")
+	var night_horizon: Vector3 = material.get_shader_parameter("sky_horizon")
+	assert_lt(night_deep.get_luminance(), day_deep.get_luminance() * 0.3,
+		"ночью глубинный цвет гаснет")
+	assert_lt(night_horizon.length(), day_horizon.length() * 0.3,
+		"ночью отражение неба тёмное")
+	WorldMaterials.textured_headless = false
+
+
 # --- П14 блок 2: освещение и нормали ---
 
 func test_no_custom_light_model() -> void:

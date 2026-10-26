@@ -115,6 +115,9 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 	"_FogMeshI",
 	"/EXT_glass", "/INT_glass", "/EXT_lamp",
 	"/gd_",
+	# П14 4: вода Born Unblessed процедурна — шейдер water_bu не читает
+	# текстур вовсе (пена и рябь — шум, «БЕЗ текстур Boujie» SPEC 4.5).
+	"LakeSurface", "/Ocean/",
 ]
 
 ## Переходные нетекстурные поверхности (срез 5): закрываются пунктами

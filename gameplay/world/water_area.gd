@@ -1,50 +1,70 @@
-# Вода (раздел 6 SPEC): Area3D-зона плавания + поверхность на шейдере
-# Boujie Water Shader (доработка-2 П5.13, П3 — готовый аддон MIT вместо
-# самописного). Персонаж в зоне плавает на поверхности со скоростью шага
-# (само плавание — в Player.enter_water/exit_water); этой зоне всё равно,
-# кто в ней плавает, поэтому связь — только вызовы методов тел.
-# Поверхности строится в _ready при входе в дерево (сцена острова
+# Вода (раздел 6 SPEC): Area3D-зона плавания + поверхность на своём
+# шейдере water_bu (SPEC П14 4 — Boujie Water больше не используется:
+# текстур аддона нет вовсе, волны, пена и рябь процедурные). Персонаж
+# в зоне плавает на поверхности со скоростью шага (само плавание — в
+# Player.enter_water/exit_water); этой зоне всё равно, кто в ней
+# плавает, поэтому связь — только вызовы методов тел.
+# Поверхности строятся в _ready при входе в дерево (сцена острова
 # собирается оффлайн tools/generate_island.gd, меши воды в пакет не
 # попадают):
-#   море  — нода Ocean аддона: кольца LOD с изломами-швами без щелей,
-#     следует за камерой (CameraFollower3D; паттерн волн в мировых
-#     координатах — движение бесшовно), дальняя плоскость уходит за
-#     дистанцию растворения — никаких резких границ;
-#   озеро — плоскость тем же шейдером спокойнее (волны меньше) и на
-#     LAKE_LIFT выше моря: копланарные поверхности мерцали (z-fighting).
-# Преломление и окно Снелла шейдера выключены (SPEC «Простая графика»,
-# правка дефайнов в шейдере аддона — README это прямо допускает).
-# П12 F: палитра Born Unblessed — бирюза PAL.water/PAL.water_deep больше не
-# используется (SPEC П12 4.1); шейдер — копии аддона в assets/shaders/
-# (без нарисованных волн ocean_albedo, SPEC 4.2), преломление — вторая
-# копия на HIGH/ULTRA (4.4), аддон не тронут. SSR П11 на воде двойных
-# отражений не даёт: шейдер пишет EMISSION без light(), экранное
-# отражение движок поверх не подмешивает — френель даёт только небо.
+#   море  — нода Ocean аддона как сетка (кольца LOD + дальняя
+#     плоскость), следует за камерой (CameraFollower3D; паттерн волн
+#     в мировых координатах — движение бесшовно);
+#   озеро — плоскость тем же шейдером спокойнее и на LAKE_LIFT выше
+#     моря: копланарные поверхности мерцали (z-fighting).
+# П14 4: полная версия шейдера (экранная текстура + буфер глубины,
+# поглощение Бера по каналам, преломление, пена) — HIGH/ULTRA;
+# SIMPLE/NORMAL — water_bu_cheap без экранной выборки. Спектр волн
+# Герстнера (16/32/8 по уровню) и рябь (2/3/1 слоя) — константы
+# детерминированного RNG. SSR на прозрачную воду движок не даёт
+# (только opaque) — небо отражает френель Шлика цветами DayCycle,
+# дорожка светила — спекуляр движка.
 # Не делает: подводное плавание (вне MVP), течение и волны для лодочек.
 class_name WaterArea
 extends Area3D
 
-const WATER_PLAIN: Shader = preload(
-	"res://assets/shaders/water_plain.gdshader")
-const WATER_REFRACTION: Shader = preload(
-	"res://assets/shaders/water_refraction.gdshader")
-const FOAM_TEX: Texture2D = preload(
-	"res://addons/boujie_water_shader/shader/foam_1.png")
-const REFRACTION_TEX: Texture2D = preload(
-	"res://addons/boujie_water_shader/shader/refraction.png")
+const WATER_BU: Shader = preload(
+	"res://assets/shaders/water_bu.gdshader")
+const WATER_BU_CHEAP: Shader = preload(
+	"res://assets/shaders/water_bu_cheap.gdshader")
 
-# --- Палитра воды BU (SPEC П12 4.1) ---
+# --- Палитра воды BU (SPEC П12 4.1, П14 4.1) ---
 ## Озеро и пруды: тёмная торфяная вода — глубина почти чёрная с зелёно-
 ## бурым отливом, мелководье прозрачное (дно видно).
-const LAKE_DEEP: Color = Color(0.016, 0.035, 0.028, 0.94)
-const LAKE_SHALLOW: Color = Color(0.10, 0.14, 0.10, 0.30)
-const LAKE_ALBEDO: Color = Color(0.05, 0.075, 0.06, 0.72)
+const LAKE_DEEP: Color = Color(0.016, 0.035, 0.028, 1.0)
+const LAKE_SHALLOW: Color = Color(0.10, 0.14, 0.10, 1.0)
 ## Море: холодная стально-серо-синяя.
-const SEA_DEEP: Color = Color(0.02, 0.03, 0.045, 0.94)
-const SEA_SHALLOW: Color = Color(0.09, 0.12, 0.14, 0.35)
-const SEA_ALBEDO: Color = Color(0.055, 0.07, 0.08, 0.72)
+const SEA_DEEP: Color = Color(0.02, 0.03, 0.045, 1.0)
+const SEA_SHALLOW: Color = Color(0.09, 0.12, 0.14, 1.0)
+## Поглощение Бера по каналам, 1/м (SPEC П14 4.1: красный гаснет первым;
+## торфяная мгла озера плотнее стального моря). Альфа-каналы палитры
+## больше не несут прозрачность — композит воды собирает шейдер.
+const LAKE_ABSORPTION: Vector3 = Vector3(1.6, 0.75, 0.45)
+const SEA_ABSORPTION: Vector3 = Vector3(1.05, 0.50, 0.34)
 ## Круги на воде при входе — цвет пены, не бирюза палитры.
 const RING_COLOR: Color = Color(0.87, 0.92, 0.93)
+
+# --- Спектр волн (SPEC П14 4.3) ---
+## Полный спектр — 32 волны; уровень берёт первые N (длинные первые,
+## поэтому HIGH = 16 — подмножество ULTRA = 32, SIMPLE/NORMAL — 8).
+const MAX_WAVES: int = 32
+const SEED_WAVES: int = 20261026
+## Ветер (откуда дует), градусы; разброс направлений волн вокруг него.
+const WIND_DIR_DEG: float = 35.0
+const DIR_SPREAD_SWELL: float = 60.0
+const DIR_SPREAD_MEDIUM: float = 75.0
+## Длины и амплитуды: озеро — почти гладь (0.6–3 м / суммарно 1–3 см),
+## море — зыбь 12–60 м и средние волны 2.5–10 м (суммарно ~0.2 м RMS).
+const LAKE_LEN: Vector2 = Vector2(0.6, 3.0)
+const SEA_SWELL_LEN: Vector2 = Vector2(12.0, 60.0)
+const SEA_MEDIUM_LEN: Vector2 = Vector2(2.5, 10.0)
+const RMS_LAKE: float = 0.016
+const RMS_SEA: float = 0.18
+## Суммарная крутизна спектра (Σ Q·k·A): держит Герстнера от
+## самопересечений, бюджет делится поровну между волнами.
+const STEEP_TOTAL: float = 0.75
+## Гравитация для дисперсионного соотношения глубоководных волн.
+const GRAVITY: float = 9.81
 
 ## Высота зоны под поверхностью воды, м.
 const DEPTH: float = 1.4
@@ -71,7 +91,10 @@ var _water_materials: Array[ShaderMaterial] = []
 ## Базовые (дневные) значения цветов, от которых считается ночной спад.
 var _deep_base := Color.BLACK
 var _shallow_base := Color.BLACK
-var _albedo_base := Color.BLACK
+## Рябь включена (панель F3): номинал по уровню или 0.
+var _ripple_on: bool = true
+## Уровень качества построенных поверхностей (волны/рябь/шейдер).
+var _tier: int = 0
 
 
 func _ready() -> void:
@@ -114,11 +137,114 @@ func level() -> float:
 	return water_level
 
 
-## Шейдер воды по уровню графики (SPEC П12 4.4): преломление — копия
-## water_refraction — только на HIGH/ULTRA, остальным — water_plain.
+## Шейдер воды по уровню графики (SPEC П14 4.1/4.7): полная версия с
+## экранной текстурой и глубиной — только HIGH/ULTRA, SIMPLE/NORMAL —
+## дешёвая water_bu_cheap без экранной выборки.
 static func shader_for_tier(tier: int) -> Shader:
-	return WATER_REFRACTION if tier >= GraphicsQuality.Tier.HIGH \
-		else WATER_PLAIN
+	return WATER_BU if tier >= GraphicsQuality.Tier.HIGH \
+		else WATER_BU_CHEAP
+
+
+## Число волн Герстнера по уровню (SPEC П14 4.3/4.7): 32 ULTRA,
+## 16 HIGH, 8 SIMPLE/NORMAL.
+static func wave_count_for_tier(tier: int) -> int:
+	if tier == GraphicsQuality.Tier.ULTRA:
+		return 32
+	if tier == GraphicsQuality.Tier.HIGH:
+		return 16
+	return 8
+
+
+## Слои процедурной ряби по уровню (SPEC П14 4.3/4.7): 3 ULTRA,
+## 2 HIGH, дешёвой версии хватает одного.
+static func ripple_layers_for_tier(tier: int) -> int:
+	if tier == GraphicsQuality.Tier.ULTRA:
+		return 3
+	if tier == GraphicsQuality.Tier.HIGH:
+		return 2
+	return 1
+
+
+## Спектр волн Герстнера (SPEC П14 4.3) — детерминированный RNG с
+## фиксированным seed: [waves_a, waves_b] по 32 волны, длинные первыми.
+##   waves_a[i] = (dir.x, dir.y, k = 2π/λ, амплитуда)
+##   waves_b[i] = (ω = √(g·k), крутизна Q, фаза, вес пены гребня)
+## Амплитуды пропорциональны длине волны и нормализуются к суммарному
+## RMS (море ~0.2 м, озеро ~2 см — не шторм); веса пены нормированы так,
+## что совпадение фаз зыби даёт сжатие гребня ≈ 0.55 (порог шейдера).
+static func wave_spectrum(sea: bool) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED_WAVES
+	var lengths: Array[float] = []
+	var amps: Array[float] = []
+	var dirs: Array[float] = []  # радианы
+	var phases: Array[float] = []
+	var foams: Array[float] = []
+	var wind: float = deg_to_rad(WIND_DIR_DEG)
+	for i: int in MAX_WAVES:
+		# Море: 60% зыби (12–60 м) и 40% средних волн (2.5–10 м);
+		# озеро — один диапазон коротких волн.
+		var swell: bool = not sea or i % 5 < 3
+		var t: float = rng.randf()
+		var length: float
+		var amp: float
+		var foam: float
+		var spread: float
+		if sea and swell:
+			length = lerpf(SEA_SWELL_LEN.x, SEA_SWELL_LEN.y, t)
+			amp = lerpf(0.30, 0.80, t)
+			foam = 1.0
+			spread = DIR_SPREAD_SWELL
+		elif sea:
+			length = lerpf(SEA_MEDIUM_LEN.x, SEA_MEDIUM_LEN.y, t)
+			amp = lerpf(0.04, 0.18, t)
+			foam = 0.35
+			spread = DIR_SPREAD_MEDIUM
+		else:
+			length = lerpf(LAKE_LEN.x, LAKE_LEN.y, t)
+			amp = lerpf(0.01, 0.03, t)
+			foam = 0.0
+			spread = DIR_SPREAD_MEDIUM
+		# Зыбь держится ближе к ветру, средние волны разбросаны шире.
+		dirs.append(wind + deg_to_rad(
+			rng.randf_range(-spread, spread)))
+		lengths.append(length)
+		amps.append(amp)
+		phases.append(rng.randf() * TAU)
+		foams.append(foam)
+	# Длинные волны первыми: HIGH=16 — подмножество ULTRA=32, урезание
+	# спектра не меняет первые волны.
+	var order := range(MAX_WAVES)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return lengths[a] > lengths[b])
+	# Нормализация амплитуд к суммарному RMS моря/озера.
+	var sum_sq: float = 0.0
+	for amp: float in amps:
+		sum_sq += amp * amp
+	var rms_target: float = RMS_SEA if sea else RMS_LAKE
+	var scale: float = rms_target / sqrt(maxf(sum_sq, 1e-9))
+	# Крутизна: Q общая на волну, Σ Q·k·A = STEEP_TOTAL (без петель).
+	var steep_sum: float = 0.0
+	for i: int in MAX_WAVES:
+		steep_sum += TAU / lengths[i] * amps[i] * scale
+	var q: float = STEEP_TOTAL / maxf(steep_sum, 1e-9)
+	# Веса пены: совпадение фаз всех волн с весом даёт сжатие ≈ 0.55.
+	var crest_sum: float = 0.0
+	for i: int in MAX_WAVES:
+		crest_sum += foams[i] * q * TAU / lengths[i] * amps[i] * scale
+	var foam_scale: float = 0.55 / maxf(crest_sum, 1e-9) \
+		if crest_sum > 1e-6 else 0.0
+	var waves_a := PackedVector4Array()
+	var waves_b := PackedVector4Array()
+	for i: int in order:
+		var k: float = TAU / lengths[i]
+		var amp: float = amps[i] * scale
+		waves_a.append(Vector4(
+			cos(dirs[i]), sin(dirs[i]), k, amp))
+		waves_b.append(Vector4(
+			sqrt(GRAVITY * k), q, phases[i],
+			foams[i] * foam_scale))
+	return [waves_a, waves_b]
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -186,9 +312,9 @@ func _build_lake_plane(size: Vector2, lift: float) -> void:
 	surface.set_owner(null)  # не сериализовать: строится в рантайме
 
 
-## В нормальном рендере — копия шейдера Boujie Water в палитре BU (море —
-## заметные волны, озеро — мелкая рябь; преломление — только HIGH/ULTRA,
-## SPEC П12 4.4); в headless (dummy-рендер) — плоская полупрозрачная
+## В нормальном рендере — свой шейдер water_bu (полная версия на
+## HIGH/ULTRA: экранная выборка + глубина + Бер по каналам; дешёвая на
+## SIMPLE/NORMAL); в headless (dummy-рендер) — плоская полупрозрачная
 ## заглушка без волн.
 func _surface_material(calm: bool) -> Material:
 	if WorldMaterials.want_flat():
@@ -197,115 +323,50 @@ func _surface_material(calm: bool) -> Material:
 			LAKE_SHALLOW if calm else SEA_SHALLOW, 0.55)
 		flat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		return flat
+	_tier = GraphicsQuality.tier_from_settings()
 	var material := ShaderMaterial.new()
-	var shader := shader_for_tier(GraphicsQuality.tier_from_settings())
-	var refraction := shader == WATER_REFRACTION
-	material.shader = shader
-	material.set_shader_parameter("freeze_time", false)
-	# Палитра BU (4.1): озеро/пруды — торфяная, море — стальная серо-синяя.
+	material.shader = shader_for_tier(_tier)
+	# Палитра BU (П12 4.1): озеро/пруды — торфяная, море — стальная.
 	_deep_base = LAKE_DEEP if calm else SEA_DEEP
 	_shallow_base = LAKE_SHALLOW if calm else SEA_SHALLOW
-	_albedo_base = LAKE_ALBEDO if calm else SEA_ALBEDO
-	material.set_shader_parameter("albedo", _albedo_base)
-	material.set_shader_parameter("albedo_fresnel",
-		Color(0.42, 0.47, 0.50, 1.0))  # до первого update_sky
 	material.set_shader_parameter("color_deep", _deep_base)
 	material.set_shader_parameter("color_shallow", _shallow_base)
-	material.set_shader_parameter("texture_foam", FOAM_TEX)
-	if refraction:
-		# Дефолты префаба аддона: тихое искажение дна, сходит на нет к 200 м.
-		material.set_shader_parameter("texture_refraction", REFRACTION_TEX)
-		material.set_shader_parameter("refraction", 0.09)
-		material.set_shader_parameter("refraction_texture_channel",
-			Vector4(1.0, 0.0, 0.0, 0.0))
-		material.set_shader_parameter("refraction_opacity", 0.7)
-		material.set_shader_parameter("refraction_scaling_distance_min", 200.0)
+	# Поглощение Бера по каналам (П14 4.1): озеро плотнее моря.
+	material.set_shader_parameter("absorption",
+		LAKE_ABSORPTION if calm else SEA_ABSORPTION)
+	# Спектр волн (П14 4.3): море — зыбь и средние, озеро — короткие;
+	# уровень качества берёт первые N волн (длинные первые).
+	var spectrum := wave_spectrum(not calm)
+	material.set_shader_parameter("waves_a", spectrum[0])
+	material.set_shader_parameter("waves_b", spectrum[1])
+	material.set_shader_parameter("wave_count", wave_count_for_tier(_tier))
+	# Рябь (4.3/4.7) и преломление (4.2): 2–3 слоя на HIGH/ULTRA,
+	# один дешёвой версии; преломление включено (панель F3 гасит).
+	material.set_shader_parameter(
+		"ripple_layers", float(ripple_layers_for_tier(_tier)))
+	material.set_shader_parameter("refraction_amount", 1.0)
 	material.set_shader_parameter("specular", 0.55)
-	# Почти зеркало (4.3): рябь и френель не размазываются микрошероховатостью.
+	# Почти зеркало (4.3/П14 4.4): рябь и френель не размазываются
+	# микрошероховатостью.
 	material.set_shader_parameter("roughness", 0.03)
 	material.set_shader_parameter("metallic", 0.0)
-	material.set_shader_parameter("vertex_displace_from_mesh_normal", false)
-	material.set_shader_parameter("normal_wave_from_mesh_normal", false)
-	# Трипланарные UV в мировых координатах — тот же масштаб, что у префаба
-	# аддона (пена и рябь дна ~36 м).
-	material.set_shader_parameter("uv_blend_sharpness", 2.0)
-	material.set_shader_parameter("uv_tri_scale", Vector3(36.0, 36.0, 36.0))
-	material.set_shader_parameter("uv_tri_offset", Vector3.ZERO)
-	# Глубинный цвет: закон Бера на глубине, мелководье прозрачно; озеро
-	# плотнее моря — торфяная мгла глотает свет быстрее (4.5).
-	material.set_shader_parameter("beers_law", 2.8 if calm else 2.2)
-	material.set_shader_parameter("depth_offset", -0.75)
-	# Пена у кромки (4.6): тонкая полоса прибоя у берега и камней.
-	material.set_shader_parameter("shore_start_blend", 0.25 if calm else 0.4)
-	material.set_shader_parameter("shore_end_blend", 0.8 if calm else 1.4)
-	# Дальний растворение: вода мягко уходит в дымку неба задолго до края
-	# меша (far_edge 1500) — резкой границы не видно. «Простая графика»
-	# приближает (set_fade_distance от world_scene при far 70).
+	# Небо для френеля до первого update_sky (нейтральное дневное).
+	material.set_shader_parameter("sky_horizon", Vector3(0.55, 0.62, 0.70))
+	material.set_shader_parameter("sky_top", Vector3(0.30, 0.45, 0.68))
+	# Растворение к горизонту цветом неба: дальняя плоскость Ocean без
+	# резкой границы; «Простая графика» приближает (set_fade_distance
+	# от world_scene при far 70).
 	material.set_shader_parameter("distance_fade_min", 700.0)
 	material.set_shader_parameter("distance_fade_max", 1400.0)
-	material.set_shader_parameter("near_fade_min", 0.8)
-	material.set_shader_parameter("near_fade_max", 1.2)
-	material.set_shader_parameter("foam_fade_min", 280.0)
-	material.set_shader_parameter("foam_fade_max", 620.0)
-	material.set_shader_parameter("shore_fade_min", 280.0)
-	material.set_shader_parameter("shore_fade_max", 620.0)
+	# Смещение вершин гаснет вдали (внешние кольца Ocean грубые).
 	material.set_shader_parameter("vertex_wave_fade_min", 380.0)
 	material.set_shader_parameter("vertex_wave_fade_max", 800.0)
-	# Depth-буфер вдали неточен: глубинные эффекты гаснут до горизонта.
+	# Depth-буфер вдали неточен: толщина сменяется «глубокой» константой.
 	material.set_shader_parameter("depth_fog_fade_min", 70.0)
 	material.set_shader_parameter("depth_fog_fade_max", 130.0)
-	if calm:
-		# Озеро (4.5): почти гладь — едва заметная рябь двух масштабов
-		# (~6 и ~4.5 м) с ползущими по ним бликами, пена редкая и слабая.
-		_waves(material, 2, [0.05, 0.04], [0.05, 0.035],
-			[35.0, 120.0], [0.16, 0.22], [0.5, 0.35], [0.0, 90.0])
-		_waves(material, 1, [0.04], [0.9], [70.0], [0.10], [0.2], [0.0], true)
-		_waves(material, 2, [0.08, 0.06], [0.5, 0.4],
-			[310.0, 90.0], [0.8, 0.5], [0.3, 0.25], [0.0, 120.0],
-			false, true)
-	else:
-		# Море (4.5): умеренные четыре волны Герстнера — крупнее озера,
-		# но без шторма; гребни пенятся (4.6) слабыми короткими всплесками.
-		_waves(material, 4, [0.28, 0.24, 0.20, 0.16], [0.30, 0.22, 0.16, 0.10],
-			[20.0, 140.0, 250.0, 60.0], [0.045, 0.060, 0.085, 0.100],
-			[1.0, 0.8, 1.2, 0.6], [0.0, 30.0, 60.0, 15.0])
-		_waves(material, 3, [0.20, 0.15, 0.35], [0.9, 1.1, 0.6],
-			[25.0, 315.0, 144.0], [0.02, 0.05, 0.06], [0.8, 1.2, 0.6],
-			[0.0, 90.0, 40.0], true)
-		_waves(material, 2, [0.09, 0.08], [0.7, 0.5],
-			[315.0, 90.0], [0.6, 0.4], [0.5, 0.3], [0.0, 0.0],
-			false, true)
+	material.set_shader_parameter("far_thickness", 8.0)
 	_water_materials.append(material)
 	return material
-
-
-## Параметры группы волн шейдера (Vertex/Foam/UV): до восьми значений,
-## хвост дополняется нулями — шейдер читает только Count первых.
-func _waves(
-	material: ShaderMaterial, count: int,
-	steepness: Array, amplitude: Array, directions: Array,
-	frequencies: Array, speeds: Array, phases: Array,
-	foam: bool = false, uv: bool = false,
-) -> void:
-	var prefix: String = "Foam" if foam else ("UV" if uv else "")
-	var names: Array[String] = [
-		"%sWaveCount", "%sWaveSteepnesses", "%sWaveAmplitudes",
-		"%sWaveDirectionsDegrees", "%sWaveFrequencies", "%sWaveSpeeds",
-		"%sWavePhases",
-	]
-	var values: Array = [count, steepness, amplitude, directions,
-		frequencies, speeds, phases]
-	for i: int in names.size():
-		var param: String = names[i] % prefix
-		if values[i] is int:
-			material.set_shader_parameter(param, values[i])
-		else:
-			var packed := PackedFloat32Array()
-			for v: float in values[i]:
-				packed.append(v)
-			while packed.size() < 8:
-				packed.append(0.0)
-			material.set_shader_parameter(param, packed)
 
 
 ## «Простая графика» (раздел 15): камера far 70 — растворение воды
@@ -314,22 +375,16 @@ func set_fade_distance(fade_min: float, fade_max: float) -> void:
 	for material: ShaderMaterial in _water_materials:
 		material.set_shader_parameter("distance_fade_min", fade_min)
 		material.set_shader_parameter("distance_fade_max", fade_max)
-		material.set_shader_parameter("foam_fade_min", fade_min * 0.4)
-		material.set_shader_parameter("foam_fade_max", fade_min * 0.85)
-		material.set_shader_parameter("shore_fade_min", fade_min * 0.4)
-		material.set_shader_parameter("shore_fade_max", fade_min * 0.85)
 
 
 ## Растворение воды по уровню графики (баг-фикс П13 п. 5): 46–66 м —
 ## «Простая графика» (камера far 70, Доработка-2 П5.13 П3); прочие уровни —
-## базовая дальность шейдера (700–1400 м, пена 280–620) без видимого
-## обрыва: дальняя плоскость воды уходит за горизонт.
+## базовая дальность шейдера (700–1400 м) без видимого обрыва: дальняя
+## плоскость воды уходит за горизонт.
 const FADE_SIMPLE_MIN: float = 46.0
 const FADE_SIMPLE_MAX: float = 66.0
 const FADE_BASE_MIN: float = 700.0
 const FADE_BASE_MAX: float = 1400.0
-const FOAM_BASE_MIN: float = 280.0
-const FOAM_BASE_MAX: float = 620.0
 
 
 func set_tier_fade(tier: int) -> void:
@@ -339,26 +394,32 @@ func set_tier_fade(tier: int) -> void:
 	for material: ShaderMaterial in _water_materials:
 		material.set_shader_parameter("distance_fade_min", FADE_BASE_MIN)
 		material.set_shader_parameter("distance_fade_max", FADE_BASE_MAX)
-		material.set_shader_parameter("foam_fade_min", FOAM_BASE_MIN)
-		material.set_shader_parameter("foam_fade_max", FOAM_BASE_MAX)
-		material.set_shader_parameter("shore_fade_min", FOAM_BASE_MIN)
-		material.set_shader_parameter("shore_fade_max", FOAM_BASE_MAX)
 
 
-## Преломление воды на лету (панель замера F3, П13 3.2): включено на
-## HIGH/ULTRA (SPEC П12 4.4) — переключает шейдер копии материалов
-## (параметры ShaderMaterial переживают смену шейдера).
+## Преломление воды на лету (панель замера F3, П14 4.2): сила смещения
+## выборки экрана — 0 выключает смещение (толщина и поглощение Бера
+## остаются); у дешёвой версии экранной выборки нет — параметр там
+## не читается.
 func set_refraction(on: bool) -> void:
-	var shader := WATER_REFRACTION if on else WATER_PLAIN
 	for material: ShaderMaterial in _water_materials:
-		material.shader = shader
+		material.set_shader_parameter(
+			"refraction_amount", 1.0 if on else 0.0)
 
 
-## Отражение неба и яркость глубинных цветов (П5.13, блок 2; доработка-2
-## П3 — Boujie Water): френелевский цвет поверхности берёт горизонт неба
-## (закат — тёплая вода без «бордовой полосы»), глубинные цвета гаснут
-## вместе с яркостью неба — ночью вода тёмная сама, а не подсвеченная
-## эмиссией глубины. Дорожку светила даёт спекуляр шейдера от солнца/луны.
+## Рябь воды на лету (панель замера F3, П14 4.3): 0 слоёв — гладкая
+## поверхность (волны Герстнера остаются), обратно — номинал уровня.
+func set_ripple(on: bool) -> void:
+	_ripple_on = on
+	var layers: float = float(ripple_layers_for_tier(_tier)) if on else 0.0
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("ripple_layers", layers)
+
+
+## Отражение неба и яркость глубинных цветов (П5.13, блок 2; П14 4.4 —
+## свой шейдер): френель Шлика красит отражение реальным небом (закат —
+## тёплая вода без «бордовой полосы»), глубинные цвета гаснут вместе с
+## яркостью неба — ночью вода тёмная сама, а не подсвеченная эмиссией
+## глубины. Дорожку светила даёт спекуляр шейдера от солнца/луны.
 func update_sky(
 	sky_top: Color, sky_horizon: Color, light_dir: Vector3, glint: Color,
 ) -> void:
@@ -367,11 +428,11 @@ func update_sky(
 	# Спад яркости от дневного горизонта (0.75 — типичная светлота дня).
 	var luma := clampf(sky_horizon.get_luminance() / 0.75, 0.10, 1.0)
 	for material: ShaderMaterial in _water_materials:
-		material.set_shader_parameter("albedo_fresnel",
-			Color(sky_horizon, 1.0))
+		material.set_shader_parameter("sky_horizon",
+			Vector3(sky_horizon.r, sky_horizon.g, sky_horizon.b))
+		material.set_shader_parameter("sky_top",
+			Vector3(sky_top.r, sky_top.g, sky_top.b))
 		material.set_shader_parameter("color_deep",
-			Color(_deep_base * luma, _deep_base.a))
+			Color(_deep_base * luma, 1.0))
 		material.set_shader_parameter("color_shallow",
-			Color(_shallow_base * luma, _shallow_base.a))
-		material.set_shader_parameter("albedo",
-			Color(_albedo_base * luma, _albedo_base.a))
+			Color(_shallow_base * luma, 1.0))
