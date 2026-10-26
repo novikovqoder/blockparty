@@ -152,6 +152,11 @@ static func scatter(
 			var dist: float = Vector2(float(x), float(z)).distance_to(center)
 			if dist > RADIUS:
 				continue
+			# За картой высот (остров — мир ±HALF) мелочи нет — и чтения
+			# высот в _cell_blocked/_slope не выходят за массив, когда
+			# наблюдатель (камера) ушёл за край острова.
+			if absi(x) > IslandGen.HALF or absi(z) > IslandGen.HALF:
+				continue
 			if _cell_blocked(art, x, z):
 				continue
 			# Спад плотности к кромке: у края кольца мелочь редеет, стык
@@ -206,11 +211,14 @@ static func scatter(
 					Basis(Vector3.UP, yaw) * Basis().scaled(Vector3.ONE * scale),
 					pos))
 				var brightness: float = rng.randf_range(0.92, 1.08)
+				# Без as-каста (идиома GroundDetails): каст создаёт копию
+				# COW-массива, append уходил в никуда — цвета не доезжали
+				# до apply_clutter, и он падал на пустом PackedColorArray.
 				if kind["grass"]:
-					(group["colors"] as PackedColorArray).append(Color(
+					group["colors"].append(Color(
 						brightness, brightness, brightness, 1.0))
 				else:
-					(group["colors"] as PackedColorArray).append(Color(
+					group["colors"].append(Color(
 						TINT_COOL.r * brightness, TINT_COOL.g * brightness,
 						TINT_COOL.b * brightness, 1.0))
 	return groups

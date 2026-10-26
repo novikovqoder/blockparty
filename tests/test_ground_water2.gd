@@ -276,6 +276,12 @@ func test_ground_clutter_ring_around_player() -> void:
 	var total := 0
 	for type: String in ultra:
 		total += (ultra[type]["transforms"] as Array).size()
+		# Цвета инстансов доезжают вместе с трансформами (регресс COW:
+		# append через as-каст уходил в копию, apply_clutter падал на
+		# пустом PackedColorArray).
+		assert_eq((ultra[type]["colors"] as PackedColorArray).size(),
+			(ultra[type]["transforms"] as Array).size(),
+			"каждому инстансу — свой цвет (%s)" % type)
 		var again: Array = ultra_repeat[type]["transforms"]
 		var first: Array = ultra[type]["transforms"]
 		assert_eq(again.size(), first.size(),

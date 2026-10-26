@@ -80,14 +80,15 @@ func test_water_surfaces_configured() -> void:
 			)
 
 
-## Доработка-2 П5.13, П3: вода — Boujie Water Shader. Море — нода Ocean
-## аддона (кольца LOD, следует за камерой), озеро — плоскость тем же
-## шейдером спокойнее (волны меньше) и на LAKE_LIFT выше моря: копланарное
-## мерцание двух полупрозрачных поверхностей (vfx-fix, баг 4) исчезает
-## вместе с дыркой в море.
-func test_water_is_boujie_ocean_and_lake() -> void:
-	# Материалы Boujie строит только текстурный режим (headless без флага
-	# отдаёт плоские заглушки) — включаем, как тест аудита поверхностей.
+## Доработка-2 П5.13, П3; П14 4: вода — свой шейдер water_bu (Boujie
+## больше не используется). Море — нода Ocean аддона как сетка (кольца
+## LOD, следует за камерой), озеро — плоскость тем же шейдером спокойнее
+## (волны меньше) и на LAKE_LIFT выше моря: копланарное мерцание двух
+## полупрозрачных поверхностей (vfx-fix, баг 4) исчезает вместе с дыркой
+## в море.
+func test_water_is_shared_ocean_and_lake() -> void:
+	# Шейдерные материалы воды строит только текстурный режим (headless
+	# без флага отдаёт плоские заглушки) — включаем, как тест аудита.
 	WorldMaterials.textured_headless = true
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
@@ -100,7 +101,7 @@ func test_water_is_boujie_ocean_and_lake() -> void:
 		if area == null:
 			continue
 		if area.name == "SeaWater":
-			# Море — Ocean аддона с материалом Boujie.
+			# Море — Ocean аддона как сетка LOD-колец, материал water_bu.
 			var ocean := area.get_node_or_null("Ocean") as Ocean
 			assert_not_null(ocean, "море — нода Ocean аддона (LOD-кольца)")
 			if ocean == null:
@@ -131,28 +132,31 @@ func test_water_is_boujie_ocean_and_lake() -> void:
 	assert_not_null(lake_material, "материал озера — ShaderMaterial")
 	if sea_material == null or lake_material == null:
 		return
-	# Один и тот же шейдер Boujie у моря и озера («одна поверхность»).
+	# Один и тот же шейдер water_bu у моря и озера («одна поверхность»).
 	assert_eq(sea_material.shader, lake_material.shader,
-		"море и озеро — один шейдер Boujie Water")
-	# Озеро спокойнее: амплитуды волн меньше морских.
-	var sea_amp: float = (sea_material.get_shader_parameter("WaveAmplitudes")
-		as PackedFloat32Array)[0]
-	var lake_amp: float = (lake_material.get_shader_parameter("WaveAmplitudes")
-		as PackedFloat32Array)[0]
-	assert_lt(lake_amp, sea_amp * 0.5,
-		"волны озера заметно спокойнее морских (%.2f < %.2f)" % [
-			lake_amp, sea_amp])
-	# Материал текстурный (П8): пена — текстура аддона. П12 F: нарисованные
-	# волны ocean_albedo выключены (SPEC 4.2, копия шейдера без texture_albedo).
-	assert_false(sea_material.get_shader_parameter("texture_albedo")
-		is Texture2D, "текстура волн альбедо не задаётся (П12)")
-	assert_true(sea_material.get_shader_parameter("texture_foam")
-		is Texture2D, "текстура пены задана")
-	# Цвет по глубине: глубокая темнее и непрозрачнее мелководья.
+		"море и озеро — один шейдер water_bu")
+	# Озеро спокойнее: амплитуда первой (самой длинной) волны спектра
+	# меньше морской (waves_a[i].w — амплитуда).
+	var sea_waves := sea_material.get_shader_parameter(
+		"waves_a") as PackedVector4Array
+	var lake_waves := lake_material.get_shader_parameter(
+		"waves_a") as PackedVector4Array
+	assert_gt(sea_waves.size(), 0, "спектр моря не пуст")
+	assert_gt(lake_waves.size(), 0, "спектр озера не пуст")
+	if sea_waves.size() > 0 and lake_waves.size() > 0:
+		assert_lt(lake_waves[0].w, sea_waves[0].w * 0.5,
+			"волны озера заметно спокойнее морских (%.3f < %.3f)" % [
+				lake_waves[0].w, sea_waves[0].w])
+	# Вода процедурная (П14 4.5): назначенных текстур нет вовсе — пена
+	# и рябь шумом, текстур Boujie в материалах не осталось.
+	for material: ShaderMaterial in [sea_material, lake_material]:
+		for u: Dictionary in material.shader.get_shader_uniform_list():
+			assert_false(material.get_shader_parameter(u["name"])
+				is Texture2D, "у воды нет текстур (%s)" % u["name"])
+	# Цвет по глубине: глубокая темнее мелководья (прозрачность — Бером
+	# по каналам в композите, альфа цветов не используется).
 	var deep: Color = sea_material.get_shader_parameter("color_deep")
 	var shallow: Color = sea_material.get_shader_parameter("color_shallow")
-	assert_gt(deep.a, shallow.a + 0.3,
-		"глубокая вода непрозрачнее мелководья")
 	assert_lt(deep.get_luminance(), shallow.get_luminance(),
 		"глубокая вода темнее мелководья")
 
