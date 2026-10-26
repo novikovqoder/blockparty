@@ -66,6 +66,12 @@ const CATEGORIES: Array = [
 ## меньше — процедурные данные (карты весов/границ земли 128×128).
 const RUNTIME_MIP_THRESHOLD: int = 256
 
+## Сэмплеры-данные, не визуал (П14 3.1): height_tex — карта высот острова
+## RFloat 257×257 (как HeightMapShape3D) для смещения вершин кольца и
+## марша POM; усреднение мипами смазало бы марш — аудита мипов она не
+## подлежит, как и карты покраски размером ниже порога.
+const DATA_SAMPLERS: Array[String] = ["height_tex"]
+
 ## Шейдеры игры (сэмплеры обязаны объявлять не-Nearest фильтр явно).
 const SHADER_DIRS: Array[String] = [
 	"res://assets/shaders",
@@ -115,6 +121,9 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 	"_FogMeshI",
 	"/EXT_glass", "/INT_glass", "/EXT_lamp",
 	"/gd_",
+	# П14 3.3: мелочь на земле (gc_*) — нетекстурные low-poly модели
+	# наборов П12 (вершинные цвета), как печёные Props_*.
+	"gc_",
 	# П14 4: вода Born Unblessed процедурна — шейдер water_bu не читает
 	# текстур вовсе (пена и рябь — шум, «БЕЗ текстур Boujie» SPEC 4.5).
 	"LakeSurface", "/Ocean/",
@@ -377,6 +386,8 @@ func test_runtime_materials_meet_quality_bar() -> void:
 			for u: Dictionary in shader.get_shader_uniform_list():
 				var value = (material as ShaderMaterial).get_shader_parameter(u["name"])
 				if value is Texture2D:
+					if DATA_SAMPLERS.has(u["name"]):
+						continue
 					_assert_texture_mips(value as Texture2D,
 						"%s %s" % [where, u["name"]])
 	assert_gt(textured, 0, "в мире есть текстурные материалы (кора, кожа)")

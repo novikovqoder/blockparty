@@ -22,6 +22,29 @@ const MOSS_TEX: Texture2D = preload(
 
 static var _cache: Dictionary = {}
 
+## Канонический спад густоты растительности (fade_start, fade_end), м —
+## единый источник базы: материал кэшируется статически и живёт дольше
+## одного IslandView, а IslandView._apply_grass_fade умножает fade
+## по уровню. Без сброса база «уплывала» между видами (второй мир читал
+## уже умноженное значение и множил снова — 40 → 34 → 51 → 43.35), поэтому
+## при выдаче из кэша fade возвращается к канону.
+static var _base_fade: Dictionary[String, Vector2] = {
+	"rgrass": Vector2(40.0, 58.0),
+	"fern": Vector2(45.0, 62.0),
+	"rflower": Vector2(40.0, 56.0),
+	"riris": Vector2(42.0, 58.0),
+	"reed": Vector2(40.0, 58.0),
+}
+
+
+## Вернуть материалу растительности канонический спад (см. _base_fade):
+## вызывается и при создании, и при каждом взятии из кэша.
+static func _reset_fade(type: StringName, material: ShaderMaterial) -> void:
+	if _base_fade.has(String(type)):
+		var fade: Vector2 = _base_fade[String(type)]
+		material.set_shader_parameter("fade_start", fade.x)
+		material.set_shader_parameter("fade_end", fade.y)
+
 
 ## Тип обрабатывается этой фабрикой (IslandView._build_props). П5.13, блок 1:
 ## камни всего острова (boulder/rock_pillar/pebble) и камыш — тоже здесь:
@@ -37,6 +60,9 @@ static func for_type(type: StringName) -> Material:
 	if WorldMaterials.want_flat():
 		return _flat()
 	if _cache.has(type):
+		# Материал один на все виды мира — сброс спада к канону (иначе
+		# база уплывает вместе с применёнными множителями уровней).
+		_reset_fade(type, _cache[type])
 		return _cache[type]
 	var material := ShaderMaterial.new()
 	match String(type):
@@ -51,30 +77,22 @@ static func for_type(type: StringName) -> Material:
 			# кончик травинки гуляет до ~15 см в порыве.
 			material.set_shader_parameter("wind_amplitude", 0.11)
 			material.set_shader_parameter("wind_freq", 1.8)
-			material.set_shader_parameter("fade_start", 40.0)
-			material.set_shader_parameter("fade_end", 58.0)
 		"fern":
 			material.shader = GRASS_SHADER
 			material.set_shader_parameter("use_gradient", 0.0)
 			material.set_shader_parameter("wind_amplitude", 0.045)
 			material.set_shader_parameter("wind_freq", 1.2)
-			material.set_shader_parameter("fade_start", 45.0)
-			material.set_shader_parameter("fade_end", 62.0)
 		"rflower":
 			material.shader = GRASS_SHADER
 			material.set_shader_parameter("use_gradient", 0.0)
 			material.set_shader_parameter("wind_amplitude", 0.04)
 			material.set_shader_parameter("wind_freq", 2.2)
-			material.set_shader_parameter("fade_start", 40.0)
-			material.set_shader_parameter("fade_end", 56.0)
 		# Ирис выше цветка — стебель качается шире, парусам хватает веса UV.y.
 		"riris":
 			material.shader = GRASS_SHADER
 			material.set_shader_parameter("use_gradient", 0.0)
 			material.set_shader_parameter("wind_amplitude", 0.055)
 			material.set_shader_parameter("wind_freq", 2.0)
-			material.set_shader_parameter("fade_start", 42.0)
-			material.set_shader_parameter("fade_end", 58.0)
 		"mrock":
 			material.shader = ROCK_SHADER
 			_materialize_rock(material, VPAL.rock_rock, VPAL.rock_moss, 0.25)
@@ -101,8 +119,8 @@ static func for_type(type: StringName) -> Material:
 			material.set_shader_parameter("use_gradient", 0.0)
 			material.set_shader_parameter("wind_amplitude", 0.09)
 			material.set_shader_parameter("wind_freq", 1.4)
-			material.set_shader_parameter("fade_start", 40.0)
-			material.set_shader_parameter("fade_end", 58.0)
+	# Спад густоты — из канонической базы (_base_fade), не из match.
+	_reset_fade(type, material)
 	_cache[type] = material
 	return material
 
