@@ -116,24 +116,41 @@ const GRAVEL_NORMAL: Texture2D = preload(
 const GRAVEL_ORM: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/rocky_trail/rocky_trail_orm_2k.jpg")
 
-# --- Тинты Born Unblessed (SPEC П12 2.7): приглушённые холодные, значения
-# стартовые — тон и яркость каждого слоя подбирает владелец в сборке
-# (mix с текстурой, доля — uniform tint_mix в шейдере). ---
+# --- П14 1.1: реальный размер тайла слоя — по полю real-world size
+# страницы набора (Poly Haven); где метаданных нет — правило ТЗ 2–3 м.
+# Раньше один tile_m = 30 м растягивал фотоскан в 10–15 раз («картинка,
+# натянутая на поверхность»). ---
+const TILE_M_LITTER: float = 2.0    # forest_ground_05 — «2m wide»
+const TILE_M_GRASS: float = 2.0    # leafy_grass — «2m wide»
+const TILE_M_ROCK: float = 2.7      # rock_face_03 — «2.7m wide»
+const TILE_M_MUD: float = 2.3       # mud_forest — «2.3m wide»
+const TILE_M_MOSS: float = 2.0      # Moss001 ambientCG — нет данных, ТЗ 2–3 м
+const TILE_M_GRAVEL: float = 2.0    # rocky_trail — «2m wide»
 
-## Подстилка: тот же тон, что сводил CC0-грунт к демо (холодный, чуть синее).
-const TINT_LITTER: Color = Color(0.83, 0.84, 1.07)
-## Трава лугов: холодная, без пастельной сочности.
-const TINT_GRASS: Color = Color(0.88, 0.94, 0.92)
-## Скала склонов: серая палитры (VPAL.ground_rock).
-const TINT_ROCK: Color = Color(0.53, 0.54, 0.55)
-## Грязь низин: тёмная бурая (VPAL.ground_wet).
-const TINT_MUD: Color = Color(0.31, 0.26, 0.20)
-## Мох: приглушённый зелёный (VPAL.ground_moss).
-const TINT_MOSS: Color = Color(0.33, 0.44, 0.24)
-## Гравий тропы и Площади: серо-бурый (VPAL.ground_path).
-const TINT_GRAVEL: Color = Color(0.61, 0.50, 0.36)
+# --- П14 1.2: второй крупный масштаб того же слоя против сетки повторов
+# (SPEC П14 1.2): с расстояния MACRO_NEAR до MACRO_FAR мелкая фактура
+# подмешивается к тому же слою в MACRO_SCALE раз крупнее. ---
+const MACRO_SCALE: float = 5.0
+const MACRO_NEAR: float = 15.0
+const MACRO_FAR: float = 40.0
+
+# --- Тинты Born Unblessed (П14 1.3): нейтральные ≈ белые, без каналов > 1 —
+# цвет даёт фотоскан; «мрачнее» — через яркость/насыщенность тинта.
+# Значения стартовые, тон подбирает владелец в сборке. ---
+## Подстилка: тёплый нейтрал, чуть притемнён.
+const TINT_LITTER: Color = Color(0.88, 0.86, 0.82)
+## Трава лугов: нейтрально-зелёная, без пастельной сочности.
+const TINT_GRASS: Color = Color(0.82, 0.88, 0.80)
+## Скала склонов: нейтрально-серая, чуть холодная.
+const TINT_ROCK: Color = Color(0.82, 0.83, 0.85)
+## Грязь низин: тёмный тёплый нейтрал.
+const TINT_MUD: Color = Color(0.76, 0.70, 0.64)
+## Мох: приглушённый зелёный.
+const TINT_MOSS: Color = Color(0.78, 0.88, 0.74)
+## Гравий тропы и Площади: серо-тёплый.
+const TINT_GRAVEL: Color = Color(0.84, 0.80, 0.74)
 ## Доля плоского тинта в цвете слоя (0 — чистая карта, 1 — плоский цвет).
-const TINT_MIX: float = 0.35
+const TINT_MIX: float = 0.10
 
 ## Мокрая земля (SPEC П12 2.5): затемнение albedo и падение roughness
 ## по весу влаги; лужи начинаются от того же порога, что FootFx
@@ -165,6 +182,17 @@ static func make_material(art: IslandArt, quality: int) -> ShaderMaterial:
 	material.set_shader_parameter("moss_tint", TINT_MOSS)
 	material.set_shader_parameter("gravel_tint", TINT_GRAVEL)
 	material.set_shader_parameter("tint_mix", TINT_MIX)
+	# П14 1.1/1.2: реальный размер тайла каждого слоя и второй крупный
+	# масштаб против сетки повторов.
+	material.set_shader_parameter("tile_m_litter", TILE_M_LITTER)
+	material.set_shader_parameter("tile_m_grass", TILE_M_GRASS)
+	material.set_shader_parameter("tile_m_rock", TILE_M_ROCK)
+	material.set_shader_parameter("tile_m_mud", TILE_M_MUD)
+	material.set_shader_parameter("tile_m_moss", TILE_M_MOSS)
+	material.set_shader_parameter("tile_m_gravel", TILE_M_GRAVEL)
+	material.set_shader_parameter("macro_scale", MACRO_SCALE)
+	material.set_shader_parameter("macro_near", MACRO_NEAR)
+	material.set_shader_parameter("macro_far", MACRO_FAR)
 	material.set_shader_parameter("wet_darken", WET_DARKEN)
 	material.set_shader_parameter("wet_rough_factor", WET_ROUGH_FACTOR)
 	material.set_shader_parameter("litter_tex", LITTER_TEX)

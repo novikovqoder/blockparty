@@ -1,4 +1,10 @@
 // Земля острова (П12 «Земля и вода»: полный PBR по тем же весам ForestGround).
+// П14 1 «Масштаб и цвет»: у каждого слоя свой реальный размер тайла
+// (tile_m_<слой>, 2–2.7 м по real-world size Poly Haven; прежний единый
+// tile_m = 30 м растягивал сканы в 10–15 раз), против сетки повторов —
+// второй крупный масштаб (macro_*) и разбивка тайлинга по ячейке тайла;
+// тинты нейтральные ≈ белые (tint_mix ≈ 0.1 — цвет даёт фотоскан);
+// бывший «детальный» масштаб нормалей убран (базовый тайл уже мелкий).
 // Наследие П5.9/П5.13, что сохраняется: смешивание базы симплекс-шумом
 // (пятнистость демо ez-tree), трипланар по мировой нормали рельефа
 // (relief_normal), карта тона border_map и краевой toon-переход,
@@ -41,15 +47,16 @@ uniform int quality = 2;
 const int QUALITY_SIMPLE = 0;
 const int QUALITY_HIGH = 2;
 
-// Тинты слоёв (source_color): плоский цвет миксуется с картой (TINT_MIX).
-uniform vec3 litter_tint : source_color = vec3(0.83, 0.84, 1.07);
-uniform vec3 grass_tint : source_color = vec3(0.96, 0.76, 1.08);
-uniform vec3 rock_tint : source_color = vec3(0.53, 0.54, 0.55);
-uniform vec3 mud_tint : source_color = vec3(0.31, 0.26, 0.20);
-uniform vec3 moss_tint : source_color = vec3(0.33, 0.44, 0.24);
-uniform vec3 gravel_tint : source_color = vec3(0.61, 0.50, 0.36);
+// Тинты слоёв (source_color, П14 1.3): нейтральные ≈ белые, без каналов
+// > 1 — цвет даёт фотоскан; «мрачнее» — притемнением/насыщенностью.
+uniform vec3 litter_tint : source_color = vec3(0.88, 0.86, 0.82);
+uniform vec3 grass_tint : source_color = vec3(0.82, 0.88, 0.80);
+uniform vec3 rock_tint : source_color = vec3(0.82, 0.83, 0.85);
+uniform vec3 mud_tint : source_color = vec3(0.76, 0.70, 0.64);
+uniform vec3 moss_tint : source_color = vec3(0.78, 0.88, 0.74);
+uniform vec3 gravel_tint : source_color = vec3(0.84, 0.80, 0.74);
 // Доля плоского тинта в цвете слоя: 0 — чистая карта, 1 — плоский цвет.
-uniform float tint_mix = 0.35;
+uniform float tint_mix = 0.10;
 
 // Слои земли: albedo (source_color), нормаль и ORM (данные — без
 // source_color; ORM: R AO, G Roughness, B Height).
@@ -77,20 +84,29 @@ uniform sampler2D gravel_orm : filter_linear_mipmap_anisotropic;
 // s = smoothstep(patchiness ± 0.1) — вес подстилки против травы.
 uniform float noise_scale = 100.0;
 uniform float patchiness = 0.7;
-// Повтор текстуры, м на тайл (демо: uv / 30).
-uniform float tile_m = 30.0;
-// Разбивка тайлинга (SPEC 2.4): ячейка поворота UV. Ячейка = тайл —
-// поворот происходит на бесшовных стыках тайла.
-const float CELL_M = 30.0;
+// Реальный размер тайла слоя, м на повтор (П14 1.1): по real-world size
+// Poly Haven (forest_ground_05 — 2 м, leafy_grass — 2, rock_face_03 — 2.7,
+// mud_forest — 2.3, rocky_trail — 2; Moss001 нет данных — ТЗ 2–3 м).
+// Прежний единый tile_m = 30 растягивал фотосканы в 10–15 раз.
+uniform float tile_m_litter = 2.0;
+uniform float tile_m_grass = 2.0;
+uniform float tile_m_rock = 2.7;
+uniform float tile_m_mud = 2.3;
+uniform float tile_m_moss = 2.0;
+uniform float tile_m_gravel = 2.0;
+// Второй крупный масштаб того же слоя (П14 1.2): от macro_near до
+// macro_far albedo верхней плоскости подмешивается к тому же слою
+// в macro_scale раз крупнее — вблизи зернистость скана, вдали нет
+// сетки повторов (макро — только верхняя плоскость, склоны вдали
+// закрывают нормали рельефа).
+uniform float macro_scale = 5.0;
+uniform float macro_near = 15.0;
+uniform float macro_far = 40.0;
 // Крупная вариация тона: масштаб в метрах и амплитуда (~10%).
 const float TONE_VAR_SCALE = 70.0;
 const float TONE_VAR_AMP = 0.10;
 
-// Детальная нормаль грунта (наследие П1): второй мелкий масштаб карты
-// подстилки, вблизи земля читается зернистой, к дальним планам гаснет.
-uniform float detail_tile_m = 6.0;
-uniform float detail_fade_start = 45.0;
-uniform float detail_fade_end = 90.0;
+// Сила нормал-карт слоёв (блок 2 П14 поднимает до 1.3–1.6 вблизи).
 uniform float normal_strength = 1.0;
 
 // Height-blend (SPEC 2.2): вклад карты высоты в эффективную высоту слоя
@@ -198,9 +214,10 @@ float cell_hash(vec2 cell) {
 
 // Разбивка тайлинга (SPEC 2.4): координаты плоскости в метрах
 // поворачиваются на 0/90/180/270° и зеркалятся по случайной ячейке
-// CELL_M = тайлу — сетка повторов основного слоя не читается.
-vec2 tile_break(vec2 plane_m) {
-	vec2 cell = floor(plane_m / CELL_M);
+// cell_m = тайлу слоя — сетка повторов не читается, повороты приходятся
+// на бесшовные стыки тайла.
+vec2 tile_break(vec2 plane_m, float cell_m) {
+	vec2 cell = floor(plane_m / cell_m);
 	float r1 = cell_hash(cell);
 	float r2 = cell_hash(cell + vec2(-37.7, 11.3));
 	vec2 uv = plane_m;
@@ -219,27 +236,43 @@ vec2 tile_break(vec2 plane_m) {
 
 // Трипланарная выборка albedo слоя по трём плоскостям (мировые zy, xz, xy
 // с весами tri_w = x zy-плоскость, y xz-плоскость (верх), z xy-плоскость).
-vec3 layer_albedo(sampler2D tex, vec3 tri_w, vec2 uv_x, vec2 uv_top, vec2 uv_z) {
+// UV слоя = разбивка тайлинга (ячейка = тайл слоя) / тайл слоя.
+vec3 layer_albedo(
+	sampler2D tex, vec3 tri_w, float tile,
+	vec2 top_m, vec2 plane_x_m, vec2 plane_z_m) {
 	return (
-		tri_w.y * texture(tex, uv_top).rgb
-		+ tri_w.x * texture(tex, uv_x).rgb
-		+ tri_w.z * texture(tex, uv_z).rgb);
+		tri_w.y * texture(tex, tile_break(top_m, tile) / tile).rgb
+		+ tri_w.x * texture(tex, tile_break(plane_x_m, tile) / tile).rgb
+		+ tri_w.z * texture(tex, tile_break(plane_z_m, tile) / tile).rgb);
+}
+
+// Albedo слоя с макро-масштабом (П14 1.2): вдали верхняя плоскость
+// подмешивает тот же слой в macro_scale раз крупнее (ячейка поворота —
+// макротаил). macro_w уже включает вес верхней плоскости и дальность.
+vec3 layer_color(
+	sampler2D tex, vec3 tri_w, float tile, float macro_w,
+	vec2 top_m, vec2 plane_x_m, vec2 plane_z_m) {
+	vec3 col = layer_albedo(tex, tri_w, tile, top_m, plane_x_m, plane_z_m);
+	if (macro_w > 0.002) {
+		float macro_tile = tile * macro_scale;
+		vec3 macro = texture(
+			tex, tile_break(world_pos.xz, macro_tile) / macro_tile).rgb;
+		col = mix(col, macro, macro_w);
+	}
+	return col;
 }
 
 // Возмущение нормали слоя в мировом базисе (компоненты карты (x, y) ложатся
 // на касательные оси доминирующей плоскости) — та же схема, что у базы
-// в принятом Лесе (П5.13, П1), по два масштаба: базовый тайл + детальный.
+// в принятом Лесе (П5.13). Бывший второй «детальный» масштаб убран: при
+// реальном тайле 2 м базовая фактура уже мелкая (П14 1.1).
 vec3 layer_perturb(
-	sampler2D tex, vec3 tri_w, float detail_w,
-	float sx, float sz,
-	vec2 uv_x, vec2 uv_top, vec2 uv_z,
-	vec2 duv_x, vec2 duv_top, vec2 duv_z) {
-	vec2 nx = texture(tex, uv_x).rg * 2.0 - 1.0
-		+ (texture(tex, duv_x).rg * 2.0 - 1.0) * detail_w;
-	vec2 ntop = texture(tex, uv_top).rg * 2.0 - 1.0
-		+ (texture(tex, duv_top).rg * 2.0 - 1.0) * detail_w;
-	vec2 nz = texture(tex, uv_z).rg * 2.0 - 1.0
-		+ (texture(tex, duv_z).rg * 2.0 - 1.0) * detail_w;
+	sampler2D tex, vec3 tri_w,
+	float sx, float sz, float tile,
+	vec2 top_m, vec2 plane_x_m, vec2 plane_z_m) {
+	vec2 nx = texture(tex, tile_break(plane_x_m, tile) / tile).rg * 2.0 - 1.0;
+	vec2 ntop = texture(tex, tile_break(top_m, tile) / tile).rg * 2.0 - 1.0;
+	vec2 nz = texture(tex, tile_break(plane_z_m, tile) / tile).rg * 2.0 - 1.0;
 	return (
 		tri_w.y * (ntop.x * vec3(1.0, 0.0, 0.0) + ntop.y * vec3(0.0, 0.0, 1.0))
 		+ tri_w.x * (nx.x * vec3(0.0, 0.0, sx) + nx.y * vec3(0.0, 1.0, 0.0))
@@ -274,30 +307,28 @@ void fragment() {
 	// верхней плоскости по высоте подстилки (ORM.b) против взгляда.
 	// ORM читается до основных сэмплов — один лишний фетч только вблизи.
 	vec2 parallax_off = vec2(0.0);
+	float dist_v = length(-VERTEX);
 	if (quality >= QUALITY_HIGH) {
-		float dist = length(-VERTEX);
-		float p_amt = (1.0 - smoothstep(parallax_near, parallax_far, dist))
+		float p_amt = (1.0 - smoothstep(parallax_near, parallax_far, dist_v))
 			* step(0.05, tri_w.y);
 		if (p_amt > 0.001) {
 			vec3 wdir = normalize(
 				(INV_VIEW_MATRIX * vec4(normalize(-VERTEX), 0.0)).xyz);
-			float h0 = texture(litter_orm, world_pos.xz / tile_m).b;
+			float h0 = texture(litter_orm, world_pos.xz / tile_m_litter).b;
 			parallax_off = wdir.xz / max(abs(wdir.y), 0.2)
 				* (h0 - 0.5) * parallax_scale * p_amt;
 		}
 	}
 
-	// Координаты трёх плоскостей с разбивкой тайлинга и параллаксом
-	// (параллакс — только верхней плоскости, на склонах гасится весом).
-	vec2 top_m = tile_break(world_pos.xz + parallax_off);
-	vec2 x_m = tile_break(world_pos.zy);
-	vec2 z_m = tile_break(world_pos.xy);
-	vec2 uv_top = top_m / tile_m;
-	vec2 uv_x = x_m / tile_m;
-	vec2 uv_z = z_m / tile_m;
-	vec2 duv_top = top_m / detail_tile_m;
-	vec2 duv_x = x_m / detail_tile_m;
-	vec2 duv_z = z_m / detail_tile_m;
+	// Плоскости трипланара в метрах (разбивку тайлинга делают выборки
+	// каждого слоя со своим тайлом; параллакс — только верхней плоскости,
+	// на склонах гасится весом p_amt).
+	vec2 top_m = world_pos.xz + parallax_off;
+	vec2 x_m = world_pos.zy;
+	vec2 z_m = world_pos.xy;
+	// Макро-масштаб (П14 1.2): вдали albedo верхней плоскости подмешивает
+	// тот же слой крупнее — сетки повторов на дальних планах нет.
+	float macro_w = smoothstep(macro_near, macro_far, dist_v) * tri_w.y;
 
 	// Пятнистость базы (схема демо ground.js): вес подстилки s.
 	float n = 0.5 + 0.5 * simplex2d(world_pos.xz / noise_scale);
@@ -306,14 +337,18 @@ void fragment() {
 
 	// --- База: подстилка (+ трава вне SIMPLE), ORM — верхняя плоскость ---
 	vec3 litter_col = mix(
-		layer_albedo(litter_tex, tri_w, uv_x, uv_top, uv_z), litter_tint, tint_mix);
-	vec3 litter_orm_v = texture(litter_orm, uv_top).rgb;
+		layer_color(litter_tex, tri_w, tile_m_litter, macro_w, top_m, x_m, z_m),
+		litter_tint, tint_mix);
+	vec3 litter_orm_v = texture(
+		litter_orm, tile_break(top_m, tile_m_litter) / tile_m_litter).rgb;
 	vec3 grass_col = vec3(0.0);
 	vec3 grass_orm_v = vec3(0.5, 0.9, 0.5);
 	if (with_grass) {
-		vec3 grass_map = layer_albedo(grass_tex, tri_w, uv_x, uv_top, uv_z);
+		vec3 grass_map = layer_color(
+			grass_tex, tri_w, tile_m_grass, macro_w, top_m, x_m, z_m);
 		grass_col = mix(grass_map, grass_tint, tint_mix);
-		grass_orm_v = texture(grass_orm, uv_top).rgb;
+		grass_orm_v = texture(
+			grass_orm, tile_break(top_m, tile_m_grass) / tile_m_grass).rgb;
 	}
 	vec3 base_orm_v = mix(grass_orm_v, litter_orm_v, with_grass ? s : 1.0);
 	vec3 base_col = mix(grass_col, litter_col, with_grass ? s : 1.0);
@@ -353,59 +388,56 @@ void fragment() {
 	float rough_moss = 1.0;
 	float rough_gravel = 1.0;
 
-	// Детальный масштаб нормалей гаснет к дальним планам (наследие П1).
-	float detail_w = 0.55 * (1.0 - smoothstep(
-		detail_fade_start, detail_fade_end, length(-VERTEX)));
 	float sx = sign(relief_world.x);
 	float sz = sign(relief_world.z);
 
 	if (w_rock > LAYER_EPS) {
 		col_rock = mix(
-			layer_albedo(rock_tex, tri_w, uv_x, uv_top, uv_z),
+			layer_color(rock_tex, tri_w, tile_m_rock, macro_w, top_m, x_m, z_m),
 			rock_tint, tint_mix);
-		vec3 orm = texture(rock_orm, uv_top).rgb;
+		vec3 orm = texture(
+			rock_orm, tile_break(top_m, tile_m_rock) / tile_m_rock).rgb;
 		h_rock = orm.b;
 		ao_rock = orm.r;
 		rough_rock = orm.g;
 		perturb_rock = layer_perturb(
-			rock_normal, tri_w, detail_w, sx, sz,
-			uv_x, uv_top, uv_z, duv_x, duv_top, duv_z);
+			rock_normal, tri_w, sx, sz, tile_m_rock, top_m, x_m, z_m);
 	}
 	if (w_mud > LAYER_EPS) {
 		col_mud = mix(
-			layer_albedo(mud_tex, tri_w, uv_x, uv_top, uv_z),
+			layer_color(mud_tex, tri_w, tile_m_mud, macro_w, top_m, x_m, z_m),
 			mud_tint, tint_mix);
-		vec3 orm = texture(mud_orm, uv_top).rgb;
+		vec3 orm = texture(
+			mud_orm, tile_break(top_m, tile_m_mud) / tile_m_mud).rgb;
 		h_mud = orm.b;
 		ao_mud = orm.r;
 		rough_mud = orm.g;
 		perturb_mud = layer_perturb(
-			mud_normal, tri_w, detail_w, sx, sz,
-			uv_x, uv_top, uv_z, duv_x, duv_top, duv_z);
+			mud_normal, tri_w, sx, sz, tile_m_mud, top_m, x_m, z_m);
 	}
 	if (w_moss > LAYER_EPS) {
 		col_moss = mix(
-			layer_albedo(moss_tex, tri_w, uv_x, uv_top, uv_z),
+			layer_color(moss_tex, tri_w, tile_m_moss, macro_w, top_m, x_m, z_m),
 			moss_tint, tint_mix);
-		vec3 orm = texture(moss_orm, uv_top).rgb;
+		vec3 orm = texture(
+			moss_orm, tile_break(top_m, tile_m_moss) / tile_m_moss).rgb;
 		h_moss = orm.b;
 		ao_moss = orm.r;
 		rough_moss = orm.g;
 		perturb_moss = layer_perturb(
-			moss_normal, tri_w, detail_w, sx, sz,
-			uv_x, uv_top, uv_z, duv_x, duv_top, duv_z);
+			moss_normal, tri_w, sx, sz, tile_m_moss, top_m, x_m, z_m);
 	}
 	if (w_gravel > LAYER_EPS) {
 		col_gravel = mix(
-			layer_albedo(gravel_tex, tri_w, uv_x, uv_top, uv_z),
+			layer_color(gravel_tex, tri_w, tile_m_gravel, macro_w, top_m, x_m, z_m),
 			gravel_tint, tint_mix);
-		vec3 orm = texture(gravel_orm, uv_top).rgb;
+		vec3 orm = texture(
+			gravel_orm, tile_break(top_m, tile_m_gravel) / tile_m_gravel).rgb;
 		h_gravel = orm.b;
 		ao_gravel = orm.r;
 		rough_gravel = orm.g;
 		perturb_gravel = layer_perturb(
-			gravel_normal, tri_w, detail_w, sx, sz,
-			uv_x, uv_top, uv_z, duv_x, duv_top, duv_z);
+			gravel_normal, tri_w, sx, sz, tile_m_gravel, top_m, x_m, z_m);
 	}
 
 	// Softmax по эффективным высотам: w' = w · exp(h_eff · k) / Σ.
@@ -471,13 +503,11 @@ void fragment() {
 
 	// Нормаль: база + взвешенные возмущения слоёв в мировом базисе.
 	vec3 perturb_base = layer_perturb(
-		litter_normal, tri_w, detail_w, sx, sz,
-		uv_x, uv_top, uv_z, duv_x, duv_top, duv_z);
+		litter_normal, tri_w, sx, sz, tile_m_litter, top_m, x_m, z_m);
 	vec3 perturb_grass = vec3(0.0);
 	if (with_grass) {
 		perturb_grass = layer_perturb(
-			grass_normal, tri_w, detail_w, sx, sz,
-			uv_x, uv_top, uv_z, duv_x, duv_top, duv_z);
+			grass_normal, tri_w, sx, sz, tile_m_grass, top_m, x_m, z_m);
 	}
 	vec3 perturb = m_base * mix(perturb_grass, perturb_base, with_grass ? s : 1.0)
 		+ m_rock * perturb_rock
