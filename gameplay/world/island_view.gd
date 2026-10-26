@@ -36,6 +36,20 @@ var _slope_maps: Dictionary = {}
 ## Коллизии наполнения П12 E (валуны и пни) — ставятся вместе с коллизиями
 ## печёных предметов в _ready.
 var _detail_colliders: Array[Dictionary] = []
+## П14 3.1: кольцо детальной сетки вокруг зрителя (HIGH/ULTRA) — нода
+## снапится к камере в update_viewer, высоту вершинам ставит шейдер.
+var _detail_ring: MeshInstance3D = null
+## Материал кольца (копия материала чанков с detail_ring = true).
+var _ring_material: ShaderMaterial = null
+## Шаг сетки кольца (снап ноды к камере — с этим же шагом, вершины
+## не плавают).
+var _ring_step: float = 0.25
+## П14 3.3: слой мелочи вокруг зрителя (ноды MultiMesh по видам).
+var _clutter_nodes: Dictionary = {}
+## Клетка последней пересборки мелочи (быстрый выход).
+var _clutter_center: Vector2 = Vector2(1e9, 1e9)
+## Уровень, по которому мелочь построена (тени/плотность).
+var _clutter_tier: int = 0
 
 
 ## Радиус ближней тесселяции (доработка-2 П5.13, П1): чанки ближе этого
@@ -75,8 +89,8 @@ func _build_terrain() -> void:
 	# П12: уровень качества (SIMPLE — упрощённая земля, HIGH/ULTRA —
 	# параллакс и AO-каналы) читается при постройке материала; смена
 	# уровня применяется при следующем входе в мир, как у воды.
-	var forest_material := ForestGround.make_material(
-		art, GraphicsQuality.tier_from_settings())
+	var tier := GraphicsQuality.tier_from_settings()
+	var forest_material := ForestGround.make_material(art, tier)
 	_ground_material = forest_material
 	for chunk: Mesh in art.chunks:
 		var mesh_instance := MeshInstance3D.new()
@@ -86,6 +100,21 @@ func _build_terrain() -> void:
 		_chunk_instances.append(mesh_instance)
 		_chunk_steps.append(1.0)
 	add_child(body)
+	# П14 3.1: кольцо детальной сетки (HIGH/ULTRA, SIMPLE/NORMAL — как
+	# раньше). Сетка плоская, высоту вершинам ставит vertex() шейдера
+	# (detail_ring); тень не отбрасывает — рельеф уже в тенях чанков.
+	if TerrainDetail.is_ring_enabled(tier):
+		_ring_step = TerrainDetail.step_for_tier(tier)
+		_ring_material = TerrainDetail.make_material(
+			forest_material, art, tier)
+		var ring := MeshInstance3D.new()
+		ring.name = "DetailRing"
+		ring.mesh = TerrainDetail.build_mesh(
+			_ring_step, TerrainDetail.radius_for_tier(tier))
+		ring.material_override = _ring_material
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ring)
+		_detail_ring = ring
 
 
 ## Адаптивная тесселяция (доработка-2 П5.13, П1): вокруг игрока чанки
@@ -97,6 +126,18 @@ func _build_terrain() -> void:
 ## достраивается сразу.
 func update_viewer(viewer_pos: Vector3) -> void:
 	var center := Vector2(viewer_pos.x, viewer_pos.z)
+	# Кольцо детальной сетки (П14 3.1): снап к камере с шагом сетки —
+	# вершины всегда в узлах одной решётки, бугры не «плывут» при ходьбе.
+	if _detail_ring != null:
+		var ring_pos := center.snapped(Vector2(_ring_step, _ring_step))
+		_detail_ring.position = Vector3(ring_pos.x, 0.0, ring_pos.y)
+	# Мелочь (П14 3.3): пересборка при смене клетки CELL_M.
+	if not _clutter_nodes.is_empty():
+		var cell := (center / GroundClutter.CELL_M).floor()
+		if cell != _clutter_center:
+			_clutter_center = cell
+			GroundClutter.apply_clutter(_clutter_nodes,
+				GroundClutter.scatter(art, _clutter_tier, center))
 	if center.distance_to(_lod_center) < 2.0:
 		return
 	_lod_center = center
@@ -290,6 +331,14 @@ func _build_details() -> void:
 		_base_ranges[type] = instance.visibility_range_end
 		_register(type, instance)
 	_detail_colliders = built["colliders"]
+	# П14 3.3: слой мелочи вокруг игрока (HIGH/ULTRA): ноды строятся здесь,
+	# буферы заполняет первый update_viewer (когда известна позиция
+	# зрителя); плотность и тени — по уровню входа, как у травы-буста.
+	_clutter_tier = GraphicsQuality.tier_from_settings()
+	if GroundClutter.is_clutter_enabled(_clutter_tier):
+		_clutter_nodes = GroundClutter.make_nodes(_clutter_tier)
+		for type: String in _clutter_nodes:
+			add_child(_clutter_nodes[type])
 
 
 ## Уровень качества мира (П12 E; переданный из П11 пункт 2.8): SIMPLE —
@@ -334,13 +383,29 @@ func set_grass_boost_visible(on: bool) -> void:
 			_set_type_visible(String(type), on)
 
 
-## Панель замера F3 (П13 3.2): выключить/вернуть параллакс земли
-## (parallax_scale в 0 — выборка высоты подстилки не делается).
+## Панель замера F3 (П13 3.2, П14 3.2 — теперь POM): выключить/вернуть
+## рельефную выборку земли (parallax_scale в 0 — марш POM не делается);
+## ставится и материалу чанков, и материалу кольца детальной сетки.
 func set_parallax(on: bool) -> void:
 	if _ground_material == null:
 		return
-	_ground_material.set_shader_parameter(
-		"parallax_scale", FOREST_PARALLAX_SCALE if on else 0.0)
+	var value: float = FOREST_PARALLAX_SCALE if on else 0.0
+	_ground_material.set_shader_parameter("parallax_scale", value)
+	if _ring_material != null:
+		_ring_material.set_shader_parameter("parallax_scale", value)
+
+
+## Панель замера F3 (П14 3.5): показать/спрятать кольцо детальной сетки
+## (мгновенно, без пересборки — переключатель замера).
+func set_detail_ring_visible(on: bool) -> void:
+	if _detail_ring != null:
+		_detail_ring.visible = on
+
+
+## Панель замера F3 (П14 3.5): показать/спрятать слой мелочи.
+func set_clutter_visible(on: bool) -> void:
+	for type: String in _clutter_nodes:
+		(_clutter_nodes[type] as MultiMeshInstance3D).visible = on
 
 
 ## Видимость всех групп типа («Простая графика» прячет траву и цветы).

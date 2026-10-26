@@ -160,6 +160,39 @@ varying vec3 world_pos;
 // гашения на SIMPLE), и в fragment (SPECULAR лужи).
 varying float puddle_v;
 
+// Кольцо детальной сетки (П14 3.1): включается материалом кольца
+// (TerrainDetail.make_material); у чанков detail_ring = false и ветка
+// не сэмплит карту высот.
+uniform bool detail_ring = false;
+uniform sampler2D height_tex : filter_linear_mipmap_anisotropic;
+uniform float ring_radius = 16.0;
+// Средние ORM.b слоёв для центрирования смещения (средняя высота кольца
+// над чанками ≈ 0): a = litter, rock, mud; b = moss, gravel, grass.
+uniform vec3 orm_mean_a = vec3(0.5, 0.5, 0.5);
+uniform vec3 orm_mean_b = vec3(0.5, 0.5, 0.5);
+
+// Амплитуды рельефа слоёв, м (SPEC П14 3.1/3.2 — те же числа, что
+// TerrainDetail.AMP_*): подстилка/гравий ±3–5 см, грязь 8–10, скала 15;
+// глубина POM во fragment — та же.
+const float AMP_LITTER_C = 0.04;
+const float AMP_ROCK_C = 0.15;
+const float AMP_MUD_C = 0.09;
+const float AMP_MOSS_C = 0.03;
+const float AMP_GRAVEL_C = 0.05;
+// Подъём кольца над чанками (мм) и полоса гашения смещения у кромки, м.
+const float RING_LIFT_C = 0.004;
+const float RING_EDGE_FADE = 1.5;
+
+// Берег (П14 3.4): полоса мокрой земли над уровнем воды — та же отметка,
+// что море и озеро (IslandGen.SEA_LEVEL).
+uniform float shore_level = -0.15;
+const float SHORE_BAND = 0.55;
+const float SHORE_DARKEN = 0.62;
+
+// POM (П14 3.2): шаги марша по доминирующему слою; 8 на HIGH (дефолт),
+// 16 ставит ForestGround на ULTRA.
+uniform float pom_steps = 8.0;
+
 // Симплекс-шум 2D (Ian McEwan / Ashima Arts, публичный webgl-noise) —
 // тот же, что в шейдере земли демо.
 vec3 mod289(vec3 x) {
@@ -280,7 +313,84 @@ vec3 layer_perturb(
 		+ tri_w.z * (nz.x * vec3(sz, 0.0, 0.0) + nz.y * vec3(0.0, 1.0, 0.0)));
 }
 
+// Смещение вершины кольца по высоте слоёв (П14 3.1): веса — карта
+// weight_map (та же, что во fragment; база — подстилка, трава в кольце
+// не выделена), высота слоя центрируется средним (orm_mean_*) — средняя
+// высота кольца ≈ 0, ступни не проваливаются.
+float ring_displacement(vec2 m) {
+	vec4 w = textureLod(weight_map, (m + vec2(128.0)) / 256.0, 0.0);
+	float w_base = clamp(1.0 - (w.r + w.g + w.b + w.a), 0.0, 1.0);
+	float d = w_base * (textureLod(litter_orm,
+		tile_break(m, tile_m_litter) / tile_m_litter, 0.0).b
+		- orm_mean_a.x) * AMP_LITTER_C;
+	if (w.r > LAYER_EPS) {
+		d += w.r * (textureLod(rock_orm,
+			tile_break(m, tile_m_rock) / tile_m_rock, 0.0).b
+			- orm_mean_a.y) * AMP_ROCK_C;
+	}
+	if (w.g > LAYER_EPS) {
+		d += w.g * (textureLod(mud_orm,
+			tile_break(m, tile_m_mud) / tile_m_mud, 0.0).b
+			- orm_mean_a.z) * AMP_MUD_C;
+	}
+	if (w.b > LAYER_EPS) {
+		d += w.b * (textureLod(moss_orm,
+			tile_break(m, tile_m_moss) / tile_m_moss, 0.0).b
+			- orm_mean_b.x) * AMP_MOSS_C;
+	}
+	if (w.a > LAYER_EPS) {
+		d += w.a * (textureLod(gravel_orm,
+			tile_break(m, tile_m_gravel) / tile_m_gravel, 0.0).b
+			- orm_mean_b.y) * AMP_GRAVEL_C;
+	}
+	return d;
+}
+
+// POM (П14 3.2): steep parallax по доминирующему слою — марш вдоль
+// взгляда от поверхности вглубь карты высот слоя; глубина рельефа —
+// амплитуда слоя (те же AMP_*), master — доля parallax_scale от полного
+// (0 выключает панель F3). Возвращает смещение координат верхней
+// плоскости, м.
+vec2 pom_march(
+	sampler2D orm, float tile, float amp, vec2 m2, vec2 dir_m, float master) {
+	vec2 uv_m = m2;
+	vec2 delta_m = -dir_m * (amp * master) / pom_steps;
+	float delta_h = 1.0 / pom_steps;
+	float ray_h = 1.0;
+	for (int i = 0; i < 16; i++) {
+		if (float(i) >= pom_steps) {
+			break;
+		}
+		ray_h -= delta_h;
+		uv_m += delta_m;
+		float tex_h = textureLod(
+			orm, tile_break(uv_m, tile) / tile, 0.0).b;
+		if (tex_h >= ray_h) {
+			break;
+		}
+	}
+	return uv_m - m2;
+}
+
 void vertex() {
+	if (detail_ring) {
+		// Кольцо: плоской вершине ставится высота чанков (height_tex) +
+		// сантиметровый рельеф слоёв. Нода без поворота, снап к камере
+		// делает IslandView; смещение гаснет к кромке раньше подъёма —
+		// у края кольцо совпадает с печёной поверхностью.
+		vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		vec2 ring_c = vec2(MODEL_MATRIX[3][0], MODEL_MATRIX[3][2]);
+		float ring_d = length(wp.xz - ring_c);
+		float disp_fade = 1.0 - smoothstep(
+			ring_radius - RING_EDGE_FADE, ring_radius, ring_d);
+		float lift = RING_LIFT_C * (1.0 - smoothstep(
+			ring_radius - 0.4, ring_radius, ring_d));
+		float ground_h = textureLod(
+			height_tex, (wp.xz + vec2(128.0)) / 256.0, 0.0).r;
+		float target_y = ground_h + lift
+			+ ring_displacement(wp.xz) * disp_fade;
+		VERTEX.y += target_y - MODEL_MATRIX[3][1];
+	}
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 256.0;
 	// Вес лужи для спекуляра (П14 2.1): во fragment он считается так же
@@ -303,20 +413,45 @@ void fragment() {
 	vec3 tri_w = pow(abs(relief_world), vec3(4.0));
 	tri_w /= (tri_w.x + tri_w.y + tri_w.z);
 
-	// Параллакс (HIGH/ULTRA, гаснет к parallax_far): смещение координат
-	// верхней плоскости по высоте подстилки (ORM.b) против взгляда.
-	// ORM читается до основных сэмплов — один лишний фетч только вблизи.
+	// POM (П14 3.2, HIGH/ULTRA, гаснет к parallax_far): steep parallax
+	// по доминирующему слою карты весов — марш вдоль взгляда вглубь
+	// карты высот слоя (ORM.b), глубина — амплитуда слоя (те же AMP_*,
+	// что у кольца детальной сетки: скала и колея глубже, подстилка
+	// мелкая). parallax_scale — общий выключатель F3: доля от полной
+	// глубины (0 — марша нет). Шаги pom_steps: 8 HIGH / 16 ULTRA.
 	vec2 parallax_off = vec2(0.0);
 	float dist_v = length(-VERTEX);
 	if (quality >= QUALITY_HIGH) {
 		float p_amt = (1.0 - smoothstep(parallax_near, parallax_far, dist_v))
 			* step(0.05, tri_w.y);
-		if (p_amt > 0.001) {
+		if (p_amt > 0.001 && parallax_scale > 0.0001) {
 			vec3 wdir = normalize(
 				(INV_VIEW_MATRIX * vec4(normalize(-VERTEX), 0.0)).xyz);
-			float h0 = texture(litter_orm, world_pos.xz / tile_m_litter).b;
-			parallax_off = wdir.xz / max(abs(wdir.y), 0.2)
-				* (h0 - 0.5) * parallax_scale * p_amt;
+			// Направление на камеру в метрах верхней плоскости; марш
+			// pom_march идёт в противоположную — от камеры вглубь.
+			vec2 dir_m = -wdir.xz / max(abs(wdir.y), 0.2);
+			// Доминирующий слой весов задаёт карту высот и амплитуду
+			// марша (сэмплер нельзя в переменную — ветка на слой).
+			float w_base0 = clamp(
+				1.0 - (w.r + w.g + w.b + w.a), 0.0, 1.0);
+			float max_w = max(max(w.r, w.g), max(w.b, w.a));
+			float master = min(parallax_scale / 0.06, 1.0) * p_amt;
+			if (w.r > w_base0 && w.r == max_w) {
+				parallax_off = pom_march(rock_orm, tile_m_rock,
+					AMP_ROCK_C, world_pos.xz, dir_m, master);
+			} else if (w.g > w_base0 && w.g == max_w) {
+				parallax_off = pom_march(mud_orm, tile_m_mud,
+					AMP_MUD_C, world_pos.xz, dir_m, master);
+			} else if (w.b > w_base0 && w.b == max_w) {
+				parallax_off = pom_march(moss_orm, tile_m_moss,
+					AMP_MOSS_C, world_pos.xz, dir_m, master);
+			} else if (w.a > w_base0 && w.a == max_w) {
+				parallax_off = pom_march(gravel_orm, tile_m_gravel,
+					AMP_GRAVEL_C, world_pos.xz, dir_m, master);
+			} else {
+				parallax_off = pom_march(litter_orm, tile_m_litter,
+					AMP_LITTER_C, world_pos.xz, dir_m, master);
+			}
 		}
 	}
 
@@ -472,6 +607,15 @@ void fragment() {
 	albedo *= mix(1.0, wet_darken, wet);
 	albedo *= mix(1.0, wet_darken, puddle * 0.5);
 
+	// Мокрая полоса берега (П14 3.4): по высоте над уровнем воды
+	// (shore_level — тот же уровень, что у воды), край без ломаной
+	// грани — smoothstep-полоса от кромки. Ниже уровня воды полосы нет
+	// (там воду рисует шейдер воды).
+	float shore_w = (1.0 - smoothstep(
+		0.03, SHORE_BAND, world_pos.y - shore_level))
+		* step(0.0, world_pos.y - shore_level);
+	albedo *= mix(1.0, SHORE_DARKEN, shore_w);
+
 	// Край сектора: тонировка цветом соседней зоны, у границы вес 1 —
 	// плоский цвет соседа.
 	albedo = mix(albedo, border.rgb, border.a);
@@ -495,6 +639,8 @@ void fragment() {
 		rough = mix(rough, PUDDLE_ROUGH, puddle);
 		ROUGHNESS = mix(rough, SIMPLE_ROUGH, border.a);
 	}
+	// Прибрежный песок у кромки воды темнее и глаже (мокрая полоса).
+	ROUGHNESS = mix(ROUGHNESS, 0.32, shore_w * 0.8);
 	// П14 2.3: AO из ORM — в AO-выход движка с умеренным влиянием на
 	// прямой свет (не умножением альбеда); на SIMPLE без ORM ao = 1.
 	AO = ao;

@@ -104,6 +104,243 @@ func test_macro_second_scale_against_repeats() -> void:
 		"детальный масштаб 6 м исчез (тайл слоя уже 2 м)")
 
 
+# --- П14 блок 3: детальная сетка, POM, берег, мелочь ---
+
+func test_detail_ring_steps_by_tier() -> void:
+	# П14 3.1: кольцо только на HIGH/ULTRA; шаг 0.25 м HIGH / 0.125 м
+	# ULTRA, радиус ~16 / ~24 м; у ULTRA сетка вдвое плотнее.
+	assert_false(TerrainDetail.is_ring_enabled(GraphicsQuality.Tier.SIMPLE),
+		"SIMPLE — без кольца")
+	assert_false(TerrainDetail.is_ring_enabled(GraphicsQuality.Tier.NORMAL),
+		"NORMAL — без кольца")
+	assert_true(TerrainDetail.is_ring_enabled(GraphicsQuality.Tier.HIGH),
+		"HIGH — с кольцом")
+	assert_true(TerrainDetail.is_ring_enabled(GraphicsQuality.Tier.ULTRA),
+		"ULTRA — с кольцом")
+	assert_almost_eq(TerrainDetail.STEP_HIGH, 0.25, 0.001,
+		"шаг HIGH 0.25 м")
+	assert_almost_eq(TerrainDetail.STEP_ULTRA, 0.125, 0.001,
+		"шаг ULTRA 0.125 м")
+	assert_between(TerrainDetail.RADIUS_HIGH, 14.0, 18.0, "радиус HIGH ~16 м")
+	assert_between(TerrainDetail.RADIUS_ULTRA, 22.0, 26.0, "радиус ULTRA ~24 м")
+	assert_almost_eq(
+		TerrainDetail.step_for_tier(GraphicsQuality.Tier.HIGH), 0.25, 0.001)
+	assert_almost_eq(
+		TerrainDetail.step_for_tier(GraphicsQuality.Tier.ULTRA), 0.125, 0.001)
+	assert_almost_eq(
+		TerrainDetail.radius_for_tier(GraphicsQuality.Tier.HIGH), 16.0, 0.001)
+	assert_almost_eq(
+		TerrainDetail.radius_for_tier(GraphicsQuality.Tier.ULTRA), 24.0, 0.001)
+
+
+func test_ring_mesh_is_flat_grid() -> void:
+	# Сетка кольца плоская (высоту ставит шейдер), покрывает квадрат
+	# радиуса с шагом, индексы — два треугольника на квад.
+	var mesh := TerrainDetail.build_mesh(0.25, 16.0)
+	var surface := mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = surface[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = surface[Mesh.ARRAY_INDEX]
+	assert_eq(vertices.size(), 129 * 129, "вершины 129 × 129")
+	assert_eq(indices.size(), 128 * 128 * 6, "треугольники 128 × 128 × 2")
+	for vertex: Vector3 in vertices:
+		assert_almost_eq(vertex.y, 0.0, 0.0001, "сетка плоская (y = 0)")
+		assert_lte(absf(vertex.x), 16.0 + 0.001, "в пределах радиуса")
+		assert_lte(absf(vertex.z), 16.0 + 0.001, "в пределах радиуса")
+
+
+func test_ring_displacement_amplitudes() -> void:
+	# П14 3.1: амплитуды слоёв — подстилка/мох/гравий ±3–5 см, грязь
+	# 8–10 см, скала до 15 см; те же значения — в константах шейдера
+	# (общая глубина POM и кольца).
+	assert_between(TerrainDetail.AMP_LITTER, 0.03, 0.05, "подстилка 3–5 см")
+	assert_between(TerrainDetail.AMP_MOSS, 0.02, 0.05, "мох 2–5 см")
+	assert_between(TerrainDetail.AMP_GRAVEL, 0.03, 0.05, "гравий 3–5 см")
+	assert_between(TerrainDetail.AMP_MUD, 0.08, 0.10, "грязь 8–10 см")
+	assert_between(TerrainDetail.AMP_ROCK, 0.12, 0.15, "скала до 15 см")
+	var text := GROUND_SHADER.code
+	for pair: Array in [
+		["AMP_LITTER_C", TerrainDetail.AMP_LITTER],
+		["AMP_ROCK_C", TerrainDetail.AMP_ROCK],
+		["AMP_MUD_C", TerrainDetail.AMP_MUD],
+		["AMP_MOSS_C", TerrainDetail.AMP_MOSS],
+		["AMP_GRAVEL_C", TerrainDetail.AMP_GRAVEL],
+	]:
+		assert_almost_eq(_extract_const(text, String(pair[0])),
+			float(pair[1]), 0.0001,
+			"%s шейдера = амплитуде кольца" % pair[0])
+
+
+func test_ring_displacement_mean_near_zero() -> void:
+	# П14 3.1: смещение центрировано средним канала высоты слоя —
+	# средняя высота кольца над чанками ≈ 0 (±1 см), коллизия не
+	# меняется, ступни не проваливаются. Проба по сетке точек острова.
+	var weights := ForestGround._weights_image(ART)
+	var orm_images := TerrainDetail.orm_images()
+	var means := TerrainDetail.orm_means()
+	var sum := 0.0
+	var count := 0
+	for wz: int in range(-100, 101, 8):
+		for wx: int in range(-100, 101, 8):
+			sum += TerrainDetail.displacement_at(
+				ART, weights, orm_images, means, float(wx), float(wz))
+			count += 1
+	var mean: float = sum / float(count)
+	assert_between(mean, -0.01, 0.01,
+		"среднее смещение ≈ 0 ±1 см (факт %.4f м)" % mean)
+
+
+func test_ring_uses_height_texture_and_fade() -> void:
+	# Материал кольца: detail_ring включен, карта высот задана (та же
+	# сетка 257 × 257, что коллизия), средние ORM и радиус по уровню;
+	# у материала чанков detail_ring выключен, но height_tex задан
+	# (сэмплер не пустой).
+	var base := ForestGround.make_material(ART, GraphicsQuality.Tier.HIGH)
+	assert_false(bool(base.get_shader_parameter("detail_ring")),
+		"чанки — без кольца")
+	assert_not_null(base.get_shader_parameter("height_tex"),
+		"height_tex задан и у чанков (сэмплер не пустой)")
+	var ring := TerrainDetail.make_material(base, ART, GraphicsQuality.Tier.ULTRA)
+	assert_true(bool(ring.get_shader_parameter("detail_ring")),
+		"кольцо — detail_ring")
+	var heights: Image = (ring.get_shader_parameter("height_tex") as ImageTexture).get_image()
+	assert_eq(heights.get_width(), IslandGen.POINTS, "ширина карты высот")
+	assert_eq(heights.get_height(), IslandGen.POINTS, "высота карты высот")
+	assert_almost_eq(float(ring.get_shader_parameter("ring_radius")),
+		TerrainDetail.RADIUS_ULTRA, 0.001, "радиус кольца ULTRA")
+	# Гашение к кромке: смещение и подъём исчезают у края (константы).
+	assert_between(_extract_const(GROUND_SHADER.code, "RING_EDGE_FADE"),
+		1.0, 3.0, "полоса гашения смещения у кромки")
+	assert_between(_extract_const(GROUND_SHADER.code, "RING_LIFT_C"),
+		0.002, 0.01, "подъём кольца — миллиметры против z-fighting")
+	# Хеш высот не меняется: кольцо — рантайм-оверлей, генератор не тронут.
+	assert_eq(IslandGen.island_hash(IslandGen.generate()), 941246210,
+		"хеш острова не изменился")
+
+
+func test_pom_steps_by_tier() -> void:
+	# П14 3.2: марш POM 8 шагов HIGH / 16 ULTRA, глубина — амплитуда
+	# слоя; parallax_scale — выключатель (master = parallax_scale/0.06).
+	assert_eq(ForestGround.pom_steps_for_tier(GraphicsQuality.Tier.HIGH), 8,
+		"HIGH — 8 шагов")
+	assert_eq(ForestGround.pom_steps_for_tier(GraphicsQuality.Tier.ULTRA), 16,
+		"ULTRA — 16 шагов")
+	var material := ForestGround.make_material(ART, GraphicsQuality.Tier.ULTRA)
+	assert_almost_eq(float(material.get_shader_parameter("pom_steps")),
+		16.0, 0.001, "pom_steps в материале ULTRA")
+	var high := ForestGround.make_material(ART, GraphicsQuality.Tier.HIGH)
+	assert_almost_eq(float(high.get_shader_parameter("pom_steps")),
+		8.0, 0.001, "pom_steps в материале HIGH")
+	assert_true(GROUND_SHADER.code.contains("pom_march"),
+		"шейдер марширует по карте высот слоя")
+	assert_true(GROUND_SHADER.code.contains("min(parallax_scale / 0.06, 1.0)"),
+		"параллакс F3 гасит глубину POM целиком")
+
+
+func test_shore_band_wet_strip() -> void:
+	# П14 3.4: мокрая полоса берега по высоте над уровнем воды (без
+	# ломаной грани — smoothstep), уровень — тот же, что у моря/озера.
+	assert_almost_eq(float(
+		ForestGround.make_material(ART, GraphicsQuality.Tier.HIGH)
+			.get_shader_parameter("shore_level")),
+		IslandGen.SEA_LEVEL, 0.0001, "shore_level = уровень воды")
+	var text := GROUND_SHADER.code
+	assert_almost_eq(_extract_uniform(text, "shore_level"), -0.15, 0.0001,
+		"дефолт шейдера — уровень моря")
+	assert_between(_extract_const(text, "SHORE_BAND"), 0.3, 0.9,
+		"полоса берега 30–90 см над водой")
+	assert_between(_extract_const(text, "SHORE_DARKEN"), 0.45, 0.8,
+		"мокрый берег темнее")
+	assert_true(text.contains("smoothstep(\n\t\t0.03, SHORE_BAND"),
+		"край полосы — smoothstep от кромки воды")
+	assert_true(text.contains("mix(ROUGHNESS, 0.32, shore_w"),
+		"мокрая полоса глаже (roughness)")
+
+
+func test_ground_clutter_ring_around_player() -> void:
+	# П14 3.3: мелочь — кольцо 15–25 м вокруг игрока, детерминирована
+	# по мировым клеткам (свой seed на клетку), HIGH = ½ ULTRA,
+	# тени только ULTRA, коллизии нет.
+	assert_between(GroundClutter.RADIUS, 15.0, 25.0, "радиус кольца мелочи")
+	assert_false(GroundClutter.is_clutter_enabled(GraphicsQuality.Tier.NORMAL),
+		"NORMAL — без мелочи")
+	assert_true(GroundClutter.is_clutter_enabled(GraphicsQuality.Tier.HIGH),
+		"HIGH — с мелочью")
+	assert_almost_eq(
+		GroundClutter.density_for_tier(GraphicsQuality.Tier.HIGH) \
+			/ GroundClutter.density_for_tier(GraphicsQuality.Tier.ULTRA),
+		0.5, 0.001, "плотность HIGH = ½ ULTRA")
+	var center := Vector2(20.0, 30.0)
+	var ultra := GroundClutter.scatter(ART, GraphicsQuality.Tier.ULTRA, center)
+	var ultra_repeat := GroundClutter.scatter(
+		ART, GraphicsQuality.Tier.ULTRA, center)
+	var total := 0
+	for type: String in ultra:
+		total += (ultra[type]["transforms"] as Array).size()
+		var again: Array = ultra_repeat[type]["transforms"]
+		var first: Array = ultra[type]["transforms"]
+		assert_eq(again.size(), first.size(),
+			"повторная раскладка — то же число (%s)" % type)
+		for i: int in mini(first.size(), again.size()):
+			assert_true(
+				(first[i] as Transform3D).origin.is_equal_approx(
+					(again[i] as Transform3D).origin),
+				"детерминизм позиций по мировым клеткам (%s)" % type)
+	assert_gt(total, 100, "в кольце 20 м есть мелочь")
+	# HIGH — примерно половина инстансов той же области (статистика
+	# бросков по клеткам с плотностью ½).
+	var high := GroundClutter.scatter(ART, GraphicsQuality.Tier.HIGH, center)
+	var total_high := 0
+	for type: String in high:
+		total_high += (high[type]["transforms"] as Array).size()
+	assert_between(
+		float(total_high) / float(maxi(total, 1)), 0.3, 0.7,
+		"HIGH ≈ ½ ULTRA (факт %.2f)" % (float(total_high) / float(total)))
+	# Тени и видимость нод: ULTRA — с тенями, HIGH — без; мелочь
+	# дальше радиуса не ставится.
+	var nodes := GroundClutter.make_nodes(GraphicsQuality.Tier.HIGH)
+	for type: String in nodes:
+		var node: MultiMeshInstance3D = nodes[type]
+		assert_eq(node.cast_shadow,
+			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"HIGH — тени мелочи выключены (%s)" % type)
+	var nodes_ultra := GroundClutter.make_nodes(GraphicsQuality.Tier.ULTRA)
+	for type: String in nodes_ultra:
+		var node: MultiMeshInstance3D = nodes_ultra[type]
+		assert_eq(node.cast_shadow,
+			GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+			"ULTRA — мелочь отбрасывает тень (%s)" % type)
+	for type: String in ultra:
+		for xf: Transform3D in ultra[type]["transforms"]:
+			assert_lte(
+				Vector2(xf.origin.x, xf.origin.z).distance_to(center),
+				GroundClutter.RADIUS + 0.6,
+				"мелочь не дальше радиуса кольца")
+
+
+func test_ground_clutter_blocks_zones() -> void:
+	# П14 3.3: мелочь не ставится на пляже/воде, Площади и у построек —
+	# те же запретные зоны, что у наполнения. Центр — Лес в 42 м от
+	# Площади: ближний край кольца (20 м) захватывает блокируемые
+	# клетки Plaza (24 м мягкого края) — проверка не пустая и не холостая.
+	var center := Vector2(-30.0, -30.0)
+	var scattered := GroundClutter.scatter(ART, GraphicsQuality.Tier.ULTRA, center)
+	var total := 0
+	for type: String in scattered:
+		total += (scattered[type]["transforms"] as Array).size()
+	assert_gt(total, 50, "в чаще Леса вокруг есть мелочь (проба не пустая)")
+	for type: String in scattered:
+		for xf: Transform3D in scattered[type]["transforms"]:
+			var pos := Vector2(xf.origin.x, xf.origin.z)
+			assert_lt(
+				ForestGround._plaza_weight(pos.x, pos.y), 0.06,
+				"мелочи нет на Площади (%s)" % type)
+			assert_false(IslandGen.on_village_pad(pos),
+				"мелочи нет во дворах построек (%s)" % type)
+			assert_gte(pos.distance_to(GroundClutter.RUIN_CENTER),
+				GroundClutter.RUIN_CLEAR,
+				"мелочи нет на террасе руин (%s)" % type)
+
+
 # --- П14 блок 2: освещение и нормали ---
 
 func test_no_custom_light_model() -> void:
@@ -166,7 +403,7 @@ static func _extract_const(text: String, name: String) -> float:
 
 static func _extract_uniform(text: String, name: String) -> float:
 	var regex := RegEx.new()
-	regex.compile("uniform float %s = ([\\d.]+);" % name)
+	regex.compile("uniform float %s = (-?[\\d.]+);" % name)
 	var found := regex.search(text)
 	if found == null:
 		push_error("uniform %s не найден" % name)

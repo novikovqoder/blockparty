@@ -152,6 +152,17 @@ const TINT_GRAVEL: Color = Color(0.84, 0.80, 0.74)
 ## Доля плоского тинта в цвете слоя (0 — чистая карта, 1 — плоский цвет).
 const TINT_MIX: float = 0.10
 
+## Шаги POM (П14 3.2): марш по карте высот слоя; NORMAL/SIMPLE — без
+## POM (ветка quality >= HIGH в шейдере).
+const POM_STEPS_HIGH: int = 8
+const POM_STEPS_ULTRA: int = 16
+
+
+## Шаги POM для уровня (SIMPLE/NORMAL не используются — POM выключен).
+static func pom_steps_for_tier(quality: int) -> int:
+	return POM_STEPS_ULTRA if quality == GraphicsQuality.Tier.ULTRA \
+		else POM_STEPS_HIGH
+
 ## Мокрая земля (SPEC П12 2.5): затемнение albedo и падение roughness
 ## по весу влаги; лужи начинаются от того же порога, что FootFx
 ## (PUDDLE_WET ниже) — всплески совпадают с лужами.
@@ -175,6 +186,24 @@ static func make_material(art: IslandArt, quality: int) -> ShaderMaterial:
 			"parallax_near", GraphicsQuality.HIGH_PARALLAX_NEAR)
 		material.set_shader_parameter(
 			"parallax_far", GraphicsQuality.HIGH_PARALLAX_FAR)
+	# П14 3.2: шаги POM по уровню (8 HIGH / 16 ULTRA; ниже HIGH ветка
+	# шейдера не заходит в марш). Берег — тот же уровень воды, что у
+	# моря/озера (дефолт шейдера совпадает, ставим явно для явности).
+	material.set_shader_parameter("pom_steps",
+		float(pom_steps_for_tier(quality)))
+	material.set_shader_parameter("shore_level", IslandGen.SEA_LEVEL)
+	# Явное false у чанков (дефолт шейдера не виден через
+	# get_shader_parameter — null ломает bool() в тестах и инструментах).
+	material.set_shader_parameter("detail_ring", false)
+	# П14 3.1: карта высот (uniform кольца; у чанков detail_ring = false —
+	# ветка не заходит, но сэмплер у материала задан, как у остальных карт).
+	# Строится здесь же, без TerrainDetail — иначе цикл зависимостей
+	# ForestGround ↔ TerrainDetail ломает -s-инструменты.
+	var heights_image := Image.create_from_data(
+		IslandGen.POINTS, IslandGen.POINTS, false,
+		Image.FORMAT_RF, art.heights.to_byte_array())
+	material.set_shader_parameter("height_tex",
+		ImageTexture.create_from_image(heights_image))
 	material.set_shader_parameter("litter_tint", TINT_LITTER)
 	material.set_shader_parameter("grass_tint", TINT_GRASS)
 	material.set_shader_parameter("rock_tint", TINT_ROCK)
