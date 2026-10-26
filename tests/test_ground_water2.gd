@@ -102,3 +102,73 @@ func test_macro_second_scale_against_repeats() -> void:
 	# Бывший «детальный» масштаб 6 м убран: базовый тайл теперь сам мелкий.
 	assert_false(GROUND_SHADER.code.contains("detail_tile_m"),
 		"детальный масштаб 6 м исчез (тайл слоя уже 2 м)")
+
+
+# --- П14 блок 2: освещение и нормали ---
+
+func test_no_custom_light_model() -> void:
+	# П14 2.1: кастомный light() с wrap-Ламбертом, toon-краем и своим GGX
+	# удалён — стандартное PBR-освещение Godot (diffuse_lambert/specular
+	# в render_mode — модели движка, не кастомный код).
+	var text := GROUND_SHADER.code
+	assert_false(text.contains("void light()"),
+		"кастомного light() нет — PBR движка")
+	assert_false(text.contains("float wrap"),
+		"wrap-Ламберта нет (размывал освещение)")
+	assert_false(text.contains("SHADOW_TINT"),
+		"toon-тени соседних чанков не используются")
+	assert_false(text.contains("flat_n"),
+		"toon-край (плоская грань у границы Леса) убран")
+	assert_false(text.contains("d_ggx"),
+		"своего GGX-спекуляра нет — SPECULAR движка")
+	# Блеск луж — через ROUGHNESS/SPECULAR (стандартный PBR).
+	assert_true(text.contains("SPECULAR = mix("),
+		"блеск луж — SPECULAR-выход")
+
+
+func test_ao_goes_to_ao_output() -> void:
+	# П14 2.3: AO из ORM (канал R) подаётся в AO-выход с умеренным
+	# AO_LIGHT_AFFECT, а не умножением альбедо.
+	var text := GROUND_SHADER.code
+	assert_true(text.contains("AO = ao;"),
+		"AO подаётся в AO-выход")
+	assert_true(text.contains("AO_LIGHT_AFFECT"),
+		"AO_LIGHT_AFFECT задаётся")
+	assert_between(
+		_extract_const(text, "AO_LIGHT_AFFECT_V"), 0.3, 0.7,
+		"влияние AO на прямой свет умеренное")
+	assert_false(text.contains("ALBEDO *= mix(mix(1.0, ao"),
+		"альбедо больше не затемняется AO вручную")
+
+
+func test_normal_strength_near_far() -> void:
+	# П14 2.2: whiteout-смешивание нормалей слоёв с нормалью рельефа,
+	# сила вблизи 1.3–1.6, к дали гаснет.
+	var text := GROUND_SHADER.code
+	assert_between(
+		_extract_uniform(text, "normal_near"), 1.3, 1.6,
+		"сила нормалей вблизи 1.3–1.6")
+	var far_strength: float = _extract_uniform(text, "normal_far")
+	assert_between(far_strength, 0.5, 1.0, "к дали сила гаснет")
+	assert_true(text.contains("tangent_perturb"),
+		"whiteout: касательная часть нормал-карты над нормалью рельефа")
+
+
+static func _extract_const(text: String, name: String) -> float:
+	var regex := RegEx.new()
+	regex.compile("const float %s = ([\\d.]+);" % name)
+	var found := regex.search(text)
+	if found == null:
+		push_error("константа %s не найдена" % name)
+		return -1.0
+	return float(found.get_string(1))
+
+
+static func _extract_uniform(text: String, name: String) -> float:
+	var regex := RegEx.new()
+	regex.compile("uniform float %s = ([\\d.]+);" % name)
+	var found := regex.search(text)
+	if found == null:
+		push_error("uniform %s не найден" % name)
+		return -1.0
+	return float(found.get_string(1))

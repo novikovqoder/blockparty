@@ -8,7 +8,8 @@
 // Наследие П5.9/П5.13, что сохраняется: смешивание базы симплекс-шумом
 // (пятнистость демо ez-tree), трипланар по мировой нормали рельефа
 // (relief_normal), карта тона border_map и краевой toon-переход,
-// wrap-Ламберт внутри сектора. Меняет П12:
+// wrap-Ламберт внутри сектора (wrap-Ламберт и toon-край убраны в П14 2.1 —
+// стандартное PBR-освещение Godot). Меняет П12:
 //   6 слоёв текстур с полным PBR (albedo + nor_gl + ORM, где ORM =
 //   R: AO, G: Roughness, B: Height — tools/make_orm_textures.gd):
 //     база-подстилка forest_ground_05 (s ≥ 0.5), трава leafy_grass (s < 0.5,
@@ -18,9 +19,8 @@
 //   height-blend: побеждает слой с выше картой высоты (softmax по
 //   h_eff = вес + ORM.b × HEIGHT_TEX, мягкость BLEND_SHARP) — грязь утекает
 //   между камнями, мох лезет поверх;
-//   ROUGHNESS и AO — взвешенная сумма каналов ORM (AO — умножением ALBEDO
-//   с силой AO_MIX, эквивалент AO_LIGHT_AFFECT: в кастомном light() модели
-//   встроенного AO-выхода Godot 4 нет);
+//   ROUGHNESS и AO — взвешенная сумма каналов ORM: П14 2 подаёт AO в
+//   AO-выход движка (AO_LIGHT_AFFECT 0.5), а не умножением альбедо;
 //   разбивка тайлинга: поворот UV на 0/90/180/270° и зеркало по ячейке
 //   CELL_M метров (без интерполяции — это выбор преобразования, а не
 //   решётчатый value-noise) + крупная вариация тона симплексом
@@ -34,9 +34,9 @@
 // каждого слоя подбирает владелец (константы в forest_terrain.gd).
 // Текстуры — CC0: polyhaven (forest_ground_05, leafy_grass, rock_face_03,
 // mud_forest, rocky_trail), ambientcg (Moss001); ORM собирает скрипт.
-// Свет: внутри — wrap-Ламберт, у края — toon-модель соседних low-poly
-// чанков; влажная земля и лужи блещут GGX-спекуляром (вес лужи считает
-// vertex по весу влаги — light() видит только varyings).
+// Свет (П14 2.1): стандартный PBR Godot — кастомный light() с wrap-Ламбертом,
+// toon-краем и своим GGX удалён; нормали, ROUGHNESS, AO и спекуляр луж —
+// встроенные выходы шейдера.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_lambert,
 	specular_schlick_ggx;
@@ -106,8 +106,12 @@ uniform float macro_far = 40.0;
 const float TONE_VAR_SCALE = 70.0;
 const float TONE_VAR_AMP = 0.10;
 
-// Сила нормал-карт слоёв (блок 2 П14 поднимает до 1.3–1.6 вблизи).
-uniform float normal_strength = 1.0;
+// Сила нормал-карт слоёв (П14 2.2): вблизи ≈ 1.3–1.6 (нормальная фактура
+// фотоскана), к дали гаснет — дальние планы не мерцают.
+uniform float normal_near = 1.5;
+uniform float normal_far = 1.0;
+const float NORMAL_FADE_START = 15.0;
+const float NORMAL_FADE_END = 45.0;
 
 // Height-blend (SPEC 2.2): вклад карты высоты в эффективную высоту слоя
 // и резкость softmax (больше — резче граница победителя).
@@ -124,9 +128,10 @@ uniform float wet_darken = 0.65;
 uniform float wet_rough_factor = 0.55;
 const float PUDDLE_START = 0.9;
 const float PUDDLE_ROUGH = 0.05;
-// Спекуляр влажной земли и лужи (диэлектрик F ≈ 0.04, GGX в light()).
-uniform float wet_specular = 0.03;
-const float PUDDLE_SPEC = 0.22;
+// Спекуляр влажной земли и лужи (П14 2.1): стандартный PBR Godot —
+// SPECULAR-выход, без своего GGX.
+uniform float wet_specular = 0.2;
+const float PUDDLE_SPEC = 0.5;
 
 // Параллакс (SPEC 2.6; П13 1.9): HIGH/ULTRA, гаснет от parallax_near
 // до parallax_far (HIGH — 10–15 м, ULTRA — 15–25, ставит ForestGround
@@ -136,9 +141,10 @@ uniform float parallax_scale = 0.06;
 uniform float parallax_near = 15.0;
 uniform float parallax_far = 25.0;
 
-// AO-канал: вклад в ALBEDO (в кастомном light() нет встроенного AO-выхода,
-// поэтому эквивалент AO_LIGHT_AFFECT — доля затемнения альбедо).
-const float AO_MIX = 0.5;
+// AO (П14 2.3): канал R из ORM подаётся в AO-выход движка с умеренным
+// AO_LIGHT_AFFECT (половинное влияние на прямой свет), а не умножением
+// альбедо — нормали и AO читаются стандартным PBR.
+const float AO_LIGHT_AFFECT_V = 0.5;
 // Roughness SIMPLE (без ORM-канала — по цене прежней земли).
 const float SIMPLE_ROUGH = 0.95;
 
@@ -149,14 +155,9 @@ uniform sampler2D border_map : source_color, filter_linear_mipmap_anisotropic;
 // карты высот, кодировка n·0.5+0.5 (данные, не цвет).
 uniform sampler2D relief_normal : filter_linear_mipmap_anisotropic;
 
-// Тон теневой стороны граней — тот же, что дефолт uniform shadow_tint
-// шейдера lowpoly (соседние чанки): у края Лес считается светом соседа.
-const vec3 SHADOW_TINT = vec3(0.82, 0.87, 0.98);
-
 varying vec3 world_pos;
-// Вес края сектора (border_map.a) и вес влаги (weight_map.g) — оба нужны
-// в light(), а туда из fragment() varyings не передаются.
-varying float edge_w;
+// Вес лужи (weight_map.g ≥ PUDDLE_START): нужен и в vertex (для early
+// гашения на SIMPLE), и в fragment (SPECULAR лужи).
 varying float puddle_v;
 
 // Симплекс-шум 2D (Ian McEwan / Ashima Arts, публичный webgl-noise) —
@@ -282,8 +283,7 @@ vec3 layer_perturb(
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 256.0;
-	edge_w = textureLod(border_map, sector_uv, 0.0).a;
-	// Вес лужи для спекуляра light(): во fragment он считается так же
+	// Вес лужи для спекуляра (П14 2.1): во fragment он считается так же
 	// (smoothstep от w.g ≥ PUDDLE_START), на SIMPLE луж нет.
 	float wet = textureLod(weight_map, sector_uv, 0.0).g;
 	puddle_v = quality == QUALITY_SIMPLE
@@ -475,11 +475,9 @@ void fragment() {
 	// Край сектора: тонировка цветом соседней зоны, у границы вес 1 —
 	// плоский цвет соседа.
 	albedo = mix(albedo, border.rgb, border.a);
-	ALBEDO = albedo;
-
-	// Roughness/AO: взвешенные суммы каналов ORM (SIMPLE — без карт).
+	ALBEDO = albedo;	// Roughness/AO: взвешенные суммы каналов ORM (SIMPLE — без карт).
 	float rough = 0.0;
-	float ao = 0.0;
+	float ao = 1.0;
 	if (quality == QUALITY_SIMPLE) {
 		ROUGHNESS = mix(SIMPLE_ROUGH, SIMPLE_ROUGH * wet_rough_factor, wet);
 	} else {
@@ -496,10 +494,14 @@ void fragment() {
 		rough = mix(rough, rough * wet_rough_factor, wet);
 		rough = mix(rough, PUDDLE_ROUGH, puddle);
 		ROUGHNESS = mix(rough, SIMPLE_ROUGH, border.a);
-		// AO встроен в альбедо (AO_MIX ~ AO_LIGHT_AFFECT, см. шапку);
-		// у края сектора — плоский цвет соседа без AO.
-		ALBEDO *= mix(mix(1.0, ao, AO_MIX), 1.0, border.a);
 	}
+	// П14 2.3: AO из ORM — в AO-выход движка с умеренным влиянием на
+	// прямой свет (не умножением альбеда); на SIMPLE без ORM ao = 1.
+	AO = ao;
+	AO_LIGHT_AFFECT = AO_LIGHT_AFFECT_V;
+	// П14 2.1: блеск мокрой земли и луж — стандартный PBR (SPECULAR),
+	// у ровной лужи ярче.
+	SPECULAR = mix(wet_specular, PUDDLE_SPEC, puddle);
 
 	// Нормаль: база + взвешенные возмущения слоёв в мировом базисе.
 	vec3 perturb_base = layer_perturb(
@@ -514,32 +516,16 @@ void fragment() {
 		+ m_mud * perturb_mud
 		+ m_moss * perturb_moss
 		+ m_gravel * perturb_gravel;
-	vec3 ground_world = normalize(relief_world + perturb * normal_strength * (1.0 - edge_w));
-	vec3 flat_n = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
-	vec3 ground_view = normalize((VIEW_MATRIX * vec4(ground_world, 0.0)).xyz);
-	NORMAL = normalize(mix(ground_view, flat_n, edge_w));
-}
-
-// Прямой свет: внутри сектора — мягкий wrap-Ламберт, к краю — в точности
-// та же двухступенчатая toon-модель, что в light() шейдера lowpoly.
-void light() {
-	float ndl = dot(NORMAL, LIGHT);
-	float wrap = 0.35;
-	float lambert = clamp((ndl + wrap) / (1.0 + wrap), 0.0, 1.0);
-	vec3 wrap_diff = LIGHT_COLOR * ATTENUATION * ALBEDO * lambert;
-	float step1 = smoothstep(0.0, 0.35, ndl);
-	float step2 = smoothstep(0.35, 0.75, ndl);
-	float shade = 0.35 * step1 + 0.65 * step2;
-	vec3 toon = LIGHT_COLOR * ATTENUATION
-		* mix(ALBEDO * SHADOW_TINT, ALBEDO, shade) * shade;
-	DIFFUSE_LIGHT += mix(wrap_diff, toon, edge_w);
-	// Влажная земля и лужи блещут (D-член GGX, диэлектрик F ≈ 0.04);
-	// сила растёт с весом лужи (varying из vertex), у соседа гасится.
-	vec3 half_v = normalize(LIGHT + VIEW);
-	float ndh = max(dot(NORMAL, half_v), 0.0);
-	float a2 = ROUGHNESS * ROUGHNESS;
-	a2 *= a2;
-	float d_ggx = a2 / (3.14159 * pow(ndh * ndh * (a2 - 1.0) + 1.0, 2.0));
-	SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * d_ggx
-		* mix(wet_specular, PUDDLE_SPEC, puddle_v) * (1.0 - edge_w);
+	// П14 2.2: whiteout-смешивание с нормалью рельефа — от возмущения
+	// берётся касательная часть (продольная вычитается), базовая нормаль
+	// не «проседает»; сила вблизи 1.5, к дали гаснет. Toon-переход на
+	// плоскую грань у края сектора убран (П14 2.1) — край тонирован
+	// цветом border_map, нормали честные по всему острову.
+	vec3 tangent_perturb = perturb
+		- relief_world * dot(relief_world, perturb);
+	float normal_s = mix(normal_far, normal_near,
+		1.0 - smoothstep(NORMAL_FADE_START, NORMAL_FADE_END, dist_v));
+	vec3 ground_world = normalize(
+		relief_world + tangent_perturb * normal_s);
+	NORMAL = normalize((VIEW_MATRIX * vec4(ground_world, 0.0)).xyz);
 }

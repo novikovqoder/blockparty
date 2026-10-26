@@ -86,8 +86,8 @@ func test_ground_shader_gates_by_quality() -> void:
 		text.contains("parallax_near") and text.contains("parallax_far"),
 		"затухание параллакса по дистанции (П13: дальности — uniform уровня)")
 	assert_true(
-		text.contains("AO_MIX") and text.contains("quality == QUALITY_SIMPLE"),
-		"AO-канал и roughness из карт — не на SIMPLE")
+		text.contains("AO_LIGHT_AFFECT") and text.contains("quality == QUALITY_SIMPLE"),
+		"AO-канал (AO-выход, П14 2.3) и roughness из карт — не на SIMPLE")
 
 
 func test_puddle_threshold_matches_foot_fx() -> void:
