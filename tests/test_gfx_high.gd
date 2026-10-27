@@ -42,8 +42,8 @@ func test_high_recipe_constants_match_spec() -> void:
 	assert_between(
 		GraphicsQuality.HIGH_SSR_MAX_STEPS, 24, 32,
 		"шагов SSR — 24–32")
-	# П13 1.6 (П16 п. 1: атлас точечных теней 2048): тени — направленный
-	# атлас 4096, Soft Medium, полутень чуть уже ULTRA, дальность ~120 м.
+	# П13 1.6 (П16: атлас точечных теней 2048, дальность 70 м): тени —
+	# направленный атлас 4096, Soft Medium, полутень чуть уже ULTRA.
 	assert_eq(
 		GraphicsQuality.HIGH_SHADOW_ATLAS_SIZE, 4096,
 		"атлас направленных теней — 4096")
@@ -58,8 +58,8 @@ func test_high_recipe_constants_match_spec() -> void:
 		GraphicsQuality.HIGH_LIGHT_ANGULAR_DISTANCE, 0.4, 0.001,
 		"угловое расхождение светила — 0.4°")
 	assert_almost_eq(
-		GraphicsQuality.HIGH_SHADOW_MAX_DISTANCE, 120.0, 0.001,
-		"дальность теней — ~120 м")
+		GraphicsQuality.HIGH_SHADOW_MAX_DISTANCE, 70.0, 0.001,
+		"дальность теней — 70 м (П16 п. 2)")
 	assert_lt(
 		GraphicsQuality.HIGH_LIGHT_ANGULAR_DISTANCE,
 		GraphicsQuality.ULTRA_LIGHT_ANGULAR_DISTANCE,
@@ -134,7 +134,7 @@ func test_high_recipe_applied_to_env_and_viewport() -> void:
 	assert_almost_eq(
 		sun.directional_shadow_max_distance,
 		GraphicsQuality.HIGH_SHADOW_MAX_DISTANCE, 0.001,
-		"HIGH: дальность теней — 120 м")
+		"HIGH: дальность теней — 70 м (П16)")
 	assert_almost_eq(
 		sun.directional_shadow_fade_start,
 		GraphicsQuality.HIGH_SHADOW_FADE_START, 0.001,
@@ -146,7 +146,7 @@ func test_high_recipe_applied_to_env_and_viewport() -> void:
 	assert_almost_eq(
 		moon.directional_shadow_max_distance,
 		GraphicsQuality.HIGH_SHADOW_MAX_DISTANCE, 0.001,
-		"HIGH: дальность теней луны — как у солнца")
+		"HIGH: дальность теней луны — как у солнца (70 м)")
 	assert_eq(
 		viewport.msaa_3d, Viewport.MSAA_DISABLED,
 		"HIGH: MSAA выключен (общая память встройки)")
@@ -157,7 +157,7 @@ func test_high_recipe_applied_to_env_and_viewport() -> void:
 	assert_eq(
 		viewport.positional_shadow_atlas_size,
 		GraphicsQuality.HIGH_POSITIONAL_ATLAS_SIZE,
-		"HIGH: атлас точечных теней — 4096")
+		"HIGH: атлас точечных теней — 2048 (П16)")
 	assert_almost_eq(
 		viewport.mesh_lod_threshold, GraphicsQuality.MESH_LOD_THRESHOLD_BASE,
 		0.001, "HIGH: порог LOD — 1.0")

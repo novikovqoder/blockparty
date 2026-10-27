@@ -1,4 +1,5 @@
 # Тесты П16 «Оптимизированное Высокое» (SPEC раздел П16): тени ламп
+# Тесты П16 «Оптимизированное Высокое» (SPEC раздел П16): тени ламп
 # (маска кастеров без травы/мелочи, тень максимум у 2 ближайших ламп,
 # distance_fade ~12 м, атлас 2048, dual paraboloid), тени солнца/луны
 # (трава/мелочь/детальная сетка без тени на HIGH, дальность 60–80 м),
@@ -158,3 +159,67 @@ func test_cabin_meshes_marked_as_lamp_casters() -> void:
 		if mi != null and (mi.layers & GraphicsQuality.LAMP_CASTER_MASK) != 0:
 			marked += 1
 	assert_gt(marked, 4, "у сруба помечено больше 4 мешей-кастеров")
+
+
+# --- П16 п. 2: тени солнца/луны ---
+
+func test_sun_shadow_distance_and_small_types() -> void:
+	assert_between(
+		GraphicsQuality.HIGH_SHADOW_MAX_DISTANCE, 60.0, 80.0,
+		"дальность теней солнца/луны на HIGH — 60-80 м")
+	assert_eq(
+		GraphicsQuality.ULTRA_SHADOW_MAX_DISTANCE, 200.0,
+		"ULTRA: дальность теней не тронута")
+	# Трава и мелкие типы (<0.5 м) — без тени солнца на HIGH, с тенью на ULTRA.
+	for type: String in [
+		"rgrass", "rflower", "riris", "reed", "fern",
+		"mrock", "pebble", "etree_bush",
+	]:
+		assert_true(
+			PropMeshes.small_shadowless(StringName(type), GraphicsQuality.Tier.HIGH),
+			"%s на HIGH без тени солнца" % type)
+		assert_false(
+			PropMeshes.small_shadowless(StringName(type), GraphicsQuality.Tier.ULTRA),
+			"%s на ULTRA с тенью, как раньше" % type)
+	# Деревья, валуны и постройки — с тенью на любом уровне.
+	for type: String in [
+		"etree_pine", "etree_oak", "etree_giant", "dead_log",
+		"boulder", "rock_pillar", "ruin_block", "bench",
+	]:
+		assert_false(
+			PropMeshes.small_shadowless(StringName(type), GraphicsQuality.Tier.HIGH),
+			"%s остаётся с тенью на HIGH" % type)
+
+
+func test_grass_boost_shadowless_on_high() -> void:
+	# Трава-буст (gd_grass_*) на HIGH строится без тени солнца/луны,
+	# на ULTRA — с тенью. Раскладка та же (тот же seed) — тени решает
+	# уровень входа, а не пересборка.
+	var nodes: Dictionary = GroundDetails._build_grass(
+		_dummy_art(), GraphicsQuality.Tier.HIGH)
+	for node: Variant in nodes["nodes"]:
+		var mi := node as MultiMeshInstance3D
+		if mi != null:
+			assert_eq(
+				mi.cast_shadow,
+				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+				"%s на HIGH без тени солнца" % mi.name)
+	var ultra: Dictionary = GroundDetails._build_grass(
+		_dummy_art(), GraphicsQuality.Tier.ULTRA)
+	for node: Variant in ultra["nodes"]:
+		var mi := node as MultiMeshInstance3D
+		if mi != null:
+			assert_eq(
+				mi.cast_shadow,
+				GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+				"%s на ULTRA с тенью" % mi.name)
+
+
+## Минимальный art для _build_grass: нужна только карта высот (клетка
+## проходима при 1.0 < h <= 15.0) — плоский «остров» на высоте 2 м.
+func _dummy_art() -> IslandArt:
+	var art := IslandArt.new()
+	art.heights = PackedFloat32Array()
+	art.heights.resize(IslandGen.POINTS * IslandGen.POINTS)
+	art.heights.fill(2.0)
+	return art

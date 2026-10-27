@@ -133,16 +133,18 @@ const HIGH_SSIL_QUALITY: int = RenderingServer.ENV_SSIL_QUALITY_LOW
 const HIGH_SSR_MAX_STEPS: int = 32
 const HIGH_SSR_FADE_IN: float = 0.15
 const HIGH_SSR_FADE_OUT: float = 2.0
-## Тени (П13 1.6): атласы 4096, фильтр Soft Medium (дешевле Ultra),
-## полутень чуть уже ULTRA, дальность ~120 м, сплиты с плавным
-## растворением (fade_start + blend) — без резкой границы.
+## Тени (П13 1.6; П16 п. 2): атласы 4096, фильтр Soft Medium (дешевле
+## Ultra), полутень чуть уже ULTRA, дальность 70 м (П16: было 120 — на
+## встроенной графике карты сплитов дороже самой геометрии), сплиты с
+## плавным растворением (fade_start + blend) — без резкой границы.
+## Сплитов 4: трёх в 4.7.2 нет (SHADOW_ORTHOGONAL/2/4 — сверено).
 const HIGH_SHADOW_ATLAS_SIZE: int = 4096
 ## П16 п. 1: атлас точечных теней на HIGH 2048 (тень у 1-2 ближайших
 ## ламп, dual paraboloid — карты хватает).
 const HIGH_POSITIONAL_ATLAS_SIZE: int = 2048
 const HIGH_SOFT_SHADOW_QUALITY: int = RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM
 const HIGH_LIGHT_ANGULAR_DISTANCE: float = 0.4
-const HIGH_SHADOW_MAX_DISTANCE: float = 120.0
+const HIGH_SHADOW_MAX_DISTANCE: float = 70.0
 const HIGH_SHADOW_FADE_START: float = 0.85
 ## Объёмный туман (П13 1.7): сетка 128×64 между базой и ULTRA, фильтр
 ## включён (ставится ниже для всех уровней); плотности не меняются.

@@ -329,6 +329,10 @@ static func _build_grass(art: IslandArt, tier: int) -> Dictionary:
 		# спад густоты от камеры); дальность — как у rgrass.
 		instance.material_override = ForestMat.for_type(&"rgrass")
 		instance.visibility_range_end = PropMeshes.visibility_range(&"rgrass")
+		# П16 п. 2: тень солнца/луны — только ULTRA (как у мелочи П14).
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			if tier == GraphicsQuality.Tier.ULTRA \
+			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		nodes.append(instance)
 	return {"nodes": nodes, "transforms": transforms_by_type}
 

@@ -368,6 +368,19 @@ static func visibility_range(type: StringName) -> float:
 	return 0.0
 
 
+## П16 п. 2: трава и мелкие типы (<0.5 м) — без тени солнца/луны на
+## HIGH: у пучков и камешков она не читается, а в атлас сплитов они
+## попадают всей площадью. ULTRA не тронут — там тень как раньше.
+static func small_shadowless(type: StringName, tier: int) -> bool:
+	if tier == GraphicsQuality.Tier.ULTRA:
+		return false
+	match String(type):
+		"rgrass", "rflower", "riris", "reed", "fern", \
+		"mrock", "pebble", "etree_bush":
+			return true
+	return false
+
+
 ## Параметры ветра для качающихся типов (vfx-fix, блок б): амплитуда, м;
 ## частота; высота начала качания и размах нарастания, м; направление.
 ## Пустой словарь — тип не качается (камни, постройки). П5.9, переделка:

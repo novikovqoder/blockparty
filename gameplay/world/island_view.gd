@@ -244,6 +244,11 @@ func _build_props() -> void:
 		if range > 0.0:
 			instance.visibility_range_end = range
 			_base_ranges[type] = range
+		# П16 п. 2: трава и мелкие типы — без тени солнца/луны на HIGH
+		# (деревья, валуны и постройки остаются с тенью).
+		if PropMeshes.small_shadowless(
+				type_name, GraphicsQuality.tier_from_settings()):
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
 		_register(String(type), instance)
 
