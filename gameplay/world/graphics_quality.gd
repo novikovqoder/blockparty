@@ -8,7 +8,8 @@
 # ULTRA (П11, раздел 2 SPEC): всё из HIGH плюс SDFGI, SSIL, SSR, мягкие
 # тени высокого разрешения, объёмный туман высокого качества и SMAA.
 # П13: HIGH — «почти как Ультра, но дешевле» — лёгкий SDFGI и SSIL/SSR
-# в половинном разрешении, SMAA без MSAA, атласы 4096, туман 128×64.
+# в половинном разрешении, SMAA без MSAA, атласы 4096, туман 96×48
+# (П16: было 128×64 — на встройке сетка дороже вида).
 # Compatibility-рендерер (скриншоты на сервере) SSAO и объёмный туман не
 # поддерживает: свойства выставляются, движок молча пропускает их.
 class_name GraphicsQuality
@@ -100,13 +101,13 @@ const ULTRA_VF_DEPTH: int = 128
 # --- HIGH (П13 «Оптимизированное Высокое», Radeon 780M): визуально близко
 # --- к ULTRA, но дешевле — числа стартовые, подбирает владелец ---
 
-## Лёгкий SDFGI (П13 1.1): каскадов 3–4 (берём 4), без окклюзии (самый
+## Лёгкий SDFGI (П13 1.1; П16 п. 6 — каскадов 3): без окклюзии (самый
 ## дорогой SDFGI-проход), GI в половинном разрешении, лучей меньше
 ## (8 вместо движковых 16), схождение медленнее (30 кадров вместо 10) и
-## реже обновляется свет (16 кадров вместо 2) — шум сходится дольше,
-## но каждый кадр дешевле. Ночь ведёт DayCycle той же логикой, что на
-## ULTRA (sdfgi_energy по dayness).
-const HIGH_SDFGI_CASCADES: int = 4
+## реже обновляется свет (16 кадров вместо 2 — максимум в 4.7.2) — шум
+## сходится дольше, но каждый кадр дешевле. Ночь ведёт DayCycle той же
+## логикой, что на ULTRA (sdfgi_energy по dayness).
+const HIGH_SDFGI_CASCADES: int = 3
 const HIGH_SDFGI_BOUNCE_FEEDBACK: float = 0.5
 const HIGH_SDFGI_RAY_COUNT: int = RenderingServer.ENV_SDFGI_RAY_COUNT_8
 const HIGH_SDFGI_FRAMES_TO_CONVERGE: int = \
@@ -146,10 +147,11 @@ const HIGH_SOFT_SHADOW_QUALITY: int = RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM
 const HIGH_LIGHT_ANGULAR_DISTANCE: float = 0.4
 const HIGH_SHADOW_MAX_DISTANCE: float = 70.0
 const HIGH_SHADOW_FADE_START: float = 0.85
-## Объёмный туман (П13 1.7): сетка 128×64 между базой и ULTRA, фильтр
-## включён (ставится ниже для всех уровней); плотности не меняются.
-const HIGH_VF_WIDTH: int = 128
-const HIGH_VF_DEPTH: int = 64
+## Объёмный туман (П13 1.7; П16 п. 7 — сетка 96×48): между базой и ULTRA,
+## фильтр включён (ставится ниже для всех уровней); плотности и вид
+## не меняются — только разрешение сэмплирования.
+const HIGH_VF_WIDTH: int = 96
+const HIGH_VF_DEPTH: int = 48
 ## Трава-буст (П13 1.9): спад густоты травы начинается ближе, чем на
 ## ULTRA (×1.5) — множитель к базовым fade_start/fade_end шейдера травы.
 const HIGH_GRASS_FADE_MULT: float = 0.85
@@ -400,7 +402,7 @@ static func apply(
 		env.volumetric_fog_density = VOLUMETRIC_DENSITY
 	# Качество объёмного тумана (2.6; П13 1.7): сетка плотнее (свет
 	# в сгустках зон считается точнее) и фильтр активен; плотности
-	# не меняются. HIGH — 128×64, между базой и ULTRA.
+	# не меняются. HIGH — 96×48 (П16 п. 7: было 128×64), между базой и ULTRA.
 	RenderingServer.environment_set_volumetric_fog_volume_size(
 		ULTRA_VF_WIDTH if ultra
 		else HIGH_VF_WIDTH if hi

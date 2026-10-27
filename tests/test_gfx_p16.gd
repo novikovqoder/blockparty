@@ -554,3 +554,191 @@ func test_detail_ring_radius_and_lazy_move() -> void:
 		"кольцо переехало при сдвиге 2 м (снап 0.25 м)")
 	assert_almost_eq(ring_pos.z, 10.0, 0.26,
 		"кольцо под зрителем по Z")
+
+
+# --- П16 п. 6/7: SDFGI и объёмный туман на HIGH ---
+
+func test_sdfgi_and_fog_cheaper_on_high() -> void:
+	# SDFGI: на HIGH 3 каскада (было 4), ULTRA не тронут; свет
+	# обновляется реже (16 кадров — максимум в 4.7.2).
+	assert_eq(
+		GraphicsQuality.HIGH_SDFGI_CASCADES, 3,
+		"каскады SDFGI на HIGH — 3")
+	assert_eq(
+		GraphicsQuality.ULTRA_SDFGI_CASCADES, 5,
+		"каскады SDFGI на ULTRA не тронуты")
+	assert_eq(
+		GraphicsQuality.HIGH_SDFGI_FRAMES_TO_UPDATE_LIGHT,
+		RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_16_FRAMES,
+		"обновление света SDFGI — максимально редкое (16 кадров)")
+	# Объёмный туман: сетка 96×48 — дешевле ULTRA (256×128),
+	# но точнее базы (64×64); базы и ULTRA не тронуты.
+	assert_eq(GraphicsQuality.HIGH_VF_WIDTH, 96, "ширина сетки тумана — 96")
+	assert_eq(GraphicsQuality.HIGH_VF_DEPTH, 48, "глубина сетки тумана — 48")
+	assert_eq(GraphicsQuality.VF_WIDTH_BASE, 64, "базовая сетка не тронута")
+	assert_eq(
+		GraphicsQuality.ULTRA_VF_WIDTH * GraphicsQuality.ULTRA_VF_DEPTH,
+		256 * 128, "сетка ULTRA не тронута")
+	assert_lt(
+		GraphicsQuality.HIGH_VF_WIDTH * GraphicsQuality.HIGH_VF_DEPTH,
+		GraphicsQuality.ULTRA_VF_WIDTH * GraphicsQuality.ULTRA_VF_DEPTH,
+		"туман HIGH дешевле ULTRA")
+	assert_gt(
+		GraphicsQuality.HIGH_VF_WIDTH * GraphicsQuality.HIGH_VF_DEPTH,
+		GraphicsQuality.VF_WIDTH_BASE * GraphicsQuality.VF_DEPTH_BASE,
+		"туман HIGH точнее базы")
+	# Применённый HIGH реально ставит 3 каскада и сетку 96×48
+	# (объёмный туман RenderingServer — глобальная настройка,
+	# проверяем константой выше). Environment — RefCounted, не фрится.
+	var env := Environment.new()
+	var sun := DirectionalLight3D.new()
+	var moon := DirectionalLight3D.new()
+	var viewport := SubViewport.new()
+	GraphicsQuality.apply(
+		env, sun, GraphicsQuality.Tier.HIGH, viewport, moon)
+	assert_eq(
+		env.sdfgi_cascades, 3, "env на HIGH: каскады SDFGI — 3")
+	sun.free()
+	moon.free()
+	viewport.free()
+
+
+# --- П16 п. 8: оранжевый пересвет у скамеек и тонких досок Площади ---
+
+## Меши фонарей сруба (материал «lamp», светится emission).
+func _cabin_lamp_meshes(cabin: CabinHouse) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	for model: Node in cabin.get_children():
+		for child: Node in model.get_children():
+			var mi := child as MeshInstance3D
+			if mi != null and mi.material_override != null \
+					and mi.material_override.resource_name.begins_with("lamp"):
+				found.append(mi)
+	return found
+
+
+func test_lamp_emission_out_of_sdfgi_on_high() -> void:
+	# Причина пересвета — канал излучения: emission фонарей срубов
+	# писался в SDFGI, а SDFGI на HIGH без окклюзии «оборачивает» свет
+	# вокруг тонких досок (лавки, навесы Площади). На HIGH фонарь
+	# не участвует в SDFGI (DISABLED); на ULTRA — как было (STATIC),
+	# «Ультру» не трогаем.
+	var cabin := CabinHouse.new()
+	add_child_autofree(cabin)
+	var lamps := _cabin_lamp_meshes(cabin)
+	assert_gt(lamps.size(), 0, "в срубе есть фонарь крыльца (материал lamp)")
+	for mi: MeshInstance3D in lamps:
+		assert_eq(
+			mi.gi_mode, GeometryInstance3D.GI_MODE_STATIC,
+			"до применения уровня — дефолт (STATIC)")
+	cabin.set_quality(GraphicsQuality.Tier.HIGH)
+	for mi: MeshInstance3D in lamps:
+		assert_eq(
+			mi.gi_mode, GeometryInstance3D.GI_MODE_DISABLED,
+			"HIGH: фонарь не пишет излучение в SDFGI")
+	cabin.set_quality(GraphicsQuality.Tier.ULTRA)
+	for mi: MeshInstance3D in lamps:
+		assert_eq(
+			mi.gi_mode, GeometryInstance3D.GI_MODE_STATIC,
+			"ULTRA: фонарь в SDFGI как прежде (не тронуто)")
+	# Ниже HIGH SDFGI нет вовсе — вернём базу ради чистоты переключений.
+	cabin.set_quality(GraphicsQuality.Tier.NORMAL)
+	for mi: MeshInstance3D in lamps:
+		assert_eq(
+			mi.gi_mode, GeometryInstance3D.GI_MODE_STATIC,
+			"NORMAL: база (SDFGI выключен, gi_mode не важен)")
+
+
+# --- П16 п. 9/10: авто-замер F3 и галочка окклюзии ---
+
+func test_f3_occlusion_checkbox() -> void:
+	# П16 п. 5 включил окклюзию проектом, п. 9/10 — галочка в панели:
+	# эффект уровня на любом тире (окклюзия дешёвая), снятая галочка
+	# снимает её с viewport сцены, возврат включает.
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	assert_true(panel.EFFECTS.has(&"occl"), "галочка «Окклюзия» есть")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.HIGH)
+	assert_true(
+		panel._tier_effect_on(&"occl"),
+		"HIGH: окклюзия — эффект уровня (включена проектом)")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.SIMPLE)
+	assert_true(
+		panel._tier_effect_on(&"occl"),
+		"SIMPLE: окклюзия тоже эффект уровня (дёшева)")
+	# Выключение/возврат дёргает RenderingServer без ошибок (гетчера
+	# у настройки нет — проверяем вызов и код панели).
+	var code := FileAccess.get_file_as_string("res://ui/debug_panel.gd")
+	assert_true(
+		code.contains("viewport_set_use_occlusion_culling"),
+		"галочка occl переключает окклюзию viewport")
+	panel._on_effect_toggled(false, &"occl")
+	panel._on_effect_toggled(true, &"occl")
+
+
+func test_f3_auto_measure_runs_and_restores() -> void:
+	# П16 п. 9: авто-замер — базовый шаг + по шагу на каждый активный
+	# эффект; эффекты возвращаются уровнем, отчёт содержит базу и все
+	# эффекты, отсортированные по экономии. Прогон ускоренный (параметры
+	# start_auto_measure), в панели — константы по SPEC (4 с).
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	var env := Environment.new()
+	var sun := DirectionalLight3D.new()
+	add_child_autofree(sun)
+	GraphicsQuality.apply(env, sun, GraphicsQuality.Tier.HIGH)
+	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
+	var pressed_before: int = 0
+	for id: StringName in panel.EFFECTS:
+		if panel._boxes[id].button_pressed:
+			pressed_before += 1
+	panel.start_auto_measure(0.05, 0.01)
+	assert_true(panel._auto_running, "авто-замер запущен")
+	# Тикаем _process сами (панель может быть закрыта) с таймаутом:
+	# шаг 0.06 с × (16 эффектов HIGH + база) — до 500 кадров.
+	var frames := 0
+	while panel._auto_running and frames < 500:
+		panel._process(0.016)
+		frames += 1
+	assert_false(panel._auto_running, "авто-замер завершился (%d кадров)" % frames)
+	# По строке на каждый активный эффект уровня (на HIGH включены все).
+	assert_eq(
+		panel._auto_rows.size(), panel._auto_queue.size(),
+		"строк отчёта — по числу эффектов очереди")
+	assert_eq(
+		panel._auto_queue.size(), pressed_before,
+		"в очереди все эффекты уровня (все галочки стояли)")
+	# Все галочки остались включёнными (замер их не двигает).
+	for id: StringName in panel.EFFECTS:
+		assert_true(
+			panel._boxes[id].button_pressed,
+			"галочка %s после замера включена" % id)
+	# Эффекты уровня возвращены (замер выключал и вернул).
+	assert_true(env.sdfgi_enabled, "SDFGI возвращён уровнем")
+	assert_true(env.ssr_enabled, "SSR возвращён уровнем")
+	assert_true(env.volumetric_fog_enabled, "туман возвращён уровнем")
+	# Отчёт: база, каждый эффект, сортировка по убыванию экономии.
+	var report := panel.build_auto_report()
+	assert_true(report.contains("Auto measure:"), "в отчёте есть строка базы")
+	assert_true(report.contains(tr("BU_DBG_SDFGI")), "в отчёте есть SDFGI")
+	assert_true(report.contains(tr("BU_DBG_VFOG")), "в отчёте есть туман")
+	var saved: Array[float] = []
+	for row: Dictionary in panel._auto_rows:
+		saved.append(panel._auto_base_ms - float(row["ms"]))
+	for i: int in range(1, saved.size()):
+		assert_true(
+			saved[i - 1] >= saved[i],
+			"отчёт отсортирован по экономии по убыванию")
+	# Отмена: прогон не начат заново, повторный запуск и отмена на первом
+	# эффектном шаге возвращают состояние уровня.
+	panel.start_auto_measure(0.5, 0.01)
+	assert_true(panel._auto_running, "второй прогон запущен")
+	for i: int in 60:
+		panel._process(0.016)  # база 0.51 с — уходим в первый эффект
+	assert_true(panel._auto_index >= 0, "идёт эффектный шаг")
+	panel._on_auto_button()  # повторный щелчок — отмена
+	assert_false(panel._auto_running, "отмена остановила прогон")
+	assert_true(env.sdfgi_enabled, "после отмены эффект уровня возвращён")
+	assert_eq(
+		panel._auto_button.text, tr("BU_DBG_AUTOM"),
+		"после отмены кнопка в исходный текст")

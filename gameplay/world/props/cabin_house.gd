@@ -74,6 +74,11 @@ const WOOD_TINTS: Array[Color] = [
 ## Уровень последнего set_quality (П16 п. 1: set_lamp_shadows на ULTRA
 ## включает тени всем лампам, на HIGH их держит менеджер ближайших).
 var _tier: int = GraphicsQuality.Tier.HIGH
+## Меши фонарей крылец (материал «lamp», светится emission — П16 п. 8:
+## на HIGH их излучение не пишет в SDFGI, иначе оранжевый отскок
+## «оборачивается» вокруг тонких досок лавок и навесов Площади —
+## SDFGI на HIGH без окклюзии, ячейки крупнее толщины доски).
+var _lamp_meshes: Array[MeshInstance3D] = []
 
 ## Активные срубы сцены: камера спрашивает player_inside(), чтобы внутри
 ## дома прижать руку. Бокс интерьера по карте полов (tools/probe_boxes.gd,
@@ -145,6 +150,14 @@ func door_world_pos() -> Vector3:
 func set_quality(tier: int) -> void:
 	var hi := tier >= GraphicsQuality.Tier.HIGH
 	_tier = tier
+	# П16 п. 8: на HIGH фонарь не пишет излучение в SDFGI (DISABLED) —
+	# оранжевый отскок не просвечивает тонкие доски Площади; на ULTRA
+	# и ниже — как было (STATIC), «Ультра» не трогаем.
+	for lamp: MeshInstance3D in _lamp_meshes:
+		lamp.gi_mode = (
+			GeometryInstance3D.GI_MODE_DISABLED
+			if tier == GraphicsQuality.Tier.HIGH
+			else GeometryInstance3D.GI_MODE_STATIC)
 	for child: Node in get_children():
 		var light := child as OmniLight3D
 		if light != null:
@@ -235,6 +248,9 @@ func _build() -> void:
 			continue
 		if mat_name != "":
 			mi.material_override = _material(mat_name, tint)
+			if mat_name == "lamp":
+				# П16 п. 8: запоминаем для gi_mode в set_quality.
+				_lamp_meshes.append(mi)
 	# П16 п. 5: окклюдер корпуса — BoxOccluder3D по габариту мешей EXT_*
 	# (чуть утоплен внутрь, чтобы не съедать видимость через окна и дверь;
 	# стоит на всех уровнях — построение разовое, отсечение дёшево).

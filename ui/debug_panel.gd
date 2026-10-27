@@ -18,12 +18,12 @@ const UPDATE_INTERVAL: float = 0.25
 ## Окно усреднения отчёта, с (П13 3.4).
 const REPORT_WINDOW_SEC: float = 5.0
 ## Галочки эффектов (П13 3.2; П14 5.2 — пять новых для замеров земли
-## и воды; П15 7 — «Каустика» и «Круги на воде»): порядок = порядок
-## в панели.
+## и воды; П15 7 — «Каустика» и «Круги на воде»; П16 9 — «Окклюзия»):
+## порядок = порядок в панели.
 const EFFECTS: Array[StringName] = [
 	&"sdfgi", &"ssil", &"ssr", &"ssao", &"vfog", &"glow", &"aa",
 	&"lamps", &"grass", &"detail", &"pom", &"clutter", &"refr", &"ripple",
-	&"caustic", &"rings",
+	&"caustic", &"rings", &"occl",
 ]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
@@ -34,6 +34,7 @@ const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"clutter": "BU_DBG_CLUTTER", &"refr": "BU_DBG_REFRACTION",
 	&"ripple": "BU_DBG_RIPPLE",
 	&"caustic": "BU_DBG_CAUSTIC", &"rings": "BU_DBG_RINGS",
+	&"occl": "BU_DBG_OCCLUSION",
 }
 ## Названия уровней для строк панели и отчёта (индекс = Tier).
 const TIER_LABELS: Array[String] = [
@@ -41,8 +42,9 @@ const TIER_LABELS: Array[String] = [
 ]
 ## Позиция блока эффектов: правее нижнего информационного блока,
 ## вмещается в минимальную канву 1280×720 (П14 5.2 — галочек стало 14,
-## блок поднят, чтобы не вылезал за нижний край).
-const EFFECTS_POS: Vector2 = Vector2(690, 290)
+## блок поднят, чтобы не вылезал за нижний край; П16 9 — 17 галочек
+## и кнопка авто-замера, поднят ещё).
+const EFFECTS_POS: Vector2 = Vector2(690, 232)
 ## Ползунки вкладки «Вода» (П15 8.1): id — ключ состояния, label — ключ
 ## перевода, диапазон и шаг — как hint_range шейдера, def — номинал из
 ## констант WaterArea («Сбросить» возвращает их), const — имя константы
@@ -133,6 +135,32 @@ var _mouse_was_captured: bool = false
 ## Сэмплы (время с запуска, FPS, GPU-мс) — окно REPORT_WINDOW_SEC.
 var _samples: Array[Vector3] = []
 
+# --- Авто-замер эффектов (П16 п. 9) ---
+
+## Кнопка «Авто-замер»: сначала базовый шаг (уровень целиком), затем по
+## шагу на каждый активный эффект уровня — эффект выключен, GPU-мс
+## меряется; в конце отсортированный по экономии отчёт идёт в буфер.
+## Первые AUTO_WARMUP_SEC шага сэмплы не копятся: после переключения
+## эффекта движок компилирует шейдеры — кадры нетипично долгие.
+const AUTO_STEP_SEC: float = 4.0
+const AUTO_WARMUP_SEC: float = 0.75
+
+var _auto_button: Button
+var _auto_running: bool = false
+## Длительности шага/прогрева (параметры start_auto_measure — тесты
+## прогоняют быстро, в панели — константы).
+var _auto_step_sec: float = AUTO_STEP_SEC
+var _auto_warmup_sec: float = AUTO_WARMUP_SEC
+## Очередь эффектов уровня (включённых сейчас), −1 в _auto_index —
+## базовый шаг «всё включено».
+var _auto_queue: Array[StringName] = []
+var _auto_index: int = -1
+var _auto_time: float = 0.0
+var _auto_samples: Array[float] = []
+var _auto_base_ms: float = 0.0
+## {id: StringName, ms: float} — GPU-мс шага «без эффекта».
+var _auto_rows: Array[Dictionary] = []
+
 
 ## Показывать позицию этого игрока (вызывает сцена мира).
 func watch_player(player: Player) -> void:
@@ -212,6 +240,13 @@ func _build_effects(root: Control) -> void:
 	copy.add_theme_font_size_override("font_size", 13)
 	copy.pressed.connect(_copy_report)
 	box.add_child(copy)
+	# П16 п. 9: кнопка авто-замера — гоняет эффекты по одному, в конце
+	# кладёт отсортированный отчёт в буфер; во время прогона кнопка — отмена.
+	_auto_button = Button.new()
+	_auto_button.text = tr("BU_DBG_AUTOM")
+	_auto_button.add_theme_font_size_override("font_size", 13)
+	_auto_button.pressed.connect(_on_auto_button)
+	box.add_child(_auto_button)
 	_build_water_tab(tabs)
 
 
@@ -308,6 +343,9 @@ func _process(delta: float) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			_mouse_was_captured = false
 	_was_pressed = pressed
+	# Авто-замер (П16 п. 9) тикает и при закрытой панели — прогон длинный.
+	if _auto_running:
+		_auto_tick(delta)
 	if not _visible_panel:
 		return
 	_accum += delta
@@ -436,6 +474,13 @@ func _on_effect_toggled(on: bool, id: StringName) -> void:
 		&"rings":
 			for node: Node in get_tree().get_nodes_in_group("water_surface"):
 				(node as WaterArea).set_ripples(value)
+		&"occl":
+			# П16 п. 5/9: окклюзия включена проектом на всех уровнях —
+			# галочка снимает её с viewport сцены (гетчера нет, вызов
+			# проверен тестом), возврат включает обратно.
+			if is_inside_tree():
+				RenderingServer.viewport_set_use_occlusion_culling(
+					get_viewport().get_viewport_rid(), value)
 
 
 ## Включён ли эффект на активном уровне: возврат галочки возвращает
@@ -463,6 +508,9 @@ func _tier_effect_on(id: StringName) -> bool:
 			# Каустика и круги (П15 5-7) — только полная версия шейдера
 			# (HIGH/ULTRA); на SIMPLE/NORMAL эффектов попросту нет.
 			return _tier >= GraphicsQuality.Tier.HIGH
+		&"occl":
+			# Окклюзия (П16 п. 5) включена проектом на всех уровнях.
+			return true
 	return true
 
 
@@ -502,6 +550,116 @@ func _copy_report() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	DisplayServer.clipboard_set(build_report())
+
+
+# --- Авто-замер эффектов (П16 п. 9) ---
+
+## Кнопка: свободна — запуск, идёт прогон — отмена (эффекты вернуть,
+## отчёт не копировать).
+func _on_auto_button() -> void:
+	if _auto_running:
+		_auto_finish(true)
+	else:
+		start_auto_measure()
+
+
+## Запуск прогона: базовый шаг «уровень целиком» и по шагу на каждый
+## активный сейчас эффект (галочка стоит, эффект есть на уровне).
+## Длительности — параметры для тестов, кнопка зовёт с константами.
+func start_auto_measure(
+	step_sec: float = AUTO_STEP_SEC, warmup_sec: float = AUTO_WARMUP_SEC
+) -> void:
+	if _env == null:
+		return
+	_auto_queue.clear()
+	for id: StringName in EFFECTS:
+		if _boxes.has(id) and _boxes[id].button_pressed \
+				and _tier_effect_on(id):
+			_auto_queue.append(id)
+	_auto_step_sec = maxf(step_sec, 0.001)
+	_auto_warmup_sec = clampf(warmup_sec, 0.0, _auto_step_sec * 0.5)
+	_auto_index = -1
+	_auto_rows.clear()
+	_auto_base_ms = 0.0
+	_auto_running = true
+	_auto_begin_step()
+
+
+## Начало шага: у эффектного шага эффект выключен (базовый — уровень
+## целиком), сэмплы копятся после прогрева.
+func _auto_begin_step() -> void:
+	_auto_time = 0.0
+	_auto_samples.clear()
+	if _auto_index >= 0 and _auto_index < _auto_queue.size():
+		_on_effect_toggled(false, _auto_queue[_auto_index])
+	if _auto_button != null:
+		_auto_button.text = tr("BU_DBG_AUTOM_RUN") % [
+			_auto_index + 2, _auto_queue.size() + 1]
+
+
+## Тик кадра: после прогрева копить GPU-мс, по концу окна — следующий шаг.
+func _auto_tick(delta: float) -> void:
+	_auto_time += delta
+	if _auto_time >= _auto_warmup_sec and _vp_rid.is_valid():
+		_auto_samples.append(
+			RenderingServer.viewport_get_measured_render_time_gpu(_vp_rid))
+	if _auto_time >= _auto_warmup_sec + _auto_step_sec:
+		_auto_end_step()
+
+
+## Конец шага: среднее шага в базу/строку, эффект вернуть уровнем,
+## следующий шаг или финиш.
+func _auto_end_step() -> void:
+	var avg: float = 0.0
+	if not _auto_samples.is_empty():
+		var sum: float = 0.0
+		for ms: float in _auto_samples:
+			sum += ms
+		avg = sum / _auto_samples.size()
+	if _auto_index < 0:
+		_auto_base_ms = avg
+	else:
+		_on_effect_toggled(true, _auto_queue[_auto_index])
+		_auto_rows.append({"id": _auto_queue[_auto_index], "ms": avg})
+	_auto_index += 1
+	if _auto_index >= _auto_queue.size():
+		_auto_finish(false)
+	else:
+		_auto_begin_step()
+
+
+## Финиш/отмена: вернуть выключенный эффект текущего шага (отмена),
+## кнопку — в исходный текст; не отмена — отчёт в буфер.
+func _auto_finish(cancelled: bool) -> void:
+	if cancelled and _auto_index >= 0 and _auto_index < _auto_queue.size():
+		_on_effect_toggled(true, _auto_queue[_auto_index])
+	_auto_running = false
+	if _auto_button != null:
+		_auto_button.text = tr("BU_DBG_AUTOM")
+	if not cancelled and DisplayServer.get_name() != "headless":
+		DisplayServer.clipboard_set(build_auto_report())
+
+
+## Отчёт авто-замера: экономия каждого эффекта по убыванию — что
+## выключать в первую очередь (экономия = база − GPU-мс без эффекта).
+func build_auto_report() -> String:
+	var lines: Array[String] = []
+	lines.append("GPU: %s" % RenderingServer.get_video_adapter_name())
+	lines.append("Quality: %s (%d)" % [tr(TIER_LABELS[_tier]), _tier])
+	if is_inside_tree():
+		lines.append("3D resolution: %s" % _res3d_text())
+	lines.append("Auto measure: %.1f s per effect, base %.2f GPU ms" % [
+		_auto_step_sec, _auto_base_ms])
+	var rows := _auto_rows.duplicate()
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["ms"]) < float(b["ms"]))
+	for row: Dictionary in rows:
+		lines.append("%s: -%.2f GPU ms (%.2f without)" % [
+			tr(EFFECT_LABELS[row["id"]]),
+			_auto_base_ms - float(row["ms"]),
+			float(row["ms"]),
+		])
+	return "\n".join(lines)
 
 
 # --- Вкладка «Вода» (П15 8) ---

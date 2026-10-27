@@ -166,6 +166,9 @@ BU_DBG_EFFECTS_TAB,Эффекты,Effects
 BU_DBG_WATER_TAB,Вода,Water
 BU_DBG_CAUSTIC,Каустика (блики на дне),Caustics (floor glints)
 BU_DBG_RINGS,Круги на воде,Water rings
+BU_DBG_OCCLUSION,Окклюзия (отсечение невидимого),Occlusion culling
+BU_DBG_AUTOM,Авто-замер (4 с/эффект),Auto measure (4 s/effect)
+BU_DBG_AUTOM_RUN,Авто-замер %d/%d — щёлкните для отмены,Auto measure %d/%d — click to cancel
 BU_W_LAKE_DEEP,Озеро: цвет глубины,Lake: deep color
 BU_W_LAKE_SHALLOW,Озеро: цвет мелководья,Lake: shallow color
 BU_W_SEA_DEEP,Море: цвет глубины,Sea: deep color

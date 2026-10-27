@@ -64,9 +64,9 @@ func test_high_recipe_constants_match_spec() -> void:
 		GraphicsQuality.HIGH_LIGHT_ANGULAR_DISTANCE,
 		GraphicsQuality.ULTRA_LIGHT_ANGULAR_DISTANCE,
 		"полутень HIGH чуть уже ULTRA")
-	# П13 1.7: объёмный туман — сетка 128×64, между базой и ULTRA.
-	assert_eq(GraphicsQuality.HIGH_VF_WIDTH, 128, "ширина сетки тумана — 128")
-	assert_eq(GraphicsQuality.HIGH_VF_DEPTH, 64, "глубина сетки тумана — 64")
+	# П13 1.7 (П16 п. 7): объёмный туман — сетка 96×48, между базой и ULTRA.
+	assert_eq(GraphicsQuality.HIGH_VF_WIDTH, 96, "ширина сетки тумана — 96")
+	assert_eq(GraphicsQuality.HIGH_VF_DEPTH, 48, "глубина сетки тумана — 48")
 	assert_lt(
 		GraphicsQuality.HIGH_VF_WIDTH * GraphicsQuality.HIGH_VF_DEPTH,
 		GraphicsQuality.ULTRA_VF_WIDTH * GraphicsQuality.ULTRA_VF_DEPTH,
@@ -102,7 +102,7 @@ func test_high_recipe_applied_to_env_and_viewport() -> void:
 	assert_true(env.sdfgi_enabled, "HIGH: SDFGI включён (лёгкий)")
 	assert_eq(
 		env.sdfgi_cascades, GraphicsQuality.HIGH_SDFGI_CASCADES,
-		"HIGH: каскады SDFGI — 4")
+		"HIGH: каскады SDFGI — 3 (П16 п. 6)")
 	assert_false(
 		env.sdfgi_use_occlusion, "HIGH: без окклюзии SDFGI (самый дорогой проход)")
 	assert_true(
@@ -381,9 +381,9 @@ func test_water_fade_simple_only() -> void:
 
 func test_f3_panel_toggles_effects() -> void:
 	# П13 3.2 + П14 5.2: 14 галочек; П15 7 — ещё «Каустика» и «Круги
-	# на воде» (16). Снятая выключает эффект, повторная возвращает
-	# состояние уровня (не «всё включено»); повторное применение
-	# качества сбрасывает галочки.
+	# на воде»; П16 9 — «Окклюзия» (17). Снятая выключает эффект,
+	# повторная возвращает состояние уровня (не «всё включено»);
+	# повторное применение качества сбрасывает галочки.
 	var panel := DebugPanel.new()
 	add_child_autofree(panel)
 	var env := Environment.new()
@@ -391,14 +391,14 @@ func test_f3_panel_toggles_effects() -> void:
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	assert_eq(
 		panel._boxes.size(), panel.EFFECTS.size(),
-		"галочек столько же, сколько эффектов (16)")
+		"галочек столько же, сколько эффектов (17)")
 	var checks: Array[CheckBox] = []
 	for id: StringName in panel.EFFECTS:
 		assert_true(
 			panel._boxes[id].button_pressed,
 			"галочка %s включена после применения уровня" % id)
 		checks.append(panel._boxes[id])
-	assert_eq(checks.size(), 16, "эффектов — 16")
+	assert_eq(checks.size(), 17, "эффектов — 17")
 	var env_props: Dictionary[StringName, String] = {
 		&"sdfgi": "sdfgi_enabled", &"ssil": "ssil_enabled",
 		&"ssr": "ssr_enabled", &"ssao": "ssao_enabled",
@@ -516,6 +516,8 @@ func test_f3_and_menu_texts_translated() -> void:
 		# П14 5.2: пять новых галочек панели замера.
 		"BU_DBG_DETAIL", "BU_DBG_POM", "BU_DBG_CLUTTER",
 		"BU_DBG_REFRACTION", "BU_DBG_RIPPLE",
+		# П16 9: галочка окклюзии и кнопка авто-замера.
+		"BU_DBG_OCCLUSION", "BU_DBG_AUTOM", "BU_DBG_AUTOM_RUN",
 		"BU_SET_RES3D", "BU_DESC_RES3D_0", "BU_DESC_RES3D_1",
 		"BU_DESC_RES3D_2", "BU_DESC_RES3D_3", "BU_DESC_QUALITY_0",
 		"BU_DESC_QUALITY_1", "BU_DESC_QUALITY_2", "BU_DESC_QUALITY_3",
