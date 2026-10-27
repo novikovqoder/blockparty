@@ -356,8 +356,9 @@ func test_water_fade_simple_only() -> void:
 # --- П13 3: панель замера F3 ---
 
 func test_f3_panel_toggles_effects() -> void:
-	# П13 3.2 + П14 5.2: 14 галочек; снятая выключает эффект, повторная
-	# возвращает состояние уровня (не «всё включено»); повторное применение
+	# П13 3.2 + П14 5.2: 14 галочек; П15 7 — ещё «Каустика» и «Круги
+	# на воде» (16). Снятая выключает эффект, повторная возвращает
+	# состояние уровня (не «всё включено»); повторное применение
 	# качества сбрасывает галочки.
 	var panel := DebugPanel.new()
 	add_child_autofree(panel)
@@ -366,14 +367,14 @@ func test_f3_panel_toggles_effects() -> void:
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	assert_eq(
 		panel._boxes.size(), panel.EFFECTS.size(),
-		"галочек столько же, сколько эффектов (14)")
+		"галочек столько же, сколько эффектов (16)")
 	var checks: Array[CheckBox] = []
 	for id: StringName in panel.EFFECTS:
 		assert_true(
 			panel._boxes[id].button_pressed,
 			"галочка %s включена после применения уровня" % id)
 		checks.append(panel._boxes[id])
-	assert_eq(checks.size(), 14, "эффектов — 14")
+	assert_eq(checks.size(), 16, "эффектов — 16")
 	var env_props: Dictionary[StringName, String] = {
 		&"sdfgi": "sdfgi_enabled", &"ssil": "ssil_enabled",
 		&"ssr": "ssr_enabled", &"ssao": "ssao_enabled",

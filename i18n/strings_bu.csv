@@ -162,3 +162,26 @@ BU_DBG_CLUTTER,Мелочь на земле,Ground clutter
 BU_DBG_REFRACTION,Преломление воды,Water refraction
 BU_DBG_RIPPLE,Рябь воды,Water ripple
 BU_DBG_COPY,Скопировать отчёт,Copy report
+BU_DBG_EFFECTS_TAB,Эффекты,Effects
+BU_DBG_WATER_TAB,Вода,Water
+BU_DBG_CAUSTIC,Каустика (блики на дне),Caustics (floor glints)
+BU_DBG_RINGS,Круги на воде,Water rings
+BU_W_LAKE_DEEP,Озеро: цвет глубины,Lake: deep color
+BU_W_LAKE_SHALLOW,Озеро: цвет мелководья,Lake: shallow color
+BU_W_SEA_DEEP,Море: цвет глубины,Sea: deep color
+BU_W_SEA_SHALLOW,Море: цвет мелководья,Sea: shallow color
+BU_W_ABSORPTION,Поглощение (мутность),Absorption (murkiness)
+BU_W_WAVE_H_LAKE,Озеро: высота волн,Lake: wave height
+BU_W_WAVE_H_SEA,Море: высота волн,Sea: wave height
+BU_W_WAVE_L_LAKE,Озеро: длина волн,Lake: wave length
+BU_W_WAVE_L_SEA,Море: длина волн,Sea: wave length
+BU_W_RIPPLE_STRENGTH,Сила ряби,Ripple strength
+BU_W_RIPPLE_SCALE,Масштаб ряби,Ripple scale
+BU_W_REFRACTION,Сила преломления,Refraction strength
+BU_W_FOAM_AMOUNT,Пена: количество,Foam: amount
+BU_W_FOAM_WIDTH,Пена: ширина полосы,Foam: band width
+BU_W_ROUGH_NEAR,Шероховатость вблизи,Roughness near
+BU_W_ROUGH_FAR,Шероховатость у горизонта,Roughness far
+BU_W_CAUSTIC,Яркость каустики,Caustic brightness
+BU_W_RESET,Сбросить,Reset
+BU_W_COPY,Скопировать значения,Copy values

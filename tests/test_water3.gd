@@ -639,3 +639,237 @@ func _live_ripple_slots(material: ShaderMaterial) -> int:
 		if slot.w > 0.001:
 			count += 1
 	return count
+
+
+# --- П15 7-8: галочки F3 и вкладка «Вода» ---
+
+func test_f3_caustic_and_rings_checkboxes() -> void:
+	# П15 7: галочки «Каустика» и «Круги на воде» — только HIGH/ULTRA
+	# (в дешёвом шейдере эффектов нет); снятая выключает эффект живой
+	# зоны, повторная возвращает.
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	panel.watch_graphics(
+		Environment.new(), null, GraphicsQuality.Tier.HIGH)
+	assert_true(panel._boxes.has(&"caustic"), "галочка «Каустика» есть")
+	assert_true(panel._boxes.has(&"rings"), "галочка «Круги» есть")
+	assert_true(panel._tier_effect_on(&"caustic"), "HIGH: каустика — уровень")
+	assert_true(panel._tier_effect_on(&"rings"), "HIGH: круги — уровень")
+	panel.watch_graphics(
+		Environment.new(), null, GraphicsQuality.Tier.SIMPLE)
+	assert_false(panel._tier_effect_on(&"caustic"),
+		"SIMPLE: каустики в дешёвом шейдере нет")
+	assert_false(panel._tier_effect_on(&"rings"),
+		"SIMPLE: кругов в дешёвом шейдере нет")
+	# Живое переключение: зона воды в группе water_surface (панель —
+	# обратно на HIGH, возврат галочки возвращает эффект уровня).
+	panel.watch_graphics(
+		Environment.new(), null, GraphicsQuality.Tier.HIGH)
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	panel._boxes[&"caustic"].button_pressed = false
+	assert_almost_eq(
+		float(material.get_shader_parameter("caustic_brightness")),
+		0.0, 0.001, "галочка выключила каустику")
+	panel._boxes[&"caustic"].button_pressed = true
+	assert_almost_eq(
+		float(material.get_shader_parameter("caustic_brightness")),
+		1.0, 0.001, "повторная галочка вернула каустику")
+	panel._boxes[&"rings"].button_pressed = false
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_fx_amount")),
+		0.0, 0.001, "галочка выключила круги")
+	panel._boxes[&"rings"].button_pressed = true
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_fx_amount")),
+		1.0, 0.001, "повторная галочка вернула круги")
+	WorldMaterials.textured_headless = false
+
+
+func test_water_tab_sliders_change_own_parameters() -> void:
+	# П15 8.5: каждый ползунок меняет свой параметр материала воды
+	# (морская зона; ползунки озера её не трогают — множители раздельные).
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	for def: Dictionary in panel.WATER_SLIDERS:
+		var id: StringName = def["id"]
+		var slider: HSlider = panel._sliders[id]
+		var waves_before: PackedVector4Array = \
+			material.get_shader_parameter("waves_a")
+		slider.value = float(def["min"]) \
+			+ (float(def["max"]) - float(def["min"])) * 0.7
+		var applied: float = slider.value
+		match id:
+			&"abs":
+				assert_true(_vec3_close(material.get_shader_parameter(
+					"absorption"), WaterArea.SEA_ABSORPTION * applied),
+					"поглощение = база моря × ползунок")
+			&"wave_h_lake":
+				assert_eq(material.get_shader_parameter("waves_a")
+					as PackedVector4Array, waves_before,
+					"ползунок озера не трогает морской спектр")
+			&"wave_h_sea":
+				assert_almost_eq((material.get_shader_parameter("waves_a")
+					as PackedVector4Array)[0].w,
+					waves_before[0].w * applied, 0.0001,
+					"высота волн моря × ползунок (первая волна)")
+			&"wave_l_lake":
+				assert_eq(material.get_shader_parameter("waves_a")
+					as PackedVector4Array, waves_before,
+					"ползунок озера не трогает морской спектр")
+			&"wave_l_sea":
+				assert_almost_eq((material.get_shader_parameter("waves_a")
+					as PackedVector4Array)[0].z,
+					waves_before[0].z / applied, 0.0001,
+					"длина волн моря: k делится на ползунок")
+			&"ripple_strength":
+				assert_almost_eq(float(
+					material.get_shader_parameter("ripple_strength")),
+					applied, 0.001, "сила ряби — ползунок")
+			&"ripple_scale":
+				assert_almost_eq(float(
+					material.get_shader_parameter("ripple_scale")),
+					applied, 0.001, "масштаб ряби — ползунок")
+			&"refraction":
+				assert_almost_eq(float(
+					material.get_shader_parameter("refraction_amount")),
+					applied, 0.001, "сила преломления — ползунок")
+			&"foam_amount":
+				assert_almost_eq(float(
+					material.get_shader_parameter("foam_amount")),
+					WaterArea.SEA_FOAM * applied, 0.001,
+					"количество пены — база моря × ползунок")
+			&"foam_width":
+				assert_almost_eq(float(
+					material.get_shader_parameter("foam_width")),
+					applied, 0.001, "ширина пены — ползунок")
+			&"rough_near":
+				assert_almost_eq(float(
+					material.get_shader_parameter("roughness_near")),
+					applied, 0.001, "шероховатость вблизи — ползунок")
+			&"rough_far":
+				assert_almost_eq(float(
+					material.get_shader_parameter("roughness_far")),
+					applied, 0.001, "шероховатость у горизонта — ползунок")
+			&"caustic":
+				assert_almost_eq(float(
+					material.get_shader_parameter("caustic_brightness")),
+					applied, 0.001, "яркость каустики — ползунок")
+	WorldMaterials.textured_headless = false
+
+
+func test_water_tab_colors_change_palette() -> void:
+	# П15 8.1/8.5: цвета мелководья и глубины — раздельно озеро/море;
+	# морской зоне пишут морские пикеры, озёрные её не трогают.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	var deep_before: Color = material.get_shader_parameter("color_deep")
+	var shallow_before: Color = \
+		material.get_shader_parameter("color_shallow")
+	# Программное присвоение color у ColorPickerButton сигнала не шлёт
+	# (color_changed — из попапа пикера), поэтому связка проверяется
+	# подключением, а обработчик зовётся как его зовёт пикер.
+	assert_false(panel._pickers[&"sea_deep"]
+		.color_changed.get_connections().is_empty(),
+		"пикер глубины моря подключён к панели")
+	panel._on_water_color_changed(Color(0.5, 0.1, 0.1), &"lake_deep")
+	panel._on_water_color_changed(Color(0.6, 0.2, 0.2), &"lake_shallow")
+	assert_eq(material.get_shader_parameter("color_deep"), deep_before,
+		"пикер озера не трогает глубинный цвет моря")
+	assert_eq(material.get_shader_parameter("color_shallow"),
+		shallow_before, "пикер озера не трогает цвет мелководья моря")
+	var new_deep := Color(0.05, 0.06, 0.09)
+	var new_shallow := Color(0.2, 0.25, 0.3)
+	panel._on_water_color_changed(new_deep, &"sea_deep")
+	panel._on_water_color_changed(new_shallow, &"sea_shallow")
+	assert_eq(material.get_shader_parameter("color_deep"), new_deep,
+		"пикер моря пишет глубинный цвет")
+	assert_eq(material.get_shader_parameter("color_shallow"), new_shallow,
+		"пикер моря пишет цвет мелководья")
+	WorldMaterials.textured_headless = false
+
+
+func test_water_tab_reset_returns_defaults() -> void:
+	# П15 8.2: «Сбросить» возвращает номиналы всем ползункам, цветам
+	# и самому материалу воды.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	for def: Dictionary in panel.WATER_SLIDERS:
+		var slider: HSlider = panel._sliders[def["id"]]
+		slider.value = float(def["max"])
+	for def: Dictionary in panel.WATER_COLORS:
+		panel._pickers[def["id"]].color = Color(0.9, 0.1, 0.9)
+	panel._reset_water()
+	for def: Dictionary in panel.WATER_SLIDERS:
+		assert_almost_eq(panel._sliders[def["id"]].value,
+			float(def["def"]), 0.0001,
+			"«Сбросить» вернул ползунок %s" % def["const"])
+	for def: Dictionary in panel.WATER_COLORS:
+		assert_eq(panel._pickers[def["id"]].color, def["def"],
+			"«Сбросить» вернул цвет %s" % def["const"])
+	assert_almost_eq(float(
+		material.get_shader_parameter("refraction_amount")), 1.0, 0.001,
+		"материал: преломление вернулось к номиналу")
+	assert_almost_eq(float(
+		material.get_shader_parameter("caustic_brightness")), 1.0, 0.001,
+		"материал: каустика вернулась к номиналу")
+	assert_true(_vec3_close(material.get_shader_parameter("absorption"),
+		WaterArea.SEA_ABSORPTION), "материал: поглощение вернулось")
+	assert_eq(material.get_shader_parameter("color_deep"),
+		WaterArea.SEA_DEEP, "материал: глубинный цвет вернулся")
+	WorldMaterials.textured_headless = false
+
+
+func test_water_tab_copy_contains_all() -> void:
+	# П15 8.3: текст «Скопировать значения» — константы WaterArea со
+	# всеми параметрами; числа можно вставить в water_area.gd как есть.
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	var text := panel.build_water_values_text()
+	for const_name: String in [
+		"LAKE_DEEP", "LAKE_SHALLOW", "SEA_DEEP", "SEA_SHALLOW",
+		"ABSORPTION_MULT", "WAVE_HEIGHT_MULT_LAKE", "WAVE_HEIGHT_MULT_SEA",
+		"WAVE_LENGTH_MULT_LAKE", "WAVE_LENGTH_MULT_SEA",
+		"RIPPLE_STRENGTH_MULT", "RIPPLE_SCALE_MULT", "REFRACTION_MULT",
+		"FOAM_MULT", "FOAM_WIDTH", "ROUGHNESS_NEAR", "ROUGHNESS_FAR",
+		"CAUSTIC_BRIGHTNESS",
+	]:
+		assert_true(text.contains("const %s:" % const_name),
+			"в тексте есть константа %s" % const_name)
+	# Числа — те же, что в константах WaterArea.
+	assert_true(text.contains("const FOAM_WIDTH: float = 0.06"),
+		"ширина пены — 0.06")
+	assert_true(text.contains("const ROUGHNESS_NEAR: float = 0.03"),
+		"шероховатость вблизи — 0.03")
+	assert_true(text.contains("const CAUSTIC_BRIGHTNESS: float = 1.0"),
+		"яркость каустики — 1.0")
+	assert_true(text.contains("const LAKE_DEEP: Color = "
+		+ "Color(0.016, 0.035, 0.028, 1.0)"), "палитра озера — числами")
+	# Подвинутый ползунок попадает в текст своим числом.
+	panel._sliders[&"caustic"].value = 2.4
+	assert_true(panel.build_water_values_text().contains(
+		"const CAUSTIC_BRIGHTNESS: float = 2.4"),
+		"текущее значение ползунка печатается")
+
+
+static func _vec3_close(got: Variant, expected: Vector3) -> bool:
+	if got is not Vector3:
+		return false
+	var v: Vector3 = got
+	return is_equal_approx(v.x, expected.x) \
+		and is_equal_approx(v.y, expected.y) \
+		and is_equal_approx(v.z, expected.z)

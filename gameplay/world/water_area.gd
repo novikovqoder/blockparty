@@ -109,7 +109,7 @@ var _calm: bool = false
 ## Базовое количество пены зоны (ползунок F3 умножает его).
 var _foam_base: float = SEA_FOAM
 ## Множитель пены от панели F3 (1.0 — номинал).
-var _foam_mult: float = 1.0
+var _foam_mult: float = FOAM_MULT
 ## Ширина полосы пены, м (ползунок F3).
 var _foam_width: float = FOAM_WIDTH
 ## Базовые (дневные) значения цветов, от которых считается ночной спад.
@@ -131,6 +131,19 @@ const RIPPLE_STEP_M: float = 0.55
 const RIPPLE_STRENGTH: float = 0.8
 ## Каустика (номинал яркости, ползунок F3 меняет).
 const CAUSTIC_BRIGHTNESS: float = 1.0
+## Номиналы ползунков вкладки «Вода» (П15 8.1, панель F3): множители
+## от базы. Кнопка «Скопировать значения» печатает эти же имена и
+## числа — текст вставляется прямо в константы (цвета и ширина пены
+## уже выше: LAKE_/SEA_ палитра, FOAM_WIDTH, ROUGHNESS_*).
+const ABSORPTION_MULT: float = 1.0
+const WAVE_HEIGHT_MULT_LAKE: float = 1.0
+const WAVE_HEIGHT_MULT_SEA: float = 1.0
+const WAVE_LENGTH_MULT_LAKE: float = 1.0
+const WAVE_LENGTH_MULT_SEA: float = 1.0
+const RIPPLE_STRENGTH_MULT: float = 1.0
+const RIPPLE_SCALE_MULT: float = 1.0
+const REFRACTION_MULT: float = 1.0
+const FOAM_MULT: float = 1.0
 var _ripples: PackedVector4Array = PackedVector4Array([
 	Vector4.ZERO, Vector4.ZERO, Vector4.ZERO, Vector4.ZERO])
 var _ripples_on: bool = true
@@ -138,6 +151,22 @@ var _caustic_on: bool = true
 var _caustic_brightness: float = CAUSTIC_BRIGHTNESS
 var _local_swimmer: Player = null
 var _last_ripple_xz := Vector2(INF, INF)
+# --- Текущие значения ползунков «Вода» (П15 8.1) ---
+## Держатся, чтобы поверхности, построенные после подстройки (площадка
+## П1 строит воду в рантайме), получили те же значения, и чтобы
+## «Сбросить» в F3 возвращал номиналы. Спектр озеро/море — своя пара
+## множителей на зону (_calm решает, чья).
+var _absorption_mult: float = ABSORPTION_MULT
+var _absorption_base := Vector3.ONE
+var _wave_height_mult: float = 1.0
+var _wave_length_mult: float = 1.0
+var _waves_from_ui: bool = false
+var _ripple_fx_strength: float = RIPPLE_STRENGTH_MULT
+var _ripple_fx_scale: float = RIPPLE_SCALE_MULT
+var _refraction_mult: float = REFRACTION_MULT
+var _rough_near: float = ROUGHNESS_NEAR
+var _rough_far: float = ROUGHNESS_FAR
+var _palette_luma: float = 1.0
 
 
 func _ready() -> void:
@@ -227,13 +256,18 @@ static func ripple_layers_for_tier(tier: int) -> int:
 
 
 ## Спектр волн Герстнера (SPEC П14 4.3) — детерминированный RNG с
-## фиксированным seed: [waves_a, waves_b] по 32 волны, длинные первыми.
+## фиксированным seed: [waves_a, waves_b] по 32 волны, длинными первыми.
 ##   waves_a[i] = (dir.x, dir.y, k = 2π/λ, амплитуда)
 ##   waves_b[i] = (ω = √(g·k), крутизна Q, фаза, вес пены гребня)
 ## Амплитуды пропорциональны длине волны и нормализуются к суммарному
 ## RMS (море ~0.2 м, озеро ~2 см — не шторм); веса пены нормированы так,
 ## что совпадение фаз зыби даёт сжатие гребня ≈ 0.55 (порог шейдера).
-static func wave_spectrum(sea: bool) -> Array:
+## Множители ползунков «Вода» (П15 8.1): height_mult масштабирует RMS
+## (до нормализации крутизны — Герстнер не завивается в петлю при любой
+## высоте), length_mult растягивает длины (k и ω пересчитываются).
+static func wave_spectrum(
+	sea: bool, height_mult: float = 1.0, length_mult: float = 1.0,
+) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED_WAVES
 	var lengths: Array[float] = []
@@ -269,7 +303,7 @@ static func wave_spectrum(sea: bool) -> Array:
 		# Зыбь держится ближе к ветру, средние волны разбросаны шире.
 		dirs.append(wind + deg_to_rad(
 			rng.randf_range(-spread, spread)))
-		lengths.append(length)
+		lengths.append(length * length_mult)
 		amps.append(amp)
 		phases.append(rng.randf() * TAU)
 		foams.append(foam)
@@ -278,12 +312,13 @@ static func wave_spectrum(sea: bool) -> Array:
 	var order := range(MAX_WAVES)
 	order.sort_custom(func(a: int, b: int) -> bool:
 		return lengths[a] > lengths[b])
-	# Нормализация амплитуд к суммарному RMS моря/озера.
+	# Нормализация амплитуд к суммарному RMS моря/озера (× множитель
+	# высоты ползунка — крутизна ниже нормируется от уже умноженных).
 	var sum_sq: float = 0.0
 	for amp: float in amps:
 		sum_sq += amp * amp
 	var rms_target: float = RMS_SEA if sea else RMS_LAKE
-	var scale: float = rms_target / sqrt(maxf(sum_sq, 1e-9))
+	var scale: float = rms_target / sqrt(maxf(sum_sq, 1e-9)) * height_mult
 	# Крутизна: Q общая на волну, Σ Q·k·A = STEEP_TOTAL (без петель).
 	var steep_sum: float = 0.0
 	for i: int in MAX_WAVES:
@@ -431,30 +466,46 @@ func _surface_material(calm: bool) -> Material:
 	var material := ShaderMaterial.new()
 	material.shader = shader_for_tier(_tier)
 	# Палитра BU (П12 4.1): озеро/пруды — торфяная, море — стальная.
+	# Ползунок «Вода» (П15 8.1) меняет базовые цвета — ночной спад
+	# update_sky считается от них, подстройка живёт и ночью.
 	_deep_base = LAKE_DEEP if calm else SEA_DEEP
 	_shallow_base = LAKE_SHALLOW if calm else SEA_SHALLOW
 	material.set_shader_parameter("color_deep", _deep_base)
 	material.set_shader_parameter("color_shallow", _shallow_base)
-	# Поглощение Бера по каналам (П14 4.1): озеро плотнее моря.
+	# Поглощение Бера по каналам (П14 4.1): озеро плотнее моря;
+	# множитель прозрачности — ползунок (П15 8.1).
+	_absorption_base = LAKE_ABSORPTION if calm else SEA_ABSORPTION
 	material.set_shader_parameter("absorption",
-		LAKE_ABSORPTION if calm else SEA_ABSORPTION)
+		_absorption_base * _absorption_mult)
 	# Спектр волн (П14 4.3): море — зыбь и средние, озеро — короткие;
-	# уровень качества берёт первые N волн (длинные первые).
-	var spectrum := wave_spectrum(not calm)
+	# уровень качества берёт первые N волн (длинные первые). Множители
+	# высоты/длины — ползунки «Вода» (озеро и море — раздельно, зона
+	# берёт свою пару; до подстройки — константы-номиналы).
+	if not _waves_from_ui:
+		_wave_height_mult = (WAVE_HEIGHT_MULT_LAKE if calm
+			else WAVE_HEIGHT_MULT_SEA)
+		_wave_length_mult = (WAVE_LENGTH_MULT_LAKE if calm
+			else WAVE_LENGTH_MULT_SEA)
+	var spectrum := wave_spectrum(
+		not calm, _wave_height_mult, _wave_length_mult)
 	material.set_shader_parameter("waves_a", spectrum[0])
 	material.set_shader_parameter("waves_b", spectrum[1])
 	material.set_shader_parameter("wave_count", wave_count_for_tier(_tier))
 	# Рябь (4.3/4.7) и преломление (4.2): 2–3 слоя на HIGH/ULTRA,
-	# один дешёвой версии; преломление включено (панель F3 гасит).
+	# один дешёвой версии; сила ряби, её масштаб и сила преломления —
+	# ползунки «Вода» (номинал 1.0), галочка замера гасит слоями.
 	material.set_shader_parameter(
 		"ripple_layers", float(ripple_layers_for_tier(_tier)))
-	material.set_shader_parameter("refraction_amount", 1.0)
+	material.set_shader_parameter("ripple_strength", _ripple_fx_strength)
+	material.set_shader_parameter("ripple_scale", _ripple_fx_scale)
+	material.set_shader_parameter("refraction_amount", _refraction_mult)
 	# П15 3: френель движка F0 ≈ 0.02 (SPECULAR × 0.08 = 0.02).
 	material.set_shader_parameter("specular", 0.25)
 	# Почти зеркало вблизи, мягко-матовое у горизонта (П15 2: гашение
-	# субпиксельных волн переводит их наклон в рост roughness).
-	material.set_shader_parameter("roughness_near", ROUGHNESS_NEAR)
-	material.set_shader_parameter("roughness_far", ROUGHNESS_FAR)
+	# субпиксельных волн переводит их наклон в рост roughness);
+	# границы — ползунки «Вода».
+	material.set_shader_parameter("roughness_near", _rough_near)
+	material.set_shader_parameter("roughness_far", _rough_far)
 	material.set_shader_parameter("metallic", 0.0)
 	# Пена по SDF-карте берега (П15 4 + 9.3-9.4): карта расстояния до
 	# береговой линии запекается из карты высот острова (море и озеро
@@ -581,6 +632,80 @@ func _apply_caustic_brightness() -> void:
 		material.set_shader_parameter("caustic_brightness", value)
 
 
+# --- Ползунки вкладки «Вода» (П15 8.1) ---
+# Пишут uniform'ы всех построенных поверхностей зоны и запоминаются
+# для построенных позже; ничего не сохраняют в настройки и не идут
+# в сеть — только подбор на глаз (панель F3, П15 8.4). Панель зовёт
+# каждую зону из группы water_surface с полным набором — зона берёт
+# свои (озеро/море) значения.
+
+## Цвета мелководья и глубины (озеро и море раздельно): меняют базу,
+## от которой считает ночной спад update_sky.
+func set_palette(
+	lake_deep: Color, lake_shallow: Color,
+	sea_deep: Color, sea_shallow: Color,
+) -> void:
+	_deep_base = lake_deep if _calm else sea_deep
+	_shallow_base = lake_shallow if _calm else sea_shallow
+	_apply_palette()
+
+
+## Поглощение (прозрачность) — общий множитель констант Бера зоны.
+func set_absorption_mult(mult: float) -> void:
+	_absorption_mult = maxf(mult, 0.0)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("absorption",
+			_absorption_base * _absorption_mult)
+
+
+## Высота и длина волн (множители спектра; озеро и море раздельно —
+## зона берёт свою пару). Спектр пересчитывается целиком, крутизна
+## нормируется от новых амплитуд — Герстнер не завивается.
+func set_waves(
+	lake_height: float, lake_length: float,
+	sea_height: float, sea_length: float,
+) -> void:
+	_wave_height_mult = lake_height if _calm else sea_height
+	_wave_length_mult = lake_length if _calm else sea_length
+	_waves_from_ui = true
+	if _water_materials.is_empty():
+		return
+	var spectrum := wave_spectrum(
+		not _calm, _wave_height_mult, _wave_length_mult)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("waves_a", spectrum[0])
+		material.set_shader_parameter("waves_b", spectrum[1])
+
+
+## Сила и масштаб ряби (мелкие волны-шум, не Герстнер).
+func set_ripple_fx(strength: float, scale: float) -> void:
+	_ripple_fx_strength = clampf(strength, 0.0, 2.0)
+	_ripple_fx_scale = clampf(scale, 0.5, 2.0)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter(
+			"ripple_strength", _ripple_fx_strength)
+		material.set_shader_parameter(
+			"ripple_scale", _ripple_fx_scale)
+
+
+## Сила преломления (0 — без смещения выборки экрана); булева
+## set_refraction панели замера (0/1) отдельная.
+func set_refraction_amount(value: float) -> void:
+	_refraction_mult = clampf(value, 0.0, 4.0)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter(
+			"refraction_amount", _refraction_mult)
+
+
+## Шероховатость вблизи и у горизонта (границы roughness фильтрации).
+func set_roughness(near: float, far: float) -> void:
+	_rough_near = clampf(near, 0.0, 1.0)
+	_rough_far = clampf(far, 0.0, 1.0)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("roughness_near", _rough_near)
+		material.set_shader_parameter("roughness_far", _rough_far)
+
+
 ## Яркость глубинных цветов по часам (П5.13, блок 2; П15 3 — отражение
 ## теперь движковое): глубинные цвета гаснут вместе с яркостью неба —
 ## ночью вода тёмная сама, а не подсвеченная эмиссией глубины. Отражение
@@ -589,12 +714,18 @@ func _apply_caustic_brightness() -> void:
 func update_sky(
 	sky_top: Color, sky_horizon: Color, light_dir: Vector3, glint: Color,
 ) -> void:
+	# Спад яркости от дневного горизонта (0.75 — типичная светлота дня).
+	# Люма хранится: ползунок «Вода» меняет базовые цвета — применяются
+	# сразу с текущей ночной поправкой.
+	_palette_luma = clampf(sky_horizon.get_luminance() / 0.75, 0.10, 1.0)
 	if _water_materials.is_empty():
 		return
-	# Спад яркости от дневного горизонта (0.75 — типичная светлота дня).
-	var luma := clampf(sky_horizon.get_luminance() / 0.75, 0.10, 1.0)
+	_apply_palette()
+
+
+func _apply_palette() -> void:
 	for material: ShaderMaterial in _water_materials:
 		material.set_shader_parameter("color_deep",
-			Color(_deep_base * luma, 1.0))
+			Color(_deep_base * _palette_luma, 1.0))
 		material.set_shader_parameter("color_shallow",
-			Color(_shallow_base * luma, 1.0))
+			Color(_shallow_base * _palette_luma, 1.0))
