@@ -121,14 +121,16 @@ func test_detail_ring_steps_by_tier() -> void:
 		"шаг HIGH 0.25 м")
 	assert_almost_eq(TerrainDetail.STEP_ULTRA, 0.125, 0.001,
 		"шаг ULTRA 0.125 м")
-	assert_between(TerrainDetail.RADIUS_HIGH, 14.0, 18.0, "радиус HIGH ~16 м")
+	# П16 п. 3: радиус HIGH уменьшен 16 → 12 м (встройке хватало 16,
+	# но 12 вчетверо дешевле по вершинам).
+	assert_between(TerrainDetail.RADIUS_HIGH, 10.0, 14.0, "радиус HIGH 12 м (П16)")
 	assert_between(TerrainDetail.RADIUS_ULTRA, 22.0, 26.0, "радиус ULTRA ~24 м")
 	assert_almost_eq(
 		TerrainDetail.step_for_tier(GraphicsQuality.Tier.HIGH), 0.25, 0.001)
 	assert_almost_eq(
 		TerrainDetail.step_for_tier(GraphicsQuality.Tier.ULTRA), 0.125, 0.001)
 	assert_almost_eq(
-		TerrainDetail.radius_for_tier(GraphicsQuality.Tier.HIGH), 16.0, 0.001)
+		TerrainDetail.radius_for_tier(GraphicsQuality.Tier.HIGH), 12.0, 0.001)
 	assert_almost_eq(
 		TerrainDetail.radius_for_tier(GraphicsQuality.Tier.ULTRA), 24.0, 0.001)
 

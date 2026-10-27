@@ -223,3 +223,42 @@ func _dummy_art() -> IslandArt:
 	art.heights.resize(IslandGen.POINTS * IslandGen.POINTS)
 	art.heights.fill(2.0)
 	return art
+
+
+# --- П16 п. 3: детальная сетка ---
+
+const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")
+
+
+func test_detail_ring_radius_and_lazy_move() -> void:
+	# Радиус кольца на HIGH — 12 м (ULTRA 24 не тронут), кольцо не
+	# двигается при сдвиге зрителя меньше RING_MOVE_MIN_M (1.5 м).
+	assert_almost_eq(TerrainDetail.RADIUS_HIGH, 12.0, 0.001,
+		"радиус детальной сетки на HIGH — 12 м")
+	assert_almost_eq(TerrainDetail.RADIUS_ULTRA, 24.0, 0.001,
+		"радиус на ULTRA не тронут")
+	assert_almost_eq(IslandView.RING_MOVE_MIN_M, 1.5, 0.001,
+		"порог сдвига кольца — 1.5 м")
+	# Кольцо в сцене строится по tier_from_settings() (тесты — HIGH).
+	var island := ISLAND_SCENE.instantiate() as Island
+	add_child_autofree(island)
+	var view := island.get_node("IslandView") as IslandView
+	var ring := view.get_node_or_null("DetailRing") as MeshInstance3D
+	if ring == null:
+		# Настройки тестового прогона не HIGH/ULTRA — кольца нет,
+		# проверять нечего (константы выше уже проверены).
+		return
+	island.update_viewer(Vector3(10.0, 2.0, 10.0))
+	var placed: Vector3 = ring.position
+	# Сдвиг 0.5 м (<1.5) — кольцо на месте.
+	island.update_viewer(Vector3(10.5, 2.0, 10.0))
+	assert_eq(
+		ring.position, placed,
+		"кольцо не двигается при сдвиге 0.5 м")
+	# Сдвиг 2 м (>=1.5) — кольцо переехало под нового зрителя.
+	island.update_viewer(Vector3(12.0, 2.0, 10.0))
+	var ring_pos := ring.position
+	assert_almost_eq(ring_pos.x, 12.0, 0.26,
+		"кольцо переехало при сдвиге 2 м (снап 0.25 м)")
+	assert_almost_eq(ring_pos.z, 10.0, 0.26,
+		"кольцо под зрителем по Z")

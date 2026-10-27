@@ -12,11 +12,12 @@
 class_name TerrainDetail
 extends RefCounted
 
-## Шаг сетки кольца и радиус по уровням (SPEC П14 3.1): HIGH 0.25 м / 16 м,
+## Шаг сетки кольца и радиус по уровням (SPEC П14 3.1; П16 п. 3 радиус
+## HIGH 12 м — вчетверо меньше вершин, чем при 24): HIGH 0.25 м / 12 м,
 ## ULTRA 0.125 м / 24 м.
 const STEP_HIGH: float = 0.25
 const STEP_ULTRA: float = 0.125
-const RADIUS_HIGH: float = 16.0
+const RADIUS_HIGH: float = 12.0
 const RADIUS_ULTRA: float = 24.0
 
 ## Амплитуды смещения слоёв, м (SPEC П14 3.1): подстилка/гравий ±3–5 см,

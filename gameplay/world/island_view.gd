@@ -41,6 +41,10 @@ var _detail_colliders: Array[Dictionary] = []
 var _detail_ring: MeshInstance3D = null
 ## Материал кольца (копия материала чанков с detail_ring = true).
 var _ring_material: ShaderMaterial = null
+## П16 п. 3: последнее место установки кольца и признак «установлено» —
+## нода двигается только при уходе зрителя дальше RING_MOVE_MIN_M.
+var _ring_last_pos: Vector2 = Vector2.ZERO
+var _ring_placed: bool = false
 ## Шаг сетки кольца (снап ноды к камере — с этим же шагом, вершины
 ## не плавают).
 var _ring_step: float = 0.25
@@ -58,6 +62,9 @@ var _clutter_tier: int = 0
 ## чанку дёргаться между уровнями, стоя на границе.
 const LOD_RADIUS: float = 50.0
 const LOD_HYSTERESIS: float = 6.0
+## П16 п. 3: кольцо детальной сетки двигается только когда зритель
+## ушёл от места последней установки дальше этого порога, м.
+const RING_MOVE_MIN_M: float = 1.5
 ## Базовая сила параллакса земли (движковое значение uniform шейдера
 ## forest_ground; сюда панель F3 возвращает параллакс после замера).
 const FOREST_PARALLAX_SCALE: float = 0.06
@@ -138,11 +145,19 @@ func _build_terrain() -> void:
 ## достраивается сразу.
 func update_viewer(viewer_pos: Vector3) -> void:
 	var center := Vector2(viewer_pos.x, viewer_pos.z)
-	# Кольцо детальной сетки (П14 3.1): снап к камере с шагом сетки —
-	# вершины всегда в узлах одной решётки, бугры не «плывут» при ходьбе.
+	# Кольцо детальной сетки (П14 3.1; П16 п. 3): снап к камере с шагом
+	# сетки — вершины всегда в узлах одной решётки, бугры не «плывут»
+	# при ходьбе. Сдвиг не каждый кадр: только когда снапнутый центр ушёл
+	# от места последней установки дальше RING_MOVE_MIN_M (присвоение
+	# position двигает AABB ноды и будит рендер-сервер).
 	if _detail_ring != null:
 		var ring_pos := center.snapped(Vector2(_ring_step, _ring_step))
-		_detail_ring.position = Vector3(ring_pos.x, 0.0, ring_pos.y)
+		if not _ring_placed \
+				or _ring_last_pos.distance_squared_to(ring_pos) \
+				>= RING_MOVE_MIN_M * RING_MOVE_MIN_M:
+			_detail_ring.position = Vector3(ring_pos.x, 0.0, ring_pos.y)
+			_ring_last_pos = ring_pos
+			_ring_placed = true
 	# Мелочь (П14 3.3): пересборка при смене клетки CELL_M.
 	if not _clutter_nodes.is_empty():
 		var cell := (center / GroundClutter.CELL_M).floor()
