@@ -372,9 +372,14 @@ func test_water_material_bu_settings() -> void:
 		var calm: bool = pair[2]
 		assert_true(material is ShaderMaterial,
 			"вода %s — шейдерный материал" % pair[0])
+		# П15 2: шероховатость растёт с расстоянием — вблизи почти
+		# зеркало, у горизонта матовое зеркало неба.
 		assert_between(
-			float(material.get_shader_parameter("roughness")), 0.02, 0.05,
-			"%s: почти зеркало (roughness)" % pair[0])
+			float(material.get_shader_parameter("roughness_near")),
+			0.02, 0.05, "%s: почти зеркало вблизи" % pair[0])
+		assert_between(
+			float(material.get_shader_parameter("roughness_far")),
+			0.12, 0.2, "%s: матовое зеркало у горизонта" % pair[0])
 		var deep: Color = WaterArea.LAKE_DEEP if calm else WaterArea.SEA_DEEP
 		var shallow: Color = WaterArea.LAKE_SHALLOW if calm else WaterArea.SEA_SHALLOW
 		assert_eq(material.get_shader_parameter("color_deep"), deep,

@@ -43,6 +43,10 @@ const LAKE_ABSORPTION: Vector3 = Vector3(1.6, 0.75, 0.45)
 const SEA_ABSORPTION: Vector3 = Vector3(1.05, 0.50, 0.34)
 ## Круги на воде при входе — цвет пены, не бирюза палитры.
 const RING_COLOR: Color = Color(0.87, 0.92, 0.93)
+## Шероховатость воды (П15 2): вблизи — почти зеркало, у горизонта —
+## матовое зеркало неба (наклон субпиксельных волн уходит в roughness).
+const ROUGHNESS_NEAR: float = 0.03
+const ROUGHNESS_FAR: float = 0.16
 
 # --- Спектр волн (SPEC П14 4.3) ---
 ## Полный спектр — 32 волны; уровень берёт первые N (длинные первые,
@@ -107,8 +111,26 @@ func _ready() -> void:
 	# Группа, не ссылка на сцену: цикл дня находит все поверхности воды
 	# и ведёт их отражение неба по часам мира (П5.13, блок 2).
 	add_to_group("water_surface")
+	# Ресайз окна меняет пиксельный размер волн на экране (П15 2):
+	# фильтрация следит за высотой вьюпорта.
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	if surface_size != Vector2.ZERO:
 		_build_surface()
+
+
+func _on_viewport_resized() -> void:
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter(
+			"screen_px_height", _screen_px_height())
+
+
+## Высота вьюпорта в пикселях внутреннего буфера (масштаб 3D учтён):
+## для оценки «волна мельче N пикселей» важен порядок, не точность.
+func _screen_px_height() -> float:
+	var viewport := get_viewport()
+	if viewport == null:
+		return 720.0
+	return float(viewport.size.y) * viewport.scaling_3d_scale
 
 
 ## Построить зону: центр в плоскости XZ, размер, уровень воды (абсолютный Y).
@@ -346,10 +368,15 @@ func _surface_material(calm: bool) -> Material:
 		"ripple_layers", float(ripple_layers_for_tier(_tier)))
 	material.set_shader_parameter("refraction_amount", 1.0)
 	material.set_shader_parameter("specular", 0.55)
-	# Почти зеркало (4.3/П14 4.4): рябь и френель не размазываются
-	# микрошероховатостью.
-	material.set_shader_parameter("roughness", 0.03)
+	# Почти зеркало вблизи, мягко-матовое у горизонта (П15 2: гашение
+	# субпиксельных волн переводит их наклон в рост roughness).
+	material.set_shader_parameter("roughness_near", ROUGHNESS_NEAR)
+	material.set_shader_parameter("roughness_far", ROUGHNESS_FAR)
 	material.set_shader_parameter("metallic", 0.0)
+	# Высота экрана для пиксельной фильтрации волн (П15 2): built-in
+	# SCREEN_PIXEL_SIZE из fragment в 4.7.2 не виден — размер вьюпорта
+	# (с учётом масштаба 3D) несёт uniform.
+	material.set_shader_parameter("screen_px_height", _screen_px_height())
 	# Небо для френеля до первого update_sky (нейтральное дневное).
 	material.set_shader_parameter("sky_horizon", Vector3(0.55, 0.62, 0.70))
 	material.set_shader_parameter("sky_top", Vector3(0.30, 0.45, 0.68))

@@ -1,22 +1,24 @@
-// Вода Born Unblessed (SPEC П14 4): свой шейдер вместо Boujie — текстур
-// аддона нет вовсе (пена и рябь процедурные). Полная версия для HIGH/ULTRA:
-// экранная текстура + буфер глубины дают толщину воды под пикселем →
-// поглощение Бера ПО КАНАЛАМ (красный гаснет первым: дно на мелком видно
-// чётко, к глубине — тёмная торфяная/стальная вода), преломление —
-// смещение выборки экрана по нормали волн (с проверкой глубины выборки —
-// предметы над водой не рвутся). Композит собирается вручную и пишется
-// в EMISSION с ALPHA = 1 и ALBEDO = 0 (один альфа-канал блендинга не
-// передаст поканальное поглощение, нулевой альбедо гасит диффуз и
-// окружение): небо — френель Шлика цветами DayCycle (update_sky),
-// дорожка светила — спекуляр движка (луна ночью). Нормали: спектр волн
-// Герстнера (массивы
-// waves_a/waves_b, считает WaterArea детерминированным RNG) суммируется
-// в vertex() (смещение + нормаль + сжатие гребней), поверх во fragment —
-// 2–3 слоя процедурной ряби (2D-симплекс), к дали гаснет. Дешёвая версия
-// для SIMPLE/NORMAL — water_bu_cheap.gdshader (без экранной выборки).
-// Сетка: море — Ocean-кольца аддона (сетка), озеро — PlaneMesh; ноды
-// воды без поворота и масштаба, поэтому смещение и нормали считаются
-// сразу в мировых координатах (MODEL_MATRIX — только перенос).
+// Вода Born Unblessed (SPEC П14 4, П15 — третья итерация): свой шейдер
+// вместо Boujie — текстур аддона нет вовсе (пена и рябь процедурные).
+// Полная версия для HIGH/ULTRA: экранная текстура + буфер глубины дают
+// толщину воды под пикселем → поглощение Бера ПО КАНАЛАМ (красный гаснет
+// первым: дно на мелком видно чётко, к глубине — тёмная торфяная/стальная
+// вода), преломление — смещение выборки экрана по нормали волн (с
+// проверкой глубины выборки — предметы над водой не рвутся). Композит
+// собирается вручную и пишется в EMISSION с ALPHA = 1 и ALBEDO = 0 (один
+// альфа-канал блендинга не передаст поканальное поглощение, нулевой
+// альбедо гасит диффуз и окружение): небо — френель Шлика цветами
+// DayCycle (update_sky), дорожка светила — спекуляр движка (луна ночью).
+// П15 1-2: нормали ВСЕГО спектра считаются попиксельно во fragment по
+// world_pos (до смещения) — нормаль не зависит от плотности сетки, швов
+// на стыках колец Ocean нет; в vertex() — только смещение длинных волн
+// (λ > VERTEX_WAVE_M). П15 2: Toksvig-подобная фильтрация с расстоянием —
+// волны мельче 2-4 пикселей экрана гаснут, их наклон уходит в рост
+// roughness (зеркало вблизи, матовое у горизонта). Рябь мельче и слабее
+// (1.5/0.75/0.3 м), та же фильтрация. Дешёвая версия для SIMPLE/NORMAL —
+// water_bu_cheap.gdshader (без экранной выборки). Сетка: море —
+// Ocean-кольца аддона, озеро — PlaneMesh; ноды воды без поворота и
+// масштаба, координаты сразу мировые (MODEL_MATRIX — только перенос).
 shader_type spatial;
 render_mode blend_mix, depth_draw_always, cull_disabled,
 	ambient_light_disabled, specular_schlick_ggx;
@@ -43,7 +45,11 @@ uniform vec3 sky_top : source_color = vec3(0.3, 0.45, 0.7);
 group_uniforms;
 
 group_uniforms Surface;
-uniform float roughness : hint_range(0.0, 1.0) = 0.03;
+// П15 2: roughness растёт с расстоянием — гашение субпиксельных волн
+// переводит их наклон в шероховатость (Toksvig-подобно). Вблизи — почти
+// зеркало, у горизонта — матовое зеркало неба.
+uniform float roughness_near : hint_range(0.0, 1.0) = 0.03;
+uniform float roughness_far : hint_range(0.0, 1.0) = 0.16;
 uniform float specular : hint_range(0.0, 1.0) = 0.5;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 // Сила преломления (панель F3 «Преломление воды»: 0 — без смещения
@@ -51,6 +57,13 @@ uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 uniform float refraction_amount : hint_range(0.0, 4.0) = 1.0;
 // Слои ряби: 2 на HIGH, 3 на ULTRA (F3 «Рябь воды» — 0).
 uniform float ripple_layers : hint_range(0.0, 3.0) = 2.0;
+// Сила и масштаб ряби (ползунки F3 «Вода»): 1 — номинал уровня.
+uniform float ripple_strength : hint_range(0.0, 2.0) = 1.0;
+uniform float ripple_scale : hint_range(0.5, 2.0) = 1.0;
+// Высота вьюпорта в пикселях (для пиксельной фильтрации волн): built-in
+// SCREEN_PIXEL_SIZE в 4.7.2 из fragment-кода не виден — WaterArea ставит
+// размер и обновляет его при ресайзе окна.
+uniform float screen_px_height = 720.0;
 group_uniforms;
 
 group_uniforms Waves;
@@ -59,6 +72,9 @@ group_uniforms Waves;
 //   waves_a[i] = (dir.x, dir.y, k = 2π/λ, амплитуда_м)
 //   waves_b[i] = (ω, крутизна Q, фаза, вес пены гребня)
 // Считает WaterArea.wave_spectrum детерминированным RNG (SPEC 4.3).
+// П15 1: нормали — во fragment по world_pos (до смещения); смещение
+// геометрии — только волны длиннее VERTEX_WAVE_M (короткие живут
+// нормалями, поверхность не «рвёт» грубая сетка колец).
 uniform vec4 waves_a[32];
 uniform vec4 waves_b[32];
 uniform int wave_count = 16;
@@ -78,6 +94,13 @@ uniform float depth_fog_fade_max = 130.0;
 // Дальняя толщина-заглушка, м (за пределами надёжной глубины).
 uniform float far_thickness = 8.0;
 group_uniforms;
+
+// П15 1-2: пороги пиксельной фильтрации волн — мельче 2 пикселей волна
+// гасится полностью, крупнее 4 — учитывается целиком (Toksvig/LEAN).
+const float FILTER_MIN_PX = 2.0;
+const float FILTER_MAX_PX = 4.0;
+// Длиннее этой волны — смещение геометрии в vertex() (П15 1).
+const float VERTEX_WAVE_M = 20.0;
 
 // Пена без текстур: полоса у кромки (первые сантиметры толщины) и
 // гребни морской зыби, разорванные шумом (SPEC П14 4.5).
@@ -123,7 +146,7 @@ float snoise(vec2 v) {
 }
 
 // Наклон одного слоя ряби (конечные разности шума): направление и
-// скорость у каждого слоя свои, масштаб уменьшается вдвое.
+// скорость у каждого слоя свои.
 vec2 ripple_slope(vec2 p, vec2 dir, float scale, float speed, float t) {
 	vec2 uv = p * scale + dir * (t * speed);
 	float e = 0.35;
@@ -133,76 +156,118 @@ vec2 ripple_slope(vec2 p, vec2 dir, float scale, float speed, float t) {
 	return vec2(hx - h0, hz - h0) / e;
 }
 
+// П15 2: вес волны по её экранному размеру (λ на дистанции dist):
+// мельче FILTER_MIN_PX пикселей — 0 (наклон уйдёт в roughness),
+// крупнее FILTER_MAX_PX — 1. Пикселей на радиан (px_per_rad) считается
+// в теле fragment: built-in SCREEN_PIXEL_SIZE в функциях недоступен.
+float wave_weight(float lambda_m, float dist, float px_per_rad) {
+	return smoothstep(FILTER_MIN_PX, FILTER_MAX_PX,
+		px_per_rad * lambda_m / max(dist, 0.001));
+}
+
 varying vec3 world_pos;
-varying vec3 wave_normal;
-// Сжатие гребней (якобиан Герстнера): к 1 на гребнях зыби — там пена.
-varying float crest;
 
 void vertex() {
+	// Исходная мировая позиция (до смещения): по ней fragment считает
+	// нормали всего спектра — Герстнер аналитичен, точка отсчёта не
+	// смещена (GPU Gems 1, гл. 1).
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// Гашение волн вдали: внешние кольца Ocean грубые, дальше — плоскость.
 	vec3 cam_pos = INV_VIEW_MATRIX[3].xyz;
 	float wave_fade = 1.0 - smoothstep(
 		vertex_wave_fade_min, vertex_wave_fade_max,
 		distance(wp.xz, cam_pos.xz));
-	// Спектр Герстнера (GPU Gems 1, гл. 1): смещение XZ по направлению
-	// волны, Y — синус; нормаль и сжатие — из тех же сумм (один проход).
+	// П15 1: только смещение длинных волн — нормали и пена считаются
+	// во fragment попиксельно. Ноды воды без поворота/масштаба:
+	// мировое смещение = локальному.
 	vec3 disp = vec3(0.0);
-	vec3 nrm = vec3(0.0, 1.0, 0.0);
-	float crest_sum = 0.0;
 	for (int i = 0; i < 32; i++) {
 		if (i >= wave_count) {
 			break;
 		}
 		vec4 wa = waves_a[i];
 		vec4 wb = waves_b[i];
+		if (TAU / wa.z <= VERTEX_WAVE_M) {
+			continue;
+		}
 		float amp = wa.w * wave_fade;
 		float phi = wa.z * dot(wa.xy, wp.xz) - wb.x * TIME + wb.z;
-		float s = sin(phi);
-		float c = cos(phi);
 		float qa = wb.y * amp;
-		disp += vec3(wa.x * qa * c, amp * s, wa.y * qa * c);
-		nrm.x -= wa.x * wa.z * amp * c;
-		nrm.z -= wa.y * wa.z * amp * c;
-		nrm.y -= wb.y * wa.z * amp * s;
-		crest_sum += wb.w * wb.y * wa.z * amp * s;
+		disp += vec3(
+			wa.x * qa * cos(phi), amp * sin(phi), wa.y * qa * cos(phi));
 	}
-	wp += disp;
-	// Ноды воды без поворота/масштаба: мировое смещение = локальному,
-	// нормаль сразу мировая (осям объекта доверять нельзя — нода едет
-	// за камерой, MODEL_MATRIX — перенос).
 	VERTEX += disp;
-	wave_normal = normalize(nrm);
-	crest = crest_sum;
 	world_pos = wp;
 }
 
 void fragment() {
-	// Мировая нормаль: движок даёт NORMAL в пространстве вида — рябь
-	// добавляется в мировых координатах (не «плывёт» за камерой).
-	vec3 nrm = normalize(
-		(INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
 	float dist = length(CAMERA_POSITION_WORLD - world_pos);
+	// Пикселей на радиан по вертикали экрана: PROJECTION_MATRIX[1][1] =
+	// 1/tan(fov/2), высота экрана — uniform screen_px_height.
+	float px_per_rad = screen_px_height / (2.0 * PROJECTION_MATRIX[1][1]);
 
-	// Рябь (SPEC 4.3): 2–3 слоя шума в разных направлениях и скоростях,
-	// к дали гаснет (против мерцания); масштабы 2.2 / 1.1 / 0.55 м.
-	if (ripple_layers > 0.5 && dist < 120.0) {
-		float ripple_fade = 1.0 - smoothstep(30.0, 110.0, dist);
-		vec2 slope = vec2(0.0);
-		slope += ripple_slope(world_pos.xz,
-			vec2(0.84, 0.54), 0.45, 0.35, TIME) * 0.030;
+	// П15 1: нормаль всего спектра — попиксельно по world_pos (до
+	// смещения). П15 2: волны мельче 2-4 пикселей гаснут (вес wave_weight),
+	// их доля наклона (lost) переводится в roughness — зеркальная вода
+	// вблизи, мягко-матовая у горизонта, без пятен и мерцания.
+	vec3 nrm = vec3(0.0, 1.0, 0.0);
+	float crest = 0.0;
+	float slope_total = 1e-6;
+	float slope_kept = 0.0;
+	for (int i = 0; i < 32; i++) {
+		if (i >= wave_count) {
+			break;
+		}
+		vec4 wa = waves_a[i];
+		vec4 wb = waves_b[i];
+		float lambda_m = TAU / wa.z;
+		float weight = wave_weight(lambda_m, dist, px_per_rad);
+		float phi = wa.z * dot(wa.xy, world_pos.xz)
+			- wb.x * TIME + wb.z;
+		float s = sin(phi);
+		float c = cos(phi);
+		float wa_slope = wa.z * wa.w;  // k·A — масштаб наклона волны
+		nrm.x -= wa.x * wa_slope * c * weight;
+		nrm.z -= wa.y * wa_slope * c * weight;
+		nrm.y -= wb.y * wa_slope * s * weight;
+		crest += wb.w * wb.y * wa_slope * s * weight;
+		slope_total += wa_slope;
+		slope_kept += wa_slope * weight;
+	}
+	nrm = normalize(nrm);
+	float lost = clamp(1.0 - slope_kept / slope_total, 0.0, 1.0);
+
+	// Рябь (SPEC 4.3, П15 2): 2-3 слоя шума, длины 1.5/0.75/0.3 м —
+	// мельче и слабее прежних; та же пиксельная фильтрация, к дали
+	// гаснет и сама по себе (двойная защита от мерцания).
+	if (ripple_layers > 0.5 && ripple_strength > 0.001) {
+		float scale = ripple_scale;
+		vec2 slope = ripple_slope(world_pos.xz,
+			vec2(0.84, 0.54), 0.667 * scale, 0.35, TIME) * 0.020;
+		float lambda_ripple = 1.5 / scale;
+		float weight = wave_weight(lambda_ripple, dist, px_per_rad);
+		slope *= weight;
+		float ripple_lost = 1.0 - weight;
 		if (ripple_layers > 1.5) {
+			float w2 = wave_weight(0.75 / scale, dist, px_per_rad);
 			slope += ripple_slope(world_pos.xz,
-				vec2(-0.47, 0.88), 0.90, -0.50, TIME) * 0.022;
+				vec2(-0.47, 0.88), 1.333 * scale, -0.50, TIME)
+				* 0.016 * w2;
+			ripple_lost = min(ripple_lost + (1.0 - w2) * 0.4, 1.0);
 		}
 		if (ripple_layers > 2.5) {
+			float w3 = wave_weight(0.30 / scale, dist, px_per_rad);
 			slope += ripple_slope(world_pos.xz,
-				vec2(0.36, -0.93), 1.80, 0.80, TIME) * 0.016;
+				vec2(0.36, -0.93), 3.333 * scale, 0.80, TIME)
+				* 0.012 * w3;
+			ripple_lost = min(ripple_lost + (1.0 - w3) * 0.6, 1.0);
 		}
 		nrm = normalize(nrm + vec3(slope.x, 0.0, slope.y)
-			* ripple_fade * 2.2);
+			* ripple_strength * 2.2);
+		lost = max(lost, ripple_lost);
 	}
+	float rough = mix(roughness_near, roughness_far, lost);
 
 	// Толщина воды под пикселем: глубина сцены минус глубина поверхности
 	// (оба — дистанции вдоль взгляда; на мелком у берега → 0).
@@ -241,23 +306,23 @@ void fragment() {
 	vec3 scatter = mix(color_shallow.rgb, color_deep.rgb, deep_mix);
 	vec3 water = bottom * transmit + scatter * (1.0 - transmit);
 
-	// Пена без текстур (SPEC 4.5): тонкая разорванная полоса в первых
-	// сантиметрах толщины и на гребнях морской зыби. Веса гребней
-	// нормированы в WaterArea.wave_spectrum так, что совпадение фаз
-	// длинных волн даёт crest ≈ 0.55 — порог ловит только реальные
-	// гребни, где сошлись несколько волн зыби.
+	// Пена без текстур (SPEC 4.5, П15 4 — только smoothstep): тонкая
+	// разорванная полоса в первых сантиметрах толщины и на гребнях
+	// морской зыби. Веса гребней нормированы в WaterArea.wave_spectrum
+	// так, что совпадение фаз длинных волн даёт crest ≈ 0.55.
 	float foam_noise = snoise(world_pos.xz * 2.6 + vec2(TIME * 0.25));
 	float foam = (1.0 - smoothstep(0.01, FOAM_SHORE_M, thickness))
-		* step(0.15, foam_noise);
-	foam += smoothstep(0.35, 0.55, crest) * step(0.0, foam_noise)
+		* smoothstep(0.05, 0.30, foam_noise);
+	foam += smoothstep(0.35, 0.55, crest)
+		* smoothstep(-0.2, 0.2, foam_noise)
 		* (1.0 - smoothstep(60.0, 140.0, surf_dist));
-	water = mix(water, FOAM_COLOR, clamp(foam, 0.0, 1.0));
+	foam = clamp(foam, 0.0, 1.0);
+	water = mix(water, FOAM_COLOR, foam);
 
 	// Небо — френель Шлика (SPEC 4.4): под острым углом зеркало, сверху
 	// прозрачная вода; цвет отражения — небо у горизонта/в зените (цвета
-	// update_sky, ночью тёмные). ROUGHNESS 0.02–0.05, спекуляр движка
-	// даёт дорожку солнца/луны. Весь композит — в EMISSION, ALBEDO = 0:
-	// диффуз и окружение не подсвечивают толщу.
+	// update_sky, ночью тёмные). Спекуляр движка даёт дорожку солнца/
+	// луны. Весь композит — в EMISSION, ALBEDO = 0.
 	float fresnel = 0.02 + 0.98
 		* pow(1.0 - max(dot(nrm, view_dir), 0.0), 5.0);
 	vec3 refl_dir = reflect(-view_dir, nrm);
@@ -272,7 +337,7 @@ void fragment() {
 	EMISSION = mix(sky_horizon, color, dist_fade);
 	ALBEDO = vec3(0.0);
 	ALPHA = 1.0;
-	ROUGHNESS = roughness;
+	ROUGHNESS = rough;
 	SPECULAR = specular;
 	METALLIC = metallic;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nrm, 0.0)).xyz);
