@@ -225,6 +225,149 @@ func _dummy_art() -> IslandArt:
 	return art
 
 
+# --- П16 п. 4: трава-буст и мелочь — дальность и мягкое исчезновение ---
+
+func test_grass_and_clutter_ranges_on_high() -> void:
+	# П16 п. 4: на HIGH трава-буст (gd_grass_*) видна ближе базы (×0.85),
+	# лёгкая мелочь наполнения — ×0.8, крупное наполнение и печёные
+	# пучки — база; исчезновение мягкое (fade self). ULTRA — ×1.5 всем
+	# и без fade (рецепт не менялся), NORMAL — база без fade.
+	# View — вне дерева: _ready строит мир по art, тут проверяется только
+	# таблица дальностей set_quality.
+	var view := IslandView.new()
+	var grass := MultiMeshInstance3D.new()
+	var stones := MultiMeshInstance3D.new()
+	var roots := MultiMeshInstance3D.new()
+	var rgrass := MultiMeshInstance3D.new()
+	view._base_ranges = {
+		"gd_grass_0": 60.0, "gd_stones": 60.0, "gd_roots": 90.0,
+		"rgrass": 60.0,
+	}
+	view._props_by_type = {
+		"gd_grass_0": [grass] as Array[MultiMeshInstance3D],
+		"gd_stones": [stones] as Array[MultiMeshInstance3D],
+		"gd_roots": [roots] as Array[MultiMeshInstance3D],
+		"rgrass": [rgrass] as Array[MultiMeshInstance3D],
+	}
+	view.set_quality(GraphicsQuality.Tier.HIGH)
+	assert_almost_eq(
+		grass.visibility_range_end, 60.0 * 0.85, 0.001,
+		"HIGH: трава-буст видна ближе базы (×0.85)")
+	assert_almost_eq(
+		stones.visibility_range_end, 60.0 * 0.8, 0.001,
+		"HIGH: лёгкая мелочь видна ближе базы (×0.8)")
+	assert_almost_eq(
+		roots.visibility_range_end, 90.0, 0.001,
+		"HIGH: крупное наполнение — дальность базы (силуэт)")
+	assert_almost_eq(
+		rgrass.visibility_range_end, 60.0, 0.001,
+		"HIGH: печёные пучки — дальность базы")
+	assert_eq(
+		grass.visibility_range_fade_mode,
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF,
+		"HIGH: мягкое исчезновение у травы-буста")
+	assert_eq(
+		stones.visibility_range_fade_mode,
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF,
+		"HIGH: мягкое исчезновение у лёгкой мелочи")
+	assert_eq(
+		roots.visibility_range_fade_mode,
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED,
+		"HIGH: резкая граница у крупного наполнения")
+	assert_eq(
+		rgrass.visibility_range_fade_mode,
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED,
+		"HIGH: резкая граница у печёных пучков")
+	view.set_quality(GraphicsQuality.Tier.ULTRA)
+	# ULTRA: дальность ×1.5 всем и без fade — рецепт не менялся.
+	assert_almost_eq(
+		grass.visibility_range_end, 90.0, 0.001,
+		"ULTRA: трава-буст ×1.5 (60 м), как раньше")
+	assert_almost_eq(
+		stones.visibility_range_end, 90.0, 0.001,
+		"ULTRA: мелочь ×1.5 (60 м), как раньше")
+	assert_almost_eq(
+		roots.visibility_range_end, 135.0, 0.001,
+		"ULTRA: крупное наполнение ×1.5 (90 м), как раньше")
+	assert_almost_eq(
+		rgrass.visibility_range_end, 90.0, 0.001,
+		"ULTRA: печёные пучки ×1.5 (60 м), как раньше")
+	for node: MultiMeshInstance3D in [grass, stones, roots, rgrass]:
+		assert_eq(
+			node.visibility_range_fade_mode,
+			GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED,
+			"ULTRA: fade выключен")
+	view.set_quality(GraphicsQuality.Tier.NORMAL)
+	assert_almost_eq(
+		grass.visibility_range_end, 60.0, 0.001,
+		"NORMAL: база у травы-буста (fade тоже выключен)")
+	assert_eq(
+		grass.visibility_range_fade_mode,
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED,
+		"NORMAL: fade выключен, как в базе")
+	view.free()
+	for node: MultiMeshInstance3D in [grass, stones, roots, rgrass]:
+		node.free()
+
+
+func test_clutter_type_classification() -> void:
+	# Лёгкая мелочь («light» в KINDS) — гасится на HIGH мягко и раньше;
+	# крупные виды наполнения и трава-буст классифицируются отдельно.
+	for type: String in ["gd_stones", "gd_root", "gd_branch", "gd_debris", "gd_fern"]:
+		assert_true(
+			GroundDetails.light_clutter(StringName(type)),
+			"%s — лёгкая мелочь" % type)
+	for type: String in [
+		"gd_boulder02", "gd_boulder03", "gd_stump01", "gd_stump02", "gd_roots",
+	]:
+		assert_false(
+			GroundDetails.light_clutter(StringName(type)),
+			"%s — крупное наполнение" % type)
+	assert_false(
+		GroundDetails.light_clutter(&"gd_grass_0"),
+		"трава-буст гасится по своему множителю, не как мелочь")
+	assert_false(
+		GroundDetails.light_clutter(&"rgrass"),
+		"печёные пучки — не мелочь наполнения")
+	assert_almost_eq(
+		IslandView.range_mult("gd_grass_0", GraphicsQuality.Tier.HIGH), 0.85,
+		0.001, "множитель травы-буста на HIGH")
+	assert_almost_eq(
+		IslandView.range_mult("gd_stones", GraphicsQuality.Tier.HIGH), 0.8,
+		0.001, "множитель лёгкой мелочи на HIGH")
+	assert_almost_eq(
+		IslandView.range_mult("gd_roots", GraphicsQuality.Tier.HIGH), 1.0,
+		0.001, "крупное наполнение на HIGH — база")
+	assert_almost_eq(
+		IslandView.range_mult("rgrass", GraphicsQuality.Tier.HIGH), 1.0,
+		0.001, "печёные пучки на HIGH — база")
+
+
+func test_plant_materials_no_alpha_blend() -> void:
+	# П16 п. 4: материалы травы/мелочи непрозрачные (нет blend_mix и записи
+	# ALPHA — полупрозрачность ломает сортировцию и бьёт по fill rate);
+	# листва деревьев — alpha scissor с depth_draw_opaque.
+	for path: String in [
+		"res://assets/shaders/grass_field.gdshader",
+		"res://assets/shaders/lowpoly.gdshader",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		assert_false(
+			source.contains("blend_mix"), "%s — без alpha blend" % path)
+		assert_false(
+			source.contains("ALPHA"), "%s — не пишет альфу" % path)
+	var canopy := FileAccess.get_file_as_string(
+		"res://assets/shaders/canopy.gdshader")
+	assert_true(
+		canopy.contains("ALPHA_SCISSOR_THRESHOLD"),
+		"листва — alpha scissor, не blend")
+	assert_true(
+		canopy.contains("depth_draw_opaque"),
+		"листва пишет глубину в opaque-проходе")
+	assert_false(
+		canopy.contains("blend_mix"), "листва — без alpha blend")
+
+
 # --- П16 п. 3: детальная сетка ---
 
 const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")

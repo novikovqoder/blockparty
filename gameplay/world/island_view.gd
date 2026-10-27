@@ -378,11 +378,13 @@ func _build_details() -> void:
 ## мелких предметов ×0.6 (минимум 25 м); ULTRA — дальность травы и мелких
 ## предметов ×1.5 и спад густоты травы отодвинут ×1.5; HIGH (П13 1.9) —
 ## дальность и спад как в базе, но спад травы-буста начинается ближе
-## (×HIGH_GRASS_FADE_MULT); NORMAL — база.
+## (×HIGH_GRASS_FADE_MULT); NORMAL — база. П16 п. 4: на HIGH трава-буст
+## и лёгкая мелочь наполнения видны ближе базы (×0.85/×0.8) и исчезают
+## мягко (fade), уход с HIGH возвращает резкую границу, как в базе.
 ## Применяется ко всем группам типа и к наполнению земли.
 func set_quality(tier: int) -> void:
 	var simple := tier == GraphicsQuality.Tier.SIMPLE
-	var ultra := tier == GraphicsQuality.Tier.ULTRA
+	var hi := tier == GraphicsQuality.Tier.HIGH
 	for type: String in ["rgrass", "rflower", "riris", "reed", "gd_fern"]:
 		_set_type_visible(type, not simple)
 	for type: String in _props_by_type:
@@ -391,10 +393,36 @@ func set_quality(tier: int) -> void:
 	for type: String in _base_ranges:
 		var base: float = float(_base_ranges[type])
 		var range := maxf(25.0, base * 0.6) \
-			if simple else base * (1.5 if ultra else 1.0)
+			if simple else base * range_mult(type, tier)
 		for instance: MultiMeshInstance3D in _props_by_type.get(type, []):
 			instance.visibility_range_end = range
+			if soft_fade_type(type):
+				instance.visibility_range_fade_mode = (
+					GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF if hi
+					else GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED)
 	_apply_grass_fade(_grass_fade_mult(tier))
+
+
+## Множитель дальности видимости типа по уровню (П16 п. 4): ULTRA ×1.5,
+## HIGH — трава-буст ×0.85 и лёгкая мелочь ×0.8 (ближе базы), прочие
+## уровни и прочие типы — база.
+static func range_mult(type: String, tier: int) -> float:
+	if tier == GraphicsQuality.Tier.ULTRA:
+		return 1.5
+	if tier != GraphicsQuality.Tier.HIGH:
+		return 1.0
+	if type.begins_with("gd_grass"):
+		return GraphicsQuality.HIGH_GRASS_RANGE_MULT
+	if GroundDetails.light_clutter(StringName(type)):
+		return GraphicsQuality.HIGH_CLUTTER_RANGE_MULT
+	return 1.0
+
+
+## Типы с мягким исчезновением на границе видимости на HIGH (П16 п. 4):
+## трава-буст и лёгкая мелочь наполнения; на прочих уровнях fade выключен.
+static func soft_fade_type(type: String) -> bool:
+	return type.begins_with("gd_grass") \
+		or GroundDetails.light_clutter(StringName(type))
 
 
 ## Множитель спада густоты травы по уровню (П13 1.9): ULTRA ×1.5,
