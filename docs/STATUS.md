@@ -5082,6 +5082,13 @@ ambient_light_disabled и двухцветного неба), SDF знаки/т�
   не менялся, рецепт ULTRA нетронут.
 - `--selftest-anim`: **PASS**, код 0 — свежий Linux-экспорт из HEAD (П16
   анимаций не касалась — прогон по правилу приёмки CLAUDE.md).
+- **Сборка Windows** (2026-10-27 21:34, из HEAD `75b7e8c`, пересборка
+  с нуля — прежняя была от П15 14:47): `builds/born-unblessed-windows.zip`
+  (282 МБ, 4 файла: BornUnblessed.exe, godotsteam dll, steam_api64.dll,
+  steam_appid.txt), `python3 -m zipfile -t` — без ошибок.
+  exe 382 548 104 байт, sha256: exe
+  `4d11b1c5d5036fe3e59b23b797e11b7088377a56d3d297a558aae9c38b44a2ba`, zip
+  `d31546eeb8a068349998ff4d36ff1948a5432851e5bfab3506928ac693697e4e`.
 
 **Коммиты:** план `a0b2f3c`; блок 1 `b2d8200` (+`809cfd7` uid); блок 2
 `716b3b9`; блок 3 `f45ddfe`; блок 4 `2a87aa8`; блок 5 `0ea95d1`; блоки 6-8
