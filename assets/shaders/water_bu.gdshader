@@ -99,6 +99,22 @@ uniform float foam_width : hint_range(0.02, 0.3) = 0.06;
 uniform float runup_amp : hint_range(0.0, 0.6) = 0.35;
 group_uniforms;
 
+group_uniforms Effects;
+// П15 5: каустика на дне — процедурные анимированные блики на мелком
+// (толщина < 1.5 м), гаснут с глубиной, с расстоянием и в темноте
+// (добавка пропорциональна свету, отражённому от дна: ночью и в тени
+// дно тёмное — бликов нет). 0 — выключено (галочка F3 «Каустика»);
+// ползунок F3 «Вода» меняет яркость.
+uniform float caustic_brightness : hint_range(0.0, 4.0) = 1.0;
+// П15 6: круги вокруг ног героя — до 4 источников uniform-массивом:
+// xy — позиция XZ, z — время старта (сек с запуска движка), w — сила
+// (0 — слот пуст). Ведёт WaterArea по локальному игроку в зоне,
+// по сети не идут. ripple_fx_amount — выключатель галочкой F3
+// «Круги на воде».
+uniform vec4 ripple_sources[4];
+uniform float ripple_fx_amount : hint_range(0.0, 1.0) = 1.0;
+group_uniforms;
+
 group_uniforms Fades;
 // Растворение к горизонту цветом неба (дальняя плоскость Ocean за 700 м
 // уходит в дымку без резкой границы; «Простая графика» приближает).
@@ -129,6 +145,16 @@ const vec3 FOAM_COLOR = vec3(0.76, 0.77, 0.79);
 // Мягкий край воды (П15 9.2): последние сантиметры толщины (5-15 см)
 // плавно гасят всё, кроме дна, — вода у кромки полностью прозрачная.
 const float EDGE_SOFT_M = 0.12;
+// Круги от ног (П15 6): гауссовы кольца, скорость фронта, время жизни
+// и ширина пакета, м; второе кольцо отстаёт на RING_TRAIL_M и слабее.
+const float RING_LIFE_SEC = 2.2;
+const float RING_SPEED_M = 0.85;
+const float RING_W = 0.20;
+const float RING_TRAIL_M = 0.32;
+// Каустика (П15 5): блики на дне живут на мелком у берега — дальше
+// (и глубже) гаснет.
+const float CAUSTIC_MAX_DEPTH_M = 1.5;
+const float CAUSTIC_MAX_DIST_M = 50.0;
 
 // Симплекс-шум 2D (Ian McEwan / Ashima Arts, публичный webgl-noise) —
 // тот же, что в шейдере земли.
@@ -307,6 +333,38 @@ void fragment() {
 			* ripple_strength * 2.2);
 		lost = max(lost, ripple_lost);
 	}
+
+	// П15 6: круги вокруг ног героя — до 4 источников (WaterArea ведёт
+	// слоты по локальному игроку в зоне, без сети): расходящиеся
+	// гауссовы кольца ряби (наклон — производная пакета по радиусу)
+	// и немного пены у фронта. Возмущение подчиняется общему гашению
+	// кромки, как и рябь.
+	float rings_foam = 0.0;
+	if (ripple_fx_amount > 0.001) {
+		for (int i = 0; i < 4; i++) {
+			vec4 src = ripple_sources[i];
+			float age = TIME - src.z;
+			if (src.w <= 0.001 || age < 0.0 || age > RING_LIFE_SEC) {
+				continue;
+			}
+			vec2 rel = world_pos.xz - src.xy;
+			float d = max(length(rel), 1e-4);
+			float fade = src.w * (1.0 - age / RING_LIFE_SEC);
+			float r1 = age * RING_SPEED_M;
+			// exp(-q²) — гауссово кольцо (без pow: база отрицательна).
+			float q1 = (d - r1) / RING_W;
+			float ring1 = exp(-q1 * q1);
+			float q2 = (d - max(r1 - RING_TRAIL_M, 0.0)) / RING_W;
+			float ring2 = exp(-q2 * q2);
+			float ring = ring1 + 0.55 * ring2;
+			float slope_r = -2.0 * (d - r1) / (RING_W * RING_W) * ring1;
+			nrm.xz += (rel / d) * slope_r * fade
+				* 0.05 * ripple_fx_amount;
+			rings_foam = max(rings_foam,
+				ring * fade * 0.35 * ripple_fx_amount);
+		}
+		nrm = normalize(nrm);
+	}
 	// П15 9.2: рябь и наклон волн гаснут к кромке — вода у края гладкая
 	// и прозрачная (edge = 0 на толщине < ~5 см).
 	nrm = normalize(mix(vec3(0.0, 1.0, 0.0), nrm, edge));
@@ -326,6 +384,27 @@ void fragment() {
 		refr_uv = SCREEN_UV;
 	}
 	vec3 bottom = texture(screen_tex, refr_uv).rgb;
+
+	// П15 5: каустика на дне — анимированные блики на мелком: два
+	// встречно дрейфующих слоя шума, возведённые в степень (яркие
+	// пятна редки, между ними — тёмные). Гаснет с глубиной (толщина),
+	// с расстоянием (мерцание) и в темноте: добавка пропорциональна
+	// свету, отражённому от дна, — ночью и в тени дно тёмное, бликов
+	// нет, днём на светлом песке — максимум.
+	float caustic_mask = caustic_brightness
+		* (1.0 - smoothstep(CAUSTIC_MAX_DEPTH_M * 0.25,
+			CAUSTIC_MAX_DEPTH_M, thickness))
+		* (1.0 - smoothstep(CAUSTIC_MAX_DIST_M * 0.4,
+			CAUSTIC_MAX_DIST_M, surf_dist));
+	if (caustic_mask > 0.001) {
+		vec2 cuv = world_pos.xz * 1.3;
+		float cn = snoise(cuv + vec2(TIME * 0.15, -TIME * 0.12))
+			+ 0.5 * snoise(cuv * 2.1 - vec2(TIME * 0.23, -TIME * 0.17));
+		float caustic = pow(clamp(0.5 + 0.5 * cn * 0.667, 0.0, 1.0), 5.0);
+		float bottom_luma = dot(bottom, vec3(0.299, 0.587, 0.114));
+		bottom += vec3(0.9, 0.95, 1.0)
+			* caustic * caustic_mask * bottom_luma * 1.6;
+	}
 
 	// Поглощение Бера по каналам (SPEC 4.1): красный гаснет первым —
 	// дно на мелком видно чисто, с глубиной уходит в цвет воды.
@@ -361,6 +440,7 @@ void fragment() {
 	foam += smoothstep(0.35, 0.55, crest)
 		* smoothstep(-0.2, 0.2, n_coarse)
 		* (1.0 - smoothstep(60.0, 140.0, surf_dist));
+	foam = max(foam, rings_foam);
 	foam = clamp(foam, 0.0, 1.0);
 
 	// П15 3: отражение — движковое: отключавший IBL флаг рендера убран,

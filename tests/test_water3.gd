@@ -7,6 +7,7 @@
 extends GutTest
 
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
+const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
 const WATER_BU_CODE: String = WaterArea.WATER_BU.code
 const WATER_CHEAP_CODE: String = WaterArea.WATER_BU_CHEAP.code
 ## Контрольная сумма heights печёного арта: П15 землю не трогает,
@@ -500,3 +501,141 @@ func test_band_cubic_matches_detail_ring_shader() -> void:
 		var tri: float = ShoreBand.tri_height(heights, probe.x, probe.y)
 		assert_lte(absf(cubic - tri), ShoreBand.TENSION_LIMIT,
 			"бикубика прижата к чанковой высоте (%s)" % probe)
+
+
+# --- П15 5-6: каустика на дне и круги вокруг героя ---
+
+func test_caustic_and_rings_only_in_full_shader() -> void:
+	# П15 5-6: каустика и круги — эффекты полной версии шейдера
+	# (HIGH/ULTRA): дешёвая версия без экранной выборки дна этих
+	# параметров не имеет вовсе.
+	assert_true(WATER_BU_CODE.contains("caustic_brightness"),
+		"полный шейдер знает яркость каустики")
+	assert_true(WATER_BU_CODE.contains("ripple_sources"),
+		"полный шейдер принимает массив источников кругов")
+	assert_false(WATER_CHEAP_CODE.contains("caustic_brightness"),
+		"дешёвый шейдер без каустики")
+	assert_false(WATER_CHEAP_CODE.contains("ripple_sources"),
+		"дешёвый шейдер без кругов")
+
+
+func test_caustic_fades_with_depth_and_light() -> void:
+	# П15 5: блики только на мелком (< 1.5 м — гашение по толщине
+	# smoothstep'ом), и их яркость следует за светом дна: в тени и
+	# ночью дно тёмное — блик гаснет через его яркость (bottom_luma),
+	# без отдельного множителя дня.
+	assert_almost_eq(_const_of(WATER_BU_CODE, "CAUSTIC_MAX_DEPTH_M"),
+		1.5, 0.001, "каустика живёт до 1.5 м глубины")
+	var idx: int = WATER_BU_CODE.find("caustic_mask")
+	assert_gt(idx, -1, "маска каустики считается в шейдере")
+	var block: String = WATER_BU_CODE.substr(idx, 900)
+	assert_true(block.contains("smoothstep"), "гашение с глубиной — smoothstep")
+	assert_true(block.contains("bottom_luma"),
+		"блик пропорционален освещённости дна (тень и ночь гасят)")
+
+
+func test_rings_are_gaussian_rings_with_foam() -> void:
+	# П15 6: кольца ряби — гауссовы пакеты (exp(-q²), без pow с
+	# отрицательной базой), наклон — производная пакета по радиусу;
+	# пена кругов подмешивается к береговой через max, не в EMISSION.
+	var idx: int = WATER_BU_CODE.find("ripple_fx_amount",
+		WATER_BU_CODE.find("void fragment"))
+	assert_gt(idx, -1, "блок кругов есть во fragment")
+	var block: String = WATER_BU_CODE.substr(idx, 1400)
+	assert_true(block.contains("exp(-q1 * q1)"), "кольцо — гауссов пакет")
+	assert_true(block.contains("RING_LIFE_SEC"), "кольцо живёт ограниченно")
+	assert_true(block.contains("slope_r"), "кольцо наклоняет нормаль")
+	assert_true(WATER_BU_CODE.contains("foam = max(foam, rings_foam)"),
+		"пена кругов входит в общую пену воды")
+
+
+func test_water_area_ripple_slots_and_toggles() -> void:
+	# П15 6-7: слоты источников (uniform-массив ≤ 4, время — TIME
+	# шейдера), тумблеры F3 выключают и возвращают эффекты; яркость
+	# каустики переживает выключенную галочку (ползунок П15 8.1).
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_fx_amount")),
+		1.0, 0.001, "номинал: круги включены")
+	assert_almost_eq(
+		float(material.get_shader_parameter("caustic_brightness")),
+		1.0, 0.001, "номинал: каустика включена")
+	area.push_ripple(Vector2(3.0, 4.0), 0.8)
+	var sources: PackedVector4Array = \
+		material.get_shader_parameter("ripple_sources")
+	var hit: int = 0
+	for slot: Vector4 in sources:
+		if slot.w > 0.001:
+			hit += 1
+			assert_almost_eq(slot.x, 3.0, 0.001, "слот помнит x круга")
+			assert_almost_eq(slot.y, 4.0, 0.001, "слот помнит z круга")
+			assert_gt(slot.z, 0.0, "время старта — TIME шейдера")
+	assert_eq(hit, 1, "после первого круга живой слот один")
+	# Пять пушей подряд — слотов всё равно 4 (замещается старейший).
+	for i: int in 5:
+		area.push_ripple(Vector2(float(i), 0.0), 0.8)
+	assert_eq((material.get_shader_parameter("ripple_sources")
+		as PackedVector4Array).size(), 4, "число слотов не растёт")
+	# Тумблеры F3 (П15 7).
+	area.set_ripples(false)
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_fx_amount")),
+		0.0, 0.001, "галочка выключила круги")
+	area.set_ripples(true)
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_fx_amount")),
+		1.0, 0.001, "повторная галочка вернула круги")
+	area.set_caustic_brightness(2.5)
+	area.set_caustic(false)
+	assert_almost_eq(
+		float(material.get_shader_parameter("caustic_brightness")),
+		0.0, 0.001, "галочка выключила каустику")
+	area.set_caustic(true)
+	assert_almost_eq(
+		float(material.get_shader_parameter("caustic_brightness")),
+		2.5, 0.001, "галочка вернула значение ползунка, а не номинал")
+	WorldMaterials.textured_headless = false
+
+
+func test_swimmer_pushes_ripples_by_step() -> void:
+	# П15 6: круги пускаются по движению героя в воде — новый не чаще
+	# шага RIPPLE_STEP_M; выключенный тумблер останавливает пуш.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	var player := PLAYER.instantiate() as Player
+	add_child_autofree(player)
+	player.global_position = Vector3.ZERO
+	area._local_swimmer = player
+	area._last_ripple_xz = Vector2.ZERO
+	area._physics_process(0.016)
+	assert_eq(_live_ripple_slots(material), 0,
+		"на месте круг не пускается повторно")
+	player.global_position = Vector3(0.3, 0.0, 0.0)
+	area._physics_process(0.016)
+	assert_eq(_live_ripple_slots(material), 0,
+		"ближе шага 0.55 м — круга нет")
+	player.global_position = Vector3(0.6, 0.0, 0.0)
+	area._physics_process(0.016)
+	assert_eq(_live_ripple_slots(material), 1,
+		"дальше шага — новый круг")
+	area.set_ripples(false)
+	player.global_position = Vector3(5.0, 0.0, 0.0)
+	area._physics_process(0.016)
+	assert_eq(_live_ripple_slots(material), 1,
+		"выключенный тумблер останавливает круги")
+	WorldMaterials.textured_headless = false
+
+
+func _live_ripple_slots(material: ShaderMaterial) -> int:
+	var sources: PackedVector4Array = \
+		material.get_shader_parameter("ripple_sources")
+	var count: int = 0
+	for slot: Vector4 in sources:
+		if slot.w > 0.001:
+			count += 1
+	return count

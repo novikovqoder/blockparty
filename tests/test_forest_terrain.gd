@@ -170,9 +170,20 @@ func test_island_uses_forest_material() -> void:
 	add_child_autofree(island)
 	var terrain := island.get_node("IslandView/Terrain") as StaticBody3D
 	var forest := 0
+	var band := 0
 	var others := 0
 	for node: Node in terrain.get_children():
 		if node is MeshInstance3D:
+			# П15 9.1: береговая полоса (ShoreBand) — не чанк: своя густая
+			# сетка 0.25 м вдоль береговой линии, материал — чанковый;
+			# в подсчёт чанков не входит, проверяется отдельно.
+			if node.name == "ShoreBand":
+				band += 1
+				assert_true(
+					(node as MeshInstance3D).material_override
+					is ShaderMaterial,
+					"полоса берега — чанковым материалом ForestGround")
+				continue
 			if (node as MeshInstance3D).material_override is ShaderMaterial:
 				forest += 1
 			else:
@@ -180,6 +191,7 @@ func test_island_uses_forest_material() -> void:
 	assert_eq(
 		forest, TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE,
 		"все 64 чанка острова с материалом ForestGround")
+	assert_eq(band, 1, "береговая полоса П15 — одна на весь остров")
 	assert_eq(others, 0, "чанков с другим материалом нет")
 	var shapes := 0
 	for child: Node in terrain.get_children():

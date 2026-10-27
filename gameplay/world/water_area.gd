@@ -119,6 +119,25 @@ var _shallow_base := Color.BLACK
 var _ripple_on: bool = true
 ## Уровень качества построенных поверхностей (волны/рябь/шейдер).
 var _tier: int = 0
+# --- Круги и каустика (SPEC П15 5-6) ---
+## Круги вокруг ног героя: до 4 живых источников в uniform-массиве
+## шейдера, слот = (x, z, время старта в секундах TIME шейдера, сила).
+## Новый круг — когда герой отошёл от предыдущего на RIPPLE_STEP_M;
+## замещается самый старый слот (кольцо живёт ~RING_LIFE_SEC ≈ 2.2 с).
+## Локально и без сети: источники не реплицируются (RemotePlayer —
+## не Player, в зону коллизии не попадает, круги только у своего героя).
+const RIPPLE_SLOTS: int = 4
+const RIPPLE_STEP_M: float = 0.55
+const RIPPLE_STRENGTH: float = 0.8
+## Каустика (номинал яркости, ползунок F3 меняет).
+const CAUSTIC_BRIGHTNESS: float = 1.0
+var _ripples: PackedVector4Array = PackedVector4Array([
+	Vector4.ZERO, Vector4.ZERO, Vector4.ZERO, Vector4.ZERO])
+var _ripples_on: bool = true
+var _caustic_on: bool = true
+var _caustic_brightness: float = CAUSTIC_BRIGHTNESS
+var _local_swimmer: Player = null
+var _last_ripple_xz := Vector2(INF, INF)
 
 
 func _ready() -> void:
@@ -291,19 +310,57 @@ static func wave_spectrum(sea: bool) -> Array:
 
 func _on_body_entered(body: Node3D) -> void:
 	if body is Player:
-		(body as Player).enter_water(water_level)
+		var player := body as Player
+		player.enter_water(water_level)
 		# Круги на воде при входе в неё (раздел 16); П12 F — цвет пены,
 		# не бирюза палитры.
-		var pos: Vector3 = (body as Node3D).global_position
+		var pos: Vector3 = player.global_position
 		Fx.water_ring(
 			get_parent(), Vector3(pos.x, water_level + 0.02, pos.z),
 			RING_COLOR,
 		)
+		# Расходящиеся кольца (П15 6) — вокруг локального героя; круг
+		# при входе, дальше — по шагу от последнего.
+		_local_swimmer = player
+		_last_ripple_xz = Vector2(pos.x, pos.z)
+		push_ripple(_last_ripple_xz, 1.0)
 
 
 func _on_body_exited(body: Node3D) -> void:
 	if body is Player:
 		(body as Player).exit_water()
+		if body == _local_swimmer:
+			_local_swimmer = null
+
+
+func _physics_process(_delta: float) -> void:
+	var swimmer := _local_swimmer
+	if swimmer == null or not is_instance_valid(swimmer):
+		_local_swimmer = null
+		return
+	if not _ripples_on:
+		return
+	var xz := Vector2(
+		swimmer.global_position.x, swimmer.global_position.z)
+	if xz.distance_to(_last_ripple_xz) >= RIPPLE_STEP_M:
+		_last_ripple_xz = xz
+		push_ripple(xz, RIPPLE_STRENGTH)
+
+
+## Пустить круг ряби (П15 6): слот с самым старым временем старта
+## замещается — одновременно живёт не больше RIPPLE_SLOTS колец.
+## Время — TIME шейдера (секунды с запуска движка = ticks_msec/1000).
+func push_ripple(xz: Vector2, strength: float) -> void:
+	if not _ripples_on or _water_materials.is_empty():
+		return
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	var oldest: int = 0
+	for i: int in RIPPLE_SLOTS:
+		if _ripples[i].z < _ripples[oldest].z:
+			oldest = i
+	_ripples[oldest] = Vector4(xz.x, xz.y, now, strength)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("ripple_sources", _ripples)
 
 
 func _build_surface() -> void:
@@ -426,6 +483,14 @@ func _surface_material(calm: bool) -> Material:
 	material.set_shader_parameter("depth_fog_fade_min", 70.0)
 	material.set_shader_parameter("depth_fog_fade_max", 130.0)
 	material.set_shader_parameter("far_thickness", 8.0)
+	# Каустика и круги (П15 5-6): параметры читает только полная версия
+	# шейдера (HIGH/ULTRA), дешёвая их не имеет; текущее состояние
+	# тумблеров F3 переносится и на построенные позже поверхности.
+	material.set_shader_parameter("ripple_sources", _ripples)
+	material.set_shader_parameter(
+		"ripple_fx_amount", 1.0 if _ripples_on else 0.0)
+	material.set_shader_parameter("caustic_brightness",
+		_caustic_brightness if _caustic_on else 0.0)
 	_water_materials.append(material)
 	return material
 
@@ -485,6 +550,35 @@ func set_foam(mult: float, width: float) -> void:
 		material.set_shader_parameter(
 			"foam_amount", _foam_base * _foam_mult)
 		material.set_shader_parameter("foam_width", _foam_width)
+
+
+## Круги на воде на лету (галочка F3 «Круги на воде», П15 7): 0 —
+## слоты не обновляются и шейдер их не рисует; повторная галочка
+## возвращает.
+func set_ripples(on: bool) -> void:
+	_ripples_on = on
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter(
+			"ripple_fx_amount", 1.0 if on else 0.0)
+
+
+## Каустика на лету (галочка F3 «Каустика», П15 7): выключена —
+## яркость 0; ползунок яркости (П15 8.1) помнит значение и после
+## возврата галочки восстанавливается.
+func set_caustic(on: bool) -> void:
+	_caustic_on = on
+	_apply_caustic_brightness()
+
+
+func set_caustic_brightness(value: float) -> void:
+	_caustic_brightness = clampf(value, 0.0, 4.0)
+	_apply_caustic_brightness()
+
+
+func _apply_caustic_brightness() -> void:
+	var value := _caustic_brightness if _caustic_on else 0.0
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("caustic_brightness", value)
 
 
 ## Яркость глубинных цветов по часам (П5.13, блок 2; П15 3 — отражение

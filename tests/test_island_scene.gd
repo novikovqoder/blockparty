@@ -148,9 +148,16 @@ func test_water_is_shared_ocean_and_lake() -> void:
 			"волны озера заметно спокойнее морских (%.3f < %.3f)" % [
 				lake_waves[0].w, sea_waves[0].w])
 	# Вода процедурная (П14 4.5): назначенных текстур нет вовсе — пена
-	# и рябь шумом, текстур Boujie в материалах не осталось.
+	# и рябь шумом, текстур Boujie в материалах не осталось. П15 9.3 —
+	# единственное исключение: SDF-карта расстояния до берега, запечённая
+	# из карты высот острова на генерации (не ассет).
 	for material: ShaderMaterial in [sea_material, lake_material]:
 		for u: Dictionary in material.shader.get_shader_uniform_list():
+			if u["name"] == "shore_sdf":
+				assert_true(
+					material.get_shader_parameter(u["name"]) is Texture2D,
+					"SDF-карта берега назначена (П15 9.3)")
+				continue
 			assert_false(material.get_shader_parameter(u["name"])
 				is Texture2D, "у воды нет текстур (%s)" % u["name"])
 	# Цвет по глубине: глубокая темнее мелководья (прозрачность — Бером
