@@ -365,6 +365,17 @@ static func visibility_range(type: StringName) -> float:
 			return 56.0
 		"mrock":
 			return 60.0
+		# П16 п. 5: дальность по размеру мелким предметам раскладки —
+		# дальше они в пикселях меньше ложки, а Draw Call живёт. Скамейки
+		# 70, валежник 90, мостки 110, лодка 120.
+		"bench":
+			return 70.0
+		"dead_log":
+			return 90.0
+		"log_bridge":
+			return 110.0
+		"boat":
+			return 120.0
 	return 0.0
 
 

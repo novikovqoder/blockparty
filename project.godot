@@ -96,4 +96,7 @@ pause={
 [rendering]
 
 renderer/rendering_method="forward_plus"
+; П16 п. 5: отсечение невидимого — окклюдеры срубов, руин и валунов
+; (OccluderInstance3D в cabin_house.gd и island_view.gd).
+occlusion_culling/use_occlusion_culling=true
 textures/default_filters/anisotropic_filtering_level=16

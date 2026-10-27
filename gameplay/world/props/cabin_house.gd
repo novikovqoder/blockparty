@@ -57,6 +57,9 @@ const HALL_LIGHT_LOCAL: Vector3 = Vector3(-0.5, 2.3, 1.6)
 ## COLL с центром внутри него уходят в отдельное тело, включаемое вместе
 ## с террасой — вариант «без террасы» не оставляет невидимого пола.
 ## Меряется по мешу TERRACE_deck при сборке (с запасом на стену дома).
+## П16 п. 5: на сколько окклюдер корпуса утоплен внутрь по горизонтали
+## (м), чтобы сплошной бокс не съедал окна и дверной проём.
+const OCCLUDER_INSET: float = 0.35
 
 ## Оттенки наружного дерева (брёвна, обшивка, крыша) — вариации фасадов.
 const WOOD_TINTS: Array[Color] = [
@@ -232,11 +235,43 @@ func _build() -> void:
 			continue
 		if mat_name != "":
 			mi.material_override = _material(mat_name, tint)
+	# П16 п. 5: окклюдер корпуса — BoxOccluder3D по габариту мешей EXT_*
+	# (чуть утоплен внутрь, чтобы не съедать видимость через окна и дверь;
+	# стоит на всех уровнях — построение разовое, отсечение дёшево).
+	_add_body_occluder(model)
 	# Лампа крыльца светится всегда (материал emission), тёплый свет
 	# у входа и внутри — как у костра, без теней (дешёвая ночь).
 	_add_light(PORCH_LIGHT_LOCAL, Color(1.0, 0.8, 0.55), 1.2, 5.0, "PorchLight")
 	_add_light(WING_LIGHT_LOCAL, Color(1.0, 0.82, 0.6), 0.9, 5.5, "WingLight")
 	_add_light(HALL_LIGHT_LOCAL, Color(1.0, 0.82, 0.6), 1.0, 8.0, "HallLight")
+
+
+## Окклюдер корпуса (П16 п. 5): объединённый AABB наружных мешей EXT_*,
+## ужатый по горизонтали на OCCLUDER_INSET с каждой стороны — сплошной
+## бокс перекрыл бы окна и дверной проём (проём — в западной стене крыла,
+## OccluderInstance3D не умеет дырок), утопленный оставляет обзор изнутри.
+## По высоте не ужимается: от земли до конька, из-за дома мир не просвечивает.
+func _add_body_occluder(model: Node) -> void:
+	var body_box := AABB()
+	for child: Node in model.get_children():
+		var mi := child as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		if String(mi.name).begins_with("EXT_"):
+			body_box = body_box.merge(mi.mesh.get_aabb())
+	if not body_box.has_volume():
+		return
+	var size := body_box.size \
+		- Vector3(OCCLUDER_INSET * 2.0, 0.0, OCCLUDER_INSET * 2.0)
+	if size.x < 0.5 or size.z < 0.5:
+		return
+	var box := OccluderInstance3D.new()
+	box.name = "BodyOccluder"
+	var occluder := BoxOccluder3D.new()
+	occluder.size = size
+	box.occluder = occluder
+	box.position = body_box.get_center()
+	model.add_child(box)
 
 
 func _material_name(mi: MeshInstance3D) -> String:

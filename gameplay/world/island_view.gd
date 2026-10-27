@@ -54,6 +54,9 @@ var _clutter_nodes: Dictionary = {}
 var _clutter_center: Vector2 = Vector2(1e9, 1e9)
 ## Уровень, по которому мелочь построена (тени/плотность).
 var _clutter_tier: int = 0
+## П16 п. 5: трансформы наполнения по видам (из GroundDetails.build) —
+## по ним ставятся окклюдеры крупных валунов и пней.
+var _detail_transforms: Dictionary = {}
 
 
 ## Радиус ближней тесселяции (доработка-2 П5.13, П1): чанки ближе этого
@@ -65,6 +68,19 @@ const LOD_HYSTERESIS: float = 6.0
 ## П16 п. 3: кольцо детальной сетки двигается только когда зритель
 ## ушёл от места последней установки дальше этого порога, м.
 const RING_MOVE_MIN_M: float = 1.5
+## П16 п. 5: минимальная сторона окклюдера, м — щебень и кладка-обломки
+## не окклюдируются (проверка дороже пользы).
+const OCCLUDER_MIN_M: float = 0.5
+## П16 п. 5: печёные типы с окклюдером — кладка и скальные стены
+## (руины, каньон, смотровые уступы).
+const OCCLUDER_PROP_TYPES: PackedStringArray = [
+	"ruin_tower", "ruin_arch", "ruin_column", "rock_wall",
+]
+## П16 п. 5: виды наполнения с окклюдером — крупные валуны и пни
+## (масштаб ≥1.0, см. detail_occluder).
+const OCCLUDER_DETAIL_TYPES: PackedStringArray = [
+	"gd_boulder02", "gd_boulder03", "gd_stump01", "gd_stump02",
+]
 ## Базовая сила параллакса земли (движковое значение uniform шейдера
 ## forest_ground; сюда панель F3 возвращает параллакс после замера).
 const FOREST_PARALLAX_SCALE: float = 0.06
@@ -75,6 +91,7 @@ func _ready() -> void:
 	_build_props()
 	_build_details()
 	_build_colliders(_detail_colliders)
+	_build_occluders()
 
 
 ## Рельеф: одна карта высот и на коллизию (HeightMapShape3D — вся физика
@@ -363,6 +380,7 @@ func _build_details() -> void:
 		_base_ranges[type] = instance.visibility_range_end
 		_register(type, instance)
 	_detail_colliders = built["colliders"]
+	_detail_transforms = built["transforms"]
 	# П14 3.3: слой мелочи вокруг игрока (HIGH/ULTRA): ноды строятся здесь,
 	# буферы заполняет первый update_viewer (когда известна позиция
 	# зрителя); плотность и тени — по уровню входа, как у травы-буста.
@@ -371,6 +389,82 @@ func _build_details() -> void:
 		_clutter_nodes = GroundClutter.make_nodes(_clutter_tier)
 		for type: String in _clutter_nodes:
 			add_child(_clutter_nodes[type])
+
+
+## Окклюдеры статичного мира (П16 п. 5, SPEC п. 5 «отсечение невидимого»):
+## по BoxOccluder3D на крупный печёный предмет (кладка руин, скальные
+## стены каньона и уступов) и крупное наполнение (валуны, пни ≥1.0
+## масштаба) — рендер не рисует то, что за ними. Ставятся один раз при
+## входе в мир и живут на всех уровнях: построение разовое, сама
+## проверка отсечения дешевле лишних Draw Call'ов. Мелочь (трава, щебень,
+## скамейки) окклюдерами не становится — порог OCCLUDER_MIN_M.
+func _build_occluders() -> void:
+	var root := Node3D.new()
+	root.name = "Occluders"
+	for key: String in art.prop_groups:
+		var type := String(key.split(":")[0])
+		if not prop_occluder(type):
+			continue
+		var group: PropGroup = art.prop_groups[key]
+		for xf: Transform3D in group.transforms:
+			_add_occluder_box(root, group.mesh, xf)
+	for type: String in OCCLUDER_DETAIL_TYPES:
+		if not _detail_transforms.has(type):
+			continue
+		var mesh: Mesh = GroundDetails.kind_mesh(StringName(type))
+		if mesh == null:
+			continue
+		for xf: Transform3D in _detail_transforms[type]:
+			if detail_occluder(type, xf.basis.x.length()):
+				_add_occluder_box(root, mesh, xf)
+	add_child(root)
+
+
+## П16 п. 5: размер окклюдера предмета — AABB меша в масштабе трансформа
+## (у «метровых» типов вроде rock_wall длины уже в базисе); Vector3.ZERO —
+## предмет мелкий, окклюдер не ставится (порог OCCLUDER_MIN_M).
+static func occluder_size(mesh: Mesh, xf: Transform3D) -> Vector3:
+	var aabb: AABB = mesh.get_aabb()
+	var size := Vector3(
+		aabb.size.x * xf.basis.x.length(),
+		aabb.size.y * xf.basis.y.length(),
+		aabb.size.z * xf.basis.z.length(),
+	)
+	if size.x < OCCLUDER_MIN_M or size.y < OCCLUDER_MIN_M \
+			or size.z < OCCLUDER_MIN_M:
+		return Vector3.ZERO
+	return size
+
+
+## П16 п. 5: окклюдер-бокс по трансформу предмета — меш «ногами» в origin,
+## поворот только по yaw (кладка и валуны не наклоняются). Размер — AABB
+## меша в масштабе предмета (у «метровых» типов scale уже в длинах базиса),
+## центр — через полный трансформ; нода без масштаба, чтобы BoxOccluder3D
+## остался в метрах. Мелкий предмет не окклюдируется.
+static func _add_occluder_box(
+	parent: Node3D, mesh: Mesh, xf: Transform3D
+) -> void:
+	var size := occluder_size(mesh, xf)
+	if size == Vector3.ZERO:
+		return
+	var occluder_node := OccluderInstance3D.new()
+	var box := BoxOccluder3D.new()
+	box.size = size
+	occluder_node.occluder = box
+	occluder_node.position = xf * mesh.get_aabb().get_center()
+	occluder_node.rotation.y = atan2(-xf.basis.x.z, xf.basis.x.x)
+	parent.add_child(occluder_node)
+
+
+## П16 п. 5: печёный тип получает окклюдер (кладка руин и скальные стены).
+static func prop_occluder(type: String) -> bool:
+	return OCCLUDER_PROP_TYPES.has(type)
+
+
+## П16 п. 5: вид наполнения получает окклюдер — валуны и пни крупного
+## масштаба; мелкие сканы и лёгкая мелочь не окклюдируются.
+static func detail_occluder(type: String, scale: float) -> bool:
+	return OCCLUDER_DETAIL_TYPES.has(type) and scale >= 1.0
 
 
 ## Уровень качества мира (П12 E; переданный из П11 пункт 2.8): SIMPLE —

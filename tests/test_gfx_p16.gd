@@ -368,6 +368,155 @@ func test_plant_materials_no_alpha_blend() -> void:
 		canopy.contains("blend_mix"), "листва — без alpha blend")
 
 
+# --- П16 п. 5: occlusion culling ---
+
+func test_occlusion_culling_enabled() -> void:
+	# П16 п. 5: отсечение невидимого включено в настройках проекта;
+	# окклюдеры (срубы, руины, валуны) при этом реально работают.
+	assert_true(
+		ProjectSettings.get_setting(
+			"rendering/occlusion_culling/use_occlusion_culling"),
+		"occlusion culling включён в настройках проекта")
+
+
+func test_cabin_has_body_occluder() -> void:
+	# У каждого сруба — OccluderInstance3D с BoxOccluder3D по габариту
+	# корпуса (ужат по горизонтали, чтобы не съесть окна и дверной проём).
+	var cabin := CabinHouse.new()
+	add_child_autofree(cabin)
+	var occl := cabin.get_node("Cabin/BodyOccluder") as OccluderInstance3D
+	assert_not_null(occl, "у сруба есть окклюдер корпуса")
+	var box := occl.occluder as BoxOccluder3D
+	assert_not_null(box, "окклюдер сруба — бокс")
+	# Габарит дома ~12×13×4.5 м, ужатие только по горизонтали (0.35 м).
+	assert_gt(box.size.x, 8.0, "бокс по X — почти во всю ширину дома")
+	assert_gt(box.size.z, 8.0, "бокс по Z — почти во всю глубину дома")
+	assert_gt(box.size.y, 3.0, "бокс по Y — от земли до конька")
+
+
+func test_occluder_classification_and_size() -> void:
+	# Кладка руин и скальные стены окклюдируются; деревья, постройки,
+	# трава и мелочь — нет (для них отсечение дороже пользы).
+	for type: String in [
+		"ruin_tower", "ruin_arch", "ruin_column", "rock_wall",
+	]:
+		assert_true(
+			IslandView.prop_occluder(type), "%s — с окклюдером" % type)
+	for type: String in [
+		"bench", "boat", "dead_log", "log_bridge", "rgrass", "etree_pine",
+		"boulder", "pebble",
+	]:
+		assert_false(
+			IslandView.prop_occluder(type), "%s — без окклюдера" % type)
+	# Валуны и пни наполнения — с окклюдером при масштабе ≥1.0.
+	assert_true(
+		IslandView.detail_occluder("gd_boulder02", 1.0),
+		"валун масштаба 1.0 — окклюдер")
+	assert_true(
+		IslandView.detail_occluder("gd_stump01", 1.2),
+		"пень масштаба 1.2 — окклюдер")
+	assert_false(
+		IslandView.detail_occluder("gd_boulder02", 0.9),
+		"валун масштаба 0.9 — без окклюдера")
+	assert_false(
+		IslandView.detail_occluder("gd_stones", 1.5),
+		"россыпь камней — без окклюдера")
+	assert_false(
+		IslandView.detail_occluder("gd_fern", 1.5),
+		"папоротник — без окклюдера")
+	# Размер бокса — AABB меша × масштаб трансформа; мелкий не ставится.
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.9, 3.3, 2.0)
+	var size := IslandView.occluder_size(mesh, Transform3D(
+		Basis().scaled(Vector3.ONE * 1.2), Vector3.ZERO))
+	assert_almost_eq(size.x, 1.9 * 1.2, 0.001, "размер — AABB × масштаб")
+	assert_almost_eq(size.y, 3.3 * 1.2, 0.001, "высота — AABB × масштаб")
+	var tiny := BoxMesh.new()
+	tiny.size = Vector3(0.3, 0.4, 0.3)
+	assert_eq(
+		IslandView.occluder_size(tiny, Transform3D.IDENTITY),
+		Vector3.ZERO, "мелкий предмет не окклюдируется")
+
+
+func test_occluders_built_from_groups() -> void:
+	# Окклюдеры строятся из данных запечённого острова (кладка, стены)
+	# и наполнения (валуны): по одному на каждый крупный предмет, мелкие
+	# и немасштабные отфильтрованы.
+	var view := IslandView.new()
+	var art := IslandArt.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.9, 3.3, 2.0)
+	var tower := PropGroup.new()
+	tower.mesh = mesh
+	tower.transforms = [Transform3D(Basis(), Vector3(5.0, 2.0, 5.0))]
+	var wall := PropGroup.new()
+	wall.mesh = mesh
+	wall.transforms = [
+		Transform3D(Basis(), Vector3(0.0, 0.0, 0.0)),
+		Transform3D(Basis().scaled(Vector3.ONE * 0.2), Vector3(1.0, 0.0, 1.0)),
+	]
+	# bench — не окклюдируется, несмотря на группу.
+	var bench := PropGroup.new()
+	bench.mesh = mesh
+	bench.transforms = [Transform3D(Basis(), Vector3(2.0, 0.0, 2.0))]
+	art.prop_groups = {
+		"ruin_tower:0": tower, "rock_wall:4": wall, "bench:0": bench,
+	}
+	view.art = art
+	view._detail_transforms = {
+		"gd_boulder02": [
+			Transform3D(Basis().scaled(Vector3.ONE * 1.1), Vector3(8.0, 0.0, 8.0)),
+			Transform3D(Basis().scaled(Vector3.ONE * 0.7), Vector3(9.0, 0.0, 9.0)),
+		],
+		"gd_stones": [Transform3D(Basis(), Vector3(1.0, 0.0, 1.0))],
+	}
+	view._build_occluders()
+	assert_not_null(view.get_node_or_null("Occluders"), "узел окклюдеров есть")
+	assert_eq(
+		view.get_node("Occluders").get_child_count(), 3,
+		"окклюдеры: башня, большая стена и валун 1.1 "
+		+ "(малая стена, скамейка, валун 0.7 и камни отфильтрованы)")
+	view.free()
+
+
+func test_ruin_occluder_count_from_art() -> void:
+	# По реальному запечённому острову окклюдеров руин и стен много
+	# (башни, арки, колонны, кладка и скальные стены) — все крупнее
+	# порога. Регресс раскладки (меньше 60) заметен здесь.
+	var art: IslandArt = load("res://gameplay/world/island_art.res")
+	var count: int = 0
+	for key: String in art.prop_groups:
+		var type := String(key.split(":")[0])
+		if not IslandView.prop_occluder(type):
+			continue
+		var group: PropGroup = art.prop_groups[key]
+		for xf: Transform3D in group.transforms:
+			if IslandView.occluder_size(group.mesh, xf) != Vector3.ZERO:
+				count += 1
+	assert_gt(count, 60, "руинных окклюдеров больше 60 (фактически ~79)")
+
+
+func test_small_prop_visibility_ranges() -> void:
+	# П16 п. 5: у мелких предметов раскладки появилась дальность видимости
+	# (раньше рисуясь всегда); деревья, постройки и валуны — как прежде.
+	assert_almost_eq(
+		PropMeshes.visibility_range(&"bench"), 70.0, 0.001,
+		"скамейки видны до 70 м")
+	assert_almost_eq(
+		PropMeshes.visibility_range(&"dead_log"), 90.0, 0.001,
+		"валежник — до 90 м")
+	assert_almost_eq(
+		PropMeshes.visibility_range(&"log_bridge"), 110.0, 0.001,
+		"мостки — до 110 м")
+	assert_almost_eq(
+		PropMeshes.visibility_range(&"boat"), 120.0, 0.001,
+		"лодка — до 120 м")
+	for type: StringName in [&"etree_pine", &"boulder", &"ruin_tower", &"cabin"]:
+		assert_almost_eq(
+			PropMeshes.visibility_range(type), 0.0, 0.001,
+			"%s — всегда видим (силуэт)" % type)
+
+
 # --- П16 п. 3: детальная сетка ---
 
 const ISLAND_SCENE: PackedScene = preload("res://gameplay/world/island.tscn")

@@ -185,6 +185,15 @@ static func light_clutter(type: StringName) -> bool:
 	return false
 
 
+## П16 п. 5: меш вида наполнения по типу (null — тип неизвестен);
+## окклюдеры крупных валунов и пней считаются по его AABB.
+static func kind_mesh(type: StringName) -> Mesh:
+	for kind: Dictionary in KINDS:
+		if String(kind["type"]) == String(type):
+			return kind["mesh"]
+	return null
+
+
 ## Попытка поставить один вид в клетке: жёсткие пределы (уклон, двор руин,
 ## тропа) гасят вероятность до броска, дальше — обычная раскладка «как у
 ## пропсов»: масштаб, поворот, джиттер, высота билинейной выборкой рельефа.
