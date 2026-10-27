@@ -162,10 +162,14 @@ varying float puddle_v;
 
 // Кольцо детальной сетки (П14 3.1): включается материалом кольца
 // (TerrainDetail.make_material); у чанков detail_ring = false и ветка
-// не сэмплит карту высот.
+// не сэмплит карту высот. П15 9.1: высота кольца — бикубическая
+// Catmull-Rom по height_tex с прижимом к треугольной высоте коллизии
+// (та же формула, что у береговой полосы ShoreBand — стык без шва).
 uniform bool detail_ring = false;
 uniform sampler2D height_tex : filter_linear_mipmap_anisotropic;
 uniform float ring_radius = 16.0;
+// Прижим бикубики к коллизии, м (тот же лимит, что ShoreBand.TENSION_LIMIT).
+const float TENSION_LIMIT = 0.03;
 // Средние ORM.b слоёв для центрирования смещения (средняя высота кольца
 // над чанками ≈ 0): a = litter, rock, mud; b = moss, gravel, grass.
 uniform vec3 orm_mean_a = vec3(0.5, 0.5, 0.5);
@@ -372,12 +376,64 @@ vec2 pom_march(
 	return uv_m - m2;
 }
 
+// П15 9.1: бикубическая высота кольца — Catmull-Rom 4×4 узла
+// (16 сэмплов height_tex по узлам решётки) с прижимом к треугольной
+// высоте коллизии (диагональ квадрата (x,z)–(x+1,z+1), как у чанков):
+// отклонение ≤ TENSION_LIMIT. Высота не опускается ниже чанка — кольцо
+// скользит над чанками и береговой полосой без утопания.
+float ring_node_h(vec2 node) {
+	return textureLod(height_tex, (node + vec2(128.0)) / 256.0, 0.0).r;
+}
+
+float ring_catmull(float p0, float p1, float p2, float p3, float t) {
+	return 0.5 * ((2.0 * p1) + (-p0 + p2) * t
+		+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t);
+}
+
+float ring_ground_h(vec2 wxz) {
+	vec2 p = clamp(wxz, vec2(-126.5), vec2(126.5));
+	vec2 base = floor(p);
+	vec2 f = p - base;
+	vec2 b1 = clamp(base, vec2(-127.0), vec2(126.0));
+	float tx = clamp(p.x - b1.x, 0.0, 1.0);
+	float tz = clamp(p.y - b1.y, 0.0, 1.0);
+	float col0 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y - 1.0)),
+		ring_node_h(vec2(b1.x, b1.y - 1.0)),
+		ring_node_h(vec2(b1.x + 1.0, b1.y - 1.0)),
+		ring_node_h(vec2(b1.x + 2.0, b1.y - 1.0)), tx);
+	float col1 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y)),
+		ring_node_h(vec2(b1.x, b1.y)),
+		ring_node_h(vec2(b1.x + 1.0, b1.y)),
+		ring_node_h(vec2(b1.x + 2.0, b1.y)), tx);
+	float col2 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y + 1.0)),
+		ring_node_h(vec2(b1.x, b1.y + 1.0)),
+		ring_node_h(vec2(b1.x + 1.0, b1.y + 1.0)),
+		ring_node_h(vec2(b1.x + 2.0, b1.y + 1.0)), tx);
+	float col3 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y + 2.0)),
+		ring_node_h(vec2(b1.x, b1.y + 2.0)),
+		ring_node_h(vec2(b1.x + 1.0, b1.y + 2.0)),
+		ring_node_h(vec2(b1.x + 2.0, b1.y + 2.0)), tx);
+	float cubic = ring_catmull(col0, col1, col2, col3, tz);
+	// Треугольная высота чанка по углам клетки.
+	float h00 = ring_node_h(vec2(b1.x, b1.y));
+	float h10 = ring_node_h(vec2(b1.x + 1.0, b1.y));
+	float h01 = ring_node_h(vec2(b1.x, b1.y + 1.0));
+	float h11 = ring_node_h(vec2(b1.x + 1.0, b1.y + 1.0));
+	float linear = tx >= tz
+		? h00 + (h10 - h00) * tx + (h11 - h10) * tz
+		: h00 + (h01 - h00) * tz + (h11 - h01) * tx;
+	float k = clamp(abs(cubic - linear) / TENSION_LIMIT, 0.0, 1.0);
+	return max(mix(cubic, linear, k), linear + 0.001);
+}
+
 void vertex() {
 	if (detail_ring) {
-		// Кольцо: плоской вершине ставится высота чанков (height_tex) +
-		// сантиметровый рельеф слоёв. Нода без поворота, снап к камере
-		// делает IslandView; смещение гаснет к кромке раньше подъёма —
-		// у края кольцо совпадает с печёной поверхностью.
+		// Кольцо: плоской вершине ставится бикубическая высота чанков
+		// (height_tex, П15 9.1) + сантиметровый рельеф слоёв. Нода без
+		// поворота, снап к камере делает IslandView; смещение гаснет
+		// к кромке раньше подъёма — у края кольцо совпадает с печёной
+		// поверхностью.
 		vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 		vec2 ring_c = vec2(MODEL_MATRIX[3][0], MODEL_MATRIX[3][2]);
 		float ring_d = length(wp.xz - ring_c);
@@ -385,8 +441,7 @@ void vertex() {
 			ring_radius - RING_EDGE_FADE, ring_radius, ring_d);
 		float lift = RING_LIFT_C * (1.0 - smoothstep(
 			ring_radius - 0.4, ring_radius, ring_d));
-		float ground_h = textureLod(
-			height_tex, (wp.xz + vec2(128.0)) / 256.0, 0.0).r;
+		float ground_h = ring_ground_h(wp.xz);
 		float target_y = ground_h + lift
 			+ ring_displacement(wp.xz) * disp_fade;
 		VERTEX.y += target_y - MODEL_MATRIX[3][1];

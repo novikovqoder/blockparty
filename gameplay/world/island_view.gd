@@ -99,6 +99,18 @@ func _build_terrain() -> void:
 		body.add_child(mesh_instance)
 		_chunk_instances.append(mesh_instance)
 		_chunk_steps.append(1.0)
+	# П15 9.1: береговая полоса — визуальная сетка вдоль всей береговой
+	# линии (земля ±1 м от уровня воды, шаг 0.25 м, бикубическая высота
+	# из той же карты высот): кромка воды — плавная кривая, не рёбра
+	# треугольников. Только визуал: генератор, карта высот, коллизия
+	# и хеш острова не меняются; тень не отбрасывает (рельеф уже в
+	# тенях чанков). Материал — чанковый (покраска по world_pos).
+	var band := MeshInstance3D.new()
+	band.name = "ShoreBand"
+	band.mesh = ShoreBand.build_band_mesh(art, IslandGen.SEA_LEVEL)
+	band.material_override = forest_material
+	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(band)
 	add_child(body)
 	# П14 3.1: кольцо детальной сетки (HIGH/ULTRA, SIMPLE/NORMAL — как
 	# раньше). Сетка плоская, высоту вершинам ставит vertex() шейдера

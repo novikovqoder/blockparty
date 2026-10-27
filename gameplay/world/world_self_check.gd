@@ -81,6 +81,10 @@ static func run(island: Island, verbose: bool = false) -> Dictionary:
 	var terrain := view.get_node("Terrain") as StaticBody3D
 	var painted := 0
 	for child: Node in terrain.get_children():
+		# П15 9.1: береговая полоса — отдельный меш с тем же материалом,
+		# но не чанк (не входит в 8×8 печёной сетки).
+		if child is MeshInstance3D and child.name == "ShoreBand":
+			continue
 		if child is MeshInstance3D \
 				and (child as MeshInstance3D).material_override is ShaderMaterial:
 			var shader: Shader = (

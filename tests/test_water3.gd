@@ -390,3 +390,113 @@ func test_island_heights_unchanged() -> void:
 		checksum = hash([checksum, h])
 	assert_eq(checksum, HEIGHTS_CHECKSUM,
 		"карта высот арта не изменилась (хеш)")
+
+
+# --- П15 9.1: полоса берега — шаг 0.25 м, бикубика, отклонение ≤5 см ---
+
+func test_band_mesh_built_with_quarter_step() -> void:
+	# П15 9.1: полоса сетки вдоль всей береговой линии с шагом 0.25 м —
+	# вершины лежат на решётке 0.25, рёбра подквадов по горизонтали
+	# 0.25 (диагонали — 0.354); меш непустой и индексный.
+	var mesh := ShoreBand.build_band_mesh(ART, IslandGen.SEA_LEVEL)
+	assert_gt(mesh.get_surface_count(), 0, "полоса построена")
+	var surface: Array = mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = surface[Mesh.ARRAY_VERTEX]
+	var idx: PackedInt32Array = surface[Mesh.ARRAY_INDEX]
+	assert_gt(verts.size(), 10000, "полоса покрывает всю береговую линию")
+	assert_eq(idx.size() % 3, 0, "треугольники целые")
+	var worst_step: float = 0.0
+	for i: int in range(0, idx.size(), 3):
+		for k: int in 3:
+			var a: Vector3 = verts[idx[i + k]]
+			var b: Vector3 = verts[idx[i + (k + 1) % 3]]
+			# Рёбра подквада: два по осям (0.25) и диагональ (0.354) —
+			# осевые проверяются точно, диагональ своим значением.
+			var planar: float = Vector2(a.x, a.z).distance_to(
+				Vector2(b.x, b.z))
+			if absf(planar - 0.3536) > 0.001:
+				worst_step = maxf(worst_step, absf(planar - 0.25))
+	assert_lte(worst_step, 0.001,
+		"горизонтальный шаг сетки полосы — 0.25 м")
+
+
+func test_band_mesh_within_5cm_of_collision() -> void:
+	# П15 9.1: отклонение визуальной высоты полосы от коллизии — не
+	# больше 5 см. Высота коллизии (HeightMapShape3D, Jolt режет квад
+	# диагональю (x+1,z)–(x,z+1) — проверено raycast-пробником на
+	# седловой клетке) сверяется честным raycast по подмножеству вершин
+	# и аналитически по всем.
+	var mesh := ShoreBand.build_band_mesh(ART, IslandGen.SEA_LEVEL)
+	var verts: PackedVector3Array = mesh.surface_get_arrays(0)[
+		Mesh.ARRAY_VERTEX]
+	var heights: PackedFloat32Array = ART.heights
+	var worst: float = 0.0
+	for v: Vector3 in verts:
+		var col: float = ShoreBand.collision_height(heights, v.x, v.z)
+		worst = maxf(worst, absf(v.y - col))
+	assert_lte(worst, ShoreBand.COLLISION_CLAMP + ShoreBand.BAND_LIFT,
+		"все вершины полосы ≤5 см от высоты коллизии (аналитика)")
+	assert_lte(ShoreBand.COLLISION_CLAMP + ShoreBand.BAND_LIFT, 0.05,
+		"труба к коллизии в пределах 5 см SPEC")
+	# Честный raycast: физическая сцена с той же HeightMapShape3D,
+	# что строит IslandView (та же карта высот без изменений).
+	var root3d := Node3D.new()
+	add_child_autofree(root3d)
+	var body := StaticBody3D.new()
+	root3d.add_child(body)
+	var collision := CollisionShape3D.new()
+	var shape := HeightMapShape3D.new()
+	shape.map_width = IslandGen.POINTS
+	shape.map_depth = IslandGen.POINTS
+	shape.map_data = ART.heights
+	collision.shape = shape
+	body.add_child(collision)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var space := root3d.get_world_3d().direct_space_state
+	var worst_ray: float = 0.0
+	var step: int = maxi(1, verts.size() / 200)
+	var checked: int = 0
+	for i: int in range(0, verts.size(), step):
+		var v: Vector3 = verts[i]
+		var query := PhysicsRayQueryParameters3D.create(
+			Vector3(v.x, v.y + 1.0, v.z), Vector3(v.x, v.y - 1.0, v.z))
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		worst_ray = maxf(worst_ray, absf(v.y - float(hit.position.y)))
+		checked += 1
+	assert_gt(checked, 100, "raycast проверил достаточно вершин")
+	assert_lte(worst_ray, 0.05,
+		"отклонение полосы от коллизии (raycast) ≤ 5 см")
+
+
+func test_band_cubic_matches_detail_ring_shader() -> void:
+	# П15 9.1: бикубика полосы и детального кольца П14 — одна формула
+	# (Catmull-Rom по 4×4 узлам с тем же прижимом TENSION_LIMIT), стык
+	# кольца и полосы без шва; шейдер кольца не опускается ниже чанков.
+	var ground := FileAccess.get_file_as_string(
+		"res://assets/shaders/forest_ground.gdshader")
+	assert_true(ground.contains("ring_catmull"),
+		"кольцо считает Catmull-Rom бикубику")
+	assert_almost_eq(_const_of(ground, "TENSION_LIMIT"),
+		ShoreBand.TENSION_LIMIT, 0.0005,
+		"прижим бикубики кольца — тот же лимит, что у полосы")
+	assert_true(ground.contains("linear + 0.001"),
+		"кольцо держится над чанковой высотой (не утопает)")
+	# Сама бикубика: на целых узлах равна высоте карты (непрерывность
+	# между клетками), между узлами отклоняется не дальше прижима.
+	var heights: PackedFloat32Array = ART.heights
+	for node: Vector2i in [Vector2i(10, 7), Vector2i(-40, 33),
+			Vector2i(77, -5), Vector2i(0, 90)]:
+		var at_node: float = ShoreBand.cubic_height(
+			heights, float(node.x), float(node.y))
+		assert_almost_eq(at_node, heights[(node.y + IslandGen.HALF)
+			* IslandGen.POINTS + node.x + IslandGen.HALF], 0.0005,
+			"бикубика на узле карты = высота узла (%s)" % node)
+	for probe: Vector2 in [Vector2(10.4, 7.6), Vector2(-40.2, 33.8),
+			Vector2(77.5, -5.3), Vector2(0.7, 90.1)]:
+		var cubic: float = ShoreBand.cubic_height(heights, probe.x, probe.y)
+		var tri: float = ShoreBand.tri_height(heights, probe.x, probe.y)
+		assert_lte(absf(cubic - tri), ShoreBand.TENSION_LIMIT,
+			"бикубика прижата к чанковой высоте (%s)" % probe)

@@ -212,6 +212,10 @@ func test_viewer_lod_switch() -> void:
 	var near_chunks := 0
 	var far_chunks := 0
 	for child: Node in terrain.get_children():
+		# П15 9.1: береговая полоса (ShoreBand) — не чанк, у неё своя
+		# густая сетка 0.25 м; в подсчёт уровней чанков не входит.
+		if child is MeshInstance3D and child.name == "ShoreBand":
+			continue
 		if child is MeshInstance3D:
 			var count: int = (child as MeshInstance3D).mesh.surface_get_arrays(
 				0)[Mesh.ARRAY_VERTEX].size()
