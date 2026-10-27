@@ -42,14 +42,14 @@ func test_high_recipe_constants_match_spec() -> void:
 	assert_between(
 		GraphicsQuality.HIGH_SSR_MAX_STEPS, 24, 32,
 		"шагов SSR — 24–32")
-	# П13 1.6: тени — атласы 4096, Soft Medium, полутень чуть уже ULTRA,
-	# дальность ~120 м.
+	# П13 1.6 (П16 п. 1: атлас точечных теней 2048): тени — направленный
+	# атлас 4096, Soft Medium, полутень чуть уже ULTRA, дальность ~120 м.
 	assert_eq(
 		GraphicsQuality.HIGH_SHADOW_ATLAS_SIZE, 4096,
 		"атлас направленных теней — 4096")
 	assert_eq(
-		GraphicsQuality.HIGH_POSITIONAL_ATLAS_SIZE, 4096,
-		"атлас точечных теней — 4096")
+		GraphicsQuality.HIGH_POSITIONAL_ATLAS_SIZE, 2048,
+		"атлас точечных теней — 2048 (П16)")
 	assert_eq(
 		GraphicsQuality.HIGH_SOFT_SHADOW_QUALITY,
 		RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM,
@@ -84,10 +84,10 @@ func test_high_recipe_constants_match_spec() -> void:
 	assert_lt(
 		GraphicsQuality.HIGH_PARALLAX_FAR, GraphicsQuality.PARALLAX_FAR_BASE,
 		"параллакс HIGH ближе базы ULTRA")
-	# П13 1.6: тени ламп срубов гаснут дальше ~20 м.
+	# П13 1.6 (П16 п. 1): тени ламп срубов гаснут дальше ~12 м.
 	assert_almost_eq(
-		GraphicsQuality.HIGH_LAMP_FADE_SHADOW, 20.0, 0.001,
-		"тени ламп гаснут с ~20 м")
+		GraphicsQuality.HIGH_LAMP_FADE_SHADOW, 12.0, 0.001,
+		"тени ламп гаснут с ~12 м")
 
 
 func test_high_recipe_applied_to_env_and_viewport() -> void:
@@ -197,9 +197,12 @@ func test_high_grass_parallax_in_ground_material() -> void:
 
 
 func test_cabin_high_shadows_and_probes() -> void:
-	# П13 1.6/1.8: на HIGH пробы комнат есть (UPDATE_ONCE дёшевы), тени
-	# ламп включены, но гаснут дальше ~20 м (distance_fade); на ULTRA
-	# distance_fade выключен; уход ниже HIGH убирает пробы и тени.
+	# П13 1.6/1.8 (П16 п. 1 — поведение теней ламп на HIGH изменилось):
+	# на HIGH пробы комнат есть (UPDATE_ONCE дёшевы), тени ламп настроены
+	# (маска кастеров, dual paraboloid, fade ~12 м) и включаются НЕ всем,
+	# а 1-2 ближайшим к камере лампам (LampShadows.update_nearest);
+	# на ULTRA distance_fade выключен, тень у всех; уход ниже HIGH
+	# убирает пробы и тени.
 	var cabin := CabinHouse.new()
 	add_child_autofree(cabin)
 	var lights: Array[OmniLight3D] = []
@@ -214,15 +217,28 @@ func test_cabin_high_shadows_and_probes() -> void:
 			lights.append(light)
 	assert_eq(lights.size(), 3, "у сруба три лампы-«факела»")
 	for light: OmniLight3D in lights:
-		assert_true(
-			light.shadow_enabled, "HIGH: тени лампы %s включены" % light.name)
+		assert_false(
+			light.shadow_enabled,
+			"HIGH: до апдейта тень у %s выключена (включит менеджер)"
+			% light.name)
 		assert_true(
 			light.distance_fade_enabled,
 			"HIGH: тени лампы %s гаснут по дальности" % light.name)
 		assert_almost_eq(
 			light.distance_fade_shadow,
 			GraphicsQuality.HIGH_LAMP_FADE_SHADOW, 0.001,
-			"HIGH: тени лампы %s гаснут с ~20 м" % light.name)
+			"HIGH: тени лампы %s гаснут с ~12 м" % light.name)
+		assert_eq(
+			light.shadow_caster_mask, GraphicsQuality.LAMP_CASTER_MASK,
+			"HIGH: у %s маска кастеров (постройки/персонажи)" % light.name)
+	# Менеджер ближайших: у одной лампы — тень, у прочих нет.
+	LampShadows.enabled = true
+	LampShadows.update_nearest(
+		cabin, Vector3(0.0, 2.4, -5.0), 1)
+	var shadowed: int = 0
+	for light: OmniLight3D in lights:
+		shadowed += 1 if light.shadow_enabled else 0
+	assert_eq(shadowed, 1, "HIGH: тень ровно у 1 ближайшей лампы")
 	cabin.set_quality(GraphicsQuality.Tier.ULTRA)
 	for light: OmniLight3D in lights:
 		assert_false(
@@ -230,6 +246,9 @@ func test_cabin_high_shadows_and_probes() -> void:
 			"ULTRA: distance_fade у %s выключен" % light.name)
 		assert_true(
 			light.shadow_enabled, "ULTRA: тени лампы %s включены" % light.name)
+		assert_eq(
+			light.shadow_caster_mask, 0xFFFFFFFF,
+			"ULTRA: маска кастеров не ограничена (ULTRA не тронут)")
 	cabin.set_quality(GraphicsQuality.Tier.NORMAL)
 	assert_null(
 		cabin.get_node_or_null("WingProbe"), "ниже HIGH: пробы крыла нет")
@@ -237,16 +256,21 @@ func test_cabin_high_shadows_and_probes() -> void:
 		assert_false(
 			light.shadow_enabled,
 			"ниже HIGH: тени лампы %s выключены" % light.name)
-	# П13 3.2: точечное выключение теней ламп (панель F3) и возврат.
+	# П13 3.2 (П16 п. 1): точечное выключение теней ламп (панель F3)
+	# глушит всех и менеджер; возврат на ULTRA включает всех сразу,
+	# на HIGH — вернёт менеджер ближайших.
 	cabin.set_quality(GraphicsQuality.Tier.HIGH)
 	cabin.set_lamp_shadows(false)
+	LampShadows.update_nearest(
+		cabin, Vector3(0.0, 2.4, -5.0), 1)
 	for light: OmniLight3D in lights:
 		assert_false(
-			light.shadow_enabled, "F3: тени лампы %s выключены" % light.name)
+			light.shadow_enabled,
+			"F3: тени лампы %s выключены (менеджер погашен)" % light.name)
 	cabin.set_lamp_shadows(true)
-	for light: OmniLight3D in lights:
-		assert_true(
-			light.shadow_enabled, "F3: тени лампы %s возвращены" % light.name)
+	assert_true(
+		LampShadows.enabled,
+		"F3: возврат включает менеджер ближайших ламп")
 
 
 # --- П13 2: «Разрешение 3D» ---

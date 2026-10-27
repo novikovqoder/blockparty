@@ -30,6 +30,8 @@ const SHOT_SUNSET_FRACTION: float = 0.58
 ## Частота кадров GIF-серий (финал П5.8): 12/с — движения читаются, серия
 ## 6 с — 72 кадра (сборка GIF — tools/make_gif.py).
 const SHOT_SERIES_FPS: int = 12
+## Интервал обновления «ближайших ламп с тенью» (П16 п. 1), с.
+const LAMP_SHADOW_UPDATE_SEC: float = 0.25
 
 var _debug: DebugPanel
 var _esc_menu: EscMenu
@@ -44,6 +46,11 @@ var _vignette: ColorRect
 var _leaving: bool = false
 var _zone_now: String = ""
 var _remotes: Dictionary = {}  # peer_id -> RemotePlayer
+## Уровень качества последнего применения (П16 п. 1: на HIGH тени ламп
+## перекладывает менеджер ближайших LampShadows).
+var _gfx_tier: int = GraphicsQuality.Tier.HIGH
+## Накопитель интервала обновления теней ламп (П16 п. 1).
+var _lamp_shadow_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -59,6 +66,9 @@ func _ready() -> void:
 	_vignette = GraphicsQuality.make_vignette()
 	add_child(_vignette)
 	_spawn_player()
+	# Персонаж — крупный кастер теней ламп (П16 п. 1: слой
+	# LAMP_CASTER_LAYER у мешей визуала; тень лампы от героя на постройки).
+	LampShadows.mark_caster(_player)
 	# Частицы из-под ног (переделка П9): покрытие по запечённым данным острова.
 	_player.setup_foot_fx(_island.art())
 	_apply_graphics_quality()
@@ -123,6 +133,16 @@ func _process(delta: float) -> void:
 	# Адаптивная тесселяция рельефа вокруг игрока (доработка-2 П5.13, П1):
 	# чанки в радиусе 50 м — квад 0.5 м, с бюджетом на перестройку за кадр.
 	_island.update_viewer(_player.global_position)
+	# Тени ламп на HIGH (П16 п. 1): раз в 0.25 с тень только у 1-2
+	# ближайших к камере ламп (Light3D.shadow_caster_mask сузил кастеров
+	# до построек и персонажей ещё при применении уровня).
+	if _gfx_tier == GraphicsQuality.Tier.HIGH:
+		_lamp_shadow_accum += delta
+		if _lamp_shadow_accum >= LAMP_SHADOW_UPDATE_SEC:
+			_lamp_shadow_accum = 0.0
+			LampShadows.update_nearest(
+				self, _player.camera.global_position,
+				GraphicsQuality.HIGH_LAMP_SHADOW_COUNT)
 
 
 ## Подключение к сети (раздел 10): события чужих игроков, применение
@@ -144,6 +164,8 @@ func _on_peer_joined_world(peer_id: int, player_name: String) -> void:
 	var remote := RemotePlayer.new()
 	remote.setup(peer_id, player_name)
 	add_child(remote)
+	# Чужой персонаж — тоже кастер теней ламп (П16 п. 1).
+	LampShadows.mark_caster(remote)
 	# Частицы из-под ног чужого игрока — по тем же покрытиям острова (П9).
 	remote.setup_foot_fx(_island.art())
 	_remotes[peer_id] = remote
@@ -323,6 +345,7 @@ func _draw_debug_collisions(root: Node) -> void:
 ## с distance_fade (П13 1.6/1.8).
 func _apply_graphics_quality() -> void:
 	var tier := GraphicsQuality.tier_from_settings()
+	_gfx_tier = tier
 	_day_cycle.simple = tier == GraphicsQuality.Tier.SIMPLE
 	_ambient.setup(tier)
 	_vignette.visible = tier >= GraphicsQuality.Tier.HIGH

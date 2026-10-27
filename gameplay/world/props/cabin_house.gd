@@ -68,6 +68,10 @@ const WOOD_TINTS: Array[Color] = [
 @export var variant: int = 0
 @export var terrace: bool = true
 
+## Уровень последнего set_quality (П16 п. 1: set_lamp_shadows на ULTRA
+## включает тени всем лампам, на HIGH их держит менеджер ближайших).
+var _tier: int = GraphicsQuality.Tier.HIGH
+
 ## Активные срубы сцены: камера спрашивает player_inside(), чтобы внутри
 ## дома прижать руку. Бокс интерьера по карте полов (tools/probe_boxes.gd,
 ## лучи по коллизии COLL): пол дома 0.16 покрывает x −5.9…5.9,
@@ -128,25 +132,24 @@ func door_world_pos() -> Vector3:
 	return global_transform * DOOR_LOCAL
 
 
-## «Ультра»-детали дома (П11; П13 1.6/1.8): на ULTRA лампы-«факелы»
-## (крыльцо, крыло, зал) отбрасывают тени (2.5) и в комнатах появляются
-## пробы отражений (2.9); на HIGH (П13) пробы тоже включаются (UPDATE_ONCE
-## дёшевы), тени ламп — с distance_fade (гаснут дальше ~20 м); ниже HIGH —
-## без теней и проб, уход с уровня выключает всё начисто (2.10).
+## «Ультра»-детали дома (П11; П13 1.6/1.8; П16 п. 1): на ULTRA лампы-
+## «факелы» (крыльцо, крыло, зал) отбрасывают тени (2.5) и в комнатах
+## появляются пробы отражений (2.9); на HIGH пробы тоже включаются
+## (UPDATE_ONCE дёшевы), тени ламп — с маской кастеров, dual paraboloid
+## и distance_fade ~12 м, тень включена не у всех, а у 1-2 ближайших
+## к камере ламп (LampShadows.update_nearest); ниже HIGH — без теней
+## и проб, уход с уровня выключает всё начисто (2.10).
 func set_quality(tier: int) -> void:
 	var hi := tier >= GraphicsQuality.Tier.HIGH
-	var high_fade := tier == GraphicsQuality.Tier.HIGH
+	_tier = tier
 	for child: Node in get_children():
 		var light := child as OmniLight3D
 		if light != null:
-			light.shadow_enabled = hi
-			# П13 1.6: тени ламп на HIGH гаснут дальше ~20 м — сам свет
-			# живёт дольше (distance_fade_begin), тени исчезают раньше.
-			light.distance_fade_enabled = high_fade
-			if high_fade:
-				light.distance_fade_shadow = GraphicsQuality.HIGH_LAMP_FADE_SHADOW
-				light.distance_fade_begin = GraphicsQuality.HIGH_LAMP_FADE_BEGIN
-				light.distance_fade_length = GraphicsQuality.HIGH_LAMP_FADE_LENGTH
+			# П16 п. 1: режим/маска/fade лампы — LampShadows; тень на HIGH
+			# включит менеджер ближайших, на ULTRA она у всех ламп сразу.
+			LampShadows.setup_light(light, tier == GraphicsQuality.Tier.HIGH)
+			light.shadow_enabled = tier == GraphicsQuality.Tier.ULTRA
+	LampShadows.enabled = hi
 	if hi:
 		if get_node_or_null("WingProbe") == null:
 			add_child(_make_reflection_probe(
@@ -162,13 +165,17 @@ func set_quality(tier: int) -> void:
 				probe.queue_free()
 
 
-## Тени ламп на лету (панель замера F3, П13 3.2): включить/выключить
-## без смены уровня — расстояние distance_fade не трогается.
+## Тени ламп на лету (панель замера F3, П13 3.2; П16 п. 1): выключить —
+## глушим все лампы и менеджер ближайших; включить — на ULTRA тень у всех,
+## на HIGH тень вернёт LampShadows.update_nearest (1-2 ближайших к камере,
+## это и есть «уровень» HIGH), дистанция distance_fade не трогается.
 func set_lamp_shadows(on: bool) -> void:
+	LampShadows.enabled = on
+	var ultra := _tier == GraphicsQuality.Tier.ULTRA
 	for child: Node in get_children():
 		var light := child as OmniLight3D
 		if light != null:
-			light.shadow_enabled = on
+			light.shadow_enabled = on and ultra
 
 
 ## Проба отражений комнаты: печётся один раз (UPDATE_ONCE — интерьер
@@ -208,6 +215,9 @@ func _build() -> void:
 		if mi == null or mi.mesh == null:
 			continue
 		var mat_name: String = _material_name(mi)
+		# П16 п. 1: корпус — крупный кастер теней ламп (слой
+		# LAMP_CASTER_LAYER; интерьеру бит тоже безвреден).
+		LampShadows.mark_caster(mi)
 		if mi.name.begins_with("INT_"):
 			mi.visibility_range_end = INTERIOR_RANGE_M
 			mi.visibility_range_end_margin = 2.0
@@ -309,6 +319,9 @@ func _add_light(local: Vector3, color: Color, energy: float, range_m: float, lig
 	light.light_energy = energy
 	light.omni_range = range_m
 	light.position = local
+	# П16 п. 1: все лампы мира — в одной группе (LampShadows.update_nearest
+	# включает тень 1-2 ближайшим к камере на HIGH).
+	light.add_to_group(LampShadows.LIGHT_GROUP)
 	add_child(light)
 
 

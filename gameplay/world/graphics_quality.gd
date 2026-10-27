@@ -137,7 +137,9 @@ const HIGH_SSR_FADE_OUT: float = 2.0
 ## полутень чуть уже ULTRA, дальность ~120 м, сплиты с плавным
 ## растворением (fade_start + blend) — без резкой границы.
 const HIGH_SHADOW_ATLAS_SIZE: int = 4096
-const HIGH_POSITIONAL_ATLAS_SIZE: int = 4096
+## П16 п. 1: атлас точечных теней на HIGH 2048 (тень у 1-2 ближайших
+## ламп, dual paraboloid — карты хватает).
+const HIGH_POSITIONAL_ATLAS_SIZE: int = 2048
 const HIGH_SOFT_SHADOW_QUALITY: int = RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM
 const HIGH_LIGHT_ANGULAR_DISTANCE: float = 0.4
 const HIGH_SHADOW_MAX_DISTANCE: float = 120.0
@@ -156,11 +158,23 @@ const HIGH_PARALLAX_FAR: float = 15.0
 ## База шейдера (движковые значения uniform параллакса, ULTRA).
 const PARALLAX_NEAR_BASE: float = 15.0
 const PARALLAX_FAR_BASE: float = 25.0
-## Тени ламп срубов (П13 1.6): на HIGH включены, но гаснут дальше ~20 м
-## (distance_fade тени), сам свет живёт до HIGH_LAMP_FADE_BEGIN.
-const HIGH_LAMP_FADE_SHADOW: float = 20.0
+## Тени ламп срубов (П13 1.6; П16 п. 1): на HIGH включены (решает
+## LampShadows.update_nearest — максимум HIGH_LAMP_SHADOW_COUNT ближайших
+## к камере ламп), гаснут дальше ~12 м (distance_fade тени), сам свет
+## живёт до HIGH_LAMP_FADE_BEGIN.
+const HIGH_LAMP_FADE_SHADOW: float = 12.0
 const HIGH_LAMP_FADE_BEGIN: float = 45.0
 const HIGH_LAMP_FADE_LENGTH: float = 15.0
+## П16 п. 1: сколько ближайших к камере ламп отбрасывают тень на HIGH
+## (SPEC: 1-2, берём 2). ULTRA не трогаем — там тени у всех ламп.
+const HIGH_LAMP_SHADOW_COUNT: int = 2
+## П16 п. 1: визуальный слой, помечающий «крупных» кастеров тени ламп —
+## постройки и персонажей (Light3D.shadow_caster_mask в 4.7.2). Слой 20
+## свободен: физические слои проекта — только 1 (мир) и 2 (игроки),
+## визуальные слои никем больше не заняты. Трава, мелочь, детальная
+## сетка и пропсы < 0.5 м слоя не имеют — тень лампы от них не ищется.
+const LAMP_CASTER_LAYER: int = 20
+const LAMP_CASTER_MASK: int = 1 << (LAMP_CASTER_LAYER - 1)
 ## Движковые базы для возврата с HIGH (fade сплитов и смешение).
 const SHADOW_FADE_START_BASE: float = 0.1
 const BLEND_SPLITS_BASE: bool = false
