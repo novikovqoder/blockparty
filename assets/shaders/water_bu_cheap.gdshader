@@ -1,30 +1,32 @@
 // Дешёвая вода Born Unblessed (SPEC П14 4.7) для SIMPLE/NORMAL — копия
 // water_bu.gdshader без экранной и глубинной текстур (копия экрана не
 // бесплатна, уровень экономит): полупрозрачная поверхность цветом
-// рассеяния, 8 волн Герстнера, один слой ряби, френель Шлика цветами
-// DayCycle, пены и преломления нет. П15 1-2: нормали спектра — во
-// fragment по world_pos (в vertex только смещение волн длиннее 20 м),
+// рассеяния, 8 волн Герстнера, один слой ряби, пены и преломления нет.
+// П15 3: отражение неба — движковое (ранее отключавший IBL-отражения
+// флаг рендера убран; движок кладёт radiance Sky3D с френелем
+// F0 ≈ 0.02), ручного двухцветного неба нет; дорожка светила — спекуляр
+// движка. П15 1-2: нормали спектра —
+// во fragment по world_pos (в vertex только смещение волн длиннее 20 м),
 // пиксельная фильтрация гасит субпиксельные волны, наклон уходит в
-// рост roughness с расстоянием. Спектр, палитра и френель — те же
-// константы и uniform-имена полной версии (WaterArea ставит одинаковые
-// параметры обоим шейдерам).
+// рост roughness с расстоянием. Спектр и палитра — те же константы
+// и uniform-имена полной версии (WaterArea ставит одинаковые параметры
+// обоим шейдерам).
 shader_type spatial;
 render_mode blend_mix, depth_draw_always, cull_disabled,
-	ambient_light_disabled, specular_schlick_ggx;
+	specular_schlick_ggx;
 
 group_uniforms Colors;
 uniform vec4 color_shallow : source_color = vec4(0.10, 0.14, 0.10, 1.0);
 uniform vec4 color_deep : source_color = vec4(0.016, 0.035, 0.028, 1.0);
 uniform vec3 absorption = vec3(1.6, 0.75, 0.45);
-uniform vec3 sky_horizon : source_color = vec3(0.7, 0.75, 0.8);
-uniform vec3 sky_top : source_color = vec3(0.3, 0.45, 0.7);
 group_uniforms;
 
 group_uniforms Surface;
 // П15 2: рост roughness с расстоянием (как у полной версии).
 uniform float roughness_near : hint_range(0.0, 1.0) = 0.03;
 uniform float roughness_far : hint_range(0.0, 1.0) = 0.16;
-uniform float specular : hint_range(0.0, 1.0) = 0.5;
+// П15 3: движковое отражение, F0 ≈ 0.02 (как у полной версии).
+uniform float specular : hint_range(0.0, 1.0) = 0.25;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 // Нет ни преломления, ни depth — параметры приняты (общие имена), не
 // используются: материал один и тот же у WaterArea на всех уровнях.
@@ -190,20 +192,17 @@ void fragment() {
 	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
 	// Без depth-буфера: дно не показываем, вода — вуаль рассеянного
 	// цвета между мелководьем и глубиной (на глаз середина). Композит —
-	// в EMISSION с ALBEDO = 0 (как у полной версии), но ALPHA < 1 —
-	// полупрозрачная вуаль.
+	// в EMISSION с ALBEDO = 0, ALPHA < 1 — полупрозрачная вуаль.
+	// П15 3: отражение — движковое (radiance Sky3D, френель F0 ≈ 0.02);
+	// ручной френель Шлика гасит эмиссию навстречу отражению, вдали
+	// эмиссия растворяется (туман сводит горизонт).
 	vec3 water = mix(color_shallow.rgb, color_deep.rgb, 0.55);
 
 	float fresnel = 0.02 + 0.98
 		* pow(1.0 - max(dot(nrm, view_dir), 0.0), 5.0);
-	vec3 refl_dir = reflect(-view_dir, nrm);
-	vec3 sky_refl = mix(sky_horizon, sky_top,
-		clamp(pow(max(refl_dir.y, 0.0), 0.6), 0.0, 1.0));
-	vec3 color = water + sky_refl * fresnel;
-
 	float dist_fade = 1.0 - smoothstep(
 		distance_fade_min, distance_fade_max, dist);
-	EMISSION = mix(sky_horizon, color, dist_fade);
+	EMISSION = water * (1.0 - fresnel) * dist_fade;
 	ALBEDO = vec3(0.0);
 	ALPHA = CHEAP_ALPHA;
 	ROUGHNESS = rough;

@@ -116,6 +116,52 @@ func test_ripple_smaller_and_weaker() -> void:
 		"третий слой ряби фильтруется")
 
 
+# --- П15 3: движковое отражение неба ---
+
+func test_engine_sky_reflection() -> void:
+	# П15 3: ambient_light_disabled (отключает IBL-отражения) убран из
+	# обоих шейдеров; ручного двухцветного неба (sky_horizon/sky_top)
+	# больше нет — отражение и френель движковые (F0 ≈ 0.02 при
+	# SPECULAR 0.25), дорожка светила — спекуляр движка. Пропущенный
+	# свет (дно + рассеяние) гасится своим френелем Шлика: под острым
+	# углом видно небо, сверху — толща.
+	for pair: Array in [
+		["полный", WATER_BU_CODE], ["дешёвый", WATER_CHEAP_CODE],
+	]:
+		var code: String = pair[1]
+		assert_false(code.contains("ambient_light_disabled"),
+			"%s: ambient_light_disabled убран (IBL работает)" % pair[0])
+		assert_false(code.contains("uniform vec3 sky_horizon"),
+			"%s: двухцветного неба нет" % pair[0])
+		assert_false(code.contains("uniform vec3 sky_top"),
+			"%s: неба в зените нет" % pair[0])
+		assert_false(code.contains("sky_refl"),
+			"%s: ручного отражения неба нет" % pair[0])
+		assert_almost_eq(_uniform_of(code, "specular"), 0.25, 0.001,
+			"%s: F0 ≈ 0.02 (SPECULAR × 0.08)" % pair[0])
+	assert_true(WATER_BU_CODE.contains(
+		"EMISSION = water * (1.0 - fresnel) * dist_fade;"),
+		"пропущенный свет в EMISSION гасится френелем")
+	assert_true(WATER_CHEAP_CODE.contains(
+		"EMISSION = water * (1.0 - fresnel) * dist_fade;"),
+		"дешёвая версия — тот же баланс")
+	# WaterArea не красит материалы цветами неба (неба в шейдере нет).
+	var area_text := FileAccess.get_file_as_string(
+		"res://gameplay/world/water_area.gd")
+	assert_false(area_text.contains('"sky_horizon"'),
+		"WaterArea не пишет sky_horizon в материалы")
+	assert_false(area_text.contains('"sky_top"'),
+		"WaterArea не пишет sky_top в материалы")
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	assert_almost_eq(
+		float(material.get_shader_parameter("specular")), 0.25, 0.001,
+		"SPECULAR 0.25 в материале (F0 ≈ 0.02)")
+	WorldMaterials.textured_headless = false
+
+
 static func _const_of(code: String, name: String) -> float:
 	var regex := RegEx.new()
 	regex.compile("const float %s = ([\\d.]+);" % name)

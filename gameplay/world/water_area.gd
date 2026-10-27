@@ -16,9 +16,9 @@
 # поглощение Бера по каналам, преломление, пена) — HIGH/ULTRA;
 # SIMPLE/NORMAL — water_bu_cheap без экранной выборки. Спектр волн
 # Герстнера (16/32/8 по уровню) и рябь (2/3/1 слоя) — константы
-# детерминированного RNG. SSR на прозрачную воду движок не даёт
-# (только opaque) — небо отражает френель Шлика цветами DayCycle,
-# дорожка светила — спекуляр движка.
+# детерминированного RNG. П15 3: отражение неба — движковое (radiance
+# Sky3D с френелем F0 ≈ 0.02, без ambient_light_disabled); SSR движок
+# на прозрачную воду не даёт (только opaque) — честно в STATUS.
 # Не делает: подводное плавание (вне MVP), течение и волны для лодочек.
 class_name WaterArea
 extends Area3D
@@ -367,7 +367,8 @@ func _surface_material(calm: bool) -> Material:
 	material.set_shader_parameter(
 		"ripple_layers", float(ripple_layers_for_tier(_tier)))
 	material.set_shader_parameter("refraction_amount", 1.0)
-	material.set_shader_parameter("specular", 0.55)
+	# П15 3: френель движка F0 ≈ 0.02 (SPECULAR × 0.08 = 0.02).
+	material.set_shader_parameter("specular", 0.25)
 	# Почти зеркало вблизи, мягко-матовое у горизонта (П15 2: гашение
 	# субпиксельных волн переводит их наклон в рост roughness).
 	material.set_shader_parameter("roughness_near", ROUGHNESS_NEAR)
@@ -377,12 +378,9 @@ func _surface_material(calm: bool) -> Material:
 	# SCREEN_PIXEL_SIZE из fragment в 4.7.2 не виден — размер вьюпорта
 	# (с учётом масштаба 3D) несёт uniform.
 	material.set_shader_parameter("screen_px_height", _screen_px_height())
-	# Небо для френеля до первого update_sky (нейтральное дневное).
-	material.set_shader_parameter("sky_horizon", Vector3(0.55, 0.62, 0.70))
-	material.set_shader_parameter("sky_top", Vector3(0.30, 0.45, 0.68))
-	# Растворение к горизонту цветом неба: дальняя плоскость Ocean без
-	# резкой границы; «Простая графика» приближает (set_fade_distance
-	# от world_scene при far 70).
+	# Растворение к горизонту: эмиссия гаснет (вдали остаётся движковое
+	# отражение неба, горизонт сводит туман); «Простая графика»
+	# приближает (set_fade_distance от world_scene при far 70).
 	material.set_shader_parameter("distance_fade_min", 700.0)
 	material.set_shader_parameter("distance_fade_max", 1400.0)
 	# Смещение вершин гаснет вдали (внешние кольца Ocean грубые).
@@ -442,11 +440,11 @@ func set_ripple(on: bool) -> void:
 		material.set_shader_parameter("ripple_layers", layers)
 
 
-## Отражение неба и яркость глубинных цветов (П5.13, блок 2; П14 4.4 —
-## свой шейдер): френель Шлика красит отражение реальным небом (закат —
-## тёплая вода без «бордовой полосы»), глубинные цвета гаснут вместе с
-## яркостью неба — ночью вода тёмная сама, а не подсвеченная эмиссией
-## глубины. Дорожку светила даёт спекуляр шейдера от солнца/луны.
+## Яркость глубинных цветов по часам (П5.13, блок 2; П15 3 — отражение
+## теперь движковое): глубинные цвета гаснут вместе с яркостью неба —
+## ночью вода тёмная сама, а не подсвеченная эмиссией глубины. Отражение
+## неба и дорожка светила шейдером больше не крашутся (radiance Sky3D
+## кладёт движок); параметры неба приняты ради единого вызова DayCycle.
 func update_sky(
 	sky_top: Color, sky_horizon: Color, light_dir: Vector3, glint: Color,
 ) -> void:
@@ -455,10 +453,6 @@ func update_sky(
 	# Спад яркости от дневного горизонта (0.75 — типичная светлота дня).
 	var luma := clampf(sky_horizon.get_luminance() / 0.75, 0.10, 1.0)
 	for material: ShaderMaterial in _water_materials:
-		material.set_shader_parameter("sky_horizon",
-			Vector3(sky_horizon.r, sky_horizon.g, sky_horizon.b))
-		material.set_shader_parameter("sky_top",
-			Vector3(sky_top.r, sky_top.g, sky_top.b))
 		material.set_shader_parameter("color_deep",
 			Color(_deep_base * luma, 1.0))
 		material.set_shader_parameter("color_shallow",

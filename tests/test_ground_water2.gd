@@ -491,8 +491,9 @@ func test_water_beer_and_fresnel_in_shader() -> void:
 
 
 func test_water_night_follows_sky() -> void:
-	# П14 4.6: ночь — тёмная вода: update_sky красит отражение реальным
-	# небом и гасит глубинные цвета вместе с яркостью горизонта.
+	# П14 4.6 (П15 3: отражение — движковое, небо в шейдер не пишется):
+	# ночь — тёмная вода: update_sky гасит глубинные цвета вместе
+	# с яркостью горизонта; отражение темнеет само (настоящее небо).
 	WorldMaterials.textured_headless = true
 	var area := WaterArea.new()
 	add_child_autofree(area)
@@ -502,17 +503,19 @@ func test_water_night_follows_sky() -> void:
 		Color(0.3, 0.5, 0.8), Color(0.75, 0.75, 0.72),
 		Vector3.UP, Color(1.0, 0.95, 0.85))
 	var day_deep: Color = material.get_shader_parameter("color_deep")
-	var day_horizon: Vector3 = material.get_shader_parameter("sky_horizon")
-	# Ночь: тёмный горизонт — глубинные цвета гаснут, отражение тёмное.
+	var day_shallow: Color = material.get_shader_parameter("color_shallow")
+	# Ночь: тёмный горизонт — глубинные цвета гаснут (отражение неба
+	# темнеет само — radiance ночного купола).
 	area.update_sky(
 		Color(0.02, 0.03, 0.06), Color(0.05, 0.06, 0.09),
 		Vector3.DOWN, Color(0.4, 0.4, 0.5))
 	var night_deep: Color = material.get_shader_parameter("color_deep")
-	var night_horizon: Vector3 = material.get_shader_parameter("sky_horizon")
+	var night_shallow: Color = material.get_shader_parameter("color_shallow")
 	assert_lt(night_deep.get_luminance(), day_deep.get_luminance() * 0.3,
 		"ночью глубинный цвет гаснет")
-	assert_lt(night_horizon.length(), day_horizon.length() * 0.3,
-		"ночью отражение неба тёмное")
+	assert_lt(night_shallow.get_luminance(),
+		day_shallow.get_luminance() * 0.3,
+		"ночью мелководье гаснет")
 	WorldMaterials.textured_headless = false
 
 
