@@ -19,6 +19,10 @@
 # детерминированного RNG. П15 3: отражение неба — движковое (radiance
 # Sky3D с френелем F0 ≈ 0.02, без ambient_light_disabled); SSR движок
 # на прозрачную воду не даёт (только opaque) — честно в STATUS.
+# П15 4 + 9.2-9.4: пена и накат — по SDF-карте расстояния до берега
+# (ShoreBand.sdf_texture из карты высот; море — полоса 2-8 см и накат
+# 10-40 см, озеро — почти без пены); кромка мягкая — последние 5-15 см
+# толщины гасят всё, кроме дна.
 # Не делает: подводное плавание (вне MVP), течение и волны для лодочек.
 class_name WaterArea
 extends Area3D
@@ -47,6 +51,14 @@ const RING_COLOR: Color = Color(0.87, 0.92, 0.93)
 ## матовое зеркало неба (наклон субпиксельных волн уходит в roughness).
 const ROUGHNESS_NEAR: float = 0.03
 const ROUGHNESS_FAR: float = 0.16
+## Пена по SDF-карте берега (П15 4 + 9.3-9.4): море — выраженная полоса
+## у кромки и накат 10-40 см в такт длинной волне; озеро — почти без
+## пены, накат чуть-чуть. Ширина полосы 2-8 см.
+const SEA_FOAM: float = 1.0
+const LAKE_FOAM: float = 0.15
+const FOAM_WIDTH: float = 0.06
+const SEA_RUNUP: float = 0.35
+const LAKE_RUNUP: float = 0.10
 
 # --- Спектр волн (SPEC П14 4.3) ---
 ## Полный спектр — 32 волны; уровень берёт первые N (длинные первые,
@@ -92,6 +104,14 @@ var _surface_built: bool = false
 ## Материалы поверхностей (headless — плоские, тогда пусто): DayCycle
 ## пишет в них отражение неба и ведёт яркость глубинных цветов по часам.
 var _water_materials: Array[ShaderMaterial] = []
+## Зона спокойная (озеро/пруды): пена почти выключена, накат минимален.
+var _calm: bool = false
+## Базовое количество пены зоны (ползунок F3 умножает его).
+var _foam_base: float = SEA_FOAM
+## Множитель пены от панели F3 (1.0 — номинал).
+var _foam_mult: float = 1.0
+## Ширина полосы пены, м (ползунок F3).
+var _foam_width: float = FOAM_WIDTH
 ## Базовые (дневные) значения цветов, от которых считается ночной спад.
 var _deep_base := Color.BLACK
 var _shallow_base := Color.BLACK
@@ -290,6 +310,8 @@ func _build_surface() -> void:
 	if _surface_built:
 		return
 	_surface_built = true
+	_calm = surface_size.x < SEA_MIN_SIZE
+	_foam_base = LAKE_FOAM if _calm else SEA_FOAM
 	if surface_size.x >= SEA_MIN_SIZE:
 		_build_ocean()
 	else:
@@ -345,6 +367,9 @@ func _surface_material(calm: bool) -> Material:
 			LAKE_SHALLOW if calm else SEA_SHALLOW, 0.55)
 		flat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		return flat
+	# База пены зоны (П15 4): озеро/пруды — почти без пены. Ставится и
+	# при прямом вызове (тесты), не только из _build_surface.
+	_foam_base = LAKE_FOAM if calm else SEA_FOAM
 	_tier = GraphicsQuality.tier_from_settings()
 	var material := ShaderMaterial.new()
 	material.shader = shader_for_tier(_tier)
@@ -374,6 +399,17 @@ func _surface_material(calm: bool) -> Material:
 	material.set_shader_parameter("roughness_near", ROUGHNESS_NEAR)
 	material.set_shader_parameter("roughness_far", ROUGHNESS_FAR)
 	material.set_shader_parameter("metallic", 0.0)
+	# Пена по SDF-карте берега (П15 4 + 9.3-9.4): карта расстояния до
+	# береговой линии запекается из карты высот острова (море и озеро
+	# на одном уровне — карта одна); море — полоса у кромки и накат,
+	# озеро — почти без пены. Дешёвая версия пены не рисует — параметры
+	# там не читаются.
+	material.set_shader_parameter("shore_sdf",
+		ShoreBand.sdf_texture(ShoreBand.ART, IslandGen.SEA_LEVEL))
+	material.set_shader_parameter("foam_amount", _foam_base * _foam_mult)
+	material.set_shader_parameter("foam_width", _foam_width)
+	material.set_shader_parameter("runup_amp",
+		LAKE_RUNUP if calm else SEA_RUNUP)
 	# Высота экрана для пиксельной фильтрации волн (П15 2): built-in
 	# SCREEN_PIXEL_SIZE из fragment в 4.7.2 не виден — размер вьюпорта
 	# (с учётом масштаба 3D) несёт uniform.
@@ -438,6 +474,17 @@ func set_ripple(on: bool) -> void:
 	var layers: float = float(ripple_layers_for_tier(_tier)) if on else 0.0
 	for material: ShaderMaterial in _water_materials:
 		material.set_shader_parameter("ripple_layers", layers)
+
+
+## Пена на лету (ползунки F3 «Вода», П15 8.1): множитель количества
+## (озеро остаётся почти без пены — база 0.15) и ширина полосы, м.
+func set_foam(mult: float, width: float) -> void:
+	_foam_mult = maxf(mult, 0.0)
+	_foam_width = clampf(width, 0.02, 0.3)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter(
+			"foam_amount", _foam_base * _foam_mult)
+		material.set_shader_parameter("foam_width", _foam_width)
 
 
 ## Яркость глубинных цветов по часам (П5.13, блок 2; П15 3 — отражение

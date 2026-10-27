@@ -486,8 +486,11 @@ func test_water_beer_and_fresnel_in_shader() -> void:
 		"пены-текстуры нет (процедурная)")
 	assert_false(code.contains("texture_refraction"),
 		"текстуры преломления Boujie нет")
-	assert_true(code.contains("ALPHA = 1.0"),
-		"композит воды собирается в шейдере (поканальное поглощение)")
+	# П15 4 + 9.2: альфу ведут пена (непрозрачность ≤ 0.6) и мягкий
+	# край (прозрачная кромка) — композит воды по-прежнему собран в
+	# шейдере (поканальное поглощение в EMISSION).
+	assert_true(code.contains("ALPHA = clamp(max(edge, foam * 0.6)"),
+		"альфа — пена и мягкий край (П15)")
 
 
 func test_water_night_follows_sky() -> void:
