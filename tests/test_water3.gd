@@ -1190,6 +1190,54 @@ func test_water_tab_copy_contains_all() -> void:
 		"база поглощения печатается с множителем ползунка")
 
 
+# --- П15-ДОП блок 7: приёмка ---
+
+func test_shader_compiles_on_all_tiers() -> void:
+	# П15-ДОП блок 7: шейдер воды компилируется на каждом уровне
+	# графики. GPU-компиляции в headless нет, но движок разбирает код
+	# шейдера целиком и при синтаксической ошибке список uniform'ов
+	# пуст — код ставится в свежий Shader, разбор выполняется здесь,
+	# а не берётся кэшем ресурса. SIMPLE/NORMAL — дешёвый шейдер,
+	# HIGH/ULTRA — полный.
+	for row: Array in [
+		["SIMPLE", GraphicsQuality.Tier.SIMPLE, WaterArea.WATER_BU_CHEAP],
+		["NORMAL", GraphicsQuality.Tier.NORMAL, WaterArea.WATER_BU_CHEAP],
+		["HIGH", GraphicsQuality.Tier.HIGH, WaterArea.WATER_BU],
+		["ULTRA", GraphicsQuality.Tier.ULTRA, WaterArea.WATER_BU],
+	]:
+		var tier_name: String = row[0]
+		var shader: Shader = row[2]
+		assert_eq(WaterArea.shader_for_tier(row[1]), shader,
+			"%s: тир выбирает %s" % [tier_name,
+				shader.resource_path.get_file()])
+		var fresh := Shader.new()
+		fresh.code = shader.code
+		var uniforms: Array = fresh.get_shader_uniform_list()
+		assert_gt(uniforms.size(), 20,
+			"%s: шейдер разбирается (uniform'ов > 20)" % tier_name)
+		# Общий набор волн и палитры — в обоих шейдерах.
+		for key: String in ["sea_height", "sea_choppiness",
+				"sea_speed", "sea_freq", "color_deep", "color_shallow",
+				"absorption", "roughness_near", "roughness_far"]:
+			assert_true(_has_uniform(uniforms, key),
+				"%s: uniform %s на месте" % [tier_name, key])
+	# Экранная выборка — только у полной версии (дешёвая без
+	# hint_screen_texture, SPEC П14 4.7).
+	assert_true(_has_uniform(
+		WaterArea.WATER_BU.get_shader_uniform_list(), "screen_tex"),
+		"полный: экранная текстура есть")
+	assert_false(_has_uniform(
+		WaterArea.WATER_BU_CHEAP.get_shader_uniform_list(), "screen_tex"),
+		"дешёвый: без экранной выборки")
+
+
+static func _has_uniform(uniforms: Array, uniform_name: String) -> bool:
+	for entry: Dictionary in uniforms:
+		if entry.get("name", "") == uniform_name:
+			return true
+	return false
+
+
 static func _vec3_close(got: Variant, expected: Vector3) -> bool:
 	if got is not Vector3:
 		return false

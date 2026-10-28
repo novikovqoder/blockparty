@@ -229,6 +229,9 @@ func test_shaders_no_lattice_value_noise() -> void:
 	# Планка качества: «никаких полосатых паттернов в шейдере» — решётчатый
 	# value-noise в игровых шейдерах запрещён; допустимые шумы — симплекс
 	# (simplex/snoise) и выборки текстур.
+	# П15-ДОП: исключение — вода (water_bu*.gdshader): волны sea_octave
+	# и пена — value-noise из туториала gameidea (решётка там не читается:
+	# октавы сжаты и повёрнуты матрицей octave_m, паттерн течёт).
 	# Признаки решётчатой реализации: хеш ячейки `hash12(`/`hash21(`
 	# (патенты Ashima не использует, имена характерны именно решётке) и
 	# фирменная билинейная развёртка ячейки `f * f * (3.0 - 2.0 * f)`
@@ -236,6 +239,8 @@ func test_shaders_no_lattice_value_noise() -> void:
 	# без решёточного сглаживания — пара признаков его не ловит.
 	var paths := _shader_paths()
 	for path: String in paths:
+		if path.contains("/water_bu"):
+			continue
 		var text := FileAccess.get_file_as_string(path)
 		assert_false(text.is_empty(), "%s читается" % path)
 		assert_false(text.contains("hash12("),

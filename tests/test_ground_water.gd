@@ -362,7 +362,12 @@ func test_water_material_bu_settings() -> void:
 	# SPEC П14 4.1/4.4: почти зеркало (roughness 0.02–0.05), цвета BU
 	# в материале, поглощение Бера по каналам с красным первым, озеро
 	# (торфяная мгла) глотает свет плотнее стального моря.
+	# П15-ДОП блок 5: по умолчанию материал строится из пресета
+	# «Туториал» — этому тесту нужна палитра BU, пресет выбирается явно
+	# (проверка самого дефолта — test_water_presets_switch_colors_and_
+	# absorption в test_water3).
 	WorldMaterials.textured_headless = true
+	WaterArea.set_water_preset(WaterArea.WATER_PRESET_BU)
 	var area := WaterArea.new()
 	add_child_autofree(area)
 	var lake := area._surface_material(true) as ShaderMaterial
@@ -400,6 +405,7 @@ func test_water_material_bu_settings() -> void:
 				% channel)
 	assert_ne(WaterArea.RING_COLOR, load("res://assets/palette.tres").water,
 		"круги на воде — не бирюза палитры")
+	WaterArea.set_water_preset(WaterArea.WATER_PRESET_DEFAULT)
 	WorldMaterials.textured_headless = false
 
 
