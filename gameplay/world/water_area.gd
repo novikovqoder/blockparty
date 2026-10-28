@@ -27,7 +27,9 @@
 # SDF-карте расстояния до берега (ShoreBand.sdf_texture из карты
 # высот; море — полоса 2-8 см и накат 10-40 см, озеро — почти без
 # пены); кромка воды мягкая — последние 5-15 см толщины гасят всё,
-# кроме дна.
+# кроме дна. П15-ДОП блок 5: два пресета палитры — «Туториал»
+# (бирюзовая вода gameidea, по умолчанию) и «Born Unblessed» (тёмная
+# палитра П12); переключатель — вкладка «Вода» панели F3.
 # Не делает: подводное плавание (вне MVP), течение и волны для лодочек.
 class_name WaterArea
 extends Area3D
@@ -38,6 +40,7 @@ const WATER_BU_CHEAP: Shader = preload(
 	"res://assets/shaders/water_bu_cheap.gdshader")
 
 # --- Палитра воды BU (SPEC П12 4.1, П14 4.1) ---
+## Пресет «Born Unblessed» (П15-ДОП блок 5): тёмная палитра П12.
 ## Озеро и пруды: тёмная торфяная вода — глубина почти чёрная с зелёно-
 ## бурым отливом, мелководье прозрачное (дно видно).
 const LAKE_DEEP: Color = Color(0.016, 0.035, 0.028, 1.0)
@@ -50,6 +53,56 @@ const SEA_SHALLOW: Color = Color(0.09, 0.12, 0.14, 1.0)
 ## больше не несут прозрачность — композит воды собирает шейдер.
 const LAKE_ABSORPTION: Vector3 = Vector3(1.6, 0.75, 0.45)
 const SEA_ABSORPTION: Vector3 = Vector3(1.05, 0.50, 0.34)
+
+## Пресет «Туториал» (П15-ДОП блок 5): бирюзовая вода по туториалу
+## gameidea (base_tint/deep/absorption адаптированы под наш объёмный
+## цвет); озеро — зеленее и плотнее моря.
+const TUT_LAKE_DEEP: Color = Color(0.02, 0.22, 0.13, 1.0)
+const TUT_LAKE_SHALLOW: Color = Color(0.32, 0.60, 0.42, 1.0)
+const TUT_SEA_DEEP: Color = Color(0.0, 0.20, 0.24, 1.0)
+const TUT_SEA_SHALLOW: Color = Color(0.24, 0.60, 0.62, 1.0)
+const TUT_LAKE_ABSORPTION: Vector3 = Vector3(0.55, 0.20, 0.09)
+const TUT_SEA_ABSORPTION: Vector3 = Vector3(0.35, 0.10, 0.05)
+
+## Пресеты палитры (П15-ДОП блок 5): 4 цвета + поглощение Бера озера
+## и моря; переключатель — вкладка «Вода» панели F3, ничего не
+## сохраняется. ПО УМОЛЧАНИЮ — «Туториал»; «Born Unblessed» — прежняя
+## палитра П12. Имена констант пресета печатает «Скопировать значения»
+## (TUT_* / LAKE_*-SEA_*), текст вставляется в этот файл.
+const WATER_PRESET_TUTORIAL: StringName = &"tutorial"
+const WATER_PRESET_BU: StringName = &"bu"
+const WATER_PRESETS: Dictionary = {
+	WATER_PRESET_TUTORIAL: {
+		"label": "BU_W_PRESET_TUTORIAL",
+		"colors": {
+			"lake_deep": TUT_LAKE_DEEP,
+			"lake_shallow": TUT_LAKE_SHALLOW,
+			"sea_deep": TUT_SEA_DEEP,
+			"sea_shallow": TUT_SEA_SHALLOW,
+		},
+		"absorption": {
+			"lake": TUT_LAKE_ABSORPTION,
+			"sea": TUT_SEA_ABSORPTION,
+		},
+	},
+	WATER_PRESET_BU: {
+		"label": "BU_W_PRESET_BU",
+		"colors": {
+			"lake_deep": LAKE_DEEP,
+			"lake_shallow": LAKE_SHALLOW,
+			"sea_deep": SEA_DEEP,
+			"sea_shallow": SEA_SHALLOW,
+		},
+		"absorption": {
+			"lake": LAKE_ABSORPTION,
+			"sea": SEA_ABSORPTION,
+		},
+	},
+}
+const WATER_PRESET_DEFAULT: StringName = WATER_PRESET_TUTORIAL
+## Активный пресет — общий для всех зон (переключается панелью F3;
+## построенные позже поверхности берут его же).
+static var _water_preset: StringName = WATER_PRESET_DEFAULT
 ## Круги на воде при входе — цвет пены, не бирюза палитры.
 const RING_COLOR: Color = Color(0.87, 0.92, 0.93)
 ## Шероховатость воды (П15 2): вблизи — почти зеркало, у горизонта —
@@ -118,6 +171,10 @@ var _foam_base: float = SEA_FOAM
 var _foam_mult: float = FOAM_MULT
 ## Ширина полосы пены, м (ползунок F3).
 var _foam_width: float = FOAM_WIDTH
+## Сила тёмной кромки и плотность пузырьков пены (ползунки F3,
+## П15-ДОП блок 5).
+var _foam_edge: float = FOAM_EDGE
+var _foam_bubbles: float = FOAM_BUBBLES
 ## Базовые (дневные) значения цветов, от которых считается ночной спад.
 var _deep_base := Color.BLACK
 var _shallow_base := Color.BLACK
@@ -372,10 +429,15 @@ func _build_lake_plane(size: Vector2, lift: float) -> void:
 ## SIMPLE/NORMAL); в headless (dummy-рендер) — плоская полупрозрачная
 ## заглушка без волн.
 func _surface_material(calm: bool) -> Material:
+	# Палитра активного пресета (П15-ДОП блок 5): по умолчанию —
+	# «Туториал», панель F3 переключает на «Born Unblessed».
+	var preset: Dictionary = WATER_PRESETS[_water_preset]
+	var preset_colors: Dictionary = preset["colors"]
 	if WorldMaterials.want_flat():
 		var flat := StandardMaterial3D.new()
 		flat.albedo_color = Color(
-			LAKE_SHALLOW if calm else SEA_SHALLOW, 0.55)
+			preset_colors["lake_shallow"] if calm
+				else preset_colors["sea_shallow"], 0.55)
 		flat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		return flat
 	# База пены зоны (П15 4): озеро/пруды — почти без пены. Ставится и
@@ -384,16 +446,19 @@ func _surface_material(calm: bool) -> Material:
 	_tier = GraphicsQuality.tier_from_settings()
 	var material := ShaderMaterial.new()
 	material.shader = shader_for_tier(_tier)
-	# Палитра BU (П12 4.1): озеро/пруды — торфяная, море — стальная.
+	# Цвета — из пресета (озеро/пруды своего тона, море — своего).
 	# Ползунок «Вода» (П15 8.1) меняет базовые цвета — ночной спад
 	# update_sky считается от них, подстройка живёт и ночью.
-	_deep_base = LAKE_DEEP if calm else SEA_DEEP
-	_shallow_base = LAKE_SHALLOW if calm else SEA_SHALLOW
+	_deep_base = preset_colors["lake_deep"] if calm \
+		else preset_colors["sea_deep"]
+	_shallow_base = preset_colors["lake_shallow"] if calm \
+		else preset_colors["sea_shallow"]
 	material.set_shader_parameter("color_deep", _deep_base)
 	material.set_shader_parameter("color_shallow", _shallow_base)
 	# Поглощение Бера по каналам (П14 4.1): озеро плотнее моря;
 	# множитель прозрачности — ползунок (П15 8.1).
-	_absorption_base = LAKE_ABSORPTION if calm else SEA_ABSORPTION
+	var preset_abs: Dictionary = preset["absorption"]
+	_absorption_base = preset_abs["lake"] if calm else preset_abs["sea"]
 	material.set_shader_parameter("absorption",
 		_absorption_base * _absorption_mult)
 	# Волны sea_octave (П15-ДОП): 4 параметра зоны (море — зыбь, озеро —
@@ -433,8 +498,8 @@ func _surface_material(calm: bool) -> Material:
 		LAKE_RUNUP if calm else SEA_RUNUP)
 	material.set_shader_parameter("foam_color", FOAM_COLOR)
 	material.set_shader_parameter("foam_edge_color", FOAM_EDGE_COLOR)
-	material.set_shader_parameter("foam_edge", FOAM_EDGE)
-	material.set_shader_parameter("foam_bubbles", FOAM_BUBBLES)
+	material.set_shader_parameter("foam_edge", _foam_edge)
+	material.set_shader_parameter("foam_bubbles", _foam_bubbles)
 	# Высота экрана для пиксельной фильтрации волн (П15 2): built-in
 	# SCREEN_PIXEL_SIZE из fragment в 4.7.2 не виден — размер вьюпорта
 	# (с учётом масштаба 3D) несёт uniform.
@@ -520,6 +585,16 @@ func set_foam(mult: float, width: float) -> void:
 		material.set_shader_parameter("foam_width", _foam_width)
 
 
+## Сила тёмной кромки и плотность пузырьков пены (ползунки F3,
+## П15-ДОП блок 5); построенные позже поверхности берут те же.
+func set_foam_edge(edge: float, bubbles: float) -> void:
+	_foam_edge = clampf(edge, 0.0, 1.0)
+	_foam_bubbles = clampf(bubbles, 0.0, 4.0)
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("foam_edge", _foam_edge)
+		material.set_shader_parameter("foam_bubbles", _foam_bubbles)
+
+
 ## Круги на воде на лету (галочка F3 «Круги на воде», П15 7): 0 —
 ## слоты не обновляются и шейдер их не рисует; повторная галочка
 ## возвращает.
@@ -564,6 +639,41 @@ func set_palette(
 ) -> void:
 	_deep_base = lake_deep if _calm else sea_deep
 	_shallow_base = lake_shallow if _calm else sea_shallow
+	_apply_palette()
+
+
+# --- Пресеты палитры (П15-ДОП блок 5) ---
+
+## Активный пресет воды (все зоны строят поверхности по нему).
+static func water_preset() -> StringName:
+	return _water_preset
+
+
+## Выбрать пресет (панель F3): сам ставит общий идентификатор, живые
+## зоны обновляет apply_water_preset (панель обходит группу
+## water_surface — той же рассылкой, что и ползунки).
+static func set_water_preset(id: StringName) -> void:
+	if not WATER_PRESETS.has(id):
+		return
+	_water_preset = id
+
+
+## Применить активный пресет к зоне: базы цветов и поглощения — из
+## пресета, дальше — обычное применение (ползунки сохраняют свои
+## множители, ночной спад — свою яркость).
+func apply_water_preset() -> void:
+	var preset: Dictionary = WATER_PRESETS[_water_preset]
+	var preset_colors: Dictionary = preset["colors"]
+	var preset_abs: Dictionary = preset["absorption"]
+	_deep_base = preset_colors["lake_deep"] if _calm \
+		else preset_colors["sea_deep"]
+	_shallow_base = preset_colors["lake_shallow"] if _calm \
+		else preset_colors["sea_shallow"]
+	_absorption_base = preset_abs["lake"] if _calm \
+		else preset_abs["sea"]
+	for material: ShaderMaterial in _water_materials:
+		material.set_shader_parameter("absorption",
+			_absorption_base * _absorption_mult)
 	_apply_palette()
 
 

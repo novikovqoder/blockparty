@@ -875,8 +875,9 @@ func test_water_tab_sliders_change_own_parameters() -> void:
 		match id:
 			&"abs":
 				assert_true(_vec3_close(material.get_shader_parameter(
-					"absorption"), WaterArea.SEA_ABSORPTION * applied),
-					"поглощение = база моря × ползунок")
+					"absorption"),
+					WaterArea.TUT_SEA_ABSORPTION * applied),
+					"поглощение = база моря пресета × ползунок")
 			&"wave_height":
 				assert_almost_eq(float(
 					material.get_shader_parameter("sea_height")),
@@ -918,6 +919,14 @@ func test_water_tab_sliders_change_own_parameters() -> void:
 				assert_almost_eq(float(
 					material.get_shader_parameter("foam_width")),
 					applied, 0.001, "ширина пены — ползунок")
+			&"foam_edge":
+				assert_almost_eq(float(
+					material.get_shader_parameter("foam_edge")),
+					applied, 0.001, "сила кромки пены — ползунок")
+			&"foam_bubbles":
+				assert_almost_eq(float(
+					material.get_shader_parameter("foam_bubbles")),
+					applied, 0.001, "плотность пузырьков — ползунок")
 			&"rough_near":
 				assert_almost_eq(float(
 					material.get_shader_parameter("roughness_near")),
@@ -969,8 +978,9 @@ func test_water_tab_colors_change_palette() -> void:
 
 
 func test_water_tab_reset_returns_defaults() -> void:
-	# П15 8.2: «Сбросить» возвращает номиналы всем ползункам, цветам
-	# и самому материалу воды.
+	# П15 8.2 / П15-ДОП блок 5: «Сбросить» возвращает номиналы всем
+	# ползункам, цветам дефолтного пресета («Туториал») и самому
+	# материалу воды — даже если перед этим был выбран «Born Unblessed».
 	WorldMaterials.textured_headless = true
 	var area := WaterArea.new()
 	add_child_autofree(area)
@@ -982,14 +992,20 @@ func test_water_tab_reset_returns_defaults() -> void:
 		slider.value = float(def["max"])
 	for def: Dictionary in panel.WATER_COLORS:
 		panel._pickers[def["id"]].color = Color(0.9, 0.1, 0.9)
+	panel._select_water_preset(WaterArea.WATER_PRESET_BU)
 	panel._reset_water()
 	for def: Dictionary in panel.WATER_SLIDERS:
 		assert_almost_eq(panel._sliders[def["id"]].value,
 			float(def["def"]), 0.0001,
 			"«Сбросить» вернул ползунок %s" % def.get("const", def["id"]))
+	var tutorial: Dictionary = \
+		WaterArea.WATER_PRESETS[WaterArea.WATER_PRESET_DEFAULT]["colors"]
 	for def: Dictionary in panel.WATER_COLORS:
-		assert_eq(panel._pickers[def["id"]].color, def["def"],
-			"«Сбросить» вернул цвет %s" % def["const"])
+		assert_eq(panel._pickers[def["id"]].color,
+			tutorial[def["id"]],
+			"«Сбросить» вернул цвет дефолтного пресета %s" % def["id"])
+	assert_eq(panel._water_preset, WaterArea.WATER_PRESET_DEFAULT,
+		"«Сбросить» вернул дефолтный пресет")
 	assert_almost_eq(float(
 		material.get_shader_parameter("refraction_amount")), 1.0, 0.001,
 		"материал: преломление вернулось к номиналу")
@@ -997,27 +1013,131 @@ func test_water_tab_reset_returns_defaults() -> void:
 		material.get_shader_parameter("caustic_brightness")), 1.0, 0.001,
 		"материал: каустика вернулась к номиналу")
 	assert_true(_vec3_close(material.get_shader_parameter("absorption"),
-		WaterArea.SEA_ABSORPTION), "материал: поглощение вернулось")
+		WaterArea.TUT_SEA_ABSORPTION), "материал: поглощение вернулось")
 	assert_eq(material.get_shader_parameter("color_deep"),
-		WaterArea.SEA_DEEP, "материал: глубинный цвет вернулся")
+		WaterArea.TUT_SEA_DEEP, "материал: глубинный цвет вернулся")
+	WorldMaterials.textured_headless = false
+
+
+func test_water_i18n_keys_present() -> void:
+	# П15-ДОП блок 5: ключи пресета и новых ползунков пены есть в
+	# strings_bu.csv с русским и английским текстом.
+	var keys: Array[String] = ["BU_W_PRESET", "BU_W_PRESET_TUTORIAL",
+		"BU_W_PRESET_BU", "BU_W_FOAM_EDGE", "BU_W_FOAM_BUBBLES"]
+	var file := FileAccess.open(
+		"res://i18n/strings_bu.csv", FileAccess.READ)
+	assert_not_null(file, "файл строк есть")
+	if file == null:
+		return
+	file.get_csv_line()
+	var csv: Dictionary = {}
+	while not file.eof_reached():
+		var line := file.get_csv_line()
+		if line.size() >= 3 and line[0] != "":
+			csv[line[0]] = line
+	file.close()
+	for key: String in keys:
+		assert_true(csv.has(key), "ключ %s есть в CSV" % key)
+		if csv.has(key):
+			assert_false((csv[key] as PackedStringArray)[1].is_empty(),
+				"%s: русский текст есть" % key)
+			assert_false((csv[key] as PackedStringArray)[2].is_empty(),
+				"%s: английский текст есть" % key)
+
+
+func test_water_presets_switch_colors_and_absorption() -> void:
+	# П15-ДОП блок 5: дефолт — «Туториал» (бирюзовый по туториалу);
+	# пресет = 4 цвета + поглощение озера и моря; переключение меняет
+	# базы зоны и материалы, построенные позже поверхности берут его же;
+	# ночной спад update_sky живёт от баз пресета.
+	WorldMaterials.textured_headless = true
+	assert_eq(WaterArea.water_preset(), WaterArea.WATER_PRESET_TUTORIAL,
+		"по умолчанию — пресет «Туториал»")
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	assert_eq(material.get_shader_parameter("color_deep"),
+		WaterArea.TUT_SEA_DEEP, "дефолт: глубинный цвет — бирюзовый")
+	assert_true(_vec3_close(material.get_shader_parameter("absorption"),
+		WaterArea.TUT_SEA_ABSORPTION), "дефолт: поглощение — туториала")
+	# Переключение на «Born Unblessed»: базы и материал живой зоны.
+	WaterArea.set_water_preset(WaterArea.WATER_PRESET_BU)
+	area.apply_water_preset()
+	assert_eq(material.get_shader_parameter("color_deep"),
+		WaterArea.SEA_DEEP, "BU: глубинный цвет — тёмная сталь")
+	assert_true(_vec3_close(material.get_shader_parameter("absorption"),
+		WaterArea.SEA_ABSORPTION), "BU: поглощение — плотное")
+	# Построенная после переключения поверхность — сразу из пресета.
+	var lake := WaterArea.new()
+	add_child_autofree(lake)
+	var lake_material := lake._surface_material(true) as ShaderMaterial
+	assert_eq(lake_material.get_shader_parameter("color_shallow"),
+		WaterArea.LAKE_SHALLOW, "озеро после переключения — торфяное")
+	# Ночной спад от баз пресета: цвета гаснут, не вспыхивают.
+	area.update_sky(Color(0.1, 0.1, 0.12), Color(0.05, 0.05, 0.08),
+		Vector3.DOWN, Color.BLACK)
+	assert_lt((material.get_shader_parameter("color_deep") as Color)
+		.get_luminance(), WaterArea.SEA_DEEP.get_luminance(),
+		"ночь гасит глубинный цвет пресета BU")
+	# Неизвестный идентификатор пресет не меняет.
+	WaterArea.set_water_preset(&"nope")
+	assert_eq(WaterArea.water_preset(), WaterArea.WATER_PRESET_BU,
+		"неизвестный пресет отклонён")
+	# Вернуть дефолт — остальные тесты рассчитывают на «Туториал».
+	WaterArea.set_water_preset(WaterArea.WATER_PRESET_TUTORIAL)
+	WorldMaterials.textured_headless = false
+
+
+func test_water_tab_preset_switch() -> void:
+	# П15-ДОП блок 5: переключатель пресетов во вкладке «Вода» — обе
+	# кнопки, выбор меняет зоны группы water_surface и пикеры панели;
+	# ползунки множат базы активного пресета.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	for id: StringName in [WaterArea.WATER_PRESET_TUTORIAL,
+			WaterArea.WATER_PRESET_BU]:
+		assert_true(panel._preset_buttons.has(id),
+			"кнопка пресета %s есть" % id)
+	assert_true(panel._preset_buttons[WaterArea.WATER_PRESET_TUTORIAL]
+		.button_pressed, "по умолчанию нажата кнопка «Туториал»")
+	panel._select_water_preset(WaterArea.WATER_PRESET_BU)
+	assert_eq(panel._water_preset, WaterArea.WATER_PRESET_BU,
+		"панель помнит активный пресет")
+	assert_eq(material.get_shader_parameter("color_deep"),
+		WaterArea.SEA_DEEP, "зона получила палитру BU")
+	assert_eq(panel._pickers[&"sea_deep"].color, WaterArea.SEA_DEEP,
+		"пикер глубины моря — на значении пресета BU")
+	# Ползунок поглощения множит базу активного пресета.
+	panel._sliders[&"abs"].value = 2.0
+	assert_true(_vec3_close(material.get_shader_parameter("absorption"),
+		WaterArea.SEA_ABSORPTION * 2.0),
+		"поглощение = база BU × ползунок")
+	WaterArea.set_water_preset(WaterArea.WATER_PRESET_TUTORIAL)
 	WorldMaterials.textured_headless = false
 
 
 func test_water_tab_copy_contains_all() -> void:
 	# П15 8.3 / П15-ДОП: текст «Скопировать значения» — константы
-	# WaterArea со всеми параметрами (волновые базы — с применённым
-	# множителем ползунка); числа можно вставить в water_area.gd как есть.
+	# WaterArea со всеми параметрами: цвета и поглощение — именами
+	# активного пресета (TUT_* / LAKE_*-SEA_*), волновые базы — с
+	# применённым множителем ползунка; числа вставляются в water_area.gd.
 	var panel := DebugPanel.new()
 	add_child_autofree(panel)
 	var text := panel.build_water_values_text()
 	for const_name: String in [
-		"LAKE_DEEP", "LAKE_SHALLOW", "SEA_DEEP", "SEA_SHALLOW",
+		"TUT_LAKE_DEEP", "TUT_LAKE_SHALLOW", "TUT_SEA_DEEP",
+		"TUT_SEA_SHALLOW", "TUT_LAKE_ABSORPTION", "TUT_SEA_ABSORPTION",
 		"ABSORPTION_MULT", "SEA_WAVE_HEIGHT", "LAKE_WAVE_HEIGHT",
 		"SEA_WAVE_CHOPPY", "LAKE_WAVE_CHOPPY",
 		"SEA_WAVE_SPEED", "LAKE_WAVE_SPEED", "SEA_WAVE_FREQ",
 		"LAKE_WAVE_FREQ",
 		"RIPPLE_STRENGTH_MULT", "RIPPLE_SCALE_MULT", "REFRACTION_MULT",
-		"FOAM_MULT", "FOAM_WIDTH", "ROUGHNESS_NEAR", "ROUGHNESS_FAR",
+		"FOAM_MULT", "FOAM_WIDTH", "FOAM_EDGE", "FOAM_BUBBLES",
+		"ROUGHNESS_NEAR", "ROUGHNESS_FAR",
 		"CAUSTIC_BRIGHTNESS",
 	]:
 		assert_true(text.contains("const %s:" % const_name),
@@ -1028,19 +1148,41 @@ func test_water_tab_copy_contains_all() -> void:
 	# Числа — те же, что в константах WaterArea.
 	assert_true(text.contains("const FOAM_WIDTH: float = 0.06"),
 		"ширина пены — 0.06")
+	assert_true(text.contains("const FOAM_EDGE: float = 0.8"),
+		"сила кромки — 0.8")
+	assert_true(text.contains("const FOAM_BUBBLES: float = 0.8"),
+		"плотность пузырьков — 0.8")
 	assert_true(text.contains("const ROUGHNESS_NEAR: float = 0.03"),
 		"шероховатость вблизи — 0.03")
 	assert_true(text.contains("const CAUSTIC_BRIGHTNESS: float = 1.0"),
 		"яркость каустики — 1.0")
 	assert_true(text.contains("const SEA_WAVE_FREQ: float = 0.08"),
 		"частота морских волн — 0.08")
-	assert_true(text.contains("const LAKE_DEEP: Color = "
-		+ "Color(0.016, 0.035, 0.028, 1.0)"), "палитра озера — числами")
+	assert_true(text.contains("const TUT_LAKE_DEEP: Color = "
+		+ "Color(0.02, 0.22, 0.13, 1.0)"),
+		"палитра озера — числами пресета")
+	assert_true(text.contains(
+		"const TUT_SEA_ABSORPTION: Vector3 = Vector3(0.35, 0.1, 0.05)"),
+		"база поглощения моря — числами пресета")
+	# Пресет BU печатает свои имена констант.
+	panel._select_water_preset(WaterArea.WATER_PRESET_BU)
+	assert_true(panel.build_water_values_text().contains(
+		"const LAKE_DEEP: Color = Color(0.016, 0.035, 0.028, 1.0)"),
+		"пресет BU печатает константы LAKE_*")
+	assert_true(panel.build_water_values_text().contains(
+		"const SEA_ABSORPTION: Vector3 = Vector3(1.05, 0.5, 0.34)"),
+		"пресет BU печатает поглощение SEA_*")
 	# Подвинутый ползунок попадает в текст своим числом.
+	panel._select_water_preset(WaterArea.WATER_PRESET_TUTORIAL)
 	panel._sliders[&"caustic"].value = 2.4
 	assert_true(panel.build_water_values_text().contains(
 		"const CAUSTIC_BRIGHTNESS: float = 2.4"),
 		"текущее значение ползунка печатается")
+	# Множитель поглощения уезжает в печатаемые базы.
+	panel._sliders[&"abs"].value = 2.0
+	assert_true(panel.build_water_values_text().contains(
+		"const TUT_SEA_ABSORPTION: Vector3 = Vector3(0.7, 0.2, 0.1)"),
+		"база поглощения печатается с множителем ползунка")
 
 
 static func _vec3_close(got: Variant, expected: Vector3) -> bool:

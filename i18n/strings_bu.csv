@@ -169,6 +169,9 @@ BU_DBG_RINGS,Круги на воде,Water rings
 BU_DBG_OCCLUSION,Окклюзия (отсечение невидимого),Occlusion culling
 BU_DBG_AUTOM,Авто-замер (4 с/эффект),Auto measure (4 s/effect)
 BU_DBG_AUTOM_RUN,Авто-замер %d/%d — щёлкните для отмены,Auto measure %d/%d — click to cancel
+BU_W_PRESET,Пресет воды,Water preset
+BU_W_PRESET_TUTORIAL,Туториал,Tutorial
+BU_W_PRESET_BU,Born Unblessed,Born Unblessed
 BU_W_LAKE_DEEP,Озеро: цвет глубины,Lake: deep color
 BU_W_LAKE_SHALLOW,Озеро: цвет мелководья,Lake: shallow color
 BU_W_SEA_DEEP,Море: цвет глубины,Sea: deep color
@@ -183,6 +186,8 @@ BU_W_RIPPLE_SCALE,Масштаб ряби,Ripple scale
 BU_W_REFRACTION,Сила преломления,Refraction strength
 BU_W_FOAM_AMOUNT,Пена: количество,Foam: amount
 BU_W_FOAM_WIDTH,Пена: ширина полосы,Foam: band width
+BU_W_FOAM_EDGE,Пена: сила кромки,Foam: edge strength
+BU_W_FOAM_BUBBLES,Пена: пузырьки,Foam: bubbles
 BU_W_ROUGH_NEAR,Шероховатость вблизи,Roughness near
 BU_W_ROUGH_FAR,Шероховатость у горизонта,Roughness far
 BU_W_CAUSTIC,Яркость каустики,Caustic brightness

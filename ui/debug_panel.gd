@@ -82,6 +82,12 @@ const WATER_SLIDERS: Array[Dictionary] = [
 	{"id": &"foam_width", "label": "BU_W_FOAM_WIDTH",
 		"min": 0.02, "max": 0.3, "step": 0.01,
 		"def": WaterArea.FOAM_WIDTH, "const": "FOAM_WIDTH"},
+	{"id": &"foam_edge", "label": "BU_W_FOAM_EDGE",
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"def": WaterArea.FOAM_EDGE, "const": "FOAM_EDGE"},
+	{"id": &"foam_bubbles", "label": "BU_W_FOAM_BUBBLES",
+		"min": 0.0, "max": 4.0, "step": 0.1,
+		"def": WaterArea.FOAM_BUBBLES, "const": "FOAM_BUBBLES"},
 	{"id": &"rough_near", "label": "BU_W_ROUGH_NEAR",
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"def": WaterArea.ROUGHNESS_NEAR, "const": "ROUGHNESS_NEAR"},
@@ -94,15 +100,32 @@ const WATER_SLIDERS: Array[Dictionary] = [
 		"const": "CAUSTIC_BRIGHTNESS"},
 ]
 ## Цвета воды (П15 8.1): мелководье и глубина, озеро и море раздельно.
+## Значения — активного пресета (П15-ДОП блок 5): «Туториал» (бирюзовый,
+## по умолчанию) или «Born Unblessed» (тёмная палитра П12).
 const WATER_COLORS: Array[Dictionary] = [
-	{"id": &"lake_deep", "label": "BU_W_LAKE_DEEP",
-		"def": WaterArea.LAKE_DEEP, "const": "LAKE_DEEP"},
-	{"id": &"lake_shallow", "label": "BU_W_LAKE_SHALLOW",
-		"def": WaterArea.LAKE_SHALLOW, "const": "LAKE_SHALLOW"},
-	{"id": &"sea_deep", "label": "BU_W_SEA_DEEP",
-		"def": WaterArea.SEA_DEEP, "const": "SEA_DEEP"},
-	{"id": &"sea_shallow", "label": "BU_W_SEA_SHALLOW",
-		"def": WaterArea.SEA_SHALLOW, "const": "SEA_SHALLOW"},
+	{"id": &"lake_deep", "label": "BU_W_LAKE_DEEP"},
+	{"id": &"lake_shallow", "label": "BU_W_LAKE_SHALLOW"},
+	{"id": &"sea_deep", "label": "BU_W_SEA_DEEP"},
+	{"id": &"sea_shallow", "label": "BU_W_SEA_SHALLOW"},
+]
+## Имена констант WaterArea по пресету: «Скопировать значения» печатает
+## цвета и базы поглощения активного пресета его именами (TUT_* —
+## «Туториал», LAKE_*/SEA_* — «Born Unblessed»).
+const WATER_PRESET_CONSTS: Dictionary = {
+	WaterArea.WATER_PRESET_TUTORIAL: {
+		"lake_deep": "TUT_LAKE_DEEP", "lake_shallow": "TUT_LAKE_SHALLOW",
+		"sea_deep": "TUT_SEA_DEEP", "sea_shallow": "TUT_SEA_SHALLOW",
+		"lake_abs": "TUT_LAKE_ABSORPTION", "sea_abs": "TUT_SEA_ABSORPTION",
+	},
+	WaterArea.WATER_PRESET_BU: {
+		"lake_deep": "LAKE_DEEP", "lake_shallow": "LAKE_SHALLOW",
+		"sea_deep": "SEA_DEEP", "sea_shallow": "SEA_SHALLOW",
+		"lake_abs": "LAKE_ABSORPTION", "sea_abs": "SEA_ABSORPTION",
+	},
+}
+## Порядок кнопок пресетов во вкладке (первый — по умолчанию).
+const WATER_PRESET_ORDER: Array[StringName] = [
+	WaterArea.WATER_PRESET_TUTORIAL, WaterArea.WATER_PRESET_BU,
 ]
 ## Базы волн sea_octave (П15-ДОП): в «Скопировать значения» печатаются
 ## как константы WaterArea с уже применённым множителем ползунка — текст
@@ -135,6 +158,9 @@ var _slider_values: Dictionary[StringName, Label] = {}
 var _pickers: Dictionary[StringName, ColorPickerButton] = {}
 var _water_values: Dictionary[StringName, float] = {}
 var _water_colors: Dictionary[StringName, Color] = {}
+## Активный пресет воды (П15-ДОП блок 5) и его кнопки-переключатели.
+var _water_preset: StringName = WaterArea.water_preset()
+var _preset_buttons: Dictionary[StringName, Button] = {}
 ## «Сбросить» переставляет ползунки программно — сигналы погашены,
 ## промежуточные состояния в материалы не идут.
 var _water_applying: bool = false
@@ -274,8 +300,9 @@ func _build_effects(root: Control) -> void:
 func _build_water_tab(tabs: TabContainer) -> void:
 	for def: Dictionary in WATER_SLIDERS:
 		_water_values[def["id"]] = def["def"]
+	var preset_colors: Dictionary = _water_preset_colors()
 	for def: Dictionary in WATER_COLORS:
-		_water_colors[def["id"]] = def["def"]
+		_water_colors[def["id"]] = preset_colors[def["id"]]
 	var scroll := ScrollContainer.new()
 	scroll.name = tr("BU_DBG_WATER_TAB")
 	scroll.custom_minimum_size = Vector2(0.0, 352.0)
@@ -286,6 +313,25 @@ func _build_water_tab(tabs: TabContainer) -> void:
 	box.add_theme_constant_override("separation", 2)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
+	# Переключатель пресетов (П15-ДОП блок 5): «Туториал» (по умолчанию)
+	# и «Born Unblessed»; выбор переставляет пикеры и зоны воды.
+	var preset_row := HBoxContainer.new()
+	box.add_child(preset_row)
+	var preset_label := Label.new()
+	preset_label.text = tr("BU_W_PRESET")
+	preset_label.custom_minimum_size = Vector2(198.0, 0.0)
+	preset_label.add_theme_font_size_override("font_size", 13)
+	preset_row.add_child(preset_label)
+	var group := ButtonGroup.new()
+	for id: StringName in WATER_PRESET_ORDER:
+		var button := Button.new()
+		button.text = tr(WaterArea.WATER_PRESETS[id]["label"])
+		button.toggle_mode = true
+		button.button_group = group
+		button.button_pressed = _water_preset == id
+		button.toggled.connect(_on_water_preset_toggled.bind(id))
+		preset_row.add_child(button)
+		_preset_buttons[id] = button
 	for def: Dictionary in WATER_COLORS:
 		var row := HBoxContainer.new()
 		box.add_child(row)
@@ -693,6 +739,34 @@ func _on_water_color_changed(color: Color, id: StringName) -> void:
 	_apply_water()
 
 
+## Цвета активного пресета (П15-ДОП блок 5).
+func _water_preset_colors() -> Dictionary:
+	return WaterArea.WATER_PRESETS[_water_preset]["colors"]
+
+
+func _on_water_preset_toggled(pressed: bool, id: StringName) -> void:
+	if pressed:
+		_select_water_preset(id)
+
+
+## Выбрать пресет воды: общий идентификатор в WaterArea, живые зоны
+## обновляют базы, пикеры переставляются на цвета пресета молча,
+## затем одна рассылка значений.
+func _select_water_preset(id: StringName) -> void:
+	_water_preset = id
+	WaterArea.set_water_preset(id)
+	for node: Node in get_tree().get_nodes_in_group("water_surface"):
+		(node as WaterArea).apply_water_preset()
+	_water_applying = true
+	var colors: Dictionary = _water_preset_colors()
+	for def: Dictionary in WATER_COLORS:
+		var color_id: StringName = def["id"]
+		_pickers[color_id].color = colors[color_id]
+		_water_colors[color_id] = colors[color_id]
+	_water_applying = false
+	_apply_water()
+
+
 ## Разослать текущие значения всем зонам воды (группа water_surface):
 ## каждая зона берёт свои озеро/море значения (WaterArea.set_palette/
 ## set_wave_params решают по calm). Настройки игры и сеть не затрагиваются.
@@ -713,13 +787,16 @@ func _apply_water() -> void:
 		area.set_refraction_amount(_water_values[&"refraction"])
 		area.set_foam(_water_values[&"foam_amount"],
 			_water_values[&"foam_width"])
+		area.set_foam_edge(_water_values[&"foam_edge"],
+			_water_values[&"foam_bubbles"])
 		area.set_roughness(_water_values[&"rough_near"],
 			_water_values[&"rough_far"])
 		area.set_caustic_brightness(_water_values[&"caustic"])
 
 
-## «Сбросить» (П15 8.2): номиналы из констант WaterArea; ползунки и
-## пикеры переставляются молча (сигналы погашены), затем одно применение.
+## «Сбросить» (П15 8.2): номиналы из констант WaterArea и дефолтный
+## пресет («Туториал»); ползунки и пикеры переставляются молча
+## (сигналы погашены), затем одно применение.
 func _reset_water() -> void:
 	_water_applying = true
 	for def: Dictionary in WATER_SLIDERS:
@@ -727,31 +804,42 @@ func _reset_water() -> void:
 		_sliders[id].value = def["def"]
 		_water_values[id] = def["def"]
 		_slider_values[id].text = "%.2f" % float(def["def"])
-	for def: Dictionary in WATER_COLORS:
-		var id: StringName = def["id"]
-		_pickers[id].color = def["def"]
-		_water_colors[id] = def["def"]
 	_water_applying = false
-	_apply_water()
+	# Пресет возвращается к дефолту: кнопки переставляются без сигнала,
+	# применение — одним вызовом (внутри переставит и пикеры).
+	for id: StringName in _preset_buttons:
+		_preset_buttons[id].set_pressed_no_signal(
+			id == WaterArea.WATER_PRESET_DEFAULT)
+	_select_water_preset(WaterArea.WATER_PRESET_DEFAULT)
 
 
-## Текст «Скопировать значения» (П15 8.3): константы WaterArea с
-## текущими числами — вставляется в gameplay/world/water_area.gd как есть.
-## Волновые базы печатаются с уже применённым множителем ползунка
-## (множители после вставки возвращаются к 1.0 — записей WAVE_*_MULT
-## в тексте нет).
+## Текст «Скопировать значения» (П15 8.3 / П15-ДОП блок 5): константы
+## WaterArea с текущими числами — вставляется в
+## gameplay/world/water_area.gd как есть. Цвета и базы поглощения
+## печатаются именами активного пресета (TUT_* / LAKE_*-SEA_*), базы —
+## с уже применённым множителем ползунка (множители после вставки
+## возвращаются к 1.0 — записей WAVE_*_MULT в тексте нет).
 func build_water_values_text() -> String:
 	var lines: Array[String] = []
+	var consts: Dictionary = WATER_PRESET_CONSTS[_water_preset]
+	var preset: Dictionary = WaterArea.WATER_PRESETS[_water_preset]
 	for def: Dictionary in WATER_COLORS:
 		var c: Color = _water_colors[def["id"]]
 		lines.append("const %s: Color = Color(%s, %s, %s, %s)" % [
-			def["const"], _fmt_water_num(c.r), _fmt_water_num(c.g),
+			consts[def["id"]], _fmt_water_num(c.r), _fmt_water_num(c.g),
 			_fmt_water_num(c.b), _fmt_water_num(c.a)])
 	for def: Dictionary in WATER_SLIDERS:
 		if def.get("const", "") == "":
 			continue
 		lines.append("const %s: float = %s" % [
 			def["const"], _fmt_water_num(_water_values[def["id"]])])
+	# Базы поглощения пресета — с множителем ползунка «Поглощение».
+	var mult: float = _water_values[&"abs"]
+	for zone: String in ["lake", "sea"]:
+		var base: Vector3 = preset["absorption"][zone] * mult
+		lines.append("const %s: Vector3 = Vector3(%s, %s, %s)" % [
+			consts["%s_abs" % zone], _fmt_water_num(base.x),
+			_fmt_water_num(base.y), _fmt_water_num(base.z)])
 	for def: Dictionary in WAVE_BASE_CONSTS:
 		lines.append("const %s: float = %s" % [def["const"],
 			_fmt_water_num(float(def["base"])
