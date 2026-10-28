@@ -137,10 +137,9 @@ uniform float distance_fade_max = 1400.0;
 uniform float vertex_wave_fade_min = 380.0;
 uniform float vertex_wave_fade_max = 800.0;
 // Depth-буфер вдали неточен: толщина сменяется «глубокой» константой.
-uniform float depth_fog_fade_min = 70.0;
-uniform float depth_fog_fade_max = 130.0;
-// Дальняя толщина-заглушка, м (за пределами надёжной глубины).
-uniform float far_thickness = 8.0;
+// П15-ДОП2, п. 2: константа стала мягким потолком (см. fragment):
+// глубже всё сходится к ней плавно, без подмены и излома.
+uniform float far_thickness = 16.0;
 group_uniforms;
 
 // Волны туториала: октавы sea_octave, матрица сжатия_uv между октавами.
@@ -463,10 +462,16 @@ void fragment() {
 	// distorted_bg_depth > water_linear_depth.
 	float thickness_signed = -view_pos.z - surf_dist;
 	float thickness = max(thickness_signed, 0.0);
-	// Вдали depth-буфер неточен: толщина сменяется «глубокой» константой.
-	float depth_fade = 1.0 - smoothstep(
-		depth_fog_fade_min, depth_fog_fade_max, surf_dist);
-	thickness = mix(far_thickness, thickness, depth_fade);
+	// П15-ДОП2, п. 2: толщина мягко ограничена сверху — tanh прижимает
+	// всё глубокое к «глубокой» константе без излома. Цвет глубокой воды
+	// одинаков и над картой, и за её краем: на юбке дна (П15-ДОП2, п. 1)
+	// толщина растёт плавно от края, а если под пикселем нет геометрии
+	// (луч мимо дна, глубина сцены = дальняя плоскость камеры), толщина
+	// получается огромной и tanh даёт ту же глубокую воду — резких
+	// переключений нет. Заодно шум depth-буфера вдали сжимается около
+	// константы. Мелководье не трогается: при толщине ≪ константы
+	// tanh(t/T)·T ≈ t.
+	thickness = far_thickness * tanh(thickness / far_thickness);
 	// П15 9.2: мягкий край — последние 5-15 см толщины плавно гасят
 	// всё, кроме дна (отражение, френель, рассеяние, рябь); у самой
 	// кромки вода полностью прозрачная, линия пересечения не читается.

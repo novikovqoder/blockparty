@@ -512,10 +512,10 @@ func _surface_material(calm: bool) -> Material:
 	# Смещение вершин гаснет вдали (внешние кольца Ocean грубые).
 	material.set_shader_parameter("vertex_wave_fade_min", 380.0)
 	material.set_shader_parameter("vertex_wave_fade_max", 800.0)
-	# Depth-буфер вдали неточен: толщина сменяется «глубокой» константой.
-	material.set_shader_parameter("depth_fog_fade_min", 70.0)
-	material.set_shader_parameter("depth_fog_fade_max", 130.0)
-	material.set_shader_parameter("far_thickness", 8.0)
+	# П15-ДОП2, п. 2: «глубокая» константа — мягкий потолок толщины
+	# (tanh в fragment): глубже всё плавно сходится к ней, цвет глубокой
+	# воды одинаков внутри карты и за её краем (юбка дна, п. 1).
+	material.set_shader_parameter("far_thickness", 16.0)
 	# Каустика и круги (П15 5-6): параметры читает только полная версия
 	# шейдера (HIGH/ULTRA), дешёвая их не имеет; текущее состояние
 	# тумблеров F3 переносится и на построенные позже поверхности.

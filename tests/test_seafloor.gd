@@ -6,6 +6,9 @@
 # высот острова не меняется (контроль — test_water3).
 extends GutTest
 
+## Исходник воды (полная версия, HIGH/ULTRA): «глубокая» константа.
+const WATER_BU_CODE: String = WaterArea.WATER_BU.code
+
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ## Границы колец юбки (полустороны, м) и край — из SeafloorSkirt.RINGS.
 const RING_EDGES: Array[float] = [128.0, 136.0, 152.0, 176.0, 256.0, 384.0,
@@ -203,4 +206,37 @@ func test_panel_seafloor_sliders() -> void:
 	assert_almost_eq(skirt.mesh.get_aabb().position.y, -110.0, 0.01,
 		"ползунки панели пересобирают юбку дна")
 	view.free()
+
+# --- П15-ДОП2, п. 2: глубокая вода без границ ---
+
+func test_shader_soft_clamps_thickness() -> void:
+	# Толщина воды мягко ограничена сверху (tanh к «глубокой» константе
+	# 16 м): глубокая вода внутри карты и за её краем одинакова, а
+	# «нет геометрии под пикселем» (глубина сцены = дальняя плоскость
+	# камеры) даёт огромную толщину — tanh сводит её к той же константе
+	# без ветвлений. Мелководье не меняется: при t ≪ T, tanh(t/T)·T ≈ t.
+	assert_true(WATER_BU_CODE.contains(
+		"thickness = far_thickness * tanh(thickness / far_thickness)"),
+		"толщина ограничена soft clamp (tanh)")
+	var re := RegEx.new()
+	re.compile("uniform float far_thickness = ([\\d.]+);")
+	var m: RegExMatch = re.search(WATER_BU_CODE)
+	assert_not_null(m, "uniform far_thickness есть в полной версии")
+	if m != null:
+		assert_almost_eq(m.get_string(1).to_float(), 16.0, 0.001,
+			"константа глубокой воды — 16 м")
+	assert_false(WATER_BU_CODE.contains("depth_fog_fade"),
+		"подмены толщины по расстоянию больше нет")
+	# Резких переключений по толщине/расстоянию нет: голых step( вне
+	# smoothstep шейдер не использует.
+	re.compile("(?<!smooth)step\\(")
+	assert_null(re.search(WATER_BU_CODE),
+		"голых step( в шейдере нет")
+	# WaterArea ставит константу на материал (обе версии шейдера:
+	# полная читает её, дешёвая принимает uniform без использования).
+	var area_text := FileAccess.get_file_as_string(
+		"res://gameplay/world/water_area.gd")
+	assert_true(area_text.contains(
+		"set_shader_parameter(\"far_thickness\", 16.0)"),
+		"WaterArea ставит far_thickness = 16")
 
