@@ -2,6 +2,8 @@
 # (пп. 1-2), движковое отражение неба (п. 3), пена по SDF-карте берега
 # и мягкий край (пп. 4, 9.2-9.4), полоса берега 0.25 м с бикубикой
 # (п. 9.1), каустика и круги (пп. 5-6), галочки и ползунки F3 (пп. 7-8).
+# П15-ДОП блок 2: пена туториала — маска мелководья + гребни по нормали
+# + SDF-полоса, fbm-Вороной с domain warp, кромка и пузырьки.
 # Сервер — без рендера: шейдерное поведение проверяется материалом
 # (uniform по уровням) и исходником шейдера, как test_ground_water2.
 extends GutTest
@@ -262,24 +264,30 @@ func test_shore_sdf_signs_and_accuracy() -> void:
 
 
 func test_foam_uses_sdf_not_depth() -> void:
-	# П15 4 + 9.3: пена — по карте расстояния до берега (shore_sdf),
-	# НЕ по толщине из буфера глубины; только smoothstep, без step(.
+	# П15 4 + 9.3 + П15-ДОП блок 2: линия берега — по карте расстояния
+	# до берега (shore_sdf), не по рёбрам треугольников depth; маска
+	# мелководья по толщине и гребни по нормали — слагаемые туториала.
+	# Только smoothstep, без step(.
 	var code := WATER_BU_CODE
 	assert_true(code.contains("uniform sampler2D shore_sdf"),
 		"карта SDF берега — uniform шейдера")
 	assert_true(code.contains("float sdf = texture(shore_sdf"),
 		"пена читает SDF-карту")
-	assert_true(code.contains("1.0 - smoothstep(0.0, foam_width, line)"),
+	assert_true(code.contains(
+			"1.0 - smoothstep(0.0, foam_width, shore_line)"),
 		"полоса пены — smoothstep по расстоянию до линии наката")
-	# Пена больше не строится по толщине: FOAM_SHORE_M удалён.
 	assert_false(code.contains("FOAM_SHORE_M"),
-		"пены по толщине из depth больше нет")
+		"старой константы полосы по depth нет")
 	# В коде пены нет step( — только плавные переходы (smoothstep).
-	var foam_part: String = code.substr(code.find("// Пена по SDF-карте"))
+	var foam_part: String = code.substr(code.find("// Пена туториала"))
 	assert_false(foam_part.replace("smoothstep(", "").contains("step("),
 		"в пене нет резкого step(")
 	assert_false(foam_part.contains("texture(depth_tex, refr_uv).g"),
 		"пена не читает буфер глубины напрямую")
+	# Предмет над водой в кадре не покрывается пеной (толщина вдоль
+	# взгляда отрицательна) — как проверка туториала.
+	assert_true(code.contains("thickness_signed > 0.0"),
+		"пена — только под водой (предмет над водой чист)")
 	# WaterArea ставит карту в материал (море и озеро — одна карта).
 	WorldMaterials.textured_headless = true
 	var area := WaterArea.new()
@@ -290,33 +298,89 @@ func test_foam_uses_sdf_not_depth() -> void:
 	WorldMaterials.textured_headless = false
 
 
-func test_foam_lit_by_scene_light() -> void:
-	# П15 4: пена освещается светом сцены — ALBEDO = цвет пены × foam,
-	# EMISSION воды гасится (1 − foam); непрозрачность ≤ 0.6; цвет
-	# 0.75-0.8, не чисто белый. Свет в EMISSION пена не пишет.
+func test_foam_tutorial_masks_and_voronoi() -> void:
+	# П15-ДОП блок 2: маска пены туториала — мелководье (толщина) +
+	# гребни (нормаль) + наша SDF-полоса; масса — анимированный fbm
+	# Вороного с domain warp и emergence-пульсацией; кромка — смещённая
+	# выборка той же массы, пузырьки — отдельный мелкий Вороной.
 	var code := WATER_BU_CODE
-	assert_true(code.contains("ALBEDO = FOAM_COLOR * foam;"),
+	# Маска: три слагаемых, всё умножается на foam_amount зоны.
+	assert_true(code.contains(
+			"smoothstep(FOAM_DEPTH_START, FOAM_DEPTH_END,"),
+		"мелководье — по толщине воды (туториал)")
+	assert_true(code.contains("smoothstep(FOAM_CREST_THRESHOLD,"),
+		"гребни — по нормали (nrm.y ниже порога)")
+	assert_true(code.contains("FOAM_CREST_THRESHOLD - 0.1, nrm.y"),
+		"порог гребней — наклон нормали")
+	assert_true(code.contains("* foam_amount * underwater"),
+		"маска умножается на количество пены зоны")
+	# Функции туториала.
+	for pair: Array in [["float hash13(", "hash13"], ["vec2 hash22(", "hash22"],
+			["float voronoi(", "voronoi"], ["float noise3d(", "noise3d"],
+			["float fbm_voronoi(", "fbm_voronoi"]]:
+		assert_true(code.contains(pair[0]),
+			"функция пены %s (туториал)" % pair[1])
+	assert_true(code.contains("sin(TIME * FOAM_NOISE_SPEED + 6.2831 * o)"),
+		"точки Вороного анимированы (живые комья)")
+	assert_true(code.contains("val = pow(val, 2.0);"),
+		"октавы Вороного заострены pow")
+	# Domain warp двумя шумами, emergence — 3D value-шум.
+	assert_true(code.contains("vnoise(flow_uv + vec2(5.2, 1.3))"),
+		"domain warp — два шума со сдвигом фазы")
+	assert_true(code.contains(
+			"noise3d(vec3(world_pos.xz * 0.5,"),
+		"emergence — 3D-шум пульсации комьев")
+	assert_true(code.contains("mix(emergence, 1.0, foam_level)"),
+		"у берега и гребней emergence полный")
+	# Масса и кромка: смещённая выборка, мягкий порог.
+	assert_true(code.contains(
+			"smoothstep(FOAM_CUTOFF + 0.5, FOAM_CUTOFF + 0.6,"),
+		"порог массы пены — smoothstep")
+	assert_true(code.contains("(world_pos.xz + FOAM_EDGE_OFFSET)"),
+		"кромка — смещённая выборка той же массы")
+	assert_true(code.contains(
+			"clamp(shadow_shape - foam_mask, 0.0, 1.0)"),
+		"тёмная кромка — там, где массы нет")
+	# Пузырьки: мелкий Вороной рвёт массу изнутри.
+	assert_true(code.contains("1.0 - sqrt(voronoi("),
+		"пузырьки — отдельный мелкий Вороной")
+	assert_true(code.contains("* foam_bubbles, 0.0, 1.0)"),
+		"плотность пузырьков — uniform")
+	# Круги вокруг ног входят в ту же массу.
+	assert_true(code.contains("foam_mask = max(foam_mask, rings_foam)"),
+		"пена кругов входит в общую пену воды")
+
+
+func test_foam_lit_by_scene_light() -> void:
+	# П15 4: пена освещается светом сцены — ALBEDO = цвет массы поверх
+	# тёмной кромки × маски, EMISSION воды гасится (1 − foam);
+	# непрозрачность ≤ 0.6; цвет 0.75-0.8, не чисто белый. Свет в
+	# EMISSION пена не пишет.
+	var code := WATER_BU_CODE
+	assert_true(code.contains("ALBEDO = foam_edge_color.rgb")
+		and code.contains("+ foam_color.rgb * foam_mask;"),
 		"пена — в ALBEDO (освещается светом сцены)")
 	assert_true(code.contains("* (1.0 - foam) * edge;"),
 		"EMISSION воды гасится пеной и мягким краем")
 	assert_true(code.contains("foam * 0.6"),
 		"непрозрачность пены ≤ 0.6")
-	# Цвет пены 0.75-0.8 по каналам, не чисто белый.
-	var color_match := RegEx.new()
-	color_match.compile(
-		"const vec3 FOAM_COLOR = vec3\\(([\\d.]+), ([\\d.]+), ([\\d.]+)\\);")
-	var found := color_match.search(code)
-	assert_not_null(found, "константа цвета пены найдена")
-	if found != null:
-		for channel: String in [found.get_string(1), found.get_string(2),
-			found.get_string(3)]:
-			assert_between(float(channel), 0.75, 0.8,
-				"цвет пены 0.75-0.8 (%s)" % channel)
+	assert_true(code.contains("mix(rough, 0.8, foam)"),
+		"пена шершавая (roughness → 0.8, туториал)")
+	# Цвет пены 0.75-0.8 по каналам, не чисто белый; кромка тёмная.
+	for channel: float in [WaterArea.FOAM_COLOR.r, WaterArea.FOAM_COLOR.g,
+			WaterArea.FOAM_COLOR.b]:
+		assert_between(channel, 0.75, 0.8,
+			"цвет пены 0.75-0.8 (%.2f)" % channel)
+	assert_lt(WaterArea.FOAM_EDGE_COLOR.get_luminance(), 0.1,
+		"кромка пены — тёмный ободок")
+	assert_lt(WaterArea.FOAM_EDGE_COLOR.get_luminance(),
+		WaterArea.FOAM_COLOR.get_luminance(),
+		"кромка темнее массы пены")
 	# Пена не светится сама: в строке EMISSION нет цвета пены.
 	var emission_index: int = code.find("EMISSION = water")
 	var emission_line: String = code.substr(
 		emission_index, code.find("\n", emission_index) - emission_index)
-	assert_false(emission_line.contains("FOAM_COLOR"),
+	assert_false(emission_line.contains("foam_color"),
 		"пена не пишется в EMISSION напрямую")
 
 
@@ -356,11 +420,10 @@ func test_runup_follows_long_wave() -> void:
 		"период наката — секунды морской зыби")
 	assert_between(_uniform_of(code, "runup_amp"), 0.1, 0.4,
 		"амплитуда наката в пределах 10-40 см (дефолт)")
-	# Шумы двух масштабов рвут полосу: 0.2 м (×5.0) и 0.6 м (×1.667).
-	assert_true(code.contains("world_pos.xz * 5.0"),
-		"шум пены масштаба 0.2 м")
+	# Шум 0.6 м волнист линию наката (мелкую рваность ей даёт Вороной
+	# массы пены, П15-ДОП блок 2).
 	assert_true(code.contains("world_pos.xz * 1.667"),
-		"шум пены масштаба 0.6 м")
+		"шум волнистости линии — масштаб 0.6 м")
 	# Море/озеро: база пены и амплитуда наката меньше у озера.
 	assert_between(WaterArea.LAKE_FOAM, 0.05, 0.3,
 		"озеро — почти без пены")
@@ -402,6 +465,19 @@ func test_lake_material_foam_lower_than_sea() -> void:
 	assert_almost_eq(
 		float(sea_material.get_shader_parameter("foam_amount")), 0.5, 0.001,
 		"море: ползунок уменьшает пену")
+	# Пена туториала (П15-ДОП блок 2): цвета и номиналы кромки/пузырьков
+	# WaterArea ставит в материал обеих зон.
+	for material: ShaderMaterial in [sea_material, lake_material]:
+		assert_eq(material.get_shader_parameter("foam_color"),
+			WaterArea.FOAM_COLOR, "цвет массы пены — константа зоны")
+		assert_eq(material.get_shader_parameter("foam_edge_color"),
+			WaterArea.FOAM_EDGE_COLOR, "цвет кромки пены — константа зоны")
+		assert_almost_eq(
+			float(material.get_shader_parameter("foam_edge")),
+			WaterArea.FOAM_EDGE, 0.001, "номинал силы кромки")
+		assert_almost_eq(
+			float(material.get_shader_parameter("foam_bubbles")),
+			WaterArea.FOAM_BUBBLES, 0.001, "номинал плотности пузырьков")
 	assert_almost_eq(
 		float(sea_material.get_shader_parameter("foam_width")), 0.1, 0.001,
 		"ширина полосы пены меняется")
@@ -574,7 +650,8 @@ func test_rings_are_gaussian_rings_with_foam() -> void:
 	assert_true(block.contains("exp(-q1 * q1)"), "кольцо — гауссов пакет")
 	assert_true(block.contains("RING_LIFE_SEC"), "кольцо живёт ограниченно")
 	assert_true(block.contains("slope_r"), "кольцо наклоняет нормаль")
-	assert_true(WATER_BU_CODE.contains("foam = max(foam, rings_foam)"),
+	assert_true(WATER_BU_CODE.contains(
+			"foam_mask = max(foam_mask, rings_foam)"),
 		"пена кругов входит в общую пену воды")
 
 

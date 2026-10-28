@@ -21,10 +21,13 @@
 # (2/3/1 слоя). П15 3: отражение неба — движковое (radiance
 # Sky3D с френелем F0 ≈ 0.02, без ambient_light_disabled); SSR движок
 # на прозрачную воду не даёт (только opaque) — честно в STATUS.
-# П15 4 + 9.2-9.4: пена и накат — по SDF-карте расстояния до берега
-# (ShoreBand.sdf_texture из карты высот; море — полоса 2-8 см и накат
-# 10-40 см, озеро — почти без пены); кромка мягкая — последние 5-15 см
-# толщины гасят всё, кроме дна.
+# П15 4 + 9.2-9.4, П15-ДОП блок 2: пена — по туториалу (маска
+# мелководья по толщине + гребни по нормали + Вороной с domain warp,
+# emergence-пульсацией, тёмной кромкой и пузырьками), накат — по
+# SDF-карте расстояния до берега (ShoreBand.sdf_texture из карты
+# высот; море — полоса 2-8 см и накат 10-40 см, озеро — почти без
+# пены); кромка воды мягкая — последние 5-15 см толщины гасят всё,
+# кроме дна.
 # Не делает: подводное плавание (вне MVP), течение и волны для лодочек.
 class_name WaterArea
 extends Area3D
@@ -61,6 +64,13 @@ const LAKE_FOAM: float = 0.15
 const FOAM_WIDTH: float = 0.06
 const SEA_RUNUP: float = 0.35
 const LAKE_RUNUP: float = 0.10
+## Пена по туториалу (П15-ДОП блок 2): цвет массы (0.75-0.8 — не чисто
+## белый, освещается светом сцены), цвет тёмной кромки-тени и номиналы
+## силы кромки/пузырьков (ползунки F3 «Вода», блок 5).
+const FOAM_COLOR: Color = Color(0.76, 0.77, 0.79, 1.0)
+const FOAM_EDGE_COLOR: Color = Color(0.02, 0.03, 0.05, 1.0)
+const FOAM_EDGE: float = 0.8
+const FOAM_BUBBLES: float = 0.8
 
 # --- Волны sea_octave (П15-ДОП, туториал gameidea) ---
 ## Четыре параметра волн зоны (height — суммарная высота, м; choppiness —
@@ -408,10 +418,12 @@ func _surface_material(calm: bool) -> Material:
 	material.set_shader_parameter("roughness_near", _rough_near)
 	material.set_shader_parameter("roughness_far", _rough_far)
 	material.set_shader_parameter("metallic", 0.0)
-	# Пена по SDF-карте берега (П15 4 + 9.3-9.4): карта расстояния до
-	# береговой линии запекается из карты высот острова (море и озеро
-	# на одном уровне — карта одна); море — полоса у кромки и накат,
-	# озеро — почти без пены. Дешёвая версия пены не рисует — параметры
+	# Пена (П15 4 + 9.3-9.4, П15-ДОП блок 2 — туториал): карта
+	# расстояния до береговой линии запекается из карты высот острова
+	# (море и озеро на одном уровне — карта одна); море — полоса у
+	# кромки и накат, озеро — почти без пены. Масса пены — Вороной
+	# туториала (глубина + гребни + SDF-полоса), кромка и пузырьки —
+	# цвет и номиналы силы. Дешёвая версия пены не рисует — параметры
 	# там не читаются.
 	material.set_shader_parameter("shore_sdf",
 		ShoreBand.sdf_texture(ShoreBand.ART, IslandGen.SEA_LEVEL))
@@ -419,6 +431,10 @@ func _surface_material(calm: bool) -> Material:
 	material.set_shader_parameter("foam_width", _foam_width)
 	material.set_shader_parameter("runup_amp",
 		LAKE_RUNUP if calm else SEA_RUNUP)
+	material.set_shader_parameter("foam_color", FOAM_COLOR)
+	material.set_shader_parameter("foam_edge_color", FOAM_EDGE_COLOR)
+	material.set_shader_parameter("foam_edge", FOAM_EDGE)
+	material.set_shader_parameter("foam_bubbles", FOAM_BUBBLES)
 	# Высота экрана для пиксельной фильтрации волн (П15 2): built-in
 	# SCREEN_PIXEL_SIZE из fragment в 4.7.2 не виден — размер вьюпорта
 	# (с учётом масштаба 3D) несёт uniform.
