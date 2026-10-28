@@ -170,6 +170,16 @@ uniform sampler2D height_tex : filter_linear_mipmap_anisotropic;
 uniform float ring_radius = 16.0;
 // Прижим бикубики к коллизии, м (тот же лимит, что ShoreBand.TENSION_LIMIT).
 const float TENSION_LIMIT = 0.03;
+// П15-ДОП2, п. 4: релакс на крутых клетках берега — те же константы,
+// что у ShoreBand (синхронизируется тестом): перепад углов клетки от
+// WALK_DROP (предел проходимости walk_max_slope_deg 54°, tan(54°) ≈ 1.38
+// на кваде 1×1 м) до RELAX_DROP плавно выключает прижим бикубики к
+// диагонали чанка, а основу заменяет огибающей чанковых поверхностей —
+// кольцо и полоса над крутым берегом не прорезают друг друга.
+const float WALK_DROP = 1.4;
+const float RELAX_DROP = 2.4;
+const float RELAX_TENSION = 0.3;
+const float SOFT_EPS = 0.02;
 // Средние ORM.b слоёв для центрирования смещения (средняя высота кольца
 // над чанками ≈ 0): a = litter, rock, mud; b = moss, gravel, grass.
 uniform vec3 orm_mean_a = vec3(0.5, 0.5, 0.5);
@@ -376,11 +386,14 @@ vec2 pom_march(
 	return uv_m - m2;
 }
 
-// П15 9.1: бикубическая высота кольца — Catmull-Rom 4×4 узла
-// (16 сэмплов height_tex по узлам решётки) с прижимом к треугольной
-// высоте коллизии (диагональ квадрата (x,z)–(x+1,z+1), как у чанков):
-// отклонение ≤ TENSION_LIMIT. Высота не опускается ниже чанка — кольцо
-// скользит над чанками и береговой полосой без утопания.
+// П15 9.1 + П15-ДОП2, п. 4: бикубическая высота кольца — Catmull-Rom
+// 4×4 узла (16 сэмплов height_tex) с прижимом к треугольной высоте
+// чанка (диагональ квадрата (x,z)–(x+1,z+1)); на крутых клетках
+// (релакс) прижим ослабевает, а основа становится огибающей
+// диагональной (печёные чанки) и билинейной (ближние чанки)
+// поверхностей: кольцо скользит над чанками и береговой полосой без
+// утопания и без ступеней коллизии. Формулы и константы — те же, что
+// у ShoreBand (синхронизируется тестом).
 float ring_node_h(vec2 node) {
 	return textureLod(height_tex, (node + vec2(128.0)) / 256.0, 0.0).r;
 }
@@ -391,40 +404,65 @@ float ring_catmull(float p0, float p1, float p2, float p3, float t) {
 		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t);
 }
 
-float ring_ground_h(vec2 wxz) {
+// Перепад клетки (max − min по 4 углам).
+float ring_cell_drop(float a, float b, float c, float d) {
+	return max(max(a, b), max(c, d)) - min(min(a, b), min(c, d));
+}
+
+float ring_ground_h(vec2 wxz, float edge_fade) {
 	vec2 p = clamp(wxz, vec2(-126.5), vec2(126.5));
 	vec2 base = floor(p);
-	vec2 f = p - base;
 	vec2 b1 = clamp(base, vec2(-127.0), vec2(126.0));
 	float tx = clamp(p.x - b1.x, 0.0, 1.0);
 	float tz = clamp(p.y - b1.y, 0.0, 1.0);
-	float col0 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y - 1.0)),
-		ring_node_h(vec2(b1.x, b1.y - 1.0)),
-		ring_node_h(vec2(b1.x + 1.0, b1.y - 1.0)),
-		ring_node_h(vec2(b1.x + 2.0, b1.y - 1.0)), tx);
-	float col1 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y)),
-		ring_node_h(vec2(b1.x, b1.y)),
-		ring_node_h(vec2(b1.x + 1.0, b1.y)),
-		ring_node_h(vec2(b1.x + 2.0, b1.y)), tx);
-	float col2 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y + 1.0)),
-		ring_node_h(vec2(b1.x, b1.y + 1.0)),
-		ring_node_h(vec2(b1.x + 1.0, b1.y + 1.0)),
-		ring_node_h(vec2(b1.x + 2.0, b1.y + 1.0)), tx);
-	float col3 = ring_catmull(ring_node_h(vec2(b1.x - 1.0, b1.y + 2.0)),
-		ring_node_h(vec2(b1.x, b1.y + 2.0)),
-		ring_node_h(vec2(b1.x + 1.0, b1.y + 2.0)),
-		ring_node_h(vec2(b1.x + 2.0, b1.y + 2.0)), tx);
+	// 16 узлов (b1−1 .. b1+2)²: бикубика и перепады клеток вокруг.
+	float n00 = ring_node_h(vec2(b1.x - 1.0, b1.y - 1.0));
+	float n10 = ring_node_h(vec2(b1.x, b1.y - 1.0));
+	float n20 = ring_node_h(vec2(b1.x + 1.0, b1.y - 1.0));
+	float n30 = ring_node_h(vec2(b1.x + 2.0, b1.y - 1.0));
+	float n01 = ring_node_h(vec2(b1.x - 1.0, b1.y));
+	float n11 = ring_node_h(vec2(b1.x, b1.y));
+	float n21 = ring_node_h(vec2(b1.x + 1.0, b1.y));
+	float n31 = ring_node_h(vec2(b1.x + 2.0, b1.y));
+	float n02 = ring_node_h(vec2(b1.x - 1.0, b1.y + 1.0));
+	float n12 = ring_node_h(vec2(b1.x, b1.y + 1.0));
+	float n22 = ring_node_h(vec2(b1.x + 1.0, b1.y + 1.0));
+	float n32 = ring_node_h(vec2(b1.x + 2.0, b1.y + 1.0));
+	float n03 = ring_node_h(vec2(b1.x - 1.0, b1.y + 2.0));
+	float n13 = ring_node_h(vec2(b1.x, b1.y + 2.0));
+	float n23 = ring_node_h(vec2(b1.x + 1.0, b1.y + 2.0));
+	float n33 = ring_node_h(vec2(b1.x + 2.0, b1.y + 2.0));
+	float col0 = ring_catmull(n00, n10, n20, n30, tx);
+	float col1 = ring_catmull(n01, n11, n21, n31, tx);
+	float col2 = ring_catmull(n02, n12, n22, n32, tx);
+	float col3 = ring_catmull(n03, n13, n23, n33, tx);
 	float cubic = ring_catmull(col0, col1, col2, col3, tz);
-	// Треугольная высота чанка по углам клетки.
-	float h00 = ring_node_h(vec2(b1.x, b1.y));
-	float h10 = ring_node_h(vec2(b1.x + 1.0, b1.y));
-	float h01 = ring_node_h(vec2(b1.x, b1.y + 1.0));
-	float h11 = ring_node_h(vec2(b1.x + 1.0, b1.y + 1.0));
+	// Треугольная высота чанка (диагональ, как у печёных чанков) и
+	// билинейная (ближние чанки 0.5 м) по углам клетки.
 	float linear = tx >= tz
-		? h00 + (h10 - h00) * tx + (h11 - h10) * tz
-		: h00 + (h01 - h00) * tz + (h11 - h01) * tx;
-	float k = clamp(abs(cubic - linear) / TENSION_LIMIT, 0.0, 1.0);
-	return max(mix(cubic, linear, k), linear + 0.001);
+		? n11 + (n21 - n11) * tx + (n22 - n21) * tz
+		: n11 + (n12 - n11) * tz + (n22 - n12) * tx;
+	float bil = mix(mix(n11, n21, tx), mix(n12, n22, tx), tz);
+	// Релакс (П15-ДОП2, п. 4): перепад содержащей клетки (её углы
+	// n11..n22) — та же клетка и та же формула, что у береговой полосы
+	// (ShoreBand.cell_relax): поверхности не расходятся; к краю кольца
+	// релакс гасится edge_fade — у края прежняя формула, стык с чанками
+	// без губы.
+	float drop_cell = ring_cell_drop(n11, n21, n12, n22);
+	float relax = smoothstep(WALK_DROP, RELAX_DROP, drop_cell) * edge_fade;
+	// Прижим бикубики к чанковой высоте: лимит растёт с релаксом.
+	float lim = mix(TENSION_LIMIT, RELAX_TENSION, relax);
+	float k = clamp(abs(cubic - linear) / lim, 0.0, 1.0);
+	float pinned = mix(cubic, linear, k);
+	// Огибающая диагональной и билинейной поверхностей — сглаженный
+	// max (C¹), не ниже ни одной; добавка не больше SOFT_EPS/2.
+	float env = 0.5 * (linear + bil
+		+ sqrt((linear - bil) * (linear - bil) + SOFT_EPS * SOFT_EPS));
+	float base_h = mix(linear, env, relax) + 0.001;
+	// Сглаженная положительная часть над основой — не ниже чанков.
+	float over = pinned - base_h;
+	float soft_over = 0.5 * (over + sqrt(over * over + SOFT_EPS * SOFT_EPS));
+	return base_h + soft_over;
 }
 
 void vertex() {
@@ -441,7 +479,9 @@ void vertex() {
 			ring_radius - RING_EDGE_FADE, ring_radius, ring_d);
 		float lift = RING_LIFT_C * (1.0 - smoothstep(
 			ring_radius - 0.4, ring_radius, ring_d));
-		float ground_h = ring_ground_h(wp.xz);
+		// Релакс крутых клеток гасится к краю кольца вместе со
+		// смещением (П15-ДОП2, п. 4): у края — прежняя формула.
+		float ground_h = ring_ground_h(wp.xz, disp_fade);
 		float target_y = ground_h + lift
 			+ ring_displacement(wp.xz) * disp_fade;
 		VERTEX.y += target_y - MODEL_MATRIX[3][1];

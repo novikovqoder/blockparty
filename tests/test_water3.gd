@@ -534,25 +534,53 @@ func test_band_mesh_built_with_quarter_step() -> void:
 
 
 func test_band_mesh_within_5cm_of_collision() -> void:
-	# П15 9.1: отклонение визуальной высоты полосы от коллизии — не
-	# больше 5 см. Высота коллизии (HeightMapShape3D, Jolt режет квад
-	# диагональю (x+1,z)–(x,z+1) — проверено raycast-пробником на
-	# седловой клетке) сверяется честным raycast по подмножеству вершин
-	# и аналитически по всем.
+	# П15 9.1 (пологие) + П15-ДОП2, п. 4 (крутые): на проходимых клетках
+	# (relax = 0) отклонение визуальной высоты полосы от коллизии — не
+	# больше 5 см (SPEC, у ног игрока). На крутых (relax > 0) полоса
+	# уходит от коллизии к огибающей чанков: труба расширяется с
+	# релаксом, при полном релаксе полоса не ниже диагональной и
+	# билинейной поверхностей чанков (не прорезается ими).
 	var mesh := ShoreBand.build_band_mesh(ART, IslandGen.SEA_LEVEL)
 	var verts: PackedVector3Array = mesh.surface_get_arrays(0)[
 		Mesh.ARRAY_VERTEX]
 	var heights: PackedFloat32Array = ART.heights
 	var worst: float = 0.0
+	var worst_pipe: float = 0.0
+	var full_relaxed: int = 0
+	var worst_floor: float = 0.0
 	for v: Vector3 in verts:
 		var col: float = ShoreBand.collision_height(heights, v.x, v.z)
-		worst = maxf(worst, absf(v.y - col))
+		var relax: float = ShoreBand.cell_relax(heights, v.x, v.z)
+		var diff: float = absf(v.y - col)
+		if relax <= 0.0:
+			# Пологие: труба ±COLLISION_CLAMP держит ≤5 см SPEC.
+			worst = maxf(worst, diff)
+		else:
+			# Крутые: труба шире с релаксом (граница соблюдается),
+			# при полном релаксе — не ниже чанков обеих проекций.
+			var half_pipe: float = lerpf(ShoreBand.COLLISION_CLAMP,
+				ShoreBand.RELAX_CLAMP, relax)
+			worst_pipe = maxf(worst_pipe, diff - half_pipe)
+			if relax >= 0.999:
+				full_relaxed += 1
+				var tri: float = ShoreBand.tri_height(heights, v.x, v.z)
+				var bil: float = ShoreBand.bilinear_height(
+					heights, v.x, v.z)
+				worst_floor = maxf(worst_floor,
+					maxf(tri - v.y, bil - v.y))
 	assert_lte(worst, ShoreBand.COLLISION_CLAMP + ShoreBand.BAND_LIFT,
-		"все вершины полосы ≤5 см от высоты коллизии (аналитика)")
+		"пологие вершины полосы ≤5 см от высоты коллизии (аналитика)")
 	assert_lte(ShoreBand.COLLISION_CLAMP + ShoreBand.BAND_LIFT, 0.05,
 		"труба к коллизии в пределах 5 см SPEC")
+	assert_lte(worst_pipe, ShoreBand.BAND_LIFT + 0.001,
+		"на крутых вершины в расширенной трубе к коллизии")
+	assert_gt(full_relaxed, 100,
+		"крутых клеток в полосе больше сотни (релакс работает)")
+	assert_lte(worst_floor, 0.002,
+		"при полном релаксе полоса не ниже чанков и билинейной")
 	# Честный raycast: физическая сцена с той же HeightMapShape3D,
-	# что строит IslandView (та же карта высот без изменений).
+	# что строит IslandView (та же карта высот без изменений);
+	# проверяются пологие вершины (SPEC ≤5 см — проходимые клетки).
 	var root3d := Node3D.new()
 	add_child_autofree(root3d)
 	var body := StaticBody3D.new()
@@ -568,10 +596,13 @@ func test_band_mesh_within_5cm_of_collision() -> void:
 	await get_tree().process_frame
 	var space := root3d.get_world_3d().direct_space_state
 	var worst_ray: float = 0.0
-	var step: int = maxi(1, verts.size() / 200)
 	var checked: int = 0
-	for i: int in range(0, verts.size(), step):
-		var v: Vector3 = verts[i]
+	var i: int = 0
+	for v: Vector3 in verts:
+		i += 1
+		if i % 7 != 0 or ShoreBand.cell_relax(
+				heights, v.x, v.z) > 0.0:
+			continue
 		var query := PhysicsRayQueryParameters3D.create(
 			Vector3(v.x, v.y + 1.0, v.z), Vector3(v.x, v.y - 1.0, v.z))
 		var hit := space.intersect_ray(query)
@@ -579,15 +610,17 @@ func test_band_mesh_within_5cm_of_collision() -> void:
 			continue
 		worst_ray = maxf(worst_ray, absf(v.y - float(hit.position.y)))
 		checked += 1
-	assert_gt(checked, 100, "raycast проверил достаточно вершин")
+	assert_gt(checked, 100, "raycast проверил достаточно пологих вершин")
 	assert_lte(worst_ray, 0.05,
-		"отклонение полосы от коллизии (raycast) ≤ 5 см")
+		"отклонение пологой полосы от коллизии (raycast) ≤ 5 см")
 
 
 func test_band_cubic_matches_detail_ring_shader() -> void:
 	# П15 9.1: бикубика полосы и детального кольца П14 — одна формула
 	# (Catmull-Rom по 4×4 узлам с тем же прижимом TENSION_LIMIT), стык
 	# кольца и полосы без шва; шейдер кольца не опускается ниже чанков.
+	# П15-ДОП2, п. 4: константы релакса крутых клеток и формула
+	# огибающей — те же, что у полосы (ShoreBand).
 	var ground := FileAccess.get_file_as_string(
 		"res://assets/shaders/forest_ground.gdshader")
 	assert_true(ground.contains("ring_catmull"),
@@ -595,8 +628,23 @@ func test_band_cubic_matches_detail_ring_shader() -> void:
 	assert_almost_eq(_const_of(ground, "TENSION_LIMIT"),
 		ShoreBand.TENSION_LIMIT, 0.0005,
 		"прижим бикубики кольца — тот же лимит, что у полосы")
-	assert_true(ground.contains("linear + 0.001"),
+	assert_true(ground.contains("mix(linear, env, relax) + 0.001"),
 		"кольцо держится над чанковой высотой (не утопает)")
+	# П15-ДОП2, п. 4: константы релакса синхронизированы с полосой.
+	for const_pair: Array in [["WALK_DROP", ShoreBand.WALK_DROP],
+			["RELAX_DROP", ShoreBand.RELAX_DROP],
+			["RELAX_TENSION", ShoreBand.RELAX_TENSION],
+			["SOFT_EPS", ShoreBand.SOFT_EPS]]:
+		assert_almost_eq(_const_of(ground, const_pair[0]),
+			const_pair[1], 0.0005,
+			"константа %s кольца = константе полосы" % const_pair[0])
+	assert_true(ground.contains("smoothstep(WALK_DROP, RELAX_DROP, drop_cell)"),
+		"релакс кольца — тот же smoothstep по перепаду клетки")
+	assert_true(ground.contains("ring_cell_drop"),
+		"кольцо считает перепад клеток для релакса")
+	assert_true(ground.contains(
+		"sqrt((linear - bil) * (linear - bil) + SOFT_EPS * SOFT_EPS)"),
+		"огибающая кольца — сглаженный max двух поверхностей")
 	# Сама бикубика: на целых узлах равна высоте карты (непрерывность
 	# между клетками), между узлами отклоняется не дальше прижима.
 	var heights: PackedFloat32Array = ART.heights
@@ -613,6 +661,84 @@ func test_band_cubic_matches_detail_ring_shader() -> void:
 		var tri: float = ShoreBand.tri_height(heights, probe.x, probe.y)
 		assert_lte(absf(cubic - tri), ShoreBand.TENSION_LIMIT,
 			"бикубика прижата к чанковой высоте (%s)" % probe)
+
+
+func test_band_steep_edge_smooth_not_staircased() -> void:
+	# П15-ДОП2, п. 4: кромка над морем на крутых клетках следует
+	# огибающей чанковых поверхностей (сглаженный max диагональной и
+	# билинейной), а не коллизии: прежде полоса прижималась к коллизии
+	# и расходилась с чанками до ~4 м — чанки прорезали полосу
+	# («лесенка»). Теперь при полном релаксе полоса не ниже огибающей и
+	# не выше неё больше чем на RELAX_TENSION (пологие волны вместо
+	# ступеней). Маска полосы выросла вокруг крутых клеток.
+	var mesh := ShoreBand.build_band_mesh(ART, IslandGen.SEA_LEVEL)
+	var heights: PackedFloat32Array = ART.heights
+	var verts: PackedVector3Array = mesh.surface_get_arrays(0)[
+		Mesh.ARRAY_VERTEX]
+	var worst_above: float = 0.0
+	var worst_below: float = 0.0
+	var full: int = 0
+	for v: Vector3 in verts:
+		if ShoreBand.cell_relax(heights, v.x, v.z) < 0.999:
+			continue
+		full += 1
+		var env: float = ShoreBand.soft_max(
+			ShoreBand.tri_height(heights, v.x, v.z),
+			ShoreBand.bilinear_height(heights, v.x, v.z))
+		worst_above = maxf(worst_above, v.y - env)
+		worst_below = maxf(worst_below, env - v.y)
+	assert_gt(full, 100, "крутых вершин в полосе больше сотни")
+	assert_lte(worst_below, 0.002,
+		"на крутых полоса не ниже огибающей чанков, факт %.3f"
+			% worst_below)
+	assert_lte(worst_above, ShoreBand.RELAX_TENSION + 0.05,
+		"на крутых полоса выше огибающей не больше лимита прижима (%.3f)"
+			% worst_above)
+	# Маска выросла вокруг крутых клеток: клеток в маске больше, чем
+	# пересекающих уровень (рост — только там, где есть крутые клетки).
+	var mask := ShoreBand.band_mask(ART, IslandGen.SEA_LEVEL)
+	var faces: int = IslandGen.POINTS - 1
+	var crossing: int = 0
+	var in_mask: int = 0
+	for fz: int in faces:
+		for fx: int in faces:
+			var h00: float = heights[ShoreBand._node(
+				fx - IslandGen.HALF, fz - IslandGen.HALF)]
+			var h10: float = heights[ShoreBand._node(
+				fx - IslandGen.HALF + 1, fz - IslandGen.HALF)]
+			var h01: float = heights[ShoreBand._node(
+				fx - IslandGen.HALF, fz - IslandGen.HALF + 1)]
+			var h11: float = heights[ShoreBand._node(
+				fx - IslandGen.HALF + 1, fz - IslandGen.HALF + 1)]
+			var low: float = minf(minf(h00, h10), minf(h01, h11))
+			var high: float = maxf(maxf(h00, h10), maxf(h01, h11))
+			if low <= IslandGen.SEA_LEVEL + ShoreBand.BAND_RANGE \
+					and high >= IslandGen.SEA_LEVEL \
+					- ShoreBand.BAND_RANGE:
+				crossing += 1
+			if mask[fz * faces + fx] == 1:
+				in_mask += 1
+	assert_gt(in_mask, crossing,
+		"маска полосы выросла вокруг крутых клеток (%d > %d)"
+			% [in_mask, crossing])
+
+
+func test_band_relax_constants_match_walkability() -> void:
+	# Порог релакса привязан к пределу проходимости: tan(54°) ≈ 1.38
+	# на кваде 1×1 м — WALK_DROP округлён вверх, RELAX_DROP даёт
+	# плавный разгон, лимиты разумны (релакс не свободная бикубика).
+	var balance: Balance = load("res://gameplay/balance.tres")
+	var walk_drop: float = tan(deg_to_rad(balance.walk_max_slope_deg))
+	assert_between(walk_drop, ShoreBand.WALK_DROP - 0.15,
+		ShoreBand.WALK_DROP,
+		"WALK_DROP ≈ tan(walk_max_slope_deg), клетка ещё проходима")
+	assert_between(ShoreBand.RELAX_DROP, ShoreBand.WALK_DROP + 0.5,
+		ShoreBand.WALK_DROP + 1.5,
+		"RELAX_DROP плавно выше порога проходимости")
+	assert_between(ShoreBand.RELAX_TENSION, 0.1, 0.6,
+		"лимит прижима при релаксе ограничен")
+	assert_between(ShoreBand.SOFT_EPS, 0.005, 0.05,
+		"мягкость сглаживания в сантиметровом диапазоне")
 
 
 # --- П15 5-6: каустика на дне и круги вокруг героя ---

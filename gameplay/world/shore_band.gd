@@ -36,6 +36,28 @@ const BAND_EDGE_CELLS: float = 3.0
 ## SPEC), у края полосы ступенька к чанку не больше этой же величины.
 ## На пологих клетках труба шире естественного расхождения — неактивна.
 const COLLISION_CLAMP: float = 0.045
+## П15-ДОП2, п. 4 «Лесенка кромки над морем»: на крутых клетках берега
+## (перепад углов клетки выше предела проходимости walk_max_slope_deg
+## 54° → tan(54°) ≈ 1.38 на кваде 1×1 м) коллизия расходится с печёными
+## чанками на метры (физика режет квад другой диагональю), и полоса,
+## прижатая трубой к коллизии, прорезается чанками — «лесенка». Ниже
+## порога всё как в П15 9.1 (труба ±COLLISION_CLAMP, ≤5 см SPEC);
+## выше — релакс: полоса плавно (smoothstep по перепаду) уходит от
+## коллизии к огибающей чанковых поверхностей. Те же константы — в
+## ветке detail_ring шейдера земли (синхронизируется тестом).
+const WALK_DROP: float = 1.4
+## Перепад клетки, с которого релакс полный, м.
+const RELAX_DROP: float = 2.4
+## Лимит прижима бикубики к чанковой высоте при полном релаксе, м:
+## бикубика сглаживает ступени в пологие волны, не болтаясь свободно.
+const RELAX_TENSION: float = 0.3
+## Полуширина трубы к коллизии при полном релаксе, м: шире худшего
+## измеренного расхождения коллизии и чанков в полосе (4.12 м, западный
+## обрыв) — труба неактивна, полоса следует огибающей чанков.
+const RELAX_CLAMP: float = 6.0
+## Мягкость сглаженного max и положительной части (C¹, без изломов),
+## м: добавка к высоте не больше половины этой величины.
+const SOFT_EPS: float = 0.02
 
 ## Дальность SDF, м: дальше берега не интересует (пена ≤ 0.3 м, накат
 ## ≤ 0.4, полоса берега ±1 м) — вне полосы поле зажимается в ±SDF_RANGE.
@@ -282,6 +304,68 @@ static func collision_height(
 	return h10 * (1.0 - v) + h01 * (1.0 - u) + h11 * (u + v - 1.0)
 
 
+## Перепад высот клетки квада 1×1 м (max − min по 4 углам) — её крутизна.
+static func cell_drop(
+	heights: PackedFloat32Array, fx: int, fz: int,
+) -> float:
+	var h00: float = heights[_node(fx, fz)]
+	var h10: float = heights[_node(fx + 1, fz)]
+	var h01: float = heights[_node(fx, fz + 1)]
+	var h11: float = heights[_node(fx + 1, fz + 1)]
+	return maxf(maxf(h00, h10), maxf(h01, h11)) \
+		- minf(minf(h00, h10), minf(h01, h11))
+
+
+## Релакс в мировой точке (П15-ДОП2, п. 4): доля по перепаду КЛЕТКИ,
+## содержащей точку (floor, как в шейдере кольца — одна и та же клетка
+## у полосы и кольца, поверхности не расходятся). Поле кусочно-постоянно
+## по клеткам: у рёбер клетки билинейная и треугольная высоты совпадают,
+## скачок базы на границе нулевой, наклон меняется плавно.
+static func cell_relax(
+	heights: PackedFloat32Array, wx: float, wz: float,
+) -> float:
+	var x: int = clampi(floori(wx), -IslandGen.HALF, IslandGen.HALF - 1)
+	var z: int = clampi(floori(wz), -IslandGen.HALF, IslandGen.HALF - 1)
+	return relax_of(cell_drop(heights, x, z))
+
+
+## Доля релакса по перепаду клетки: 0 на проходимых (≤WALK_DROP — там
+## труба к коллизии держит ≤5 см SPEC), 1 при перепаде ≥RELAX_DROP.
+static func relax_of(drop: float) -> float:
+	return smoothstep(WALK_DROP, RELAX_DROP, drop)
+
+
+## Билинейная высота карты в точке: ближние чанки (0.5 м) сэмплируют
+## карту билинейно — вторая поверхность под полосой на крутых клетках.
+static func bilinear_height(
+	heights: PackedFloat32Array, fx: float, fz: float,
+) -> float:
+	var x0: int = clampi(int(floorf(fx)), -IslandGen.HALF,
+		IslandGen.HALF - 1)
+	var z0: int = clampi(int(floorf(fz)), -IslandGen.HALF,
+		IslandGen.HALF - 1)
+	var h00: float = heights[_node(x0, z0)]
+	var h10: float = heights[_node(x0 + 1, z0)]
+	var h01: float = heights[_node(x0, z0 + 1)]
+	var h11: float = heights[_node(x0 + 1, z0 + 1)]
+	var u: float = clampf(fx - float(x0), 0.0, 1.0)
+	var v: float = clampf(fz - float(z0), 0.0, 1.0)
+	return lerpf(lerpf(h00, h10, u), lerpf(h01, h11, u), v)
+
+
+## Сглаженный max (C¹, без излома на a = b): ≥ max(a, b), выше не более
+## чем на SOFT_EPS/2; та же функция — в detail_ring шейдере.
+static func soft_max(a: float, b: float) -> float:
+	return 0.5 * (a + b
+		+ sqrt((a - b) * (a - b) + SOFT_EPS * SOFT_EPS))
+
+
+## Сглаженная положительная часть (C¹): ≈ max(x, 0), при x < 0 почти 0
+## (добавка ≤ SOFT_EPS/2).
+static func soft_pos(x: float) -> float:
+	return 0.5 * (x + sqrt(x * x + SOFT_EPS * SOFT_EPS))
+
+
 ## Бикубическая высота (Catmull-Rom 4×4 узла) с прижимом к треугольной
 ## высоте коллизии: отклонение ≤ TENSION_LIMIT (полоса ≤5 см от
 ## коллизии, SPEC П15 9.1). Формула та же, что в ветке detail_ring
@@ -324,6 +408,10 @@ static func _node(x: int, z: int) -> int:
 
 ## Маска клеток полосы берега (П15 9.1): квад земли, чьи углы пересекают
 ## диапазон высот level ± BAND_RANGE. faces × faces (квад 1 м).
+## П15-ДОП2, п. 4: маска растёт на 1 клетку вокруг крутих клеток —
+## бикубике нужен контекст, а релаксу — место плавно сойти к краю;
+## новые крайние клетки почти всегда пологие (relax = 0), стык полосы
+## с чанками остаётся прежним.
 static func band_mask(art: IslandArt, level: float) -> PackedByteArray:
 	var heights: PackedFloat32Array = art.heights
 	var faces: int = IslandGen.POINTS - 1
@@ -343,6 +431,26 @@ static func band_mask(art: IslandArt, level: float) -> PackedByteArray:
 			var high: float = maxf(maxf(h00, h10), maxf(h01, h11))
 			if low <= level + BAND_RANGE and high >= level - BAND_RANGE:
 				mask[fz * faces + fx] = 1
+	# Рост вокруг крутих клеток (П15-ДОП2, п. 4).
+	var steep := PackedByteArray()
+	steep.resize(faces * faces)
+	for fz: int in faces:
+		for fx: int in faces:
+			var i: int = fz * faces + fx
+			if mask[i] == 1 and cell_drop(heights, fx - IslandGen.HALF,
+					fz - IslandGen.HALF) >= WALK_DROP:
+				steep[i] = 1
+	for i: int in steep.size():
+		if steep[i] == 0:
+			continue
+		var fx: int = i % faces
+		var fz: int = i / faces
+		for dz: int in [-1, 0, 1]:
+			for dx: int in [-1, 0, 1]:
+				var nx: int = fx + dx
+				var nz: int = fz + dz
+				if nx >= 0 and nx < faces and nz >= 0 and nz < faces:
+					mask[nz * faces + nx] = 1
 	return mask
 
 
@@ -525,28 +633,36 @@ static func _cell_cubic(
 				col0[sx], col1[sx], col2[sx], col3[sx], tz)
 
 
-## Вершина полосы по узлу решётки (создаётся один раз); высота:
-## треугольная чанковая + BAND_LIFT, бикубика добавляется гашением
-## blend (0 на краю — совпадение с чанком, 1 в глубине полосы), но
-## никогда не опускается ниже чанка (утопленная полоса рвёт шов);
-## результат зажимается в трубу ±COLLISION_CLAMP вокруг высоты
-## коллизии — на пологих клетках труба неактивна, на перекошенных
-## полоса остаётся у ног игрока (≤5 см от коллизии).
+## Вершина полосы по узлу решётки (создаётся один раз); высота (П15 9.1
+## + П15-ДОП2, п. 4): на пологих (relax = 0) — как раньше: треугольная
+## чанковая + BAND_LIFT, бикубика с прижимом добавляется гашением blend
+## (0 на краю — совпадение с чанком, 1 в глубине полосы), труба
+## ±COLLISION_CLAMP к коллизии (≤5 см SPEC). На крутых (relax → 1) —
+## основа становится огибающей обеих чанковых поверхностей (диагональной
+## и билинейной, сглаженный max), лимит прижима бикубики растёт, труба
+## к коллизии расширяется до неактивной: полоса скользит над чанками
+## плавной кривой, не следуя ступеням коллизии. Сглаженные max/часть
+## (soft_max/soft_pos) — C¹, изломов нет; формула синхронизирована с
+## веткой detail_ring шейдера земли (тест).
 static func _band_vertex(
 	grid: PackedInt32Array, grid_side: int, verts: PackedVector3Array,
-	heights: PackedFloat32Array, ix: int, iz: int,
+	heights: PackedFloat32Array,
+	ix: int, iz: int,
 	wx: float, wz: float, blend: float, cubic_raw: float,
 ) -> int:
 	var key: int = iz * grid_side + ix
 	if grid[key] >= 0:
 		return grid[key]
 	var tri: float = tri_height(heights, wx, wz)
-	var cubic: float = lerpf(cubic_raw, tri,
-		clampf(absf(cubic_raw - tri) / TENSION_LIMIT, 0.0, 1.0))
-	var h: float = tri + BAND_LIFT \
-		+ maxf(cubic - tri - BAND_LIFT, 0.0) * blend
+	var relax: float = cell_relax(heights, wx, wz)
+	var cubic: float = lerpf(cubic_raw, tri, clampf(absf(cubic_raw - tri)
+		/ lerpf(TENSION_LIMIT, RELAX_TENSION, relax), 0.0, 1.0))
+	var env: float = soft_max(tri, bilinear_height(heights, wx, wz))
+	var base: float = lerpf(tri, env, relax) + BAND_LIFT
+	var h: float = base + soft_pos(cubic - base) * blend
 	var col: float = collision_height(heights, wx, wz)
-	h = clampf(h, col - COLLISION_CLAMP, col + COLLISION_CLAMP)
+	var half_pipe: float = lerpf(COLLISION_CLAMP, RELAX_CLAMP, relax)
+	h = clampf(h, col - half_pipe, col + half_pipe)
 	verts.append(Vector3(wx, h, wz))
 	grid[key] = verts.size() - 1
 	return verts.size() - 1
