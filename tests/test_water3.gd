@@ -1222,12 +1222,11 @@ func test_shader_compiles_on_all_tiers() -> void:
 			assert_true(_has_uniform(uniforms, key),
 				"%s: uniform %s на месте" % [tier_name, key])
 	# Экранная выборка — только у полной версии (дешёвая без
-	# hint_screen_texture, SPEC П14 4.7).
-	assert_true(_has_uniform(
-		WaterArea.WATER_BU.get_shader_uniform_list(), "screen_tex"),
+	# hint_screen_texture, SPEC П14 4.7). Проверяется кодом: движок
+	# не включает hint_screen_texture/hint_depth_texture в uniform-лист.
+	assert_true(WATER_BU_CODE.contains("hint_screen_texture"),
 		"полный: экранная текстура есть")
-	assert_false(_has_uniform(
-		WaterArea.WATER_BU_CHEAP.get_shader_uniform_list(), "screen_tex"),
+	assert_false(WATER_CHEAP_CODE.contains("hint_screen_texture"),
 		"дешёвый: без экранной выборки")
 
 
