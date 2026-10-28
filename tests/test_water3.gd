@@ -4,6 +4,8 @@
 # (п. 9.1), каустика и круги (пп. 5-6), галочки и ползунки F3 (пп. 7-8).
 # П15-ДОП блок 2: пена туториала — маска мелководья + гребни по нормали
 # + SDF-полоса, fbm-Вороной с domain warp, кромка и пузырьки.
+# П15-ДОП блок 3: объёмный цвет тонирует дно, преломление с маской
+# мелководья, каустика — произведение двух встречных слоёв.
 # Сервер — без рендера: шейдерное поведение проверяется материалом
 # (uniform по уровням) и исходником шейдера, как test_ground_water2.
 extends GutTest
@@ -625,18 +627,79 @@ func test_caustic_and_rings_only_in_full_shader() -> void:
 
 
 func test_caustic_fades_with_depth_and_light() -> void:
-	# П15 5: блики только на мелком (< 1.5 м — гашение по толщине
-	# smoothstep'ом), и их яркость следует за светом дна: в тени и
-	# ночью дно тёмное — блик гаснет через его яркость (bottom_luma),
-	# без отдельного множителя дня.
+	# П15 5 + П15-ДОП блок 3: блики только на мелком (< 1.5 м — гашение
+	# по толщине smoothstep'ом), пятно — произведение двух встречно
+	# дрейфующих слоёв шума (туториал sample1 · sample2, прежний
+	# pow(...,5) одного поля ушёл), и яркость следует за светом дна:
+	# в тени и ночью дно тёмное — блик гаснет через его яркость
+	# (bottom_luma), без отдельного множителя дня. Процедурная —
+	# текстуры caustics_texture нет.
 	assert_almost_eq(_const_of(WATER_BU_CODE, "CAUSTIC_MAX_DEPTH_M"),
 		1.5, 0.001, "каустика живёт до 1.5 м глубины")
+	assert_almost_eq(_const_of(WATER_BU_CODE, "CAUSTIC_SCALE"),
+		1.3, 0.001, "масштаб слоёв каустики")
 	var idx: int = WATER_BU_CODE.find("caustic_mask")
 	assert_gt(idx, -1, "маска каустики считается в шейдере")
 	var block: String = WATER_BU_CODE.substr(idx, 900)
 	assert_true(block.contains("smoothstep"), "гашение с глубиной — smoothstep")
+	assert_true(block.contains("(0.5 + 0.5 * snoise(cuv1))"),
+		"первый слой каустики — шум 0..1")
+	assert_true(block.contains("* (0.5 + 0.5 * snoise(cuv2))"),
+		"пятно — произведение двух слоёв (туториал)")
+	assert_true(block.contains("cuv2.y -= TIME * CAUSTIC_SPEED * 0.8;"),
+		"слои дрейфуют встречно (по разным осям)")
 	assert_true(block.contains("bottom_luma"),
 		"блик пропорционален освещённости дна (тень и ночь гасят)")
+	assert_false(WATER_BU_CODE.contains("pow(clamp(0.5 + 0.5 * cn"),
+		"прежняя формула pow(...,5) ушла")
+	assert_false(WATER_BU_CODE.contains("caustics_texture"),
+		"текстуры каустики нет — процедурная")
+
+
+func test_refraction_tutorial_depth_mask() -> void:
+	# П15-ДОП блок 3: преломление по туториалу — смещение UV только
+	# детальной частью нормали (детальная минус геометрическая: вдали,
+	# куда нормаль сведена к геометрической, смещения нет само), сила
+	# падает с дистанцией (ref_dist_factor) и гасится маской мелководья
+	# ref_depth_mask (на сверхмелком дно не преломляется); защита от
+	# предметов над водой — наша.
+	var code := WATER_BU_CODE
+	assert_true(code.contains(
+			"vec2 normal_offset = nrm.xz - vertex_normal_world.xz;"),
+		"смещение — только детальной частью нормали")
+	assert_true(code.contains(
+			"REFRACTION_FADE_M / max(0.1, surf_dist)"),
+		"дистанционный спад силы — делением (туториал)")
+	assert_true(code.contains("smoothstep(0.0, REF_DEPTH_M, thickness)"),
+		"маска по толщине: сверхмелкое не преломляется")
+	assert_between(_const_of(code, "REF_DEPTH_M"), 0.2, 1.0,
+		"маска мелководья — десятки сантиметров")
+	assert_gt(_const_of(code, "REFRACTION_FADE_M"), 0.0,
+		"дистанция спада задана")
+	assert_true(code.contains("if (-check_pos.z < surf_dist - 0.05)"),
+		"защита выборки от предметов над водой — наша")
+	assert_true(code.contains("refr_uv = SCREEN_UV;"),
+		"сомнительная выборка заменяется прямой")
+
+
+func test_volume_color_tints_bottom() -> void:
+	# П15-ДОП блок 3: объёмный цвет туториала — volume = mix(мелководье,
+	# глубина, depth_ratio) по толщине; им тонируется дно (apparent_
+	# seabed = screen_color · volume), у кромки тонировка спадает (edge:
+	# там вода прозрачная, П15 9.2), поглощение Бера — наше, по каналам.
+	var code := WATER_BU_CODE
+	assert_true(code.contains(
+			"vec3 volume = mix(color_shallow.rgb, color_deep.rgb, depth_ratio);"),
+		"объёмный цвет — mix мелководья и глубины по толщине")
+	assert_true(code.contains("float depth_ratio = 1.0 - exp("),
+		"доля глубины растёт с толщиной")
+	assert_true(code.contains(
+			"bottom * mix(vec3(1.0), volume, edge) * transmit"),
+		"дно тонируется объёмным цветом, у кромки — нет")
+	assert_true(code.contains("vec3 transmit = exp(-absorption * thickness);"),
+		"поглощение Бера — наше, поканальное")
+	assert_true(code.contains("vec3 scatter = volume;"),
+		"рассеяние толщи — тот же объёмный цвет")
 
 
 func test_rings_are_gaussian_rings_with_foam() -> void:

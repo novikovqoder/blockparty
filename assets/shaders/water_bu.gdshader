@@ -7,8 +7,12 @@
 // шаг конечных разностей растёт с расстоянием, вдали нормаль плавно
 // переходит к геометрической. Полная версия для HIGH/ULTRA: экранная
 // текстура + буфер глубины дают толщину воды под пикселем → поглощение
-// Бера ПО КАНАЛАМ (красный гаснет первым), преломление — смещение
-// выборки экрана по нормали волн (с проверкой глубины выборки).
+// Бера ПО КАНАЛАМ (красный гаснет первым) и объёмный цвет (П15-ДОП
+// блок 3: дно тонируется им, apparent_seabed туториала), преломление —
+// смещение выборки экрана по нормали волн с маской мелководья
+// ref_depth_mask (на сверхмелком смещения нет) и проверкой глубины
+// выборки; каустика — произведение двух встречно прокручивающихся
+// слоёв шума (туториал sample1 · sample2), процедурная, без текстуры.
 // Композит собирается вручную и пишется в EMISSION (один альфа-канал
 // блендинга не передаст поканальное поглощение; ALBEDO = 0 гасит
 // диффуз — исключение П15 4: пена несёт ALBEDO и освещается светом
@@ -183,10 +187,20 @@ const float RING_LIFE_SEC = 2.2;
 const float RING_SPEED_M = 0.85;
 const float RING_W = 0.20;
 const float RING_TRAIL_M = 0.32;
-// Каустика (П15 5): блики на дне живут на мелком у берега — дальше
-// (и глубже) гаснет.
+// Каустика (П15 5, П15-ДОП блок 3 — туториал): блики на дне живут на
+// мелком у берега — дальше (и глубже) гаснут; само пятно — произведение
+// двух встречно дрейфующих слоёв шума, CAUSTIC_SCALE — их масштаб, m,
+// CAUSTIC_SPEED — скорость дрейфа (второй слой крупнее ×0.7 и медленнее
+// ×0.8, направление — по другой оси).
 const float CAUSTIC_MAX_DEPTH_M = 1.5;
 const float CAUSTIC_MAX_DIST_M = 50.0;
+const float CAUSTIC_SCALE = 1.3;
+const float CAUSTIC_SPEED = 0.15;
+// Преломление (П15-ДОП блок 3): дистанционный спад силы (м, туториал
+// refraction_distance_fade) и маска по толщине (м): на сверхмелком у
+// кромки смещения нет — границы пикселей не рвут дно «призраками».
+const float REFRACTION_FADE_M = 5.0;
+const float REF_DEPTH_M = 0.5;
 
 // Value-шум и октавы волн (туториал gameidea): hash12 → value noise →
 // sea_octave (острые гребни: 1 - pow(wv.x·wv.y, 0.65) в степени
@@ -536,11 +550,19 @@ void fragment() {
 	nrm = normalize(mix(vec3(0.0, 1.0, 0.0), nrm, edge));
 	float rough = mix(roughness_near, roughness_far, lost);
 
-	// Преломление: выборка экрана смещена по наклону волн; сила падает
-	// с дистанцией. Если смещённая точка ближе поверхности (предмет над
-	// водой) — берём прямую выборку, без разрывов.
-	vec2 refr_off = nrm.xz * 0.05 * refraction_amount
-		* (1.0 - smoothstep(6.0, 60.0, surf_dist));
+	// Преломление (П15-ДОП блок 3, туториал): смещение UV — только
+	// детальной частью нормали (детальная минус геометрическая: вдали,
+	// куда нормаль сведена к геометрической, смещения нет само), сила
+	// падает с дистанцией (ref_dist_factor) и гасится маской мелководья
+	// ref_depth_mask — на сверхмелком у кромки дно не преломляется
+	// (пиксели границы не рвутся «призраками»). Защита от предметов над
+	// водой — наша: смещённая точка ближе поверхности — прямая выборка.
+	vec2 normal_offset = nrm.xz - vertex_normal_world.xz;
+	float ref_dist_factor = clamp(
+		REFRACTION_FADE_M / max(0.1, surf_dist), 0.0, 1.0);
+	float ref_depth_mask = smoothstep(0.0, REF_DEPTH_M, thickness);
+	vec2 refr_off = normal_offset * 0.05 * refraction_amount
+		* ref_dist_factor * ref_depth_mask;
 	vec2 refr_uv = SCREEN_UV + refr_off;
 	float check_raw = texture(depth_tex, refr_uv).r;
 	vec3 check_ndc = vec3(refr_uv * 2.0 - 1.0, check_raw);
@@ -551,36 +573,43 @@ void fragment() {
 	}
 	vec3 bottom = texture(screen_tex, refr_uv).rgb;
 
-	// П15 5: каустика на дне — анимированные блики на мелком: два
-	// встречно дрейфующих слоя шума, возведённые в степень (яркие
-	// пятна редки, между ними — тёмные). Гаснет с глубиной (толщина),
-	// с расстоянием (мерцание) и в темноте: добавка пропорциональна
-	// свету, отражённому от дна, — ночью и в тени дно тёмное, бликов
-	// нет, днём на светлом песке — максимум.
+	// П15 5 + П15-ДОП блок 3: каустика на дне — анимированные блики на
+	// мелком: два встречно дрейфующих слоя шума, произведение (туториал:
+	// sample1 · sample2 — яркие пятна редки, между ними тёмные; прежний
+	// pow(...,5) одного поля ушёл). Гаснет с глубиной (толщина), с
+	// расстоянием (мерцание) и в темноте: добавка пропорциональна свету,
+	// отражённому от дна, — ночью и в тени дно тёмное, бликов нет, днём
+	// на светлом песке — максимум. Процедурная, текстура не нужна.
 	float caustic_mask = caustic_brightness
 		* (1.0 - smoothstep(CAUSTIC_MAX_DEPTH_M * 0.25,
 			CAUSTIC_MAX_DEPTH_M, thickness))
 		* (1.0 - smoothstep(CAUSTIC_MAX_DIST_M * 0.4,
 			CAUSTIC_MAX_DIST_M, surf_dist));
 	if (caustic_mask > 0.001) {
-		vec2 cuv = world_pos.xz * 1.3;
-		float cn = snoise(cuv + vec2(TIME * 0.15, -TIME * 0.12))
-			+ 0.5 * snoise(cuv * 2.1 - vec2(TIME * 0.23, -TIME * 0.17));
-		float caustic = pow(clamp(0.5 + 0.5 * cn * 0.667, 0.0, 1.0), 5.0);
+		vec2 cuv1 = world_pos.xz * CAUSTIC_SCALE;
+		cuv1.x += TIME * CAUSTIC_SPEED;
+		vec2 cuv2 = world_pos.xz * (CAUSTIC_SCALE * 0.7);
+		cuv2.y -= TIME * CAUSTIC_SPEED * 0.8;
+		float caustic = (0.5 + 0.5 * snoise(cuv1))
+			* (0.5 + 0.5 * snoise(cuv2));
 		float bottom_luma = dot(bottom, vec3(0.299, 0.587, 0.114));
 		bottom += vec3(0.9, 0.95, 1.0)
-			* caustic * caustic_mask * bottom_luma * 1.6;
+			* caustic * caustic_mask * bottom_luma * 1.2;
 	}
 
-	// Поглощение Бера по каналам (SPEC 4.1): красный гаснет первым —
-	// дно на мелком видно чисто, с глубиной уходит в цвет воды.
-	// Композит вручную: один альфа блендинга не передаст поканальное
-	// поглощение. П15 9.2: рассеяние гасится у кромки (edge), дно —
-	// остаётся (у края вода полностью прозрачная).
+	// Поглощение Бера по каналам (SPEC 4.1) + объёмный цвет туториала
+	// (П15-ДОП блок 3): volume = mix(мелководье, глубина, depth_ratio)
+	// по толщине — им тонируется дно (apparent_seabed = screen_color ·
+	// volume; у кромки тонировка спадает — там вода прозрачная, П15 9.2)
+	// и он же — рассеянный цвет толщи (in-scatter растёт с 1 − transmit,
+	// красный гаснет первым — дно на мелком видно чисто, с глубиной
+	// уходит в цвет воды). Композит вручную: один альфа блендинга не
+	// передаст поканальное поглощение.
 	vec3 transmit = exp(-absorption * thickness);
-	float deep_mix = 1.0 - exp(-thickness * 0.9);
-	vec3 scatter = mix(color_shallow.rgb, color_deep.rgb, deep_mix);
-	vec3 water = bottom * transmit
+	float depth_ratio = 1.0 - exp(-thickness * 0.9);
+	vec3 volume = mix(color_shallow.rgb, color_deep.rgb, depth_ratio);
+	vec3 scatter = volume;
+	vec3 water = bottom * mix(vec3(1.0), volume, edge) * transmit
 		+ scatter * (1.0 - transmit) * edge;
 
 	// Пена туториала (П15-ДОП блок 2), только smoothstep: где пена
