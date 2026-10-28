@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Creating a Stylized 3D Water Shader | gameidea (локальная копия)</title>
+</head>
+<body>
+<!--
+  Локальная копия туториала, ориентир этапа «ВОДА ПО ТУТОРИАЛУ» (П15-ДОП).
+  Источник: https://gameidea.org/2026/02/01/creating-a-stylized-3d-water-shader/
+  Автор: mujtaba (gameidea.org). Дата публикации: 2026-02-01.
+  Способ получения: прямое скачивание (curl, Range-куски, WP REST API) обрывается
+  на 20480 байтах и отдаёт недетерминированный контент между запросами (Cloudflare
+  поверх Apache), поэтому склейка невозможна. Полный текст получен серверным
+  ридером (web_reader) и сохранён здесь в формате extracted markdown (весь код
+  шейдеров — дословно, nothing omitted). Картинки не сохранялись.
+  Примечание: в hash12 бонусного подводного шейдера источник отдаёт константу
+  159733674u — почти наверняка опечатка самого туториала (в поверхностном шейдере
+  та же функция использует 1597334677u). Копия сохранена как есть.
+-->
+<pre>
+Creating a Stylized 3D Water Shader | gameidea
+
+This shader is available for paid download on my asset store
+here. You can choose to make it yourself by following the tutorial below.
+
+Recently, I was really inspired by the water shader from Sea of Thieves. I came across a reddit post that seemed to "capture" that stylized vibe, and I wanted to build something like that too. I previously tried to make this water shader two years ago, but it was left abandoned. This week, I thought giving it another try was worth it.
+
+I studied various water shaders, and my own attempts from the past. Eventually, it got me something I liked. Today, I'm gonna share it here. I've used simpler approach to everything, even ditched the earlier Gerstner wave function I wrote here. So, it will be simple noise, no FFT.
+
+It was created using Godot 4.6 &amp; its GLSL-like shader language, but it should be easy to make the same thing to whichever engine you're using. Enjoy!
+
+## Surface
+
+A simple plane mesh, subdivided. For large oceans, you can chunk them.
+
+![Image 1: 3D plane mesh](https://gameidea.org/wp-content/uploads/2026/02/planemesh-wireframe.png)
+
+Then a shader material applied on the mesh.
+
+## First, We only see depth as grayscale
+
+Unlike most other water shaders, I started with fragment shader first. My first objective was to visualize depth of geometry behind our water plane in grayscale. We will later replace black and white gradient of grayscale with two different colors so it will start looking like water.
+
+```
+shader_type spatial;
+render_mode unshaded;
+
+uniform sampler2D DEPTH_TEXTURE : hint_depth_texture, filter_linear_mipmap;
+uniform float max_depth : hint_range(0.1, 50.0, 0.1) = 10.0; // max depth to visualize
+uniform float water_level : hint_range(-10.0, 10.0, 0.1) = 0.0; // base height of the water surface
+
+void fragment() {
+    float depth = texture(DEPTH_TEXTURE, SCREEN_UV).x;
+
+    vec3 ndc;
+    #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+        // Compatibility (OpenGL) uses a [-1, 1] Z range for NDC
+        ndc = vec3(SCREEN_UV, depth) * 2.0 - 1.0;
+    #else
+        // Forward+ and Mobile (Vulkan) use a [0, 1] Z range for NDC
+        ndc = vec3(SCREEN_UV * 2.0 - 1.0, depth);
+    #endif
+
+    // use inverse matrices to transform from screen space to world space.
+    vec4 world = INV_VIEW_MATRIX * INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+    vec3 world_pos = world.xyz / world.w;
+
+    float surface_y = water_level;
+
+    // calculate water depth/thickness
+    // subtract the world position Y from the surface Y.
+    float thickness = surface_y - world_pos.y;
+
+    thickness = max(0.0, thickness); // clamp to 0 so areas above water are black
+
+    // output grayscale texture
+    // normalize the thickness by the max_depth to get a 0-1 value
+    float grayscale = clamp(thickness / max_depth, 0.0, 1.0);
+
+    ALBEDO = vec3(grayscale);
+}
+```
+
+Running above code got me following output:
+
+![Image 2: godot depth texture](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-1-simple-depth-grayscale.png)
+
+The above depth visualization is extremely important to us, since in future, we will be using depth to control color gradients (shallow vs deep water), refractions, foam, absorbance, caustics, and so on. Almost all water effects require this depth (or thickness) value to work… So this is our first milestone.
+
+## Adding underwater fog
+
+Now, we need to visualize whats under the water. We already are seeing grayscale shapes, but isnt it better to be able to see colors, fading as we go deeper.
+
+So what about drawing screen texture on the surface of water, and using the `thickness` value to control fading effect. So as we go deeper, the screen texture fades into the `underwater_fog_color`.
+
+So add uniforms for screen texture and other variables:
+
+```
+uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+uniform vec3 underwater_fog_color : source_color = vec3(0.0, 0.05, 0.1);
+uniform float fade_start_depth : hint_range(0.0, 50.0, 0.1) = 0.5;
+```
+
+Similarly, remove earlier grayscale variable since we now are going to sample screen texture, so replace grayscale with this code:
+
+```
+// end of your fragment() function
+    vec3 screen_color = texture(SCREEN_TEXTURE, SCREEN_UV).rgb;
+    float fade_range = max(0.001, max_depth - fade_start_depth);
+    float depth_ratio = clamp((thickness - fade_start_depth) / fade_range, 0.0, 1.0);
+
+    ALBEDO = mix(screen_color, underwater_fog_color, depth_ratio);
+```
+
+Save the shader, you should see something like this:
+
+![Image 3](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-2-screen-texture.png)
+
+The plane now shows the scene behind it, fading to fog color as depth increases (e.g., deeper water looks foggier). Adjust uniforms to tune fade.
+
+One might argue about using ALPHA (transparency) for making the trasnparent surface, but it is only useful if you are not going to do all that refraction, depth fading, and all those fancy effects. For simple PS1 style water, I recommend it. But for stylized water, it is not the way.
+
+## Adding Vertex Waves and Fragment Details (Waves)
+
+Now our next objective is to add waves and details in the water. We will add wave displacement in vertex shader using Gerstner-like waves (via `map` function below). In fragment, we compute detailed normals for wave details. Introduce noise functions for realism. This creates undulating waves.
+
+So now we add uniforms for our waves shape.. like `sea_height`, `sea_choppy`, `sea_speed`, `sea_freq`. Add these uniforms:
+
+```
+// wave parameters
+uniform float sea_height : hint_range(0.0, 5.0) = 1.3;
+uniform float sea_choppy : hint_range(0.0, 10.0) = 4.0;
+uniform float sea_speed : hint_range(0.0, 5.0) = 1.5;
+uniform float sea_freq : hint_range(0.0, 0.5) = 0.08;
+// iterations
+uniform int ITER_GEOMETRY = 3;
+uniform int ITER_FRAGMENT = 5;
+const mat2 octave_m = mat2(vec2(1.6, 1.2), vec2(-1.2, 1.6));
+```
+
+Then we will add functions for noise generation like `hash`, `noise`, `sea_octave`, `map`, `map_detailed`, `get_normal_detailed`.
+
+```
+float hash12(vec2 p) {
+    uvec2 q = uvec2(ivec2(p)) * uvec2(1597334677u, 3812015801u);
+    uint n = (q.x ^ q.y) * 1597334677u;
+    return float(n) * (1.0 / 4294967295.0);
+}
+
+float noise(in vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return -1.0 + 2.0 * mix(mix(hash12(i + vec2(0.0, 0.0)), hash12(i + vec2(1.0, 0.0)), u.x),
+                            mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+float sea_octave(vec2 uv, float choppy) {
+    uv += noise(uv);
+    vec2 wv = 1.0 - abs(sin(uv));
+    vec2 swv = abs(cos(uv));
+    wv = mix(wv, swv, wv);
+    return pow(1.0 - pow(wv.x * wv.y, 0.65), choppy);
+}
+
+float map(vec3 p, float time) {
+    float freq = sea_freq;
+    float amp = sea_height;
+    float choppy = sea_choppy;
+    vec2 uv = p.xz;
+    uv.x *= 0.75;
+    float h = 0.0;
+    for (int i = 0; i &lt; ITER_GEOMETRY; i++) {
+        float d = sea_octave((uv + time * sea_speed) * freq, choppy);
+        d += sea_octave((uv - time * sea_speed) * freq, choppy);
+        h += d * amp;
+        uv *= octave_m;
+        freq *= 1.9;
+        amp *= 0.22;
+        choppy = mix(choppy, 1.0, 0.2);
+    }
+    return p.y - h;
+}
+
+float map_detailed(vec3 p, float time) {
+    float freq = sea_freq;
+    float amp = sea_height;
+    float choppy = sea_choppy;
+    vec2 uv = p.xz;
+    uv.x *= 0.75;
+    float h = 0.0;
+    for (int i = 0; i &lt; ITER_FRAGMENT; i++) {
+        float d = sea_octave((uv + time * sea_speed) * freq, choppy);
+        d += sea_octave((uv - time * sea_speed) * freq, choppy);
+        h += d * amp;
+        uv *= octave_m;
+        freq *= 1.9;
+        amp *= 0.22;
+        choppy = mix(choppy, 1.0, 0.2);
+    }
+    return p.y - h;
+}
+
+vec3 get_normal_detailed(vec3 p, float eps, float time) {
+    vec3 n;
+    n.y = map_detailed(p, time);
+    n.x = map_detailed(vec3(p.x + eps, p.y, p.z), time) - n.y;
+    n.z = map_detailed(vec3(p.x, p.y, p.z + eps), time) - n.y;
+    n.y = eps;
+    return normalize(n);
+}
+```
+
+Now we also need to add vertex shader to apply our vertex displacement. In `vertex()`, we displace `VERTEX.y` with waves and compute basic normal. We will also pass along some values to our fragment shader using varyings:
+
+```
+varying vec3 world_vert;
+varying float wave_height;
+varying vec3 vertex_normal_world;
+
+void vertex() {
+    vec3 world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+    wave_height = -map(world_pos, TIME);
+    VERTEX.y = wave_height;
+    world_vert = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+    float vertex_eps = 0.1;
+    float h_center = wave_height;
+    float h_x = -map(world_pos + vec3(vertex_eps, 0.0, 0.0), TIME);
+    float h_z = -map(world_pos + vec3(0.0, 0.0, vertex_eps), TIME);
+    vec3 n_geom = normalize(vec3(h_center - h_x, vertex_eps, h_center - h_z));
+    vertex_normal_world = n_geom;
+}
+```
+
+Why we added these varyings? To allow our fragment to know world-space position of our vertices, and normals that we calculated in vertex shader.
+
+In fragment, we compute detailed normals and set `NORMAL` in fragment.
+Before we do modifications in fragment shader, let me quickly create a helper function to get linear depth of whatever is behind the water. Instead of sampling the `DEPTH_TEXTURE` in fragment shader directly, we will call this function, and calculate the thickness by subtracting water surface depth from depth of whatever is behind it:
+
+```
+// GET LINEAR DEPTH FROM DEPTH TEXTURE
+float get_linear_depth(sampler2D d_tex, vec2 uv, mat4 inv_proj) {
+    float depth = texture(d_tex, uv).x;
+    vec3 ndc = vec3(uv * 2.0 - 1.0, depth);
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+    ndc.z = depth * 2.0 - 1.0;
+#endif
+    vec4 view = inv_proj * vec4(ndc, 1.0);
+    return -view.z / view.w;
+}
+```
+
+And now in fragment, we need to change our logic of how `thickness` was calcualted. Now it should be calculated like this:
+
+```
+    // linear depth of the water surface itself
+    float water_linear_depth = -VERTEX.z;
+    // linear depth of what's behind the water
+    float bg_linear_depth = get_linear_depth(DEPTH_TEXTURE, SCREEN_UV, INV_PROJECTION_MATRIX);
+    thickness = max(0.0, bg_linear_depth - water_linear_depth);
+
+    // rest of code after thickness calculation remains same...
+```
+
+Finally, we use our detailed normals function we defined above to have some cool looking water. So at the _start_ of `fragment()`, do this:
+
+```
+    float lod_epsilon = 0.01;
+    vec3 detailed_normal = get_normal_detailed(world_vert, lod_epsilon, TIME);
+    NORMAL = (VIEW_MATRIX * vec4(detailed_normal, 0.0)).xyz;
+```
+
+Why at start and not at end? Because in future, we will have refraction depend upon the new NORMAL value.
+
+One very important silly mistake to fix:
+
+On top of our shader, it is `render_mode unshaded;`, _remove_ that line. Otherwise, you wont be able to see normals.
+
+What is this epsilon thing? It controls the crispness of your wave edges. How? Basically, when we calculate normals, we check height at your current point, and then check the height at a tiny step away (the epsilon). This difference in heights allow us to compute normals (the surface direction). So bigger epsilon values mean less details.
+
+Check output so far.. You should see the plane now waves up and down. Lighting should reflect wave normals (add a DirectionalLight if it doesnt).
+
+![Image 4](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-3-surface-details-and-normals.png)
+
+## Add Refraction Distortion by Sampling Noise
+
+We will add refraction by distorting `SCREEN_UV` based on normals (which include noise from waves).
+
+So add following new uniforms for refraction:
+
+```
+// refraction settings
+uniform float refraction_strength : hint_range(0.0, 2.0, 0.01) = 1.0;
+uniform float refraction_distance_fade : hint_range(0.0, 100.0, 1.0) = 5.0;
+//for smoothness part
+uniform float normal_epsilon : hint_range(0.001, 1.0) = 0.01;
+uniform float normal_smoothness_dist : hint_range(0.0, 1000.0) = 50.0;
+```
+
+And now in fragment, we need to distort UVs so our screen texture looks distorted (refraction).
+
+But before that, we must implement LOD for water normals. Since, at distance, normal map details compete for limited pixel space on screen, resulting in shimmer and specular aliasing. So we introduce `normal_epsilon` and `normal_smoothness_dist`, to filter or flatten the normals based on their distance from camera. This smoothing technique eliminates noise and ensures good look for distant water surfaces.
+
+Replace the `NORMAL` calculation block on top of fragment shader with this:
+
+```
+    // normals &amp; distance smoothing
+    float dist_to_cam = length(VERTEX);
+    lod_epsilon = max(normal_epsilon, dist_to_cam * 0.005);
+    detailed_normal = get_normal_detailed(world_vert, lod_epsilon, TIME);
+    float smooth_factor = clamp((dist_to_cam - normal_smoothness_dist) / 200.0, 0.0, 1.0);
+    vec3 final_normal = mix(detailed_normal, vertex_normal_world, smooth_factor);
+    NORMAL = (VIEW_MATRIX * vec4(final_normal, 0.0)).xyz;
+```
+
+Now our normals are ready, its time to add refraction (add this immediately below `thicknes`s definition):
+
+```
+// refraction offset calculation
+    vec3 view_vertex_normal = (VIEW_MATRIX * vec4(vertex_normal_world, 0.0)).xyz;
+    vec2 normal_offset = NORMAL.xy - view_vertex_normal.xy;
+    float ref_dist_factor = clamp(refraction_distance_fade / max(0.1, dist_to_cam), 0.0, 1.0);
+    float ref_depth_mask = smoothstep(0.0, max_depth, thickness);
+    vec2 refraction_offset = normal_offset * refraction_strength * ref_dist_factor * ref_depth_mask * 0.05;
+
+    vec2 distorted_uv = SCREEN_UV + refraction_offset;
+
+    // fix ghosting for pixels that are on boundary so they dont make water look weird
+    float distorted_bg_depth = get_linear_depth(DEPTH_TEXTURE, distorted_uv, INV_PROJECTION_MATRIX);
+    if (distorted_bg_depth &lt; water_linear_depth - 0.001) {
+        distorted_uv = SCREEN_UV;
+        distorted_bg_depth = bg_linear_depth;
+    }
+```
+
+Now, below this, lets modify our `screen_color` and override `thickness` calculation to use `distorted_uv` instead of standard `SCREEN_UV`:
+
+```
+    screen_color = texture(SCREEN_TEXTURE, distorted_uv).rgb;
+    thickness = max(0.0, distorted_bg_depth - water_linear_depth);
+```
+
+Note: About that ghosting part, it was a minor issue where pixels very close to surface were being applied refraction to, causing artifacts. So the fix was to have some pixels that are below water to still have no refraction until they are more deeper than the given threshold.
+
+See the results so far. You should see waves now distort the view underneath like refraction. Change `refraction_strength` for different results.
+
+![Image 5](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-4-refraction-and-lod.gif)
+
+## Adding Water Colors and Beer-Lambert Absorption
+
+We enhance color with base/deep tints and Beer-Lambert law for realistic absorption (light attenuation through water volume).
+
+For this, we Add color uniforms (base_tint_color, deep_color, water_absorption):
+
+```
+uniform vec3 base_tint_color : source_color = vec3(0.439, 0.973, 1.0);
+uniform vec3 deep_color : source_color = vec3(0.0, 0.341, 0.29);
+// beer-lambert absorption
+uniform vec3 water_absorption : source_color = vec3(0.3, 0.06, 0.02);
+```
+
+And, at the end of our fragment, add following. Now our `ALBEDO` color uses transmittance to mix underwater fog and underwater objects (screen texture).
+
+```
+    vec3 transmittance = exp(-thickness * water_absorption);
+    vec3 water_volume_color = mix(base_tint_color, deep_color, depth_ratio);
+    vec3 apparent_seabed_color = screen_color * water_volume_color; // screen_color = seabed color
+    ALBEDO = mix(underwater_fog_color, apparent_seabed_color, transmittance);
+```
+
+Why did we use reddish color for absorbance? Because in real world, red color being in long wavelength gets absorbed earlier, followed by green and then blue… Thats why we see water is blueish in oceans.
+
+See the output:
+
+![Image 6: water shader absorbance beer-lambert law](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-5-absorbance.png)
+
+Now, Water now has tinted colors, deepening with thickness. Absorption makes deep areas darker/more colored.
+
+## Adding PBR Adjustments and Height Controls
+
+Let us quickly add roughness, metallic &amp; specular for better lighting.. to make water look watery.
+
+Add following unifomrs:
+
+```
+uniform float roughness : hint_range(0.0, 1.0) = 0.125;
+uniform float metallic : hint_range(0.0, 1.0) = 0.0;
+uniform float specular : hint_range(0.0, 1.0) = 0.5;
+```
+
+And at the end of fragment, assign these values:
+
+```
+    ROUGHNESS = roughness;
+    METALLIC = metallic;
+    SPECULAR = specular;
+```
+
+Now you can see shiny water.
+
+Check output.
+
+![Image 7: water shader absorbance beer-lambert law](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-6-pbr-params.png)
+
+__Point:__ We could have applied these PBR attributes before, and we would have something good looking from the start.
+
+## Add Caustics
+
+We add underwater caustics using a texture projected on the seabed, animated and faded with depth.
+
+Now add uniforms for caustics:
+
+```
+// caustics uniforms
+uniform sampler2D caustics_texture : filter_linear_mipmap, repeat_enable;
+uniform float caustics_scale : hint_range(0.1, 10.0, 0.1) = 2.0;
+uniform float caustics_speed : hint_range(0.0, 1.0, 0.01) = 0.1;
+uniform float caustics_intensity : hint_range(0.0, 2.0, 0.1) = 0.8;
+uniform float caustics_depth_fade : hint_range(0.0, 1.0, 0.01) = 0.7;
+```
+
+In fragment, we compute background world position on each pixel (`bg_world_pos`), then we sample caustics texture, and add the texture to `seabed_color`.
+And in fragment, just before Beer-Lambert Absorbance logic (just above `transmittance` variable), add following:
+
+```
+    // caustics
+    vec4 bg_ndc = vec4(distorted_uv * 2.0 - 1.0, texture(DEPTH_TEXTURE, distorted_uv).x, 1.0);
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+    bg_ndc.z = bg_ndc.z * 2.0 - 1.0;
+#endif
+    vec4 bg_world = INV_VIEW_MATRIX * INV_PROJECTION_MATRIX * bg_ndc;
+    vec3 bg_world_pos = bg_world.xyz / bg_world.w;
+    if (thickness &gt; 0.0) {
+        vec2 caustics_uv1 = bg_world_pos.xz * caustics_scale;
+        caustics_uv1.x += TIME * caustics_speed;
+        vec2 caustics_uv2 = bg_world_pos.xz * caustics_scale * 0.7;
+        caustics_uv2.y -= TIME * caustics_speed * 0.8;
+        float caustics_sample1 = texture(caustics_texture, caustics_uv1).r;
+        float caustics_sample2 = texture(caustics_texture, caustics_uv2).r;
+        float caustics_value = caustics_sample1 * caustics_sample2;
+        float caustics_fade = 1.0 - clamp(thickness * caustics_depth_fade, 0.0, 1.0);
+        screen_color += caustics_value * caustics_intensity * caustics_fade;
+    }
+```
+
+Assign a caustics texture. You can use a noise texture or any caustics texture you can find online. I used this one.
+
+In output, you will see animated underwater light patterns on the seabed, fading in deep areas.
+
+![Image 8: water shader caustics](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-7-caustics.gif)
+
+## Adding foam
+
+Foam is generated procedurally using Voronoi noise and depth-based masking.
+We first determine where foam can appear based on water depth (shoreline) and wave crests.
+A warped, animated Voronoi noise is then used to create organic foam clumps, while a second Voronoi sample adds internal bubble detail inside the foam.
+Finally, an offset Voronoi sample is used to create a darker foam edge, giving the foam thickness and definition.
+
+For this, we add uniforms:
+
+```
+// foam uniforms
+uniform vec3 foam_color : source_color = vec3(1.0, 1.0, 1.0);
+uniform float foam_depth_start : hint_range(0.0, 5.0, 0.01) = 0.8;
+uniform float foam_depth_end   : hint_range(0.0, 5.0, 0.01) = 0.0;
+uniform float foam_noise_scale : hint_range(0.0, 10.0, 0.01) = 2.0;
+uniform float foam_noise_speed : hint_range(0.0, 2.0, 0.01) = 1.0;
+uniform float foam_cutoff      : hint_range(0.0, 1.0, 0.01) = 0.7;
+uniform float foam_crest_threshold : hint_range(0.0, 1.0, 0.01) = 0.7;
+uniform float foam_crest_amount    : hint_range(0.0, 10.0, 0.1) = 2.0;
+
+uniform vec3 foam_edge_color : source_color = vec3(0.0, 0.0, 0.05);
+uniform vec2 foam_edge_offset = vec2(0.02, 0.02);
+uniform float voronoi_scale   : hint_range(0.0, 50.0) = 9.0;
+uniform float voronoi_strength : hint_range(0.0, 8.0) = 0.8;
+```
+
+Now add functions for generating foam noises. These hash functions generate random values, which we use to to generate our Perlin/value noise and Voronoi noise.
+
+```
+float hash13(vec3 p) {
+    uvec3 q = uvec3(ivec3(p)) * uvec3(1597334677u, 3812015801u, 2798796415u);
+    uint n = (q.x ^ q.y ^ q.z) * 1597334677u;
+    return float(n) * (1.0 / 4294967295.0);
+}
+
+float hash3d(vec3 p) { return hash13(p); }
+
+vec2 hash22(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// this function computes 2D voronoi noise by measuring the distance to the nearest randomly placed point in each grid cell. The result is cell-like patterns, which are ideal for simulating foam clumps and bubbles
+float voronoi(vec2 uv) {
+    vec2 n = floor(uv);
+    vec2 f = fract(uv);
+    float m_dist = 1.0;
+    for (int j = -1; j &lt;= 1; j++) {
+        for (int i = -1; i &lt;= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = hash22(n + g);
+            // animate the point within the cell
+            o = 0.5 + 0.5 * sin(TIME * foam_noise_speed + 6.2831 * o);
+            vec2 r = g - f + o;
+            float d = dot(r, r);
+            m_dist = min(m_dist, d);
+        }
+    }
+    return m_dist;
+}
+
+float noise3d(in vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(
+            mix(hash3d(i + vec3(0.0, 0.0, 0.0)), hash3d(i + vec3(1.0, 0.0, 0.0)), f.x),
+            mix(hash3d(i + vec3(0.0, 1.0, 0.0)), hash3d(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+        mix(
+            mix(hash3d(i + vec3(0.0, 0.0, 1.0)), hash3d(i + vec3(1.0, 0.0, 1.0)), f.x),
+            mix(hash3d(i + vec3(0.0, 1.0, 1.0)), hash3d(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+}
+
+float fbm_voronoi(vec2 uv) {
+    float v = 0.0;
+    float a = 0.5;
+    vec2 shift = vec2(100.0);
+    mat2 rot = mat2(vec2(cos(0.5), sin(0.5)), vec2(-sin(0.5), cos(0.5)));
+    for (int i = 0; i &lt; 3; i++) {
+        float val = 1.0 - voronoi(uv);
+        val = pow(val, 2.0); // sharpen bubbles
+        v += a * val;
+        uv = rot * uv * 2.0 + shift;
+        a *= 0.5;
+    }
+    return v;
+}
+```
+
+These functions will be used to generate our foam noise.
+
+Now finally, in fragment, we implement foam logic. At the end of fragment (right after the Beer-Lambert absorption block), add following code:
+
+```
+    // foam calculation
+    float foam_mask_primary = 0.0;
+    float foam_mask_shadow  = 0.0;
+
+    // create a density factor,, 1.0 at shore/crests, 0.0 at deep water
+    //foam appears primarily in shallow water and on wave crests. We compute a depth-based factor using the beer-lambert thickness and add a crest factor based on the surface normal. The result (foam_level) defines how strongly foam can appear at this fragment
+    float depth_foam_factor = smoothstep(foam_depth_start, foam_depth_end, thickness);
+    float wave_crest_factor = smoothstep(foam_crest_threshold, foam_crest_threshold - 0.1, final_normal.y);
+    wave_crest_factor *= foam_crest_amount;
+    float foam_level = clamp(depth_foam_factor + wave_crest_factor, 0.0, 1.0);
+
+    // to create swirling, flowing motion that mimics foam being carried by water currents, we use domain warping
+    vec2 flow_uv = world_vert.xz * 0.5 + TIME * 0.05 * foam_noise_speed;
+    vec2 warp = vec2(
+        noise(flow_uv),
+        noise(flow_uv + vec2(5.2, 1.3))
+    ) * 0.5;
+
+    if (distorted_bg_depth &gt; water_linear_depth) {
+        vec2 foam_uv = world_vert.xz * foam_noise_scale + warp;
+
+        // emergence, pulsing/clumping
+        // foam should not appear everywhere at once. A 3D noise field controls foam emergence, creating pulsing and clumping behavior
+        float emergence_noise = noise3d(vec3(world_vert.xz * 0.5, TIME * 0.2 * foam_noise_speed));
+        emergence_noise = smoothstep(0.0, 1.0, emergence_noise * 0.5 + 0.5);
+
+        // near shores and crests, emergence is forced to full strength
+        float effective_emergence = mix(emergence_noise, 1.0, foam_level);
+
+        // main foam sample
+        float foam_noise_val = fbm_voronoi(foam_uv);
+        foam_noise_val *= effective_emergence;
+
+        // shadow sample (foam shadow is shown at slight offset, for faking thickness and separation from underlying water)
+        vec2 foam_uv_shadow = (world_vert.xz + foam_edge_offset) * foam_noise_scale + warp;
+        float foam_noise_shadow_val = fbm_voronoi(foam_uv_shadow);
+        foam_noise_shadow_val *= effective_emergence;
+
+        // clumping/mask generation
+        float combined_noise  = foam_noise_val + foam_level;
+        float combined_shadow = foam_noise_shadow_val + foam_level;
+
+        foam_mask_primary = smoothstep(foam_cutoff + 0.5, foam_cutoff + 0.6, combined_noise);
+        float shadow_shape = smoothstep(foam_cutoff + 0.5, foam_cutoff + 0.6, combined_shadow);
+        foam_mask_shadow = clamp(shadow_shape - foam_mask_primary, 0.0, 1.0);
+    }
+
+    // voronoi internal texture/bubbles
+    // inside the foam, a separate voronoi pattern simulates small air bubbles. This texture only affects the foam itself and adds visual richness without changing the foam silhouette
+    float voronoi_val = 1.0 - sqrt(voronoi(world_vert.xz * voronoi_scale + warp));
+    voronoi_val = smoothstep(0.2, 0.8, voronoi_val);
+
+    float bubble_alpha = 1.0 - clamp((1.0 - voronoi_val) * voronoi_strength, 0.0, 1.0);
+
+    // apply foam
+    ALBEDO = mix(ALBEDO, foam_edge_color, foam_mask_shadow);
+    ALBEDO = mix(ALBEDO, foam_color, foam_mask_primary * bubble_alpha);
+
+    // make foam rougher
+    ROUGHNESS = mix(roughness, 0.8, (foam_mask_primary * bubble_alpha) + foam_mask_shadow);
+
+    SPECULAR = specular;
+    METALLIC = metallic;
+```
+
+Congratulations! We have made a stylized water!
+
+![Image 9: water shader foam](https://gameidea.org/wp-content/uploads/2026/02/checkpoint-8-foam.png)
+
+You can play with various values of uniform parameters to achieve great looks of water… For example look at this:
+
+![Image 10: stylized water shader](https://gameidea.org/wp-content/uploads/2026/02/stylized-water-final-result-preset-2.gif)
+
+Above shader, but with changed values of some parameters.
+
+## Bonus (Underwater shader for above water)
+
+![Image 11: underwater water shader](https://gameidea.org/wp-content/uploads/2026/02/underwater-water-shader.png)
+
+This underwater effect is implemented as a screen-space spatial shader rendered on a large quad covering the camera view.
+The shader reuses the same wave functions as the surface water shader to reconstruct the water surface height in world space.
+Any pixel whose world position lies above the reconstructed water surface is discarded, while pixels below the surface receive an underwater effect.
+
+The underwater look is achieved by screen-space refraction, depth-based Beer-Lambert absorption, and a gradual tint toward a deep-water color using the scene depth texture.  To avoid visual mismatches, the wave parameters of this shader must stay synchronized with the surface water shader.
+
+This shader does not render water geometry.
+Instead, it renders a full-screen quad and uses the depth buffer + wave math to decide which pixels are underwater and how they should be shaded.
+
+Code:
+
+```
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_test_disabled;
+
+// uniforms must keep in sync with surface water shader above
+uniform float sea_height    : hint_range(0.0, 5.0) = 1.3;
+uniform float sea_choppy    : hint_range(0.0, 10.0) = 4.0;
+uniform float sea_speed     : hint_range(0.0, 5.0)  = 1.5;
+uniform float sea_freq      : hint_range(0.0, 0.5)  = 0.08;
+uniform float height_offset = 0.0;
+
+// underwater look
+uniform vec3  underwater_color     : source_color = vec3(0.02, 0.18, 0.25);
+uniform float absorption_strength  : hint_range(0.0, 2.0) = 0.35;   // how fast color gets lost with distance
+uniform float deep_tint_strength   : hint_range(0.0, 1.0) = 0.65;   // how strong the final deep color is
+
+// gentle screen wobble
+uniform float refraction_amount    : hint_range(0.0, 0.015) = 0.004;
+uniform float refraction_speed     : hint_range(0.0, 3.0)   = 0.7;
+
+// slight depth fudge to avoid seeing through near the surface
+uniform float water_level_fudge    : hint_range(-1.5, 1.5) = 0.0;
+
+uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+uniform sampler2D DEPTH_TEXTURE  : hint_depth_texture,  filter_linear_mipmap;
+
+const int ITER_GEOMETRY = 3;
+const mat2 octave_m = mat2(vec2(1.6,1.2), vec2(-1.2,1.6));
+
+float hash12(vec2 p) {
+    uvec2 q = uvec2(ivec2(p)) * uvec2(1597334677u, 3812015801u);
+    uint n = (q.x ^ q.y) * 159733674u;
+    return float(n) * (1.0 / 4294967295.0);
+}
+
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return -1.0 + 2.0 * mix(
+        mix(hash12(i + vec2(0.0,0.0)), hash12(i + vec2(1.0,0.0)), u.x),
+        mix(hash12(i + vec2(0.0,1.0)), hash12(i + vec2(1.0,1.0)), u.x), u.y);
+}
+
+float sea_octave(vec2 uv, float choppy) {
+    uv += noise(uv);
+    vec2 wv = 1.0 - abs(sin(uv));
+    vec2 swv = abs(cos(uv));
+    wv = mix(wv, swv, wv);
+    return pow(1.0 - pow(wv.x * wv.y, 0.65), choppy);
+}
+
+// world position from vertex shader
+varying vec3 world_pos;
+
+void vertex() {
+    world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+    // calculate local wave height at this fragment position
+    vec2 uv = world_pos.xz;
+    uv.x *= 0.75;
+
+    float freq = sea_freq;
+    float amp  = sea_height;
+    float chop = sea_choppy;
+    float height = 0.0;
+
+    for (int i = 0; i &lt; ITER_GEOMETRY; i++) {
+        float d = sea_octave((uv + TIME * sea_speed)     * freq, chop);
+        d +=      sea_octave((uv - TIME * sea_speed)     * freq, chop);
+        height += d * amp;
+        uv     *= octave_m;
+        freq   *= 1.9;
+        amp    *= 0.22;
+        chop   = mix(chop, 1.0, 0.2);
+    }
+
+    float surface_y = height + height_offset + water_level_fudge;
+
+    // if we're above the water, discard this pixel
+    if (world_pos.y &gt; surface_y) {
+        discard;
+    }
+
+    // simple animated screen-space refraction/wobble
+    vec2 uv_screen = SCREEN_UV;
+
+    // two directional noise offsets for gentle organic movement
+    vec2 noise_dir = vec2(
+        noise(uv_screen * 12.0 + TIME * refraction_speed * vec2(1.0, 0.4)),
+        noise(uv_screen * 12.0 + TIME * refraction_speed * vec2(0.6, 1.0))
+    ) * 2.0 - 1.0;
+
+    vec2 offset = noise_dir * refraction_amount;
+    vec2 uv_distorted = uv_screen + offset;
+
+    // sample scene color with distortion
+    vec3 scene_color = texture(SCREEN_TEXTURE, uv_distorted).rgb;
+
+    // get approximate distance through water
+    // we use the distorted UV to read depth
+    float depth_raw = texture(DEPTH_TEXTURE, uv_distorted).x;
+
+    vec3 ndc = vec3(uv_distorted * 2.0 - 1.0, depth_raw);
+    #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+    ndc.z = depth_raw * 2.0 - 1.0;
+    #endif
+
+    vec4 view_pos = INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+    view_pos.xyz /= view_pos.w;
+    float scene_view_z = -view_pos.z;
+
+    // approximate water thickness, positive means deeper
+    float thickness = scene_view_z - (-VIEW_MATRIX[3].z - world_pos.y); // rough but good enough
+
+    thickness = max(thickness, 0.0);
+
+    // beer-lambert absorption + deep color tint
+    // how much light is left after traveling through water
+    float transmittance = exp(-thickness * absorption_strength);
+
+    // blend toward deep underwater color
+    vec3 tinted = mix(scene_color, underwater_color, deep_tint_strength);
+
+    // applying absorption, darkens &amp; tints farther objects
+    vec3 final_color = tinted * transmittance;
+
+    // very simple fog falloff to pure underwater color in extreme distance
+    float fog = 1.0 - exp(-thickness * absorption_strength * 0.7);
+    final_color = mix(final_color, underwater_color, fog * 0.85);
+
+    ALBEDO = final_color;
+}
+```
+
+Both shaders together look like this:
+
+![Image 12: underwater shader](https://gameidea.org/wp-content/uploads/2026/02/underwater-water-shader.gif)
+
+That's all! I tried to explain as much as I could with the code snippets. If you enjoyed this or found this useful, let me know! If you've got any question feel free to comment. Thank you for reading.
+</pre>
+</body>
+</html>
