@@ -1,16 +1,14 @@
 // Дешёвая вода Born Unblessed (SPEC П14 4.7) для SIMPLE/NORMAL — копия
 // water_bu.gdshader без экранной и глубинной текстур (копия экрана не
 // бесплатна, уровень экономит): полупрозрачная поверхность цветом
-// рассеяния, 8 волн Герстнера, один слой ряби, пены и преломления нет.
-// П15 3: отражение неба — движковое (ранее отключавший IBL-отражения
-// флаг рендера убран; движок кладёт radiance Sky3D с френелем
-// F0 ≈ 0.02), ручного двухцветного неба нет; дорожка светила — спекуляр
-// движка. П15 1-2: нормали спектра —
-// во fragment по world_pos (в vertex только смещение волн длиннее 20 м),
-// пиксельная фильтрация гасит субпиксельные волны, наклон уходит в
-// рост roughness с расстоянием. Спектр и палитра — те же константы
-// и uniform-имена полной версии (WaterArea ставит одинаковые параметры
-// обоим шейдерам).
+// рассеяния, волны sea_octave (3 октавы и в vertex, и во fragment —
+// нормали конечными разностями с шагом по дистанции), один слой ряби,
+// пены и преломления нет. П15 3: отражение неба — движковое (IBL
+// radiance Sky3D с френелем F0 ≈ 0.02); дорожка светила — спекуляр
+// движка. Пиксельная фильтрация гасит субпиксельную рябь, наклон
+// уходит в рост roughness с расстоянием. Палитра и uniform-имена —
+// те же, что у полной версии (WaterArea ставит одинаковые параметры
+// обоим шейдерам; iter_fragment здесь не читается — октавы константа).
 shader_type spatial;
 render_mode blend_mix, depth_draw_always, cull_disabled,
 	specular_schlick_ggx;
@@ -34,16 +32,19 @@ uniform float refraction_amount : hint_range(0.0, 4.0) = 1.0;
 uniform float ripple_layers : hint_range(0.0, 3.0) = 1.0;
 uniform float ripple_strength : hint_range(0.0, 2.0) = 1.0;
 uniform float ripple_scale : hint_range(0.5, 2.0) = 1.0;
-// Высота вьюпорта в пикселях (для пиксельной фильтрации волн; в этой
+// Высота вьюпорта в пикселях (для пиксельной фильтрации ряби; в этой
 // версии нет screen texture — built-in SCREEN_PIXEL_SIZE недоступен,
 // WaterArea ставит размер и обновляет при ресайзе окна).
 uniform float screen_px_height = 720.0;
 group_uniforms;
 
 group_uniforms Waves;
-uniform vec4 waves_a[32];
-uniform vec4 waves_b[32];
-uniform int wave_count = 8;
+// Волны sea_octave (туториал gameidea), как у полной версии; озеро
+// спокойнее моря — константы ставит WaterArea.
+uniform float sea_height : hint_range(0.0, 2.0) = 0.35;
+uniform float sea_choppiness : hint_range(0.0, 10.0) = 4.0;
+uniform float sea_speed : hint_range(0.0, 3.0) = 0.8;
+uniform float sea_freq : hint_range(0.0, 0.5) = 0.08;
 group_uniforms;
 
 group_uniforms Fades;
@@ -56,15 +57,72 @@ uniform float depth_fog_fade_max = 130.0;
 uniform float far_thickness = 8.0;
 group_uniforms;
 
-// П15 1-2: пороги пиксельной фильтрации и порог длинных волн — те же,
-// что в полной версии.
+// Дешёвая версия: октав везде по 3 (без uniform-границы цикла).
+const int ITER_GEOMETRY = 3;
+const mat2 octave_m = mat2(vec2(1.6, 1.2), vec2(-1.2, 1.6));
+const float NORMAL_EPS_M = 0.01;
+const float NORMAL_SMOOTH_DIST = 50.0;
+// П15 1-2: пороги пиксельной фильтрации ряби — те же, что в полной
+// версии.
 const float FILTER_MIN_PX = 2.0;
 const float FILTER_MAX_PX = 4.0;
-const float VERTEX_WAVE_M = 20.0;
 
 // Постоянная полупрозрачность дешёвой воды: без depth-буфера толщины
 // нет, мелкое/глубокое не различить — лёгкая вуаль цвета рассеяния.
 const float CHEAP_ALPHA = 0.82;
+
+// Value-шум и октавы волн (туториал gameidea) — как в полной версии.
+float hash12(vec2 p) {
+	uvec2 q = uvec2(ivec2(p)) * uvec2(1597334677u, 3812015801u);
+	uint n = (q.x ^ q.y) * 1597334677u;
+	return float(n) * (1.0 / 4294967295.0);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return -1.0 + 2.0 * mix(
+		mix(hash12(i + vec2(0.0, 0.0)), hash12(i + vec2(1.0, 0.0)), u.x),
+		mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x),
+		u.y);
+}
+
+float sea_octave(vec2 uv, float choppy) {
+	uv += vnoise(uv);
+	vec2 wv = 1.0 - abs(sin(uv));
+	vec2 swv = abs(cos(uv));
+	wv = mix(wv, swv, wv);
+	return pow(1.0 - pow(wv.x * wv.y, 0.65), choppy);
+}
+
+float wave_height_geo(vec2 xz, float time) {
+	float freq = sea_freq;
+	float amp = sea_height;
+	float choppy = sea_choppiness;
+	vec2 uv = xz;
+	uv.x *= 0.75;
+	float h = 0.0;
+	for (int i = 0; i < ITER_GEOMETRY; i++) {
+		float d = sea_octave((uv + time * sea_speed) * freq, choppy);
+		d += sea_octave((uv - time * sea_speed) * freq, choppy);
+		h += d * amp;
+		uv *= octave_m;
+		freq *= 1.9;
+		amp *= 0.22;
+		choppy = mix(choppy, 1.0, 0.2);
+	}
+	return h;
+}
+
+// Нормаль волн конечными разностями высоты (3 октавы, шаг растёт с
+// расстоянием).
+vec3 wave_normal_detailed(vec2 xz, float eps) {
+	float h0 = wave_height_geo(xz, TIME);
+	float hx = wave_height_geo(xz + vec2(eps, 0.0), TIME);
+	float hz = wave_height_geo(xz + vec2(0.0, eps), TIME);
+	return normalize(vec3(h0 - hx, eps, h0 - hz));
+}
 
 // Симплекс-шум 2D (Ian McEwan / Ashima Arts) — как в water_bu.
 vec3 mod289(vec3 x) {
@@ -118,6 +176,7 @@ float wave_weight(float lambda_m, float dist, float px_per_rad) {
 }
 
 varying vec3 world_pos;
+varying vec3 vertex_normal_world;
 
 void vertex() {
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -125,24 +184,15 @@ void vertex() {
 	float wave_fade = 1.0 - smoothstep(
 		vertex_wave_fade_min, vertex_wave_fade_max,
 		distance(wp.xz, cam_pos.xz));
-	// П15 1: только смещение длинных волн (нормали — во fragment).
-	vec3 disp = vec3(0.0);
-	for (int i = 0; i < 32; i++) {
-		if (i >= wave_count) {
-			break;
-		}
-		vec4 wa = waves_a[i];
-		vec4 wb = waves_b[i];
-		if (TAU / wa.z <= VERTEX_WAVE_M) {
-			continue;
-		}
-		float amp = wa.w * wave_fade;
-		float phi = wa.z * dot(wa.xy, wp.xz) - wb.x * TIME + wb.z;
-		float qa = wb.y * amp;
-		disp += vec3(
-			wa.x * qa * cos(phi), amp * sin(phi), wa.y * qa * cos(phi));
-	}
-	VERTEX += disp;
+	VERTEX.y += wave_height_geo(wp.xz, TIME) * wave_fade;
+	float vertex_eps = 0.1;
+	float h_c = wave_height_geo(wp.xz, TIME) * wave_fade;
+	float h_x = wave_height_geo(wp.xz + vec2(vertex_eps, 0.0), TIME)
+		* wave_fade;
+	float h_z = wave_height_geo(wp.xz + vec2(0.0, vertex_eps), TIME)
+		* wave_fade;
+	vertex_normal_world = normalize(
+		vec3(h_c - h_x, vertex_eps, h_c - h_z));
 	world_pos = wp;
 }
 
@@ -152,31 +202,14 @@ void fragment() {
 	// высота экрана — uniform (screen texture в этой версии нет).
 	float px_per_rad = screen_px_height / (2.0 * PROJECTION_MATRIX[1][1]);
 
-	// П15 1: нормали спектра попиксельно; П15 2: субпиксельные волны
-	// гаснут, наклон уходит в roughness.
-	vec3 nrm = vec3(0.0, 1.0, 0.0);
-	float slope_total = 1e-6;
-	float slope_kept = 0.0;
-	for (int i = 0; i < 32; i++) {
-		if (i >= wave_count) {
-			break;
-		}
-		vec4 wa = waves_a[i];
-		vec4 wb = waves_b[i];
-		float weight = wave_weight(TAU / wa.z, dist, px_per_rad);
-		float phi = wa.z * dot(wa.xy, world_pos.xz)
-			- wb.x * TIME + wb.z;
-		float s = sin(phi);
-		float c = cos(phi);
-		float wa_slope = wa.z * wa.w;
-		nrm.x -= wa.x * wa_slope * c * weight;
-		nrm.z -= wa.y * wa_slope * c * weight;
-		nrm.y -= wb.y * wa_slope * s * weight;
-		slope_total += wa_slope;
-		slope_kept += wa_slope * weight;
-	}
-	nrm = normalize(nrm);
-	float lost = clamp(1.0 - slope_kept / slope_total, 0.0, 1.0);
+	// Нормаль волн: детальная (3 октавы, шаг по дистанции), вдали —
+	// переход к геометрической нормали vertex (как в полной версии).
+	float lod_eps = max(NORMAL_EPS_M, dist * 0.005);
+	vec3 nrm = wave_normal_detailed(world_pos.xz, lod_eps);
+	float smooth_factor = clamp(
+		(dist - NORMAL_SMOOTH_DIST) / 200.0, 0.0, 1.0);
+	nrm = normalize(mix(nrm, vertex_normal_world, smooth_factor));
+	float lost = smooth_factor;
 
 	// Один слой ряби (1.5 м, слабее прежнего) с той же фильтрацией.
 	if (ripple_layers > 0.5 && ripple_strength > 0.001) {

@@ -4,7 +4,7 @@
 #   xvfb-run -a godot --path . --rendering-driver opengl3 \
 #     -s res://tools/probe_water_shaders.gd
 # PASS — оба материала пережили по кадру рендера (у полной версии —
-# со спектром волн и всеми уровнями ряби); ошибки компиляции Godot сам
+# с параметрами волн и всеми уровнями ряби); ошибки компиляции Godot сам
 # печатает в stderr (SHADER ERROR). Сцену проекта не грузит (boot-ловушка
 # не при чём: boot не добавляется).
 extends SceneTree
@@ -51,10 +51,15 @@ func _draw_water(
 		WaterArea.LAKE_SHALLOW if calm else WaterArea.SEA_SHALLOW)
 	material.set_shader_parameter("absorption",
 		WaterArea.LAKE_ABSORPTION if calm else WaterArea.SEA_ABSORPTION)
-	var spectrum: Array = WaterArea.wave_spectrum(not calm)
-	material.set_shader_parameter("waves_a", spectrum[0])
-	material.set_shader_parameter("waves_b", spectrum[1])
-	material.set_shader_parameter("wave_count", spectrum[0].size())
+	material.set_shader_parameter("sea_height",
+		WaterArea.LAKE_WAVE_HEIGHT if calm else WaterArea.SEA_WAVE_HEIGHT)
+	material.set_shader_parameter("sea_choppiness",
+		WaterArea.LAKE_WAVE_CHOPPY if calm else WaterArea.SEA_WAVE_CHOPPY)
+	material.set_shader_parameter("sea_speed",
+		WaterArea.LAKE_WAVE_SPEED if calm else WaterArea.SEA_WAVE_SPEED)
+	material.set_shader_parameter("sea_freq",
+		WaterArea.LAKE_WAVE_FREQ if calm else WaterArea.SEA_WAVE_FREQ)
+	material.set_shader_parameter("iter_fragment", 4)
 	material.set_shader_parameter("ripple_layers", float(ripple))
 	mesh.material_override = material
 	root3d.add_child(mesh)

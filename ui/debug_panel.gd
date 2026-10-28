@@ -53,22 +53,18 @@ const WATER_SLIDERS: Array[Dictionary] = [
 	{"id": &"abs", "label": "BU_W_ABSORPTION",
 		"min": 0.0, "max": 3.0, "step": 0.05,
 		"def": WaterArea.ABSORPTION_MULT, "const": "ABSORPTION_MULT"},
-	{"id": &"wave_h_lake", "label": "BU_W_WAVE_H_LAKE",
+	{"id": &"wave_height", "label": "BU_W_WAVE_HEIGHT",
 		"min": 0.0, "max": 2.0, "step": 0.05,
-		"def": WaterArea.WAVE_HEIGHT_MULT_LAKE,
-		"const": "WAVE_HEIGHT_MULT_LAKE"},
-	{"id": &"wave_h_sea", "label": "BU_W_WAVE_H_SEA",
+		"def": WaterArea.WAVE_HEIGHT_MULT},
+	{"id": &"wave_choppy", "label": "BU_W_WAVE_CHOPPY",
 		"min": 0.0, "max": 2.0, "step": 0.05,
-		"def": WaterArea.WAVE_HEIGHT_MULT_SEA,
-		"const": "WAVE_HEIGHT_MULT_SEA"},
-	{"id": &"wave_l_lake", "label": "BU_W_WAVE_L_LAKE",
-		"min": 0.4, "max": 2.5, "step": 0.05,
-		"def": WaterArea.WAVE_LENGTH_MULT_LAKE,
-		"const": "WAVE_LENGTH_MULT_LAKE"},
-	{"id": &"wave_l_sea", "label": "BU_W_WAVE_L_SEA",
-		"min": 0.4, "max": 2.5, "step": 0.05,
-		"def": WaterArea.WAVE_LENGTH_MULT_SEA,
-		"const": "WAVE_LENGTH_MULT_SEA"},
+		"def": WaterArea.WAVE_CHOPPY_MULT},
+	{"id": &"wave_speed", "label": "BU_W_WAVE_SPEED",
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"def": WaterArea.WAVE_SPEED_MULT},
+	{"id": &"wave_freq", "label": "BU_W_WAVE_FREQ",
+		"min": 0.2, "max": 2.0, "step": 0.05,
+		"def": WaterArea.WAVE_FREQ_MULT},
 	{"id": &"ripple_strength", "label": "BU_W_RIPPLE_STRENGTH",
 		"min": 0.0, "max": 2.0, "step": 0.05,
 		"def": WaterArea.RIPPLE_STRENGTH_MULT,
@@ -107,6 +103,27 @@ const WATER_COLORS: Array[Dictionary] = [
 		"def": WaterArea.SEA_DEEP, "const": "SEA_DEEP"},
 	{"id": &"sea_shallow", "label": "BU_W_SEA_SHALLOW",
 		"def": WaterArea.SEA_SHALLOW, "const": "SEA_SHALLOW"},
+]
+## Базы волн sea_octave (П15-ДОП): в «Скопировать значения» печатаются
+## как константы WaterArea с уже применённым множителем ползунка — текст
+## вставляется в water_area.gd, множители возвращаются к 1.0.
+const WAVE_BASE_CONSTS: Array[Dictionary] = [
+	{"const": "SEA_WAVE_HEIGHT", "base": WaterArea.SEA_WAVE_HEIGHT,
+		"mult": &"wave_height"},
+	{"const": "LAKE_WAVE_HEIGHT", "base": WaterArea.LAKE_WAVE_HEIGHT,
+		"mult": &"wave_height"},
+	{"const": "SEA_WAVE_CHOPPY", "base": WaterArea.SEA_WAVE_CHOPPY,
+		"mult": &"wave_choppy"},
+	{"const": "LAKE_WAVE_CHOPPY", "base": WaterArea.LAKE_WAVE_CHOPPY,
+		"mult": &"wave_choppy"},
+	{"const": "SEA_WAVE_SPEED", "base": WaterArea.SEA_WAVE_SPEED,
+		"mult": &"wave_speed"},
+	{"const": "LAKE_WAVE_SPEED", "base": WaterArea.LAKE_WAVE_SPEED,
+		"mult": &"wave_speed"},
+	{"const": "SEA_WAVE_FREQ", "base": WaterArea.SEA_WAVE_FREQ,
+		"mult": &"wave_freq"},
+	{"const": "LAKE_WAVE_FREQ", "base": WaterArea.LAKE_WAVE_FREQ,
+		"mult": &"wave_freq"},
 ]
 
 var _label: Label
@@ -678,7 +695,7 @@ func _on_water_color_changed(color: Color, id: StringName) -> void:
 
 ## Разослать текущие значения всем зонам воды (группа water_surface):
 ## каждая зона берёт свои озеро/море значения (WaterArea.set_palette/
-## set_waves решают по calm). Настройки игры и сеть не затрагиваются.
+## set_wave_params решают по calm). Настройки игры и сеть не затрагиваются.
 func _apply_water() -> void:
 	if _water_applying:
 		return
@@ -688,9 +705,9 @@ func _apply_water() -> void:
 			_water_colors[&"lake_shallow"],
 			_water_colors[&"sea_deep"], _water_colors[&"sea_shallow"])
 		area.set_absorption_mult(_water_values[&"abs"])
-		area.set_waves(_water_values[&"wave_h_lake"],
-			_water_values[&"wave_l_lake"],
-			_water_values[&"wave_h_sea"], _water_values[&"wave_l_sea"])
+		area.set_wave_params(_water_values[&"wave_height"],
+			_water_values[&"wave_choppy"],
+			_water_values[&"wave_speed"], _water_values[&"wave_freq"])
 		area.set_ripple_fx(_water_values[&"ripple_strength"],
 			_water_values[&"ripple_scale"])
 		area.set_refraction_amount(_water_values[&"refraction"])
@@ -720,6 +737,9 @@ func _reset_water() -> void:
 
 ## Текст «Скопировать значения» (П15 8.3): константы WaterArea с
 ## текущими числами — вставляется в gameplay/world/water_area.gd как есть.
+## Волновые базы печатаются с уже применённым множителем ползунка
+## (множители после вставки возвращаются к 1.0 — записей WAVE_*_MULT
+## в тексте нет).
 func build_water_values_text() -> String:
 	var lines: Array[String] = []
 	for def: Dictionary in WATER_COLORS:
@@ -728,8 +748,14 @@ func build_water_values_text() -> String:
 			def["const"], _fmt_water_num(c.r), _fmt_water_num(c.g),
 			_fmt_water_num(c.b), _fmt_water_num(c.a)])
 	for def: Dictionary in WATER_SLIDERS:
+		if def.get("const", "") == "":
+			continue
 		lines.append("const %s: float = %s" % [
 			def["const"], _fmt_water_num(_water_values[def["id"]])])
+	for def: Dictionary in WAVE_BASE_CONSTS:
+		lines.append("const %s: float = %s" % [def["const"],
+			_fmt_water_num(float(def["base"])
+				* _water_values[def["mult"]])])
 	return "\n".join(lines)
 
 

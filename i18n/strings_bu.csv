@@ -174,10 +174,10 @@ BU_W_LAKE_SHALLOW,Озеро: цвет мелководья,Lake: shallow color
 BU_W_SEA_DEEP,Море: цвет глубины,Sea: deep color
 BU_W_SEA_SHALLOW,Море: цвет мелководья,Sea: shallow color
 BU_W_ABSORPTION,Поглощение (мутность),Absorption (murkiness)
-BU_W_WAVE_H_LAKE,Озеро: высота волн,Lake: wave height
-BU_W_WAVE_H_SEA,Море: высота волн,Sea: wave height
-BU_W_WAVE_L_LAKE,Озеро: длина волн,Lake: wave length
-BU_W_WAVE_L_SEA,Море: длина волн,Sea: wave length
+BU_W_WAVE_HEIGHT,Высота волн,Wave height
+BU_W_WAVE_CHOPPY,Острота гребней,Crest sharpness
+BU_W_WAVE_SPEED,Скорость волн,Wave speed
+BU_W_WAVE_FREQ,Частота волн,Wave frequency
 BU_W_RIPPLE_STRENGTH,Сила ряби,Ripple strength
 BU_W_RIPPLE_SCALE,Масштаб ряби,Ripple scale
 BU_W_REFRACTION,Сила преломления,Refraction strength

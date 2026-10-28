@@ -14,9 +14,11 @@
 #     моря: копланарные поверхности мерцали (z-fighting).
 # П14 4: полная версия шейдера (экранная текстура + буфер глубины,
 # поглощение Бера по каналам, преломление, пена) — HIGH/ULTRA;
-# SIMPLE/NORMAL — water_bu_cheap без экранной выборки. Спектр волн
-# Герстнера (16/32/8 по уровню) и рябь (2/3/1 слоя) — константы
-# детерминированного RNG. П15 3: отражение неба — движковое (radiance
+# SIMPLE/NORMAL — water_bu_cheap без экранной выборки. П15-ДОП: волны
+# sea_octave по туториалу gameidea (octaves value-шума, Герстнера
+# больше нет) — 4 параметра (height/choppiness/speed/frequency), у
+# озера и моря свои константы; октав нормалей 5 ULTRA / 4 HIGH, рябь
+# (2/3/1 слоя). П15 3: отражение неба — движковое (radiance
 # Sky3D с френелем F0 ≈ 0.02, без ambient_light_disabled); SSR движок
 # на прозрачную воду не даёт (только opaque) — честно в STATUS.
 # П15 4 + 9.2-9.4: пена и накат — по SDF-карте расстояния до берега
@@ -60,27 +62,21 @@ const FOAM_WIDTH: float = 0.06
 const SEA_RUNUP: float = 0.35
 const LAKE_RUNUP: float = 0.10
 
-# --- Спектр волн (SPEC П14 4.3) ---
-## Полный спектр — 32 волны; уровень берёт первые N (длинные первые,
-## поэтому HIGH = 16 — подмножество ULTRA = 32, SIMPLE/NORMAL — 8).
-const MAX_WAVES: int = 32
-const SEED_WAVES: int = 20261026
-## Ветер (откуда дует), градусы; разброс направлений волн вокруг него.
-const WIND_DIR_DEG: float = 35.0
-const DIR_SPREAD_SWELL: float = 60.0
-const DIR_SPREAD_MEDIUM: float = 75.0
-## Длины и амплитуды: озеро — почти гладь (0.6–3 м / суммарно 1–3 см),
-## море — зыбь 12–60 м и средние волны 2.5–10 м (суммарно ~0.2 м RMS).
-const LAKE_LEN: Vector2 = Vector2(0.6, 3.0)
-const SEA_SWELL_LEN: Vector2 = Vector2(12.0, 60.0)
-const SEA_MEDIUM_LEN: Vector2 = Vector2(2.5, 10.0)
-const RMS_LAKE: float = 0.016
-const RMS_SEA: float = 0.18
-## Суммарная крутизна спектра (Σ Q·k·A): держит Герстнера от
-## самопересечений, бюджет делится поровну между волнами.
-const STEEP_TOTAL: float = 0.75
-## Гравитация для дисперсионного соотношения глубоководных волн.
-const GRAVITY: float = 9.81
+# --- Волны sea_octave (П15-ДОП, туториал gameidea) ---
+## Четыре параметра волн зоны (height — суммарная высота, м; choppiness —
+## острота гребней; speed — скорость дрейфа; freq — базовая частота, 1/м).
+## Море — заметная зыбь, озеро — почти гладь (спокойнее по всем осям).
+## Стартовые значения — прикидка под наш климат; точный вид владелец
+## подбирает ползунками F3 «Вода» («Скопировать значения» печатает их
+## обратно в эти константы).
+const SEA_WAVE_HEIGHT: float = 0.35
+const SEA_WAVE_CHOPPY: float = 4.0
+const SEA_WAVE_SPEED: float = 0.8
+const SEA_WAVE_FREQ: float = 0.08
+const LAKE_WAVE_HEIGHT: float = 0.06
+const LAKE_WAVE_CHOPPY: float = 2.5
+const LAKE_WAVE_SPEED: float = 0.3
+const LAKE_WAVE_FREQ: float = 0.2
 
 ## Высота зоны под поверхностью воды, м.
 const DEPTH: float = 1.4
@@ -136,10 +132,10 @@ const CAUSTIC_BRIGHTNESS: float = 1.0
 ## числа — текст вставляется прямо в константы (цвета и ширина пены
 ## уже выше: LAKE_/SEA_ палитра, FOAM_WIDTH, ROUGHNESS_*).
 const ABSORPTION_MULT: float = 1.0
-const WAVE_HEIGHT_MULT_LAKE: float = 1.0
-const WAVE_HEIGHT_MULT_SEA: float = 1.0
-const WAVE_LENGTH_MULT_LAKE: float = 1.0
-const WAVE_LENGTH_MULT_SEA: float = 1.0
+const WAVE_HEIGHT_MULT: float = 1.0
+const WAVE_CHOPPY_MULT: float = 1.0
+const WAVE_SPEED_MULT: float = 1.0
+const WAVE_FREQ_MULT: float = 1.0
 const RIPPLE_STRENGTH_MULT: float = 1.0
 const RIPPLE_SCALE_MULT: float = 1.0
 const REFRACTION_MULT: float = 1.0
@@ -154,13 +150,14 @@ var _last_ripple_xz := Vector2(INF, INF)
 # --- Текущие значения ползунков «Вода» (П15 8.1) ---
 ## Держатся, чтобы поверхности, построенные после подстройки (площадка
 ## П1 строит воду в рантайме), получили те же значения, и чтобы
-## «Сбросить» в F3 возвращал номиналы. Спектр озеро/море — своя пара
-## множителей на зону (_calm решает, чья).
+## «Сбросить» в F3 возвращал номиналы. Множители волн общие на озеро
+## и море (зона берёт свою базу констант).
 var _absorption_mult: float = ABSORPTION_MULT
 var _absorption_base := Vector3.ONE
-var _wave_height_mult: float = 1.0
-var _wave_length_mult: float = 1.0
-var _waves_from_ui: bool = false
+var _wave_h_mult: float = WAVE_HEIGHT_MULT
+var _wave_choppy_mult: float = WAVE_CHOPPY_MULT
+var _wave_speed_mult: float = WAVE_SPEED_MULT
+var _wave_freq_mult: float = WAVE_FREQ_MULT
 var _ripple_fx_strength: float = RIPPLE_STRENGTH_MULT
 var _ripple_fx_scale: float = RIPPLE_SCALE_MULT
 var _refraction_mult: float = REFRACTION_MULT
@@ -235,14 +232,13 @@ static func shader_for_tier(tier: int) -> Shader:
 		else WATER_BU_CHEAP
 
 
-## Число волн Герстнера по уровню (SPEC П14 4.3/4.7): 32 ULTRA,
-## 16 HIGH, 8 SIMPLE/NORMAL.
-static func wave_count_for_tier(tier: int) -> int:
+## Октавы нормалей волн во fragment по уровню (П15-ДОП п. 1/6): 5 ULTRA,
+## 4 HIGH (цена — постановка этапа разрешает снижение с 5 до 4);
+## SIMPLE/NORMAL — дешёвый шейдер с константой 3, параметр не читает.
+static func iter_fragment_for_tier(tier: int) -> int:
 	if tier == GraphicsQuality.Tier.ULTRA:
-		return 32
-	if tier == GraphicsQuality.Tier.HIGH:
-		return 16
-	return 8
+		return 5
+	return 4
 
 
 ## Слои процедурной ряби по уровню (SPEC П14 4.3/4.7): 3 ULTRA,
@@ -254,93 +250,6 @@ static func ripple_layers_for_tier(tier: int) -> int:
 		return 2
 	return 1
 
-
-## Спектр волн Герстнера (SPEC П14 4.3) — детерминированный RNG с
-## фиксированным seed: [waves_a, waves_b] по 32 волны, длинными первыми.
-##   waves_a[i] = (dir.x, dir.y, k = 2π/λ, амплитуда)
-##   waves_b[i] = (ω = √(g·k), крутизна Q, фаза, вес пены гребня)
-## Амплитуды пропорциональны длине волны и нормализуются к суммарному
-## RMS (море ~0.2 м, озеро ~2 см — не шторм); веса пены нормированы так,
-## что совпадение фаз зыби даёт сжатие гребня ≈ 0.55 (порог шейдера).
-## Множители ползунков «Вода» (П15 8.1): height_mult масштабирует RMS
-## (до нормализации крутизны — Герстнер не завивается в петлю при любой
-## высоте), length_mult растягивает длины (k и ω пересчитываются).
-static func wave_spectrum(
-	sea: bool, height_mult: float = 1.0, length_mult: float = 1.0,
-) -> Array:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED_WAVES
-	var lengths: Array[float] = []
-	var amps: Array[float] = []
-	var dirs: Array[float] = []  # радианы
-	var phases: Array[float] = []
-	var foams: Array[float] = []
-	var wind: float = deg_to_rad(WIND_DIR_DEG)
-	for i: int in MAX_WAVES:
-		# Море: 60% зыби (12–60 м) и 40% средних волн (2.5–10 м);
-		# озеро — один диапазон коротких волн.
-		var swell: bool = not sea or i % 5 < 3
-		var t: float = rng.randf()
-		var length: float
-		var amp: float
-		var foam: float
-		var spread: float
-		if sea and swell:
-			length = lerpf(SEA_SWELL_LEN.x, SEA_SWELL_LEN.y, t)
-			amp = lerpf(0.30, 0.80, t)
-			foam = 1.0
-			spread = DIR_SPREAD_SWELL
-		elif sea:
-			length = lerpf(SEA_MEDIUM_LEN.x, SEA_MEDIUM_LEN.y, t)
-			amp = lerpf(0.04, 0.18, t)
-			foam = 0.35
-			spread = DIR_SPREAD_MEDIUM
-		else:
-			length = lerpf(LAKE_LEN.x, LAKE_LEN.y, t)
-			amp = lerpf(0.01, 0.03, t)
-			foam = 0.0
-			spread = DIR_SPREAD_MEDIUM
-		# Зыбь держится ближе к ветру, средние волны разбросаны шире.
-		dirs.append(wind + deg_to_rad(
-			rng.randf_range(-spread, spread)))
-		lengths.append(length * length_mult)
-		amps.append(amp)
-		phases.append(rng.randf() * TAU)
-		foams.append(foam)
-	# Длинные волны первыми: HIGH=16 — подмножество ULTRA=32, урезание
-	# спектра не меняет первые волны.
-	var order := range(MAX_WAVES)
-	order.sort_custom(func(a: int, b: int) -> bool:
-		return lengths[a] > lengths[b])
-	# Нормализация амплитуд к суммарному RMS моря/озера (× множитель
-	# высоты ползунка — крутизна ниже нормируется от уже умноженных).
-	var sum_sq: float = 0.0
-	for amp: float in amps:
-		sum_sq += amp * amp
-	var rms_target: float = RMS_SEA if sea else RMS_LAKE
-	var scale: float = rms_target / sqrt(maxf(sum_sq, 1e-9)) * height_mult
-	# Крутизна: Q общая на волну, Σ Q·k·A = STEEP_TOTAL (без петель).
-	var steep_sum: float = 0.0
-	for i: int in MAX_WAVES:
-		steep_sum += TAU / lengths[i] * amps[i] * scale
-	var q: float = STEEP_TOTAL / maxf(steep_sum, 1e-9)
-	# Веса пены: совпадение фаз всех волн с весом даёт сжатие ≈ 0.55.
-	var crest_sum: float = 0.0
-	for i: int in MAX_WAVES:
-		crest_sum += foams[i] * q * TAU / lengths[i] * amps[i] * scale
-	var foam_scale: float = 0.55 / maxf(crest_sum, 1e-9) \
-		if crest_sum > 1e-6 else 0.0
-	var waves_a := PackedVector4Array()
-	var waves_b := PackedVector4Array()
-	for i: int in order:
-		var k: float = TAU / lengths[i]
-		var amp: float = amps[i] * scale
-		waves_a.append(Vector4(
-			cos(dirs[i]), sin(dirs[i]), k, amp))
-		waves_b.append(Vector4(
-			sqrt(GRAVITY * k), q, phases[i],
-			foams[i] * foam_scale))
-	return [waves_a, waves_b]
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -477,20 +386,12 @@ func _surface_material(calm: bool) -> Material:
 	_absorption_base = LAKE_ABSORPTION if calm else SEA_ABSORPTION
 	material.set_shader_parameter("absorption",
 		_absorption_base * _absorption_mult)
-	# Спектр волн (П14 4.3): море — зыбь и средние, озеро — короткие;
-	# уровень качества берёт первые N волн (длинные первые). Множители
-	# высоты/длины — ползунки «Вода» (озеро и море — раздельно, зона
-	# берёт свою пару; до подстройки — константы-номиналы).
-	if not _waves_from_ui:
-		_wave_height_mult = (WAVE_HEIGHT_MULT_LAKE if calm
-			else WAVE_HEIGHT_MULT_SEA)
-		_wave_length_mult = (WAVE_LENGTH_MULT_LAKE if calm
-			else WAVE_LENGTH_MULT_SEA)
-	var spectrum := wave_spectrum(
-		not calm, _wave_height_mult, _wave_length_mult)
-	material.set_shader_parameter("waves_a", spectrum[0])
-	material.set_shader_parameter("waves_b", spectrum[1])
-	material.set_shader_parameter("wave_count", wave_count_for_tier(_tier))
+	# Волны sea_octave (П15-ДОП): 4 параметра зоны (море — зыбь, озеро —
+	# почти гладь) × множители ползунков «Вода»; октавы нормалей — по
+	# уровню (5 ULTRA / 4 HIGH, дешёвая версия параметр не читает).
+	_apply_wave_params(material, calm)
+	material.set_shader_parameter("iter_fragment",
+		iter_fragment_for_tier(_tier))
 	# Рябь (4.3/4.7) и преломление (4.2): 2–3 слоя на HIGH/ULTRA,
 	# один дешёвой версии; сила ряби, её масштаб и сила преломления —
 	# ползунки «Вода» (номинал 1.0), галочка замера гасит слоями.
@@ -658,26 +559,35 @@ func set_absorption_mult(mult: float) -> void:
 			_absorption_base * _absorption_mult)
 
 
-## Высота и длина волн (множители спектра; озеро и море раздельно —
-## зона берёт свою пару). Спектр пересчитывается целиком, крутизна
-## нормируется от новых амплитуд — Герстнер не завивается.
-func set_waves(
-	lake_height: float, lake_length: float,
-	sea_height: float, sea_length: float,
+## Волны sea_octave (П15-ДОП): множители высоты, остроты гребней,
+## скорости и частоты к константам зоны (озеро и море — своя база,
+## множители общие). Высота 0 — гладь.
+func set_wave_params(
+	height: float, choppy: float, speed: float, freq: float,
 ) -> void:
-	_wave_height_mult = lake_height if _calm else sea_height
-	_wave_length_mult = lake_length if _calm else sea_length
-	_waves_from_ui = true
-	if _water_materials.is_empty():
-		return
-	var spectrum := wave_spectrum(
-		not _calm, _wave_height_mult, _wave_length_mult)
+	_wave_h_mult = maxf(height, 0.0)
+	_wave_choppy_mult = maxf(choppy, 0.0)
+	_wave_speed_mult = maxf(speed, 0.0)
+	_wave_freq_mult = maxf(freq, 0.0)
 	for material: ShaderMaterial in _water_materials:
-		material.set_shader_parameter("waves_a", spectrum[0])
-		material.set_shader_parameter("waves_b", spectrum[1])
+		_apply_wave_params(material, _calm)
 
 
-## Сила и масштаб ряби (мелкие волны-шум, не Герстнер).
+## Параметры волн зоны (база констант озеро/море × множители ползунков)
+## в материал — при постройке поверхности и на лету из F3.
+func _apply_wave_params(material: ShaderMaterial, calm: bool) -> void:
+	material.set_shader_parameter("sea_height",
+		(LAKE_WAVE_HEIGHT if calm else SEA_WAVE_HEIGHT) * _wave_h_mult)
+	material.set_shader_parameter("sea_choppiness",
+		(LAKE_WAVE_CHOPPY if calm else SEA_WAVE_CHOPPY)
+			* _wave_choppy_mult)
+	material.set_shader_parameter("sea_speed",
+		(LAKE_WAVE_SPEED if calm else SEA_WAVE_SPEED) * _wave_speed_mult)
+	material.set_shader_parameter("sea_freq",
+		(LAKE_WAVE_FREQ if calm else SEA_WAVE_FREQ) * _wave_freq_mult)
+
+
+## Сила и масштаб ряби (мелкие волны-шум поверх волн).
 func set_ripple_fx(strength: float, scale: float) -> void:
 	_ripple_fx_strength = clampf(strength, 0.0, 2.0)
 	_ripple_fx_scale = clampf(scale, 0.5, 2.0)

@@ -18,9 +18,10 @@ const HEIGHTS_CHECKSUM: int = 2041845998
 # --- П15 1-2: нормали во fragment, фильтрация с расстоянием ---
 
 func test_normals_in_fragment_vertex_displacement_only() -> void:
-	# П15 1: нормали всего спектра — попиксельно во fragment по
-	# world_pos; в vertex() — только смещение длинных волн (> 20 м),
-	# никаких нормалей и гребней там не считается.
+	# П15-ДОП: волны sea_octave — смещение геометрии в vertex тремя
+	# октавами (map геометрии), детальная нормаль — попиксельно во
+	# fragment (wave_normal_detailed по world_pos); в vertex считается
+	# только грубая геометрическая нормаль для дальнего сведения.
 	for pair: Array in [
 		["полный", WATER_BU_CODE], ["дешёвый", WATER_CHEAP_CODE],
 	]:
@@ -28,39 +29,50 @@ func test_normals_in_fragment_vertex_displacement_only() -> void:
 		var vertex_part: String = code.substr(
 			code.find("void vertex()"), code.find("void fragment()")
 			- code.find("void vertex()"))
-		assert_true(vertex_part.contains("VERTEX += disp"),
-			"%s: vertex смещает геометрию" % pair[0])
-		assert_true(vertex_part.contains("VERTEX_WAVE_M"),
-			"%s: смещение — только волны длиннее порога" % pair[0])
-		assert_false(vertex_part.contains("nrm"),
-			"%s: в vertex нет расчёта нормали" % pair[0])
+		assert_true(vertex_part.contains(
+				"VERTEX.y += wave_height_geo(wp.xz, TIME)"),
+			"%s: vertex смещает геометрию волнами" % pair[0])
+		assert_true(vertex_part.contains("wave_height_geo"),
+			"%s: смещение — геометрические октавы" % pair[0])
+		assert_false(vertex_part.contains("wave_normal_detailed"),
+			"%s: детальной нормали в vertex нет" % pair[0])
 		assert_false(vertex_part.contains("crest"),
 			"%s: в vertex нет гребней пены" % pair[0])
 		var fragment_part: String = code.substr(code.find("void fragment()"))
-		assert_true(fragment_part.contains("nrm.x -= wa.x * wa_slope"),
-			"%s: нормали Герстнера — во fragment" % pair[0])
+		assert_true(fragment_part.contains(
+				"wave_normal_detailed(world_pos.xz, lod_eps)"),
+			"%s: детальная нормаль волн — во fragment" % pair[0])
 		assert_true(fragment_part.contains("float weight = wave_weight("),
-			"%s: волны взвешиваются пиксельной фильтрацией" % pair[0])
-	# Порог длинных волн — 20 м (SPEC П15 1: длиннее — в vertex).
-	assert_almost_eq(_const_of(WATER_BU_CODE, "VERTEX_WAVE_M"), 20.0, 0.001,
-		"порог длинных волн 20 м")
-	assert_almost_eq(
-		_const_of(WATER_CHEAP_CODE, "VERTEX_WAVE_M"), 20.0, 0.001,
-		"дешёвая версия: тот же порог")
+			"%s: рябь взвешивается пиксельной фильтрацией" % pair[0])
+	# Функции туториала: 3 октавы геометрии, до 5 на нормаль.
+	for code: String in [WATER_BU_CODE, WATER_CHEAP_CODE]:
+		assert_true(code.contains("float sea_octave("),
+			"октавы волн — sea_octave (туториал)")
+		assert_true(code.contains("const int ITER_GEOMETRY = 3;"),
+			"геометрия — 3 октавы")
+		assert_true(code.contains("const mat2 octave_m"),
+			"матрица сжатия октав — octave_m")
+	assert_true(WATER_BU_CODE.contains("const int ITER_FRAGMENT_MAX = 5;"),
+		"полный шейдер: до 5 октав нормали")
+	assert_true(WATER_BU_CODE.contains("uniform int iter_fragment"),
+		"октавы нормали — по уровню качества")
 
 
 func test_normal_independent_of_mesh_density() -> void:
 	# П15 1: нормаль не зависит от плотности сетки — в шейдере нет
-	# производных по вершинам (dFdx/dFdx нормали из varying): наклон
-	# волн аналитический по мировым координатам.
+	# производных по вершинам (dFdx нормали из varying): высота волн
+	# считается по мировым координатам конечными разностями.
 	for pair: Array in [
 		["полный", WATER_BU_CODE], ["дешёвый", WATER_CHEAP_CODE],
 	]:
 		assert_false((pair[1] as String).contains("dFdx"),
 			"%s: нет экранно-пространственных производных" % pair[0])
 		assert_true((pair[1] as String).contains(
-			"wa.z * dot(wa.xy, world_pos.xz)"),
-			"%s: фаза волн — по мировой позиции" % pair[0])
+			"wave_normal_detailed(world_pos.xz"),
+			"%s: нормаль волн — по мировой позиции" % pair[0])
+		assert_true((pair[1] as String).contains(
+			"float wave_height_geo(vec2 xz"),
+			"%s: высота волн — функция мировой позиции" % pair[0])
 
 
 func test_pixel_filter_roughness_grows_with_distance() -> void:
@@ -85,6 +97,20 @@ func test_pixel_filter_roughness_grows_with_distance() -> void:
 		"вблизи — почти зеркало (0.03)")
 	assert_between(_uniform_of(WATER_BU_CODE, "roughness_far"), 0.12, 0.2,
 		"у горизонта — матовое зеркало (0.12-0.2)")
+	# П15-ДОП: шаг конечных разностей нормали растёт с расстоянием
+	# (детали вдали гаснут, а не мерцают), нормаль сводится к
+	# геометрической за NORMAL_SMOOTH_DIST.
+	for pair: Array in [
+		["полный", WATER_BU_CODE], ["дешёвый", WATER_CHEAP_CODE],
+	]:
+		var code: String = pair[1]
+		assert_true(code.contains("max(NORMAL_EPS_M, dist * 0.005)"),
+			"%s: шаг разностей растёт с дистанцией" % pair[0])
+		assert_almost_eq(_const_of(code, "NORMAL_SMOOTH_DIST"), 50.0, 0.001,
+			"%s: сведение к геометрической нормали — с 50 м" % pair[0])
+		assert_true(code.contains(
+			"mix(nrm, vertex_normal_world, smooth_factor)"),
+			"%s: вдали нормаль — геометрическая (vertex)" % pair[0])
 	# Размер экрана для фильтрации — uniform (в headless/material тоже).
 	WorldMaterials.textured_headless = true
 	var area := WaterArea.new()
@@ -319,12 +345,15 @@ func test_soft_edge_fades_all_but_bottom() -> void:
 
 func test_runup_follows_long_wave() -> void:
 	# П15 9.4: накат 10-40 см (море сильнее, озеро чуть-чуть) — линия
-	# пены ползёт туда-обратно в такт длинной волне спектра.
+	# пены ползёт туда-обратно; такт — период морской зыби константой
+	# (спектра волн больше нет, П15-ДОП).
 	var code := WATER_BU_CODE
 	assert_true(code.contains("float runup = runup_amp"),
 		"накат — амплитуда uniform")
-	assert_true(code.contains("cos(TIME * min(waves_b[0].x * 0.35, 0.6))"),
-		"фаза наката — от самой длинной волны спектра")
+	assert_true(code.contains("cos(TIME * TAU / RUNUP_PERIOD_SEC)"),
+		"фаза наката — период зыби константой")
+	assert_between(_const_of(code, "RUNUP_PERIOD_SEC"), 4.0, 12.0,
+		"период наката — секунды морской зыби")
 	assert_between(_uniform_of(code, "runup_amp"), 0.1, 0.4,
 		"амплитуда наката в пределах 10-40 см (дефолт)")
 	# Шумы двух масштабов рвут полосу: 0.2 м (×5.0) и 0.6 м (×1.667).
@@ -689,8 +718,8 @@ func test_f3_caustic_and_rings_checkboxes() -> void:
 
 
 func test_water_tab_sliders_change_own_parameters() -> void:
-	# П15 8.5: каждый ползунок меняет свой параметр материала воды
-	# (морская зона; ползунки озера её не трогают — множители раздельные).
+	# П15 8.5 / П15-ДОП: каждый ползунок меняет свой параметр материала
+	# воды (морская зона; база волн — константы моря, множители общие).
 	WorldMaterials.textured_headless = true
 	var area := WaterArea.new()
 	add_child_autofree(area)
@@ -700,8 +729,6 @@ func test_water_tab_sliders_change_own_parameters() -> void:
 	for def: Dictionary in panel.WATER_SLIDERS:
 		var id: StringName = def["id"]
 		var slider: HSlider = panel._sliders[id]
-		var waves_before: PackedVector4Array = \
-			material.get_shader_parameter("waves_a")
 		slider.value = float(def["min"]) \
 			+ (float(def["max"]) - float(def["min"])) * 0.7
 		var applied: float = slider.value
@@ -710,24 +737,26 @@ func test_water_tab_sliders_change_own_parameters() -> void:
 				assert_true(_vec3_close(material.get_shader_parameter(
 					"absorption"), WaterArea.SEA_ABSORPTION * applied),
 					"поглощение = база моря × ползунок")
-			&"wave_h_lake":
-				assert_eq(material.get_shader_parameter("waves_a")
-					as PackedVector4Array, waves_before,
-					"ползунок озера не трогает морской спектр")
-			&"wave_h_sea":
-				assert_almost_eq((material.get_shader_parameter("waves_a")
-					as PackedVector4Array)[0].w,
-					waves_before[0].w * applied, 0.0001,
-					"высота волн моря × ползунок (первая волна)")
-			&"wave_l_lake":
-				assert_eq(material.get_shader_parameter("waves_a")
-					as PackedVector4Array, waves_before,
-					"ползунок озера не трогает морской спектр")
-			&"wave_l_sea":
-				assert_almost_eq((material.get_shader_parameter("waves_a")
-					as PackedVector4Array)[0].z,
-					waves_before[0].z / applied, 0.0001,
-					"длина волн моря: k делится на ползунок")
+			&"wave_height":
+				assert_almost_eq(float(
+					material.get_shader_parameter("sea_height")),
+					WaterArea.SEA_WAVE_HEIGHT * applied, 0.0001,
+					"высота волн = база моря × ползунок")
+			&"wave_choppy":
+				assert_almost_eq(float(
+					material.get_shader_parameter("sea_choppiness")),
+					WaterArea.SEA_WAVE_CHOPPY * applied, 0.0001,
+					"острота гребней = база моря × ползунок")
+			&"wave_speed":
+				assert_almost_eq(float(
+					material.get_shader_parameter("sea_speed")),
+					WaterArea.SEA_WAVE_SPEED * applied, 0.0001,
+					"скорость волн = база моря × ползунок")
+			&"wave_freq":
+				assert_almost_eq(float(
+					material.get_shader_parameter("sea_freq")),
+					WaterArea.SEA_WAVE_FREQ * applied, 0.0001,
+					"частота волн = база моря × ползунок")
 			&"ripple_strength":
 				assert_almost_eq(float(
 					material.get_shader_parameter("ripple_strength")),
@@ -817,7 +846,7 @@ func test_water_tab_reset_returns_defaults() -> void:
 	for def: Dictionary in panel.WATER_SLIDERS:
 		assert_almost_eq(panel._sliders[def["id"]].value,
 			float(def["def"]), 0.0001,
-			"«Сбросить» вернул ползунок %s" % def["const"])
+			"«Сбросить» вернул ползунок %s" % def.get("const", def["id"]))
 	for def: Dictionary in panel.WATER_COLORS:
 		assert_eq(panel._pickers[def["id"]].color, def["def"],
 			"«Сбросить» вернул цвет %s" % def["const"])
@@ -835,21 +864,27 @@ func test_water_tab_reset_returns_defaults() -> void:
 
 
 func test_water_tab_copy_contains_all() -> void:
-	# П15 8.3: текст «Скопировать значения» — константы WaterArea со
-	# всеми параметрами; числа можно вставить в water_area.gd как есть.
+	# П15 8.3 / П15-ДОП: текст «Скопировать значения» — константы
+	# WaterArea со всеми параметрами (волновые базы — с применённым
+	# множителем ползунка); числа можно вставить в water_area.gd как есть.
 	var panel := DebugPanel.new()
 	add_child_autofree(panel)
 	var text := panel.build_water_values_text()
 	for const_name: String in [
 		"LAKE_DEEP", "LAKE_SHALLOW", "SEA_DEEP", "SEA_SHALLOW",
-		"ABSORPTION_MULT", "WAVE_HEIGHT_MULT_LAKE", "WAVE_HEIGHT_MULT_SEA",
-		"WAVE_LENGTH_MULT_LAKE", "WAVE_LENGTH_MULT_SEA",
+		"ABSORPTION_MULT", "SEA_WAVE_HEIGHT", "LAKE_WAVE_HEIGHT",
+		"SEA_WAVE_CHOPPY", "LAKE_WAVE_CHOPPY",
+		"SEA_WAVE_SPEED", "LAKE_WAVE_SPEED", "SEA_WAVE_FREQ",
+		"LAKE_WAVE_FREQ",
 		"RIPPLE_STRENGTH_MULT", "RIPPLE_SCALE_MULT", "REFRACTION_MULT",
 		"FOAM_MULT", "FOAM_WIDTH", "ROUGHNESS_NEAR", "ROUGHNESS_FAR",
 		"CAUSTIC_BRIGHTNESS",
 	]:
 		assert_true(text.contains("const %s:" % const_name),
 			"в тексте есть константа %s" % const_name)
+	# Множители волн в текст не входят — вставляются сами базы.
+	assert_false(text.contains("WAVE_HEIGHT_MULT"),
+		"множитель высоты печатается базой, не множителем")
 	# Числа — те же, что в константах WaterArea.
 	assert_true(text.contains("const FOAM_WIDTH: float = 0.06"),
 		"ширина пены — 0.06")
@@ -857,6 +892,8 @@ func test_water_tab_copy_contains_all() -> void:
 		"шероховатость вблизи — 0.03")
 	assert_true(text.contains("const CAUSTIC_BRIGHTNESS: float = 1.0"),
 		"яркость каустики — 1.0")
+	assert_true(text.contains("const SEA_WAVE_FREQ: float = 0.08"),
+		"частота морских волн — 0.08")
 	assert_true(text.contains("const LAKE_DEEP: Color = "
 		+ "Color(0.016, 0.035, 0.028, 1.0)"), "палитра озера — числами")
 	# Подвинутый ползунок попадает в текст своим числом.

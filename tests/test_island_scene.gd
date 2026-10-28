@@ -135,18 +135,16 @@ func test_water_is_shared_ocean_and_lake() -> void:
 	# Один и тот же шейдер water_bu у моря и озера («одна поверхность»).
 	assert_eq(sea_material.shader, lake_material.shader,
 		"море и озеро — один шейдер water_bu")
-	# Озеро спокойнее: амплитуда первой (самой длинной) волны спектра
-	# меньше морской (waves_a[i].w — амплитуда).
-	var sea_waves := sea_material.get_shader_parameter(
-		"waves_a") as PackedVector4Array
-	var lake_waves := lake_material.get_shader_parameter(
-		"waves_a") as PackedVector4Array
-	assert_gt(sea_waves.size(), 0, "спектр моря не пуст")
-	assert_gt(lake_waves.size(), 0, "спектр озера не пуст")
-	if sea_waves.size() > 0 and lake_waves.size() > 0:
-		assert_lt(lake_waves[0].w, sea_waves[0].w * 0.5,
-			"волны озера заметно спокойнее морских (%.3f < %.3f)" % [
-				lake_waves[0].w, sea_waves[0].w])
+	# Озеро спокойнее (П15-ДОП: волны sea_octave): высота волн зоны —
+	# константы LAKE_*/SEA_* в материал.
+	var sea_height := float(
+		sea_material.get_shader_parameter("sea_height"))
+	var lake_height := float(
+		lake_material.get_shader_parameter("sea_height"))
+	assert_gt(sea_height, 0.0, "высота морских волн задана")
+	assert_lt(lake_height, sea_height * 0.5,
+		"волны озера заметно спокойнее морских (%.3f < %.3f)" % [
+			lake_height, sea_height])
 	# Вода процедурная (П14 4.5): назначенных текстур нет вовсе — пена
 	# и рябь шумом, текстур Boujie в материалах не осталось. П15 9.3 —
 	# единственное исключение: SDF-карта расстояния до берега, запечённая

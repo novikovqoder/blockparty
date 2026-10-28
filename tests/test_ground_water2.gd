@@ -380,93 +380,79 @@ func test_water_new_shader_on_all_surfaces() -> void:
 		"дешёвая версия без буфера глубины (4.7)")
 
 
-func test_water_wave_spectrum_deterministic() -> void:
-	# П14 4.3: спектр волн детерминирован (фиксированный seed) —
-	# повторная сборка даёт те же волны; длинные первые (HIGH = 16 —
-	# подмножество ULTRA = 32).
-	for sea: bool in [true, false]:
-		var first: Array = WaterArea.wave_spectrum(sea)
-		var again: Array = WaterArea.wave_spectrum(sea)
-		var a1: PackedVector4Array = first[0]
-		var a2: PackedVector4Array = again[0]
-		assert_eq(a1.size(), WaterArea.MAX_WAVES,
-			"в спектре %d волн" % WaterArea.MAX_WAVES)
-		for i: int in a1.size():
-			assert_true((a1[i] as Vector4).is_equal_approx(a2[i]),
-				"детерминизм волн (%s, %d)" % ["море" if sea else "озеро", i])
-		# Длинные волны первые: k = 2π/λ не убывает (λ не растёт).
-		for i: int in a1.size() - 1:
-			assert_gt((a1[i] as Vector4).z, 0.0, "k > 0")
-			assert_gte(
-				(a1[i + 1] as Vector4).z, (a1[i] as Vector4).z - 0.0001,
-				"длинные волны первые (%s, %d)" % ["море" if sea else "озеро", i])
-
-
-func test_water_spectrum_sea_vs_lake() -> void:
-	# П14 4.3: море — зыбь 12–60 м (60 %) и средние 2.5–10 м, суммарная
-	# высота ~0.2 м RMS; озеро — почти гладь: длины 0.6–3 м, RMS ~1–3 см;
-	# пена гребней — только у моря.
-	var sea: Array = WaterArea.wave_spectrum(true)
-	var lake: Array = WaterArea.wave_spectrum(false)
-	var sea_a: PackedVector4Array = sea[0]
-	var lake_a: PackedVector4Array = lake[0]
-	var sea_b: PackedVector4Array = sea[1]
-	var lake_b: PackedVector4Array = lake[1]
-	var swell: int = 0
-	var sum_sq_sea := 0.0
-	var sum_sq_lake := 0.0
-	for i: int in WaterArea.MAX_WAVES:
-		var wave: Vector4 = sea_a[i]
-		var length: float = TAU / wave.z
-		sum_sq_sea += wave.w * wave.w
-		sum_sq_lake += (lake_a[i] as Vector4).w * (lake_a[i] as Vector4).w
-		if length > 10.0:
-			swell += 1
-			assert_between(length, WaterArea.SEA_SWELL_LEN.x,
-				WaterArea.SEA_SWELL_LEN.y, "море: зыбь 12–60 м")
-		else:
-			assert_between(length, WaterArea.SEA_MEDIUM_LEN.x,
-				WaterArea.SEA_MEDIUM_LEN.y, "море: средние 2.5–10 м")
-		assert_between(TAU / (lake_a[i] as Vector4).z,
-			WaterArea.LAKE_LEN.x, WaterArea.LAKE_LEN.y,
-			"озеро: длины 0.6–3 м (почти гладь)")
-		assert_almost_eq((lake_b[i] as Vector4).w, 0.0, 0.0001,
-			"озеро: пены на гребнях нет")
-	assert_between(swell, 15, 22, "море: зыби ~60 % спектра")
-	assert_between(sqrt(sum_sq_sea), 0.12, 0.30,
-		"море: суммарная высота волн ~0.2 м RMS (не шторм)")
-	assert_between(sqrt(sum_sq_lake), 0.008, 0.035,
-		"озеро: почти гладь, амплитуды 1–3 см")
-	# Пена гребней у моря нормирована на совпадение фаз ≈ 0.55
-	# (порог шейдера smoothstep(0.35, 0.55, crest)).
-	var crest: float = 0.0
-	for i: int in WaterArea.MAX_WAVES:
-		var wa: Vector4 = sea_a[i]
-		var wb: Vector4 = sea_b[i]
-		crest += wb.w * wb.y * wa.z * wa.w
-	assert_almost_eq(crest, 0.55, 0.02,
-		"веса пены нормированы под порог шейдера")
+func test_water_wave_params_sea_vs_lake() -> void:
+	# П15-ДОП: волны sea_octave — 4 параметра зоны; море — заметная
+	# зыбь, озеро — почти гладь (спокойнее по всем осям); значения в
+	# разумных пределах (не шторм), частота озера выше (короткие волны).
+	assert_between(WaterArea.SEA_WAVE_HEIGHT, 0.1, 0.8,
+		"море: суммарная высота волн умеренная")
+	assert_between(WaterArea.LAKE_WAVE_HEIGHT, 0.01, 0.15,
+		"озеро: почти гладь")
+	assert_lt(WaterArea.LAKE_WAVE_HEIGHT, WaterArea.SEA_WAVE_HEIGHT,
+		"озеро ниже морем")
+	assert_lt(WaterArea.LAKE_WAVE_SPEED, WaterArea.SEA_WAVE_SPEED,
+		"озеро медленнее моря")
+	assert_lt(WaterArea.LAKE_WAVE_CHOPPY, WaterArea.SEA_WAVE_CHOPPY,
+		"гребни озера мягче морских")
+	assert_gt(WaterArea.LAKE_WAVE_FREQ, WaterArea.SEA_WAVE_FREQ,
+		"волны озера короче морских (частота выше)")
+	assert_between(WaterArea.SEA_WAVE_FREQ, 0.04, 0.2,
+		"море: базовая частота из туториала (≈0.08)")
+	# Материал зоны получает базу × множители; set_wave_params применяет
+	# множители ко всем четырём осям сразу.
+	WorldMaterials.textured_headless = true
+	var area := WaterArea.new()
+	add_child_autofree(area)
+	var material := area._surface_material(false) as ShaderMaterial
+	area.set_wave_params(0.5, 1.5, 0.8, 1.2)
+	assert_almost_eq(float(
+		material.get_shader_parameter("sea_height")),
+		WaterArea.SEA_WAVE_HEIGHT * 0.5, 0.0001, "высота × множитель")
+	assert_almost_eq(float(
+		material.get_shader_parameter("sea_choppiness")),
+		WaterArea.SEA_WAVE_CHOPPY * 1.5, 0.0001, "острота × множитель")
+	assert_almost_eq(float(
+		material.get_shader_parameter("sea_speed")),
+		WaterArea.SEA_WAVE_SPEED * 0.8, 0.0001, "скорость × множитель")
+	assert_almost_eq(float(
+		material.get_shader_parameter("sea_freq")),
+		WaterArea.SEA_WAVE_FREQ * 1.2, 0.0001, "частота × множитель")
+	# Озёрная зона берёт свою базу с теми же множителями.
+	var lake := WaterArea.new()
+	add_child_autofree(lake)
+	var lake_material := lake._surface_material(true) as ShaderMaterial
+	assert_almost_eq(float(
+		lake_material.get_shader_parameter("sea_height")),
+		WaterArea.LAKE_WAVE_HEIGHT, 0.0001,
+		"озеро: база высоты своя (множители по умолчанию 1.0)")
+	assert_almost_eq(float(
+		lake_material.get_shader_parameter("sea_freq")),
+		WaterArea.LAKE_WAVE_FREQ, 0.0001, "озеро: частота своя")
+	WorldMaterials.textured_headless = false
 
 
 func test_water_waves_and_ripple_by_tier() -> void:
-	# П14 4.7: волны Герстнера 32 ULTRA / 16 HIGH / 8 SIMPLE и NORMAL;
-	# рябь 3 / 2 / 1 слоя.
-	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.ULTRA), 32,
-		"ULTRA — 32 волны")
-	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.HIGH), 16,
-		"HIGH — 16 волн")
-	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.NORMAL), 8,
-		"NORMAL — 8 волн")
-	assert_eq(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.SIMPLE), 8,
-		"SIMPLE — 8 волн")
+	# П15-ДОП: октавы нормалей волн 5 ULTRA / 4 HIGH (постановка этапа
+	# разрешает 4 на HIGH ради цены), SIMPLE/NORMAL — дешёвый шейдер
+	# с константой 3; рябь 3 / 2 / 1 слоя.
+	assert_eq(
+		WaterArea.iter_fragment_for_tier(GraphicsQuality.Tier.ULTRA), 5,
+		"ULTRA — 5 октав нормалей")
+	assert_eq(
+		WaterArea.iter_fragment_for_tier(GraphicsQuality.Tier.HIGH), 4,
+		"HIGH — 4 октавы (цена)")
+	assert_eq(
+		WaterArea.iter_fragment_for_tier(GraphicsQuality.Tier.NORMAL), 4,
+		"NORMAL — дешёвый шейдер, параметр не читается")
+	assert_true(WaterArea.WATER_BU_CHEAP.code.contains(
+		"const int ITER_GEOMETRY = 3;"),
+		"дешёвый шейдер: 3 октавы константой")
 	assert_eq(WaterArea.ripple_layers_for_tier(GraphicsQuality.Tier.ULTRA), 3,
 		"ULTRA — 3 слоя ряби")
 	assert_eq(WaterArea.ripple_layers_for_tier(GraphicsQuality.Tier.HIGH), 2,
 		"HIGH — 2 слоя ряби")
 	assert_eq(WaterArea.ripple_layers_for_tier(GraphicsQuality.Tier.NORMAL), 1,
 		"NORMAL — 1 слой ряби")
-	assert_lte(WaterArea.wave_count_for_tier(GraphicsQuality.Tier.HIGH),
-		WaterArea.MAX_WAVES, "HIGH — подмножество полного спектра")
 
 
 func test_water_beer_and_fresnel_in_shader() -> void:
