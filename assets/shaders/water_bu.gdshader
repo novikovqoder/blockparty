@@ -635,43 +635,53 @@ void fragment() {
 	float foam_level = clamp(depth_foam + crest_foam + shore_band,
 		0.0, 1.0) * foam_amount * underwater;
 
-	// Domain warp: течение крутит пену двумя шумами (второй — со
-	// сдвигом фазы). Emergence: 3D-шум пульсирует — комья появляются
-	// волнами; у берега и на гребнях принудительно полный.
-	vec2 flow_uv = world_pos.xz * 0.5
-		+ TIME * 0.05 * FOAM_NOISE_SPEED;
-	vec2 warp = vec2(vnoise(flow_uv), vnoise(flow_uv + vec2(5.2, 1.3)))
-		* 0.5;
-	float emergence = noise3d(vec3(world_pos.xz * 0.5,
-		TIME * 0.2 * FOAM_NOISE_SPEED));
-	emergence = smoothstep(0.0, 1.0, emergence * 0.5 + 0.5);
-	float eff_emergence = mix(emergence, 1.0, foam_level);
+	// Масса пены (П15-ДОП блок 6): Вороной — самое дорогое место
+	// шейдера, считается только там, где пена возможна (маска
+	// foam_level или круги от ног); открытая вода платит только
+	// масками.
+	float foam_mask = 0.0;
+	float foam_edge_mask = 0.0;
+	if (foam_level > 0.001 || rings_foam > 0.001) {
+		// Domain warp: течение крутит пену двумя шумами (второй — со
+		// сдвигом фазы). Emergence: 3D-шум пульсирует — комья
+		// появляются волнами; у берега и на гребнях принудительно
+		// полный.
+		vec2 flow_uv = world_pos.xz * 0.5
+			+ TIME * 0.05 * FOAM_NOISE_SPEED;
+		vec2 warp = vec2(vnoise(flow_uv),
+			vnoise(flow_uv + vec2(5.2, 1.3))) * 0.5;
+		float emergence = noise3d(vec3(world_pos.xz * 0.5,
+			TIME * 0.2 * FOAM_NOISE_SPEED));
+		emergence = smoothstep(0.0, 1.0, emergence * 0.5 + 0.5);
+		float eff_emergence = mix(emergence, 1.0, foam_level);
 
-	// Масса пены: fbm-Вороной + foam_level, порог — мягкий smoothstep.
-	// Кромка-тень: тот же Вороной из смещённой точки — там, где он
-	// есть, а массы нет, тёмный ободок (фальшивая толщина пены).
-	float foam_noise = fbm_voronoi(
-		world_pos.xz * FOAM_NOISE_SCALE + warp) * eff_emergence;
-	float foam_shadow_noise = fbm_voronoi(
-		(world_pos.xz + FOAM_EDGE_OFFSET) * FOAM_NOISE_SCALE + warp)
-		* eff_emergence;
-	float foam_mask = smoothstep(FOAM_CUTOFF + 0.5, FOAM_CUTOFF + 0.6,
-		foam_noise + foam_level);
-	float shadow_shape = smoothstep(FOAM_CUTOFF + 0.5, FOAM_CUTOFF + 0.6,
-		foam_shadow_noise + foam_level);
-	float foam_edge_mask = clamp(shadow_shape - foam_mask, 0.0, 1.0)
-		* foam_edge;
+		// Масса пены: fbm-Вороной + foam_level, порог — мягкий
+		// smoothstep. Кромка-тень: тот же Вороной из смещённой точки —
+		// там, где он есть, а массы нет, тёмный ободок (фальшивая
+		// толщина пены).
+		float foam_noise = fbm_voronoi(
+			world_pos.xz * FOAM_NOISE_SCALE + warp) * eff_emergence;
+		float foam_shadow_noise = fbm_voronoi(
+			(world_pos.xz + FOAM_EDGE_OFFSET) * FOAM_NOISE_SCALE + warp)
+			* eff_emergence;
+		foam_mask = smoothstep(FOAM_CUTOFF + 0.5, FOAM_CUTOFF + 0.6,
+			foam_noise + foam_level);
+		float shadow_shape = smoothstep(FOAM_CUTOFF + 0.5,
+			FOAM_CUTOFF + 0.6, foam_shadow_noise + foam_level);
+		foam_edge_mask = clamp(shadow_shape - foam_mask, 0.0, 1.0)
+			* foam_edge;
 
-	// Пузырьки: мелкий Вороной рвёт плотность массы изнутри.
-	float voronoi_val = 1.0 - sqrt(voronoi(
-		world_pos.xz * VORONOI_SCALE + warp));
-	voronoi_val = smoothstep(0.2, 0.8, voronoi_val);
-	float bubble_alpha = 1.0 - clamp(
-		(1.0 - voronoi_val) * foam_bubbles, 0.0, 1.0);
-	foam_mask *= bubble_alpha;
+		// Пузырьки: мелкий Вороной рвёт плотность массы изнутри.
+		float voronoi_val = 1.0 - sqrt(voronoi(
+			world_pos.xz * VORONOI_SCALE + warp));
+		voronoi_val = smoothstep(0.2, 0.8, voronoi_val);
+		float bubble_alpha = 1.0 - clamp(
+			(1.0 - voronoi_val) * foam_bubbles, 0.0, 1.0);
+		foam_mask *= bubble_alpha;
 
-	// Круги вокруг ног — тоже пена (локально, без Вороного).
-	foam_mask = max(foam_mask, rings_foam);
+		// Круги вокруг ног — тоже пена (локально, без Вороного).
+		foam_mask = max(foam_mask, rings_foam);
+	}
 	float foam = clamp(foam_mask + foam_edge_mask, 0.0, 1.0);
 
 	// П15 3: отражение — движковое: движок сам кладёт на воду radiance

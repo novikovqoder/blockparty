@@ -351,6 +351,11 @@ func test_foam_tutorial_masks_and_voronoi() -> void:
 	# Круги вокруг ног входят в ту же массу.
 	assert_true(code.contains("foam_mask = max(foam_mask, rings_foam)"),
 		"пена кругов входит в общую пену воды")
+	# П15-ДОП блок 6: Вороной — только там, где пена возможна; открытая
+	# вода платит только дешёвыми масками (цена на HIGH).
+	assert_true(code.contains(
+			"if (foam_level > 0.001 || rings_foam > 0.001) {"),
+		"масса пены — за ветвлением по маске пены")
 
 
 func test_foam_lit_by_scene_light() -> void:
