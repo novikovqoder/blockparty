@@ -57,6 +57,9 @@ var _clutter_tier: int = 0
 ## П16 п. 5: трансформы наполнения по видам (из GroundDetails.build) —
 ## по ним ставятся окклюдеры крупных валунов и пней.
 var _detail_transforms: Dictionary = {}
+## П15-ДОП2, п. 1: юбка морского дна за краем карты (глубина растёт
+## плавно до горизонта); ползунки F3 меняют склон.
+var _seafloor: SeafloorSkirt = null
 
 
 ## Радиус ближней тесселяции (доработка-2 П5.13, П1): чанки ближе этого
@@ -136,6 +139,13 @@ func _build_terrain() -> void:
 	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(band)
 	add_child(body)
+	# П15-ДОП2, п. 1: юбка дна — морское дно за краем карты до горизонта
+	# (глубина растёт плавно от края). Только визуал: без коллизии
+	# (за ограждением мира не ходят) и без тени.
+	var skirt := SeafloorSkirt.new()
+	skirt.setup(art.heights)
+	add_child(skirt)
+	_seafloor = skirt
 	# П14 3.1: кольцо детальной сетки (HIGH/ULTRA, SIMPLE/NORMAL — как
 	# раньше). Сетка плоская, высоту вершинам ставит vertex() шейдера
 	# (detail_ring); тень не отбрасывает — рельеф уже в тенях чанков.
@@ -560,6 +570,13 @@ func set_detail_ring_visible(on: bool) -> void:
 func set_clutter_visible(on: bool) -> void:
 	for type: String in _clutter_nodes:
 		(_clutter_nodes[type] as MultiMeshInstance3D).visible = on
+
+
+## Ползунки F3, вкладка «Вода» (П15-ДОП2, п. 1): сменить склон юбки
+## морского дна (ширина шельфа и глубина вдали) — пересборка меша.
+func set_seafloor_slope(shelf: float, far_depth: float) -> void:
+	if _seafloor != null:
+		_seafloor.set_slope(shelf, far_depth)
 
 
 ## Видимость всех групп типа («Простая графика» прячет траву и цветы).

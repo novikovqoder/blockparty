@@ -193,3 +193,5 @@ BU_W_ROUGH_FAR,Шероховатость у горизонта,Roughness far
 BU_W_CAUSTIC,Яркость каустики,Caustic brightness
 BU_W_RESET,Сбросить,Reset
 BU_W_COPY,Скопировать значения,Copy values
+BU_W_SEAFLOOR_SHELF,Дно: шельф, м,Seafloor: shelf, m
+BU_W_SEAFLOOR_DEPTH,Дно: глубина вдали, м,Seafloor: far depth, m

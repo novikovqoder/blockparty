@@ -48,7 +48,8 @@ const EFFECTS_POS: Vector2 = Vector2(690, 232)
 ## Ползунки вкладки «Вода» (П15 8.1): id — ключ состояния, label — ключ
 ## перевода, диапазон и шаг — как hint_range шейдера, def — номинал из
 ## констант WaterArea («Сбросить» возвращает их), const — имя константы
-## для текста «Скопировать значения».
+## для текста «Скопировать значения». Номиналы юбки дна (П15-ДОП2, п. 1)
+## — константы SeafloorSkirt.
 const WATER_SLIDERS: Array[Dictionary] = [
 	{"id": &"abs", "label": "BU_W_ABSORPTION",
 		"min": 0.0, "max": 3.0, "step": 0.05,
@@ -98,6 +99,12 @@ const WATER_SLIDERS: Array[Dictionary] = [
 		"min": 0.0, "max": 4.0, "step": 0.1,
 		"def": WaterArea.CAUSTIC_BRIGHTNESS,
 		"const": "CAUSTIC_BRIGHTNESS"},
+	{"id": &"seafloor_shelf", "label": "BU_W_SEAFLOOR_SHELF",
+		"min": 10.0, "max": 200.0, "step": 5.0,
+		"def": SeafloorSkirt.SHELF_M, "const": "SHELF_M"},
+	{"id": &"seafloor_deep", "label": "BU_W_SEAFLOOR_DEPTH",
+		"min": 20.0, "max": 160.0, "step": 5.0,
+		"def": SeafloorSkirt.FAR_DEPTH_M, "const": "FAR_DEPTH_M"},
 ]
 ## Цвета воды (П15 8.1): мелководье и глубина, озеро и море раздельно.
 ## Значения — активного пресета (П15-ДОП блок 5): «Туториал» (бирюзовый,
@@ -792,6 +799,11 @@ func _apply_water() -> void:
 		area.set_roughness(_water_values[&"rough_near"],
 			_water_values[&"rough_far"])
 		area.set_caustic_brightness(_water_values[&"caustic"])
+	# Юбка морского дна (П15-ДОП2, п. 1): ползунки склона идут в вид
+	# острова (пересборка меша), не в шейдер воды; на сервере вида нет.
+	if _view != null:
+		_view.set_seafloor_slope(_water_values[&"seafloor_shelf"],
+			_water_values[&"seafloor_deep"])
 
 
 ## «Сбросить» (П15 8.2): номиналы из констант WaterArea и дефолтный
