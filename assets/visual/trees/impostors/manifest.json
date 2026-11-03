@@ -1,0 +1,10 @@
+{
+	"azimuth_steps": 8,
+	"cols": 4,
+	"elevations": [
+		8.0,
+		26.0
+	],
+	"frame_px": 128,
+	"rows": 4
+}

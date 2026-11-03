@@ -299,15 +299,15 @@ func _build_props() -> void:
 
 
 ## Деревья по уровням дальности (раздел 16): полная модель до 45 м, LOD1 —
-## до 90, LOD2 (как в демо ez-tree — прореженные секции и одиночные
-## карточки листьев) — до 220 м: практически всегда виден, но дальше
-## растворяется в дымке. Диапазоны перекрываются загибом (margin 6 м) —
-## переключения без «мигания».
+## до 90 м. Дальше (П17 п.3) вместо прореженного LOD2 — импостор-биллборд
+## до 400 м (за туман юбки дна): атлас albedo+нормалей на 16 ракурсов
+## печатает tools/bake_tree_impostors.gd, кадр по углу на камеру и свет
+## по нормалям — impostor.gdshader. Переход LOD1 → импостор плавный:
+## дизеринг-фейд FADE_SELF у обоих, поля 10 м перекрываются — без «дыры».
 func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 	var levels: Array = [
 		{"mesh": group.mesh, "begin": 0.0, "end": 45.0, "shadow": true},
 		{"mesh": group.lods[0], "begin": 45.0, "end": 90.0, "shadow": true},
-		{"mesh": group.lods[1], "begin": 90.0, "end": 220.0, "shadow": false},
 	]
 	for index: int in levels.size():
 		var level: Dictionary = levels[index]
@@ -319,6 +319,13 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 		instance.visibility_range_end = float(level["end"])
 		instance.visibility_range_begin_margin = 6.0
 		instance.visibility_range_end_margin = 6.0
+		if index == 1:
+			# Стык с импостором: LOD1 гаснет дизеринг-фейдом, импостор
+			# встречно проявляется (поле стыка — TreeImpostors.RANGE_MARGIN).
+			instance.visibility_range_end = TreeImpostors.RANGE_BEGIN
+			instance.visibility_range_end_margin = TreeImpostors.RANGE_MARGIN
+			instance.visibility_range_fade_mode = \
+				GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		instance.cast_shadow = \
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
 			if level["shadow"] \
@@ -327,6 +334,9 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 		_collect_canopy_materials(level["mesh"])
 		if index == 0:
 			_register(type, instance)
+	var impostor := TreeImpostors.build(key, group)
+	if impostor != null:
+		add_child(impostor)
 
 
 ## П17 п.1: собрать материалы листвы из поверхностей уровня дерева
