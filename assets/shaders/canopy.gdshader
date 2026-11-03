@@ -26,6 +26,24 @@ uniform float a2c_edge = 0.0;
 
 varying vec3 world_pos;
 
+// П17 п.4 «Туман крон»: кроны уходят в туман чуть раньше Environment
+// (FOG_DENSITY выше fog_density баланса) и в более тёмный тон с зелёным
+// сдвигом (FOG_TINT против day_fog палитры: ×0.75 яркости, G +(R+B)*0.06)
+// — дальний лес остаётся зелёной массой, а не светлой пеленой. Запись в
+// FOG в fragment() смешивает финальный пиксель с этим тоном (пользователь
+// fog(): процессорной функции тумана в Godot нет, docs 4.7 spatial).
+// Плотность Environment-тумана НЕ трогаем — только тон и старт крон.
+const vec3 FOG_TINT = vec3(0.435, 0.613, 0.715);
+const float FOG_DENSITY = 0.004;
+
+// Камера передаётся параметром: built-in CAMERA_POSITION_WORLD доступен
+// только в процессорных функциях, внутри пользовательских — нет.
+vec4 fog(vec3 position_world, vec3 camera_world) {
+	float depth = length(position_world - camera_world);
+	float amount = 1.0 - exp(-pow(depth * FOG_DENSITY, 2.0));
+	return vec4(FOG_TINT, amount);
+}
+
 vec3 mod289(vec3 x) {
 	return x - floor(x * (1.0 / 289.0)) * 289.0;
 }
@@ -123,6 +141,7 @@ void fragment() {
 	ALPHA_ANTIALIASING_EDGE = a2c_edge;
 	ALPHA = leaf.a;
 	ALBEDO = leaf.rgb * leaf_tint * COLOR.rgb;
+	FOG = fog(world_pos, CAMERA_POSITION_WORLD);
 }
 
 void light() {

@@ -172,9 +172,9 @@ func test_island_view_applies_a2c_to_canopy_materials() -> void:
 	view.art = art
 	view._build_tree_lods("etree_oak:0", "etree_oak", group)
 	assert_eq(
-		view._canopy_materials.size(), 3,
-		"материалы листвы собраны с трёх уровней (по одному — кора "
-		+ "отфильтрована)")
+		view._canopy_materials.size(), 2,
+		"материалы листвы собраны с двух уровней (по одному — кора "
+		+ "отфильтрована; LOD2 заменён импостором — свой шейдер, П17 п.3)")
 	view.set_quality(GraphicsQuality.Tier.ULTRA)
 	for material: ShaderMaterial in view._canopy_materials:
 		assert_almost_eq(

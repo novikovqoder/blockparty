@@ -26,6 +26,18 @@ varying vec2 frame_uv;
 varying vec3 bb_right;
 varying vec3 bb_up;
 varying vec3 bb_forward;
+varying vec3 world_pos;
+
+// П17 п.4 «Туман крон»: тот же тон и старт, что у canopy.gdshader —
+// стык «меш ↔ импостор» не должен читаться и по туману (90–400 м).
+const vec3 FOG_TINT = vec3(0.435, 0.613, 0.715);
+const float FOG_DENSITY = 0.004;
+
+vec4 fog(vec3 position_world, vec3 camera_world) {
+	float depth = length(position_world - camera_world);
+	float amount = 1.0 - exp(-pow(depth * FOG_DENSITY, 2.0));
+	return vec4(FOG_TINT, amount);
+}
 
 void vertex() {
 	// Направление на камеру в пространстве объекта (yaw инстанса уже
@@ -53,6 +65,7 @@ void vertex() {
 	bb_right = (VIEW_MATRIX * (MODEL_MATRIX * vec4(right_obj, 0.0))).xyz;
 	bb_up = (VIEW_MATRIX * (MODEL_MATRIX * vec4(0.0, 1.0, 0.0, 0.0))).xyz;
 	bb_forward = (VIEW_MATRIX * (MODEL_MATRIX * vec4(flat_dir, 0.0))).xyz;
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
@@ -64,6 +77,7 @@ void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = alpha_cut;
 	ALPHA = face.a;
 	ALBEDO = face.rgb * COLOR.rgb;
+	FOG = fog(world_pos, CAMERA_POSITION_WORLD);
 }
 
 void light() {
