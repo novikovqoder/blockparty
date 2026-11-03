@@ -4,7 +4,9 @@
 [ext_resource type="Script" path="res://addons/sky_3d/src/Sky3D.gd" id="2_sky3d"]
 [ext_resource type="Script" path="res://addons/sky_3d/src/SkyDome.gd" id="3_skydome"]
 [ext_resource type="Script" path="res://addons/sky_3d/src/TimeOfDay.gd" id="4_tod"]
-[ext_resource type="Shader" path="res://addons/sky_3d/shaders/SkyMaterial.gdshader" id="5_sky"]
+; П17 п.9: небо мира — на проектной копии шейдера Sky3D (дизеринг марша
+; кучевости без TIME + шаги по уровню качества); аддон не тронут.
+[ext_resource type="Shader" path="res://assets/shaders/sky_material_p17.gdshader" id="5_sky"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_1"]
 shader = ExtResource("5_sky")

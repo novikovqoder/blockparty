@@ -367,6 +367,11 @@ func _apply_graphics_quality() -> void:
 	GraphicsQuality.apply(
 		$WorldEnvironment.environment, $WorldEnvironment/SunLight, tier,
 		get_viewport(), $WorldEnvironment/MoonLight)
+	# Облака (П17 п.9): шаги марша кучевости в копии шейдера неба — по
+	# уровню; длина слэба фиксирована, уровень меняет только дискретность
+	# выборок (HIGH = базовые 10 шагов аддона, бюджет ~1 мс).
+	($WorldEnvironment.get_node("SkyDome") as SkyDome).sky_material \
+		.set_shader_parameter("cumulus_steps", GraphicsQuality.cloud_steps(tier))
 	# Срубы (П11 2.5/2.9; П13 1.6/1.8): на ULTRA у ламп-«факелов» включаются
 	# тени, в комнатах появляются пробы отражений; на HIGH пробы тоже есть,
 	# тени ламп — с distance_fade; уход с уровня выключает всё начисто (2.10).

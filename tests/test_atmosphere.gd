@@ -322,10 +322,13 @@ func test_world_scene_sky3d_rig() -> void:
 	assert_true(world_env is Sky3D, "окружение мира — узел Sky3D")
 	var material := world_env.environment.sky.sky_material as ShaderMaterial
 	assert_not_null(material, "материал неба — шейдерный")
+	# П17 п.9 (решение владельца 03.11): небо мира — на ПРОЕКТНОЙ копии
+	# шейдера Sky3D (дизеринг марша кучевости без TIME, шаги по уровню
+	# качества); сам аддон не правится. Ассерт обновлён явно.
 	assert_eq(
 		material.shader.resource_path,
-		"res://addons/sky_3d/shaders/SkyMaterial.gdshader",
-		"шейдер неба — Sky3D",
+		"res://assets/shaders/sky_material_p17.gdshader",
+		"шейдер неба — проектная копия SkyMaterial (П17)",
 	)
 	var dome_node: SkyDome = scene.get_node("WorldEnvironment/SkyDome")
 	assert_eq(

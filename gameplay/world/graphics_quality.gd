@@ -187,6 +187,15 @@ const HIGH_LAMP_SHADOW_COUNT: int = 2
 ## сетка и пропсы < 0.5 м слоя не имеют — тень лампы от них не ищется.
 const LAMP_CASTER_LAYER: int = 20
 const LAMP_CASTER_MASK: int = 1 << (LAMP_CASTER_LAYER - 1)
+## П17 п.9: шаги марша кучевости в копии шейдера неба
+## (assets/shaders/sky_material_p17.gdshader). Длина слэба марша
+## фиксирована базовыми 10 шагами аддона — уровень меняет только
+## дискретность выборок. HIGH = базовые 10 (бюджет ~1 мс на 780M),
+## ULTRA чуть больше (мягче накопление яркости), слабые уровни — ниже.
+const CLOUD_STEPS_SIMPLE: int = 6
+const CLOUD_STEPS_NORMAL: int = 8
+const CLOUD_STEPS_HIGH: int = 10
+const CLOUD_STEPS_ULTRA: int = 14
 ## Движковые базы для возврата с HIGH (fade сплитов и смешение).
 const SHADOW_FADE_START_BASE: float = 0.1
 const BLEND_SPLITS_BASE: bool = false
@@ -247,6 +256,19 @@ static func menu_tier() -> int:
 		Tier.ULTRA:
 			return Tier.ULTRA
 	return Tier.HIGH
+
+
+## П17 п.9: шаги марша кучевости (uniform cumulus_steps копии шейдера
+## неба) по уровню качества — см. константы CLOUD_STEPS_*.
+static func cloud_steps(tier: int) -> int:
+	match tier:
+		Tier.SIMPLE:
+			return CLOUD_STEPS_SIMPLE
+		Tier.NORMAL:
+			return CLOUD_STEPS_NORMAL
+		Tier.ULTRA:
+			return CLOUD_STEPS_ULTRA
+	return CLOUD_STEPS_HIGH
 
 
 ## Тени и пост-эффекты по уровню (блок е: постобработка — только HIGH;
