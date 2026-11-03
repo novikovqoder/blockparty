@@ -6,7 +6,10 @@
 extends GutTest
 
 const DIR: String = "res://assets/visual/trees/impostors/"
-const ATLAS_PX: int = 512
+## Атлас 4×4 кадра по 256 px (тула bake_tree_impostors: план п.3 — кадр
+## 256–512 px, порог аудита текстур assets/visual ≥1024 по короткой стороне).
+const ATLAS_PX: int = 1024
+const FRAME_PX: int = 256
 
 
 ## Базы всех видов:вариантов (как перечислено в EzTreeMeshes.ASSETS).
@@ -32,10 +35,10 @@ func test_atlases_for_every_base() -> void:
 		assert_not_null(normals, "%s: атлас нормалей есть" % base)
 		if albedo == null or normals == null:
 			continue
-		assert_eq(albedo.get_width(), ATLAS_PX, "%s: атлас 512 px" % base)
+		assert_eq(albedo.get_width(), ATLAS_PX, "%s: атлас 1024 px" % base)
 		assert_eq(albedo.get_height(), ATLAS_PX, "%s: атлас квадратный" % base)
 		assert_eq(normals.get_width(), ATLAS_PX,
-			"%s: атлас нормалей 512 px" % base)
+			"%s: атлас нормалей 1024 px" % base)
 
 
 func test_atlas_silhouette_alive() -> void:
@@ -49,11 +52,11 @@ func test_atlas_silhouette_alive() -> void:
 			continue
 		var image := texture.get_image()
 		var solid := 0
-		for y: int in range(0, 128, 4):
-			for x: int in range(0, 128, 4):
+		for y: int in range(0, FRAME_PX, 4):
+			for x: int in range(0, FRAME_PX, 4):
 				if image.get_pixel(x, y).a >= 0.3:
 					solid += 1
-		var share: float = float(solid) / 1024.0
+		var share: float = float(solid) / pow(FRAME_PX / 4.0, 2.0)
 		assert_between(share, 0.08, 0.92,
 			"%s: силуэт кадра 0 живой (доля %.2f)" % [base, share])
 

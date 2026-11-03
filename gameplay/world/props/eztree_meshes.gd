@@ -24,7 +24,9 @@ const DIR: String = "res://assets/visual/trees/models/"
 ## Кора — CC0 ambientcg (в project с П5.9; пресеты ez-tree используют
 ## именно Bark001–003). UV.x (обороты вокруг ствола) уже запечены
 ## генератором; uv_scale.y — repeat.y = 1/textureScale.y пресета.
-## П17 п.2: с цветом подключены нормали и шероховатость (1K, тот же uv).
+## П17 п.2: с цветом подключены нормали и шероховатость (тот же uv).
+## У Bark001 сет «1K» — 512×1024 (ниже планки аудита П5.9, как у цвета) —
+## нормали/шероховатость берутся 2K; у Bark002–003 сет «1K» полный 1024.
 const BARK: Dictionary = {
 	"Bark001": preload(
 		"res://assets/third_party/ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg"),
@@ -35,7 +37,7 @@ const BARK: Dictionary = {
 }
 const BARK_NORMAL: Dictionary = {
 	"Bark001": preload(
-		"res://assets/third_party/ambientcg.com/Bark001/Bark001_1K-JPG_NormalGL.jpg"),
+		"res://assets/third_party/ambientcg.com/Bark001/Bark001_2K-JPG_NormalGL.jpg"),
 	"Bark002": preload(
 		"res://assets/third_party/ambientcg.com/Bark002/Bark002_1K-JPG_NormalGL.jpg"),
 	"Bark003": preload(
@@ -43,7 +45,7 @@ const BARK_NORMAL: Dictionary = {
 }
 const BARK_ROUGHNESS: Dictionary = {
 	"Bark001": preload(
-		"res://assets/third_party/ambientcg.com/Bark001/Bark001_1K-JPG_Roughness.jpg"),
+		"res://assets/third_party/ambientcg.com/Bark001/Bark001_2K-JPG_Roughness.jpg"),
 	"Bark002": preload(
 		"res://assets/third_party/ambientcg.com/Bark002/Bark002_1K-JPG_Roughness.jpg"),
 	"Bark003": preload(

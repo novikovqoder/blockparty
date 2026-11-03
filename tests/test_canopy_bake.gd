@@ -115,14 +115,15 @@ func test_bark_uses_normal_and_roughness_maps() -> void:
 		assert_not_null(normal_tex, "%s: карта нормалей коры подключена" % type)
 		assert_not_null(rough_tex, "%s: карта шероховатости коры подключена" % type)
 		# Порода → свой набор карт (сосна Bark003, дуб/ясень Bark001,
-		# осина Bark002 — как в пресетах генератора).
+		# осина Bark002 — как в пресетах генератора; размер сэта не важен:
+		# у Bark001 карты 2K — его сет «1K» неполный, ниже планки аудита).
 		var base := String((EzTreeMeshes.ASSETS[StringName(type)] as Array)[0][0])
 		var kind := String(EzTreeMeshes.entry(base)["bark"]["type"])
-		assert_true(String(normal_tex.resource_path).contains(
-				"%s_1K-JPG_NormalGL" % kind),
+		assert_true(String(normal_tex.resource_path).contains("%s_" % kind)
+				and String(normal_tex.resource_path).ends_with("_NormalGL.jpg"),
 			"%s: нормали коры — %s" % [type, kind])
-		assert_true(String(rough_tex.resource_path).contains(
-				"%s_1K-JPG_Roughness" % kind),
+		assert_true(String(rough_tex.resource_path).contains("%s_" % kind)
+				and String(rough_tex.resource_path).ends_with("_Roughness.jpg"),
 			"%s: шероховатость коры — %s" % [type, kind])
 	assert_true(EzTreeMeshes.BARK_SHADER.code.contains("NORMAL_MAP"),
 		"tree_bark.gdshader читает карту нормалей")

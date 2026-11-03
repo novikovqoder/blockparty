@@ -1,7 +1,8 @@
 # Запекание импосторов дальних деревьев (П17 п.3): для каждой базы GLB
 # из EzTreeMeshes.ASSETS рендерит LOD0 (k = 1, без масштаба варианта) в
 # SubViewport с 16 ракурсов — 8 азимутов × 2 подъёма — и собирает два
-# атласа 512×512 (кадр 128 px):
+# атласа 1024×1024 (кадр 256 px — нижняя граница плана «256–512 px на
+# кадр» и порог аудита текстур assets/visual ≥1024):
 #   assets/visual/trees/impostors/<base>_impostor.png        — albedo+альфа
 #   assets/visual/trees/impostors/<base>_impostor_normal.png — нормали
 #     в базисе кадра (right, up, к камере): RGB = (n·basis) * 0.5 + 0.5
@@ -17,10 +18,10 @@
 extends SceneTree
 
 const OUT_DIR: String = "res://assets/visual/trees/impostors/"
-## Кадры: 8 азимутов (шаг 45°) × 2 подъёма камеры; атлас 4×4 кадра 128 px.
+## Кадры: 8 азимутов (шаг 45°) × 2 подъёма камеры; атлас 4×4 кадра 256 px.
 const AZIMUTH_STEPS: int = 8
 const ELEVATIONS: Array[float] = [8.0, 26.0]
-const FRAME_PX: int = 128
+const FRAME_PX: int = 256
 const COLS: int = 4
 const ROWS: int = 4
 
