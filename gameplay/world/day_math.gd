@@ -80,6 +80,19 @@ static func ambient_energy(world_time: float) -> float:
 	return 0.16 + 0.36 * dayness(world_time)
 
 
+## Множитель энергии ambient при источнике-небе (П17 п.10): радианс купола
+## Sky3D ярче плоского цвета палитры — та же кривая суток с меньшей базой,
+## день сопоставим с прежним COLOR-источником. Ночь < дня по построению
+## (и радианс ночного неба сам по себе тёмный). Подбор — владельцем.
+const AMBIENT_SKY_SCALE: float = 0.4
+
+
+## Энергия ambient при источнике AMBIENT_SOURCE_SKY (П17 п.10): кривая суток
+## та же (ночь < дня), база ниже — см. AMBIENT_SKY_SCALE.
+static func ambient_energy_sky(world_time: float) -> float:
+	return ambient_energy(world_time) * AMBIENT_SKY_SCALE
+
+
 ## Высота солнца в долях: днём sin(π·прогресса дня) [0..1], ночью —
 ## отрицательная глубина −sin(π·прогресса ночи) [−1..0]. На рассвете
 ## и закате ровно ноль — функция непрерывна через границу суток (нет

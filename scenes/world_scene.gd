@@ -40,6 +40,9 @@ var _island: Island
 var _player: Player
 var _day_cycle: DayCycle
 var _ambient: AmbientParticles
+## Заполняющий свет персонажа (П17 п.11): герой читается в тени; слой
+## только героев, без теней, ночью слабее.
+var _fill_light: HeroFillLight
 ## Виньетка (vfx-fix, блок е): полноэкранный ColorRect под HUD —
 ## затемняет углы, но не интерфейс; видна только в «Высоком качестве».
 var _vignette: ColorRect
@@ -62,6 +65,11 @@ func _ready() -> void:
 	# Атмосферные частицы (vfx-fix, блок г): светлячки, пыльца, листья.
 	_ambient = AmbientParticles.new()
 	add_child(_ambient)
+	# Заполняющий свет персонажа (П17 п.11): направление со стороны камеры
+	# ведём в _process; слой героев помечают сами модели (HeroModelBU,
+	# меч — EquipControllerBU), чужие игроки — ниже при появлении.
+	_fill_light = HeroFillLight.new()
+	add_child(_fill_light)
 	# Виньетка (vfx-fix, блок е) до HUD: рисуется под интерфейсом.
 	_vignette = GraphicsQuality.make_vignette()
 	add_child(_vignette)
@@ -130,6 +138,9 @@ func _process(delta: float) -> void:
 	# Туман по зонам (раздел 16): цвет подмешивается там, где стоит игрок.
 	_day_cycle.set_fog_focus(_player.global_position)
 	_ambient.set_focus(_player.global_position)
+	# Fill-свет героя (П17 п.11): со стороны камеры, сила по времени суток.
+	_fill_light.update(
+		_player.camera.global_position, _player.global_position)
 	# Адаптивная тесселяция рельефа вокруг игрока (доработка-2 П5.13, П1):
 	# чанки в радиусе 50 м — квад 0.5 м, с бюджетом на перестройку за кадр.
 	_island.update_viewer(_player.global_position)
@@ -166,6 +177,8 @@ func _on_peer_joined_world(peer_id: int, player_name: String) -> void:
 	add_child(remote)
 	# Чужой персонаж — тоже кастер теней ламп (П16 п. 1).
 	LampShadows.mark_caster(remote)
+	# …и получатель fill-света героя (П17 п. 11): слой персонажей.
+	HeroFillLight.mark_visual(remote)
 	# Частицы из-под ног чужого игрока — по тем же покрытиям острова (П9).
 	remote.setup_foot_fx(_island.art())
 	_remotes[peer_id] = remote

@@ -100,6 +100,9 @@ func _ready() -> void:
 	# по окончании возвращаем состояние сами.
 	equip.equip_finished.connect(_on_equip_finished)
 	_quality_materials()
+	# П17 п.11: визуал персонажа — на слой заполняющего света героя
+	# (HeroFillLight светит только этот слой; бит безвреден без света).
+	HeroFillLight.mark_visual(self)
 	set_state(_state)
 
 

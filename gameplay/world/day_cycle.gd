@@ -163,10 +163,20 @@ func _process(_delta: float) -> void:
 	# Звёзды: полный оборот за сутки мира — небо живёт, привязано к часам.
 	_dome.sky_material.set_shader_parameter(
 		"star_rotation", TAU * DayMath.day_fraction(world_time))
-	# Окружение — палитра поверх того, что выставил купол.
+	# Окружение — палитра поверх того, что выставил купол. Цвет ambient —
+	# контракт палитры (пишется и при источнике-небе: лаборатории света
+	# и ассерты палитры читают его). Энергия — по источнику сцены (П17
+	# п.10): в мире ambient берётся из купола (AMBIENT_SOURCE_SKY) — радианс
+	# Sky3D ярче плоского цвета, база ниже; лаборатории с COLOR-источником
+	# получают прежнюю кривую.
 	_environment.ambient_light_color = _mix4(VPAL.dawn_ambient,
 		VPAL.day_ambient, VPAL.dusk_ambient, VPAL.night_ambient, mixes)
-	_environment.ambient_light_energy = DayMath.ambient_energy(world_time)
+	if _environment.ambient_light_source == Environment.AMBIENT_SOURCE_SKY:
+		_environment.ambient_light_energy = \
+			DayMath.ambient_energy_sky(world_time)
+	else:
+		_environment.ambient_light_energy = \
+			DayMath.ambient_energy(world_time)
 	# Ночью экспозиция выше — «мягкая светлая ночь» (глаза адаптировались).
 	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE, 1.0, dayness)
 	# SDFGI (П11 2.1; П13 1.1 — и на HIGH): SDFGI светит и под тёмным небом

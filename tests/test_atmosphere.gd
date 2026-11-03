@@ -376,6 +376,49 @@ func test_tonemap_exposure_brighter_at_night() -> void:
 	sky.free()
 
 
+func test_world_scene_ambient_source_sky() -> void:
+	# П17 п.10: заполняющий ambient мира берётся из панорамы купола
+	# (AMBIENT_SOURCE_SKY) — герой в тени освещён небом, а не плоским
+	# цветом. Контракт палитры не меняется: ambient_light_color по-прежнему
+	# пишется DayCycle каждый кадр (проверяется
+	# test_height_fog_from_balance), движком при SKY-источнике не читается.
+	var scene := WORLD.instantiate()
+	var env: Environment = scene.get_node("WorldEnvironment").environment
+	assert_eq(env.ambient_light_source, Environment.AMBIENT_SOURCE_SKY,
+		"источник ambient — небо (П17 п.10)")
+	scene.free()
+
+
+func test_ambient_energy_sky_night_below_day() -> void:
+	# П17 п.10: при источнике-небе энергия ambient — кривая суток с меньшей
+	# базой (AMBIENT_SKY_SCALE: радианс купола ярче плоского цвета) и
+	# ночью меньше дневной — ночь остаётся тёмной.
+	assert_lt(DayMath.ambient_energy_sky(0.8 * B.day_cycle_sec),
+		DayMath.ambient_energy_sky(0.3 * B.day_cycle_sec),
+		"ночная энергия ambient ниже дневной (числа)")
+	var sky := _make_sky_rig()
+	sky.environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	var cycle := DayCycle.new()
+	cycle.setup(sky.sun, sky)
+	var saved := Session.world_time
+	Session.world_time = 0.3 * B.day_cycle_sec  # полдень
+	cycle._process(0.0)
+	var day_energy: float = sky.environment.ambient_light_energy
+	Session.world_time = 0.8 * B.day_cycle_sec  # ночь
+	cycle._process(0.0)
+	var night_energy: float = sky.environment.ambient_light_energy
+	Session.world_time = saved
+	assert_almost_eq(day_energy,
+		DayMath.ambient_energy_sky(0.3 * B.day_cycle_sec), 0.001,
+		"при SKY-источнике DayCycle ставит кривую ambient_energy_sky")
+	assert_lt(night_energy, day_energy,
+		"ночью ambient слабее дневного (ночь тёмная)")
+	assert_lt(day_energy, DayMath.ambient_energy(0.3 * B.day_cycle_sec),
+		"база SKY-кривой ниже прежней плоской (радианс купола ярче)")
+	cycle.free()
+	sky.free()
+
+
 func test_day_cycle_leads_dome_positions() -> void:
 	# П5.9 блок 6: купол Sky3D ведут часы мира — DayCycle ставит солнце
 	# в положение DayMath.sun_direction (полярный угол от зенита) и крутит

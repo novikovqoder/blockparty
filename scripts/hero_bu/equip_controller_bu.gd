@@ -75,6 +75,9 @@ func _ready() -> void:
 		sword.name = "Sword"
 		_hip_att.add_child(sword)
 		sword.transform = _sheath_xf
+		# П17 п.11: меч — часть визуала персонажа, получает слой fill-света
+		# (появляется в рантайме, позже разметки героя в HeroModelBU._ready).
+		HeroFillLight.mark_visual(sword)
 
 
 func _unhandled_input(event: InputEvent) -> void:
