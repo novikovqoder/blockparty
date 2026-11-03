@@ -18,6 +18,30 @@ extends Resource
 ## бокс с нижней гранью в pos (модели стоят «ногами» в начале координат).
 @export var colliders: Array[Dictionary] = []
 
+## П17 п.2 «Вариация тона по дереву»: лёгкий jitter тона кроны per-instance
+## (±6 % яркости и сдвиг оттенка зелёнее/жёлтее по R-каналу) — печёная
+## величина, детерминирована сидом от мировой позиции дерева (мир общий
+## у всех, в рантайме ничего не считается). Действует на всё дерево:
+## instance color умножает и кору, и листву (canopy.gdshader/tree_bark).
+const TONE_BRIGHTNESS: float = 0.06
+const TONE_HUE: float = 0.06
+
+
+## Тон дерева с вариацией: базовый тон зоны × (1 ± TONE_BRIGHTNESS),
+## оттенок — сдвиг R-канала ±TONE_HUE (>0 зеленее, <0 жёлтее; G и B
+## не трогаются — сдвиг в пределах «зелёный ↔ жёлтый»).
+static func crown_tone(base: Color, pos: Vector3) -> Color:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(pos)
+	var brightness: float = 1.0 \
+		+ rng.randf_range(-TONE_BRIGHTNESS, TONE_BRIGHTNESS)
+	var shift: float = rng.randf_range(-1.0, 1.0)
+	return Color(
+		base.r * brightness * (1.0 - TONE_HUE * shift),
+		base.g * brightness,
+		base.b * brightness,
+	)
+
 
 ## Собрать визуал из данных IslandGen.generate(): рельеф, предметы
 ## (группировка по типу и варианту — один MultiMesh на группу), коллизии
@@ -50,7 +74,11 @@ static func build(data: Dictionary) -> IslandArt:
 			var scale: Vector3 = prop["scale"]
 			var basis := Basis(Vector3.UP, float(prop["yaw"])) * Basis().scaled(scale)
 			baked.transforms.append(Transform3D(basis, prop["pos"]))
-			baked.colors.append(prop["tint"])
+			# П17 п.2: деревьям — вариация тона кроны per-instance.
+			var tone: Color = prop["tint"]
+			if String(group["type"]).begins_with("etree_"):
+				tone = crown_tone(tone, prop["pos"])
+			baked.colors.append(tone)
 		art.prop_groups[key] = baked
 
 	for prop: Dictionary in data["props"]:

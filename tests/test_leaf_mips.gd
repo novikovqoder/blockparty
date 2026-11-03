@@ -57,10 +57,12 @@ func _density(
 
 
 ## Активная маска мипа: спуск маски уровня 0 (альфа > 0) OR-ом 2×2.
+## База — байты только уровня 0: get_data() у изображения с мипами
+## возвращает всю цепочку, и маска выходила за границы.
 func _mask_at(image: Image, mip: int) -> PackedByteArray:
 	var width := image.get_width()
 	var height := image.get_height()
-	var data := image.get_data()
+	var data := _mip_bytes(image, 0)
 	var mask := PackedByteArray()
 	mask.resize(width * height)
 	var px := 0
@@ -79,8 +81,11 @@ func _mask_at(image: Image, mip: int) -> PackedByteArray:
 		var dst := 0
 		for _y: int in height >> 1:
 			for _x: int in width >> 1:
-				next[dst] = 1 if mask[src] + mask[src + 1]
-					+ mask[src + width] + mask[src + width + 1] > 0 else 0
+				var or_sum: int = mask[src] + mask[src + 1] \
+					+ mask[src + width] + mask[src + width + 1]
+				# Тернарник обязан быть одной строкой: разрыв условия
+				# переносом ломает парсер, и тест молча выпадал из GUT.
+				next[dst] = 1 if or_sum > 0 else 0
 				src += 2
 				dst += 1
 			src += width

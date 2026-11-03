@@ -24,6 +24,7 @@ const DIR: String = "res://assets/visual/trees/models/"
 ## Кора — CC0 ambientcg (в project с П5.9; пресеты ez-tree используют
 ## именно Bark001–003). UV.x (обороты вокруг ствола) уже запечены
 ## генератором; uv_scale.y — repeat.y = 1/textureScale.y пресета.
+## П17 п.2: с цветом подключены нормали и шероховатость (1K, тот же uv).
 const BARK: Dictionary = {
 	"Bark001": preload(
 		"res://assets/third_party/ambientcg.com/Bark001/Bark001_2K-JPG_Color.jpg"),
@@ -32,6 +33,32 @@ const BARK: Dictionary = {
 	"Bark003": preload(
 		"res://assets/third_party/ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg"),
 }
+const BARK_NORMAL: Dictionary = {
+	"Bark001": preload(
+		"res://assets/third_party/ambientcg.com/Bark001/Bark001_1K-JPG_NormalGL.jpg"),
+	"Bark002": preload(
+		"res://assets/third_party/ambientcg.com/Bark002/Bark002_1K-JPG_NormalGL.jpg"),
+	"Bark003": preload(
+		"res://assets/third_party/ambientcg.com/Bark003/Bark003_1K-JPG_NormalGL.jpg"),
+}
+const BARK_ROUGHNESS: Dictionary = {
+	"Bark001": preload(
+		"res://assets/third_party/ambientcg.com/Bark001/Bark001_1K-JPG_Roughness.jpg"),
+	"Bark002": preload(
+		"res://assets/third_party/ambientcg.com/Bark002/Bark002_1K-JPG_Roughness.jpg"),
+	"Bark003": preload(
+		"res://assets/third_party/ambientcg.com/Bark003/Bark003_1K-JPG_Roughness.jpg"),
+}
+
+## П17 п.2 «Объём кроны»: нормали карточек листвы — сферические от центра
+## кроны (крона освещается объёмной сферой, а не россыпью плоскостей —
+## генератор ставил карточкам нормали произвольно), в COLOR.rgb печётся AO
+## по глубине внутри кроны (canopy.gdshader умножает albedo на COLOR.rgb).
+## Сдвиг центра к верхушке — там листва гуще. Запекается на всех трёх LOD;
+## тест test_canopy_bake сверяет нормали/AO через crown_center().
+const CROWN_UP_BIAS: float = 0.1
+const CROWN_NORMAL_UP: float = 0.2
+const CROWN_AO_DEPTH: float = 0.45
 
 ## Листва — PNG из репозитория ez-tree (MIT, bundled with the demo app);
 ## материал берёт их пересобранные версии с мипами, сохраняющими плотность
@@ -151,11 +178,55 @@ static func _lod_mesh(base: String, lod: int, k: float, info: Dictionary) -> Arr
 			Mesh.PRIMITIVE_TRIANGLES, _scaled(branches, k))
 		mesh.surface_set_material(0, _bark_material(bark))
 	if leaves != null:
+		var leaf_arrays := _scaled(leaves, k)
+		_bake_crown(leaf_arrays)
 		mesh.add_surface_from_arrays(
-			Mesh.PRIMITIVE_TRIANGLES, _scaled(leaves, k))
+			Mesh.PRIMITIVE_TRIANGLES, leaf_arrays)
 		mesh.surface_set_material(mesh.get_surface_count() - 1,
 			_canopy_material(leaf, k))
 	return mesh
+
+
+## Центр кроны для сферических нормалей и AO: центр AABB поверхности
+## листвы, приподнятый к верхушке (там листва гуще) на долю CROWN_UP_BIAS
+## высоты кроны.
+static func crown_center(aabb: AABB) -> Vector3:
+	return aabb.get_center() + Vector3(
+		0.0, aabb.size.y * CROWN_UP_BIAS, 0.0)
+
+
+## П17 п.2: перепечь нормали и цвет вершин листвы под объём кроны —
+## NORMAL = normalize(vertex − центр + CROWN_NORMAL_UP·UP) — карточка
+## освещается как участок сферы кроны; COLOR = AO: у поверхности кроны 1,
+## к середине затемнение до CROWN_AO_DEPTH (глубина — эллипсоид AABB:
+## длина (vertex − центр)/полуразмеры, ограничена 1). Собственных цветов
+## у карточек ez-tree нет — массив COLOR создаётся здесь; нулевое
+## направление (вершина в центре кроны) заменяется UP, чтобы нормали
+## оставались единичными.
+static func _bake_crown(arrays: Array) -> void:
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var aabb := AABB(verts[0], Vector3.ZERO)
+	for vertex: Vector3 in verts:
+		aabb = aabb.expand(vertex)
+	var center := crown_center(aabb)
+	var half := aabb.size * 0.5
+	half = Vector3(
+		maxf(half.x, 0.01), maxf(half.y, 0.01), maxf(half.z, 0.01))
+	var normals := PackedVector3Array()
+	normals.resize(verts.size())
+	var colors := PackedColorArray()
+	colors.resize(verts.size())
+	for i: int in verts.size():
+		var rel: Vector3 = verts[i] - center
+		var direction := rel + Vector3.UP * CROWN_NORMAL_UP
+		normals[i] = direction.normalized() \
+			if direction.length_squared() > 1e-8 else Vector3.UP
+		var depth: float = 1.0 - clampf(
+			(rel / half).length(), 0.0, 1.0)
+		var ao: float = 1.0 - CROWN_AO_DEPTH * depth
+		colors[i] = Color(ao, ao, ao)
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
 
 
 ## Меш узла по имени (экспорт ez-tree: Tree_LOD{n} → Branches/Leaves).
@@ -189,13 +260,20 @@ static func _scaled(source: Mesh, k: float) -> Array:
 	return arrays
 
 
-## Кора: текстура ambientcg по типу пресета, вертикальная плотность —
-## repeat.y = 1/textureScale.y (три.js #createBarkMaterial).
+## Кора: текстура ambientcg по типу пресета (П17 п.2 — с нормалями и
+## шероховатостью), вертикальная плотность — repeat.y = 1/textureScale.y
+## (три.js #createBarkMaterial); карты лежат с тем же uv_scale.
 static func _bark_material(bark: Dictionary) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = BARK_SHADER
+	var kind := String(bark.get("type", "Bark002"))
 	material.set_shader_parameter(
-		"bark_tex", BARK.get(String(bark.get("type", "Bark002")), BARK["Bark002"]))
+		"bark_tex", BARK.get(kind, BARK["Bark002"]))
+	material.set_shader_parameter(
+		"normal_tex", BARK_NORMAL.get(kind, BARK_NORMAL["Bark002"]))
+	material.set_shader_parameter(
+		"roughness_tex",
+		BARK_ROUGHNESS.get(kind, BARK_ROUGHNESS["Bark002"]))
 	var scale: Dictionary = bark.get("textureScale", {"x": 1.0, "y": 1.0})
 	material.set_shader_parameter(
 		"uv_scale", Vector2(1.0, 1.0 / maxf(float(scale.get("y", 1.0)), 0.01)))
