@@ -5364,8 +5364,9 @@ SIMPLE 6 / NORMAL 8 / HIGH 10 (математически эквивалентн
   или приёмка по Windows-сборке).
 - **Сборка Windows** (2026-11-03 17:23, с нуля, `tools/build_windows.sh`,
   из HEAD `91ec46b`): `builds/born-unblessed-windows.zip`
-  (295 394 978 байт; BornUnblessed.exe, две DLL GodotSteam,
-  steam_appid.txt, BLOCKPARTY.md), `python3 -m zipfile -t` — без
+  (295 394 978 байт, 4 файла: BornUnblessed.exe, две DLL GodotSteam,
+  steam_appid.txt; копия BLOCKPARTY.md — рядом в builds/),
+  `python3 -m zipfile -t` — без
   ошибок. exe 382 611 776 байт, sha256: exe
   `2ae415c3391161ddb62b89d6c8234c21bffda039427c93d21b1ade3eec61e98c`, zip
   `ac777f3afb279d6d4acfa721aa17da6d1b69befcad4407e15a0473bf9de2531e`.
