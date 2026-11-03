@@ -50,6 +50,9 @@ var _ring_placed: bool = false
 var _ring_step: float = 0.25
 ## П14 3.3: слой мелочи вокруг зрителя (ноды MultiMesh по видам).
 var _clutter_nodes: Dictionary = {}
+## П17 п.1: материалы листвы деревьев (включая уровни детализации) —
+## set_quality ставит им alpha-to-coverage на ULTRA (MSAA там есть).
+var _canopy_materials: Array[ShaderMaterial] = []
 ## Клетка последней пересборки мелочи (быстрый выход).
 var _clutter_center: Vector2 = Vector2(1e9, 1e9)
 ## Уровень, по которому мелочь построена (тени/плотность).
@@ -321,8 +324,19 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 			if level["shadow"] \
 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
+		_collect_canopy_materials(level["mesh"])
 		if index == 0:
 			_register(type, instance)
+
+
+## П17 п.1: собрать материалы листвы из поверхностей уровня дерева
+## (материалы запечены в меши island_art.res) — для A2C на ULTRA.
+func _collect_canopy_materials(mesh: Mesh) -> void:
+	for surface: int in mesh.get_surface_count():
+		var material := mesh.surface_get_material(surface)
+		if material is ShaderMaterial \
+				and (material as ShaderMaterial).shader == EzTreeMeshes.CANOPY_SHADER:
+			_canopy_materials.append(material)
 
 
 ## Коллизии предметов: бокс с нижней гранью в точке предмета. extra —
@@ -505,6 +519,12 @@ func set_quality(tier: int) -> void:
 					GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF if hi
 					else GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED)
 	_apply_grass_fade(_grass_fade_mult(tier))
+	# П17 п.1: alpha-to-coverage листвы — только на ULTRA (MSAA 4x);
+	# на остальных уровнях значение 0, край выреза режет scissor
+	# + coverage-мипы.
+	var a2c_edge := GraphicsQuality.canopy_a2c_edge(tier)
+	for material: ShaderMaterial in _canopy_materials:
+		material.set_shader_parameter("a2c_edge", a2c_edge)
 
 
 ## Множитель дальности видимости типа по уровню (П16 п. 4): ULTRA ×1.5,

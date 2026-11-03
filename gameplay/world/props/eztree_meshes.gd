@@ -33,12 +33,16 @@ const BARK: Dictionary = {
 		"res://assets/third_party/ambientcg.com/Bark003/Bark003_1K-JPG_Color.jpg"),
 }
 
-## Листва — PNG из репозитория ez-tree (MIT, bundled with the demo app).
+## Листва — PNG из репозитория ez-tree (MIT, bundled with the demo app);
+## материал берёт их пересобранные версии с мипами, сохраняющими плотность
+## выреза (tools/make_leaf_mips.gd, П17 п.1): движковый бокс-фильтр
+## усреднял альфу карточек, и крона вдали редела («таяние»). Исходные PNG
+## остаются в репозитории — из них тулa пересобирает .res.
 const LEAVES: Dictionary = {
-	"pine": preload("res://assets/visual/trees/leaves/pine.png"),
-	"oak": preload("res://assets/visual/trees/leaves/oak.png"),
-	"aspen": preload("res://assets/visual/trees/leaves/aspen.png"),
-	"ash": preload("res://assets/visual/trees/leaves/ash.png"),
+	"pine": preload("res://assets/visual/trees/leaves/pine_mips.res"),
+	"oak": preload("res://assets/visual/trees/leaves/oak_mips.res"),
+	"aspen": preload("res://assets/visual/trees/leaves/aspen_mips.res"),
+	"ash": preload("res://assets/visual/trees/leaves/ash_mips.res"),
 }
 
 ## Тип предмета острова → ассеты [база GLB, целевая высота, м]. Вариант

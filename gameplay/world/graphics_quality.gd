@@ -196,6 +196,11 @@ const CLOUD_STEPS_SIMPLE: int = 6
 const CLOUD_STEPS_NORMAL: int = 8
 const CLOUD_STEPS_HIGH: int = 10
 const CLOUD_STEPS_ULTRA: int = 14
+## П17 п.1: ширина антиалиасинга края выреза листвы (ALPHA_ANTIALIASING_EDGE
+## canopy.gdshader). Alpha-to-coverage работает только на мультисэмпловом
+## буфере — включаем на ULTRA (MSAA 4x); на HIGH SMAA без MSAA, там A2C
+## не действует и остаётся scissor + coverage-мипы (решение владельца).
+const CANOPY_A2C_EDGE: float = 0.3
 ## Движковые базы для возврата с HIGH (fade сплитов и смешение).
 const SHADOW_FADE_START_BASE: float = 0.1
 const BLEND_SPLITS_BASE: bool = false
@@ -269,6 +274,12 @@ static func cloud_steps(tier: int) -> int:
 		Tier.ULTRA:
 			return CLOUD_STEPS_ULTRA
 	return CLOUD_STEPS_HIGH
+
+
+## П17 п.1: край антиалиасинга выреза листвы по уровню — только ULTRA
+## (MSAA 4x; без мультисэмпла A2C не работает, см. CANOPY_A2C_EDGE).
+static func canopy_a2c_edge(tier: int) -> float:
+	return CANOPY_A2C_EDGE if tier == Tier.ULTRA else 0.0
 
 
 ## Тени и пост-эффекты по уровню (блок е: постобработка — только HIGH;

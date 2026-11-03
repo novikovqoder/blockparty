@@ -17,6 +17,12 @@ uniform float alpha_cut = 0.5;
 uniform float wind_strength = 0.15;
 uniform float wind_freq = 0.5;
 uniform float wind_noise_scale = 24.0;
+// П17 п.1: ширина антиалиасинга края выреза (alpha-to-coverage при MSAA).
+// Не ноль — только на ULTRA (MSAA 4x там есть; IslandView.set_quality):
+// кромка листвы получает полупрозрачный субпиксельный край вместо рваного
+// стенсила. На уровнях без MSAA значение 0 — остаётся scissor
+// + coverage-мипы (tools/make_leaf_mips.gd).
+uniform float a2c_edge = 0.0;
 
 varying vec3 world_pos;
 
@@ -113,6 +119,8 @@ void vertex() {
 void fragment() {
 	vec4 leaf = texture(leaf_tex, UV);
 	ALPHA_SCISSOR_THRESHOLD = alpha_cut;
+	// A2C-край действует только при MSAA (ULTRA); без MSAA — нейтрален.
+	ALPHA_ANTIALIASING_EDGE = a2c_edge;
 	ALPHA = leaf.a;
 	ALBEDO = leaf.rgb * leaf_tint * COLOR.rgb;
 }
