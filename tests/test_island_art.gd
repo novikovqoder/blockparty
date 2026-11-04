@@ -347,6 +347,46 @@ func test_trees_planted_on_ground() -> void:
 	assert_gt(checked, 150, "посадка проверена у всех деревьев (факт %d)" % checked)
 
 
+func test_island_has_no_pines() -> void:
+	# П18-фикс 3 «ели убрать»: высокие деревья острова — только
+	# лиственные. Имена типов генератора не переименовывались (строка
+	# типа в данных расстановки и хеше острова 941246210) — «ель»
+	# проверяется по ВИДУ: ни одна группа деревьев арта не несёт
+	# хвойную листву, pine-моделей и текстуры в проекте нет вовсе
+	# (хвойный куст Bush 3 заменён вариантом Bush 1).
+	var data: Dictionary = _island_data()
+	var art := IslandArt.build(data)
+	var tree_groups := 0
+	for key: String in art.prop_groups:
+		if not key.begins_with("etree_"):
+			continue
+		tree_groups += 1
+		var group: PropGroup = art.prop_groups[key]
+		var material := (group.mesh as ArrayMesh).surface_get_material(
+			(group.mesh as ArrayMesh).get_surface_count() - 1) \
+			as ShaderMaterial
+		var leaf: Texture2D = material.get_shader_parameter("leaf_tex")
+		assert_not_null(leaf, "%s: листва с текстурой" % key)
+		for kind: String in EzTreeMeshes.LEAVES:
+			if leaf == EzTreeMeshes.LEAVES[kind]:
+				assert_ne(kind, "pine", "%s: листва не хвоя" % key)
+	# Хвоя исчезла из проекта целиком: манифест и GLB-файлы без pine.
+	var manifest_text := FileAccess.get_file_as_string(
+		EzTreeMeshes.DIR + "manifest.json")
+	assert_false(manifest_text.contains("pine_"),
+		"в манифесте деревьев нет елей")
+	var dir := DirAccess.open(EzTreeMeshes.DIR)
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while not name.is_empty():
+		assert_false(name.begins_with("pine_"),
+			"GLB ели убран из проекта: %s" % name)
+		name = dir.get_next()
+	assert_gt(tree_groups, 10,
+		"деревья на острове есть (проба не холостая, факт %d)"
+			% tree_groups)
+
+
 func test_art_colliders_only_solid_types() -> void:
 	# Коллизии — только у непроходимых типов (IslandGen.SOLID_TYPES);
 	# трава, кусты и камешки проходимы.

@@ -69,7 +69,6 @@ const CROWN_AO_DEPTH: float = 0.45
 ## усреднял альфу карточек, и крона вдали редела («таяние»). Исходные PNG
 ## остаются в репозитории — из них тулa пересобирает .res.
 const LEAVES: Dictionary = {
-	"pine": preload("res://assets/visual/trees/leaves/pine_mips.res"),
 	"oak": preload("res://assets/visual/trees/leaves/oak_mips.res"),
 	"aspen": preload("res://assets/visual/trees/leaves/aspen_mips.res"),
 	"ash": preload("res://assets/visual/trees/leaves/ash_mips.res"),
@@ -78,11 +77,18 @@ const LEAVES: Dictionary = {
 ## Тип предмета острова → ассеты [база GLB, целевая высота, м]. Вариант
 ## предмета индексирует список по модулю — IslandGen просит столько
 ## вариантов, сколько здесь записей.
+## П18-фикс 3 «ели убрать»: высокие деревья острова — только лиственные.
+## Имя ключа etree_pine НЕ переименовано: строка типа входит в данные
+## расстановки и хеш острова (941246210) — позиции, варианты и коллизии
+## неприкосновенны, меняется только вид. Высоты слотов прежние, 13–26 м;
+## варианты догенерированы в ~/eztree_gen (Oak/Ash/Aspen Large и Medium).
+## Хвойный куст Bush 3 (листва pine) заменён третьим вариантом Bush 1 —
+## хвои на острове нет вовсе; pine-текстура листвы удалена из проекта.
 const ASSETS: Dictionary = {
 	&"etree_pine": [
-		["pine_large_v0", 26.0], ["pine_large_v1", 25.0],
-		["pine_medium_v0", 19.0], ["pine_medium_v1", 18.0],
-		["pine_small_v0", 13.0],
+		["oak_large_v2", 26.0], ["ash_large_v0", 25.0],
+		["aspen_large_v0", 19.0], ["oak_medium_v2", 18.0],
+		["ash_medium_v2", 13.0],
 	],
 	&"etree_oak": [
 		["oak_medium_v0", 17.0], ["oak_medium_v1", 16.0],
@@ -94,7 +100,7 @@ const ASSETS: Dictionary = {
 	],
 	&"etree_bush": [
 		["bush_1_v0", 2.8], ["bush_1_v1", 2.9], ["bush_2_v0", 3.0],
-		["bush_2_v1", 3.1], ["bush_3_v0", 2.2],
+		["bush_2_v1", 3.1], ["bush_1_v2", 2.2],
 	],
 	&"etree_giant": [
 		["oak_large_v1", 30.0],

@@ -164,8 +164,8 @@ func test_bark_uses_normal_and_roughness_maps() -> void:
 		var rough_tex: Texture2D = material.get_shader_parameter("roughness_tex")
 		assert_not_null(normal_tex, "%s: карта нормалей коры подключена" % type)
 		assert_not_null(rough_tex, "%s: карта шероховатости коры подключена" % type)
-		# Порода → свой набор карт (сосна Bark003, дуб/ясень Bark001,
-		# осина Bark002 — как в пресетах генератора; размер сэта не важен:
+		# Порода → свой набор карт (дуб/ясень Bark001, осина Bark002 —
+		# как в пресетах генератора; размер сэта не важен:
 		# у Bark001 карты 2K — его сет «1K» неполный, ниже планки аудита).
 		var base := String((EzTreeMeshes.ASSETS[StringName(type)] as Array)[0][0])
 		var kind := String(EzTreeMeshes.entry(base)["bark"]["type"])

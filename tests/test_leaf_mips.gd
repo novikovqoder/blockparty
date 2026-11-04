@@ -7,8 +7,8 @@
 extends GutTest
 
 ## Вид листвы → пороги вырезки alphaTest пресетов ez-tree (manifest.json).
+## Сосновой хвои нет с П18-фиксом 3 — ели сняты, остров лиственный.
 const CUTS: Dictionary = {
-	"pine": [0.3, 0.5],
 	"oak": [0.5],
 	"aspen": [0.5],
 	"ash": [0.5],

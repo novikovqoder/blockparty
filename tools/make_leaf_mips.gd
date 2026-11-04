@@ -20,9 +20,9 @@ extends SceneTree
 const LEAVES_DIR: String = "res://assets/visual/trees/leaves"
 
 ## Листва и пороги вырезки alphaTest, под которыми её используют пресеты
-## ez-tree из manifest.json (сосновая хвоя — 0.3, лиственные — 0.5).
+## ez-tree из manifest.json (лиственные — 0.5; сосновая хвоя 0.3 убрана
+## вместе с елями, П18-фикс 3 — на острове только лиственные).
 const JOBS: Dictionary = {
-	"pine": [0.3, 0.5],
 	"oak": [0.5],
 	"aspen": [0.5],
 	"ash": [0.5],
