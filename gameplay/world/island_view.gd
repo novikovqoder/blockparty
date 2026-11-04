@@ -50,6 +50,13 @@ var _ring_placed: bool = false
 var _ring_step: float = 0.25
 ## П14 3.3: слой мелочи вокруг зрителя (ноды MultiMesh по видам).
 var _clutter_nodes: Dictionary = {}
+## П17, сборка 3: поле фотосканной травы вокруг зрителя (HIGH/ULTRA) —
+## ноды MultiMesh по видам, буферы пересобирает update_viewer.
+var _grass_field_nodes: Dictionary = {}
+## Клетка последней пересборки поля (быстрый выход).
+var _grass_field_center: Vector2 = Vector2(1e9, 1e9)
+## Уровень, по которому поле построено (радиус/плотность/материал).
+var _grass_field_tier: int = 0
 ## П17 п.1: материалы листвы деревьев (включая уровни детализации) —
 ## set_quality ставит им alpha-to-coverage на ULTRA (MSAA там есть).
 var _canopy_materials: Array[ShaderMaterial] = []
@@ -195,6 +202,14 @@ func update_viewer(viewer_pos: Vector3) -> void:
 			_clutter_center = cell
 			GroundClutter.apply_clutter(_clutter_nodes,
 				GroundClutter.scatter(art, _clutter_tier, center))
+	# Поле травы (П17, сборка 3): пересборка при смене клетки CELL_M
+	# (детерминизм по мировым клеткам — снап не плавает).
+	if not _grass_field_nodes.is_empty():
+		var field_cell := (center / GrassField.CELL_M).floor()
+		if field_cell != _grass_field_center:
+			_grass_field_center = field_cell
+			GrassField.apply_field(_grass_field_nodes,
+				GrassField.scatter(art, _grass_field_tier, center))
 	if center.distance_to(_lod_center) < 2.0:
 		return
 	_lod_center = center
@@ -423,6 +438,14 @@ func _build_details() -> void:
 		_clutter_nodes = GroundClutter.make_nodes(_clutter_tier)
 		for type: String in _clutter_nodes:
 			add_child(_clutter_nodes[type])
+	# П17, сборка 3: поле фотосканной травы вокруг зрителя (HIGH/ULTRA) —
+	# ноды строятся здесь, буферы заполняет первый update_viewer; радиус,
+	# плотность и материал — по уровню входа (как у мелочи и травы-буста).
+	_grass_field_tier = GraphicsQuality.tier_from_settings()
+	if GrassField.is_field_enabled(_grass_field_tier):
+		_grass_field_nodes = GrassField.make_nodes(_grass_field_tier)
+		for type: String in _grass_field_nodes:
+			add_child(_grass_field_nodes[type])
 
 
 ## Окклюдеры статичного мира (П16 п. 5, SPEC п. 5 «отсечение невидимого»):
@@ -529,6 +552,10 @@ func set_quality(tier: int) -> void:
 					GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF if hi
 					else GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED)
 	_apply_grass_fade(_grass_fade_mult(tier))
+	# П17, сборка 3: «Простая графика» прячет и поле сканов (печёная
+	# подложка rgrass гасится строкой выше, как раньше).
+	if not _grass_field_nodes.is_empty():
+		set_grass_field_visible(not simple)
 	# П17 п.1: alpha-to-coverage листвы — только на ULTRA (MSAA 4x);
 	# на остальных уровнях значение 0, край выреза режет scissor
 	# + coverage-мипы.
@@ -600,6 +627,26 @@ func set_detail_ring_visible(on: bool) -> void:
 func set_clutter_visible(on: bool) -> void:
 	for type: String in _clutter_nodes:
 		(_clutter_nodes[type] as MultiMeshInstance3D).visible = on
+
+
+## Панель замера F3 (П17, сборка 3): показать/спрятать поле сканной травы
+## (мгновенно, без пересборки — переключатель замера).
+func set_grass_field_visible(on: bool) -> void:
+	for type: String in _grass_field_nodes:
+		(_grass_field_nodes[type] as MultiMeshInstance3D).visible = on
+
+
+## Приминание травы возле персонажа (П17 п.7): позиция активного игрока
+## в uniform press_pos материала поля (материал один на все виды).
+func set_grass_press(world_pos: Vector3) -> void:
+	if _grass_field_nodes.is_empty():
+		return
+	var material: Material = (_grass_field_nodes[
+		_grass_field_nodes.keys()[0]] as MultiMeshInstance3D) \
+		.material_override
+	if material is ShaderMaterial:
+		(material as ShaderMaterial).set_shader_parameter(
+			"press_pos", world_pos)
 
 
 ## Ползунки F3, вкладка «Вода» (П15-ДОП2, п. 1): сменить склон юбки

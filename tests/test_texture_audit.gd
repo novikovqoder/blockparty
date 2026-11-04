@@ -124,6 +124,10 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 	# П14 3.3: мелочь на земле (gc_*) — нетекстурные low-poly модели
 	# наборов П12 (вершинные цвета), как печёные Props_*.
 	"gc_",
+	# П17, сборка 3: поле фотосканной травы вокруг игрока (gf_*) — пучки
+	# Poly Haven с цветом в вершинах (bundle-режим decimate_polyhaven),
+	# материал grass_scan текстур не читает.
+	"gf_",
 	# П14 4: вода Born Unblessed процедурна — шейдер water_bu не читает
 	# текстур вовсе (пена и рябь — шум, «БЕЗ текстур Boujie» SPEC 4.5).
 	"LakeSurface", "/Ocean/",

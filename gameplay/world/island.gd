@@ -24,6 +24,12 @@ func update_viewer(viewer_pos: Vector3) -> void:
 	$IslandView.update_viewer(viewer_pos)
 
 
+## Приминание травы возле персонажа (П17 п.7): проброс в IslandView
+## (uniform press_pos материала поля). Без поля — пусто, как update_viewer.
+func set_grass_press(world_pos: Vector3) -> void:
+	$IslandView.set_grass_press(world_pos)
+
+
 ## Запечённые данные острова (IslandView.art): высоты — для определения
 ## покрытия под ногами (частицы бега, доработка П9).
 func art() -> IslandArt:
