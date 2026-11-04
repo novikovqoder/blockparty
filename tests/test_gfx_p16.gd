@@ -649,7 +649,66 @@ func test_lamp_emission_out_of_sdfgi_on_high() -> void:
 			"NORMAL: база (SDFGI выключен, gi_mode не важен)")
 
 
-# --- П16 п. 9/10: авто-замер F3 и галочка окклюзии ---
+# --- П16 п. 9/10: авто-замер F3 и галочка окклюзии; П17 п.13: галочки ---
+
+func test_f3_p17_checkboxes() -> void:
+	# П17 п.13: четыре новые галочки F3 — «Трава (поле)» (gfield),
+	# «Импосторы деревьев» (timpostor), «Объём кроны» (canopyvol),
+	# «Свет персонажа» (herolight). Уровневая база: поле — только
+	# HIGH/ULTRA (ниже печёная подложка), остальные три — все уровни;
+	# сеттеры IslandView гасят/возвращают объекты видимости, fill-свет —
+	# группой нод (visible = false у Light3D выключает свет).
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	for id: StringName in [&"gfield", &"timpostor", &"canopyvol", &"herolight"]:
+		assert_true(panel.EFFECTS.has(id), "галочка %s есть" % id)
+		assert_true(panel.EFFECT_LABELS.has(id), "у %s есть подпись i18n" % id)
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.NORMAL)
+	assert_false(panel._tier_effect_on(&"gfield"),
+		"NORMAL: поля нет — не эффект уровня")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.SIMPLE)
+	assert_false(panel._tier_effect_on(&"gfield"),
+		"SIMPLE: поля нет (печёная подложка)")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.HIGH)
+	assert_true(panel._tier_effect_on(&"gfield"), "HIGH: поле — эффект уровня")
+	assert_true(panel._tier_effect_on(&"timpostor"), "импосторы — все уровни")
+	assert_true(panel._tier_effect_on(&"canopyvol"), "объём кроны — все уровни")
+	assert_true(panel._tier_effect_on(&"herolight"), "свет персонажа — все уровни")
+	# Сеттеры IslandView гасят и возвращают объекты видимости (в т.ч.
+	# ближнее кольцо теней поля — ноды «<вид>_near»).
+	var view := IslandView.new()
+	view._grass_field_nodes = GrassField.make_nodes(GraphicsQuality.Tier.ULTRA)
+	var impostor := MultiMeshInstance3D.new()
+	view._impostor_nodes = [impostor]
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://assets/shaders/canopy.gdshader")
+	view._canopy_materials = [material]
+	panel._view = view
+	for on: bool in [false, true]:
+		panel._on_effect_toggled(on, &"gfield")
+		panel._on_effect_toggled(on, &"timpostor")
+		panel._on_effect_toggled(on, &"canopyvol")
+		for type: String in view._grass_field_nodes:
+			assert_eq((view._grass_field_nodes[type] \
+				as MultiMeshInstance3D).visible, on,
+				"поле %s (%s)" % ["скрыто" if not on else "возвращено", type])
+		assert_eq(impostor.visible, on,
+			"импосторы %s" % ["скрыты" if not on else "возвращены"])
+		assert_almost_eq(
+			float(material.get_shader_parameter("volume_mix")),
+			1.0 if on else 0.0, 0.0001,
+			"volume_mix = %d (объём кроны)" % [1 if on else 0])
+	# Свет персонажа — группа нод HeroFillLight.
+	var light := HeroFillLight.new()
+	light.add_to_group(HeroFillLight.GROUP)
+	add_child_autofree(light)
+	assert_true(light.visible, "fill-свет по умолчанию включен")
+	panel._on_effect_toggled(false, &"herolight")
+	assert_false(light.visible, "галочка погасила fill-свет")
+	panel._on_effect_toggled(true, &"herolight")
+	assert_true(light.visible, "возврат галочки включил fill-свет")
+	view.free()
+
 
 func test_f3_occlusion_checkbox() -> void:
 	# П16 п. 5 включил окклюзию проектом, п. 9/10 — галочка в панели:

@@ -23,6 +23,10 @@ uniform float wind_noise_scale = 24.0;
 // стенсила. На уровнях без MSAA значение 0 — остаётся scissor
 // + coverage-мипы (tools/make_leaf_mips.gd).
 uniform float a2c_edge = 0.0;
+// П17 п.2/п.13: доля «объёма кроны» (1 — сферические нормали и AO,
+// запечённые в меши; 0 — плоская карточка, как до П17). F3-галочка
+// «Объём кроны» сводит к 0 для замера цены эффекта.
+uniform float volume_mix = 1.0;
 
 varying vec3 world_pos;
 
@@ -140,7 +144,11 @@ void fragment() {
 	// A2C-край действует только при MSAA (ULTRA); без MSAA — нейтрален.
 	ALPHA_ANTIALIASING_EDGE = a2c_edge;
 	ALPHA = leaf.a;
-	ALBEDO = leaf.rgb * leaf_tint * COLOR.rgb;
+	// Объём кроны (П17 п.2): COLOR.rgb — запечённый AO глубины; при
+	// volume_mix = 0 AO нейтрален, а нормаль сводится к плоскости
+	// карточки — в view space это нормаль «на камеру» (0, 0, -1).
+	ALBEDO = leaf.rgb * leaf_tint * mix(vec3(1.0), COLOR.rgb, volume_mix);
+	NORMAL = mix(NORMAL, vec3(0.0, 0.0, -1.0), 1.0 - volume_mix);
 	FOG = fog(world_pos, CAMERA_POSITION_WORLD);
 }
 

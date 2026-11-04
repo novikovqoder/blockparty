@@ -69,6 +69,7 @@ func _ready() -> void:
 	# ведём в _process; слой героев помечают сами модели (HeroModelBU,
 	# меч — EquipControllerBU), чужие игроки — ниже при появлении.
 	_fill_light = HeroFillLight.new()
+	_fill_light.add_to_group(HeroFillLight.GROUP)
 	add_child(_fill_light)
 	# Виньетка (vfx-fix, блок е) до HUD: рисуется под интерфейсом.
 	_vignette = GraphicsQuality.make_vignette()

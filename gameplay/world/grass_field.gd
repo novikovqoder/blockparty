@@ -58,6 +58,10 @@ const FERN_FOREST_FACTOR: float = 0.8
 const TRUNK_NEAR: float = 5.0
 ## Клетка пространственной сетки стволов (достаточно 9 соседних).
 const TRUNK_CELL: float = 8.0
+## Ближнее кольцо теней (П17 п.13): на ULTRA поле разбито на две ноды
+## на вид — ближняя (≤ SHADOW_RING_M, cast_shadow ON) и дальняя (без
+## теней); на HIGH поле целиком без теней.
+const SHADOW_RING_M: float = 10.0
 
 ## Виды поля: share — доля базовой плотности, scale — диапазон масштаба
 ## (0.7–1.4, «разной высоты» референса), slope — предельный уклон,
@@ -197,27 +201,37 @@ static func near_trunk(grid: Dictionary, x: float, z: float) -> bool:
 	return false
 
 
-## Ноды поля по видам (меш, материал с ветром/приминанием, тени — только
-## ULTRA и только ближнее кольцо, П17 п.13). Буферы пустые — заполняет
-## apply_field из scatter.
+## Ноды поля по видам (меш, материал с ветром/приминанием). На ULTRA у
+## вида две ноды: ближняя «<вид>_near» (≤ SHADOW_RING_M, с тенями) и
+## дальняя без теней (П17 п.13); на HIGH — одна, без теней. Буферы
+## пустые — заполняет apply_field из scatter.
 static func make_nodes(tier: int) -> Dictionary:
 	var nodes: Dictionary = {}
 	var material := _material(tier)
 	for kind: Dictionary in KINDS:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.mesh = kind["mesh"]
-		var instance := MultiMeshInstance3D.new()
-		instance.name = String(kind["type"])
-		instance.multimesh = mm
-		instance.material_override = material
-		# Тени поля — только ULTRA и только ближнее кольцо (П17 п.13);
-		# кольцо выделяет IslandView.set_quality (ближняя нода — те же
-		# буферы в отдельной ноде), пока поле без теней.
-		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		nodes[kind["type"]] = instance
+		var type := String(kind["type"])
+		nodes[type] = _make_node(type, kind["mesh"], material, false)
+		if tier == GraphicsQuality.Tier.ULTRA:
+			nodes[type + "_near"] = _make_node(
+				type + "_near", kind["mesh"], material, true)
 	return nodes
+
+
+static func _make_node(
+		type: String, mesh: Mesh, material: Material, shadow: bool
+) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	var instance := MultiMeshInstance3D.new()
+	instance.name = type
+	instance.multimesh = mm
+	instance.material_override = material
+	# Тени поля — только ближняя нода ULTRA (П17 п.13).
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+		if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return instance
 
 
 ## Материал поля: один на все виды (вариации — инстанс-цвета). В headless
@@ -364,16 +378,67 @@ static func scatter(art: IslandArt, tier: int, center: Vector2) -> Dictionary:
 	return groups
 
 
-## Перенести раскладку scatter в ноды (буферы MultiMesh целиком).
-static func apply_field(nodes: Dictionary, groups: Dictionary) -> void:
+## Перенести раскладку scatter в ноды (буферы MultiMesh целиком). center —
+## центр раскладки: на ULTRA ближние инстансы (≤ SHADOW_RING_M) идут в
+## ноду с тенями «<вид>_near», остальные — в основную; без near-пары
+## (HIGH) всё ложится в основную.
+static func apply_field(
+		nodes: Dictionary, groups: Dictionary, center: Vector2
+) -> void:
 	for type: String in nodes:
+		if type.ends_with("_near"):
+			continue  # заполняется из раскладки базового вида
 		var instance: MultiMeshInstance3D = nodes[type]
 		var group: Dictionary = groups.get(type, {})
 		var transforms: Array = group.get("transforms", [])
-		var mm: MultiMesh = instance.multimesh
-		mm.instance_count = transforms.size()
-		var colors: PackedColorArray = group.get(
-			"colors", PackedColorArray())
-		for i: int in transforms.size():
-			mm.set_instance_transform(i, transforms[i])
-			mm.set_instance_color(i, colors[i])
+		if not transforms.is_empty() and nodes.has(type + "_near"):
+			# Разбивка вынесена в чистую функцию: буферы мультимеша в
+			# headless не читаются (get_instance_transform — identity),
+			# тест проверяет принадлежность по раскладке scatter.
+			var split := near_far_indices(transforms, center)
+			_fill_multimesh(
+				instance.multimesh, transforms, split["far"], group)
+			_fill_multimesh(
+				(nodes[type + "_near"] as MultiMeshInstance3D).multimesh,
+				transforms, split["near"], group)
+		else:
+			_fill_multimesh(
+				instance.multimesh, transforms,
+				range(transforms.size()), group)
+			if nodes.has(type + "_near"):
+				# Вид пуст в этой раскладке — ближнее кольцо тоже пусто
+				# (иначе в ноде остались бы прошлые буферы).
+				(nodes[type + "_near"] as MultiMeshInstance3D) \
+					.multimesh.instance_count = 0
+
+
+## Разбивка раскладки вида на ближнее кольцо теней (≤ SHADOW_RING_M от
+## center) и дальнюю часть — индексы в transforms (П17 п.13, ULTRA).
+static func near_far_indices(transforms: Array, center: Vector2) -> Dictionary:
+	var near: Array[int] = []
+	var far: Array[int] = []
+	for i: int in transforms.size():
+		var xf: Transform3D = transforms[i]
+		if Vector2(xf.origin.x, xf.origin.z).distance_to(center) \
+				<= SHADOW_RING_M:
+			near.append(i)
+		else:
+			far.append(i)
+	return {"near": near, "far": far}
+
+
+## Буфер одной ноды: трансформы/цвета исходной раскладки по индексам
+## (near/far-наборы — подмножества одной раскладки вида).
+static func _fill_multimesh(
+		mm: MultiMesh,
+		transforms: Array,
+		indices: Array,
+		group: Dictionary,
+) -> void:
+	mm.instance_count = indices.size()
+	var colors: PackedColorArray = group.get("colors", PackedColorArray())
+	for slot: int in indices.size():
+		var i: int = indices[slot]
+		mm.set_instance_transform(slot, transforms[i])
+		if i < colors.size():
+			mm.set_instance_color(slot, colors[i])

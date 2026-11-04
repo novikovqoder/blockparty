@@ -99,9 +99,11 @@ func test_field_tiers_radius_and_density() -> void:
 		"ULTRA-поле шире круга HIGH (радиус уровня работает)")
 
 
-func test_field_within_radius_and_shadow_off() -> void:
-	# Пучки не дальше радиуса (дрожание ±0.45 м) и пока без теней —
-	# ближнее кольцо ULTRA появится блоком 3, тест обновится там же.
+func test_field_within_radius_and_shadow_tiers() -> void:
+	# Пучки не дальше радиуса (дрожание ±0.45 м). Тени поля (П17 п.13,
+	# блок 3): HIGH — поле целиком без теней и без ближнего кольца;
+	# ULTRA — у каждого вида пара «<вид>_near»: ближняя нода кольца
+	# ≤ SHADOW_RING_M с тенью, дальняя — без.
 	var center := Vector2(20.0, 25.0)
 	var scattered := GrassField.scatter(
 		ART, GraphicsQuality.Tier.ULTRA, center)
@@ -111,17 +113,102 @@ func test_field_within_radius_and_shadow_off() -> void:
 				Vector2(xf.origin.x, xf.origin.z).distance_to(center),
 				GrassField.RADIUS_ULTRA + 0.7,
 				"пучок не дальше радиуса поля")
-	for tier: int in [
-		GraphicsQuality.Tier.HIGH, GraphicsQuality.Tier.ULTRA,
-	]:
-		var nodes := GrassField.make_nodes(tier)
-		for type: String in nodes:
-			var node: MultiMeshInstance3D = nodes[type]
-			assert_eq(node.multimesh.instance_count, 0,
-				"ноды строятся пустыми — заполняет apply_field")
-			assert_eq(node.cast_shadow,
-				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
-				"тени поля выключены (блок 3 даст ULTRA-кольцо) (%s)" % type)
+	var high := GrassField.make_nodes(GraphicsQuality.Tier.HIGH)
+	for type: String in high:
+		assert_false(type.ends_with("_near"),
+			"HIGH: ближнего кольца теней нет (%s)" % type)
+		var node: MultiMeshInstance3D = high[type]
+		assert_eq(node.multimesh.instance_count, 0,
+			"ноды строятся пустыми — заполняет apply_field")
+		assert_eq(node.cast_shadow,
+			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"HIGH: поле без теней (%s)" % type)
+	var ultra := GrassField.make_nodes(GraphicsQuality.Tier.ULTRA)
+	var near_total := 0
+	for kind: Dictionary in GrassField.KINDS:
+		var type := String(kind["type"])
+		assert_true(ultra.has(type + "_near"),
+			"ULTRA: у вида есть ближняя нода кольца (%s)" % type)
+	for type: String in ultra:
+		var node: MultiMeshInstance3D = ultra[type]
+		assert_eq(node.multimesh.instance_count, 0,
+			"ноды строятся пустыми — заполняет apply_field")
+		var want := GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			if type.ends_with("_near") \
+			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		assert_eq(node.cast_shadow, want,
+			"ULTRA: тень только у ближнего кольца (%s)" % type)
+		if type.ends_with("_near"):
+			near_total += 1
+	assert_eq(near_total, GrassField.KINDS.size(),
+		"ULTRA: ближняя нода у каждого вида")
+
+
+func test_field_apply_near_ring_split() -> void:
+	# П17 п.13: на ULTRA раскладка вида делится на ближнее кольцо теней
+	# (≤ SHADOW_RING_M, нода «<вид>_near») и дальнюю часть — сумма
+	# инстансов сохраняется, ближняя содержит только близкие пучки;
+	# на HIGH весь вид ложится в одну ноду. Принадлежность проверяется
+	# по чистой разбивке near_far_indices: буферы мультимеша в headless
+	# не читаются (get_instance_transform — identity), счётчики — честны.
+	var center := Vector2(20.0, 25.0)
+	var scattered := GrassField.scatter(
+		ART, GraphicsQuality.Tier.ULTRA, center)
+	var ultra := GrassField.make_nodes(GraphicsQuality.Tier.ULTRA)
+	GrassField.apply_field(ultra, scattered, center)
+	var near_all := 0
+	for kind: Dictionary in GrassField.KINDS:
+		var type := String(kind["type"])
+		var transforms: Array = scattered[type]["transforms"]
+		var total: int = transforms.size()
+		var split := GrassField.near_far_indices(transforms, center)
+		var near_idx: Array[int] = split["near"]
+		var far_idx: Array[int] = split["far"]
+		assert_eq(near_idx.size() + far_idx.size(), total,
+			"разбивка покрывает раскладку вида целиком (%s)" % type)
+		for i: int in near_idx:
+			var xf: Transform3D = transforms[i]
+			assert_lte(
+				Vector2(xf.origin.x, xf.origin.z).distance_to(center),
+				GrassField.SHADOW_RING_M,
+				"в ближнее кольцо идут только близкие пучки (%s)" % type)
+		for i: int in far_idx:
+			var xf: Transform3D = transforms[i]
+			assert_gt(
+				Vector2(xf.origin.x, xf.origin.z).distance_to(center),
+				GrassField.SHADOW_RING_M,
+				"в дальней ноде пучки за кольцом (%s)" % type)
+		# Счётчики нод повторяют разбивку (apply_field заполнил их).
+		var near: MultiMesh = (ultra[type + "_near"] \
+			as MultiMeshInstance3D).multimesh
+		var far: MultiMesh = (ultra[type] as MultiMeshInstance3D).multimesh
+		assert_eq(near.instance_count, near_idx.size(),
+			"ULTRA: ближняя нода — размер кольца (%s)" % type)
+		assert_eq(far.instance_count, far_idx.size(),
+			"ULTRA: дальняя нода — раскладка без кольца (%s)" % type)
+		near_all += near.instance_count
+	assert_gt(near_all, 0, "кольцо вокруг центра луга населено (проба не холостая)")
+	# Пустая раскладка (вид исчез из зоны) — ближнее кольцо очищается,
+	# в ноде не остаются прошлые буферы.
+	GrassField.apply_field(ultra, {}, center)
+	for kind: Dictionary in GrassField.KINDS:
+		var type := String(kind["type"])
+		var near_mm: MultiMesh = (ultra[type + "_near"] \
+			as MultiMeshInstance3D).multimesh
+		assert_eq(near_mm.instance_count, 0,
+			"пустая раскладка очистила кольцо (%s)" % type)
+	# HIGH: одна нода на вид, целиком.
+	var high_nodes := GrassField.make_nodes(GraphicsQuality.Tier.HIGH)
+	var high_scatter := GrassField.scatter(
+		ART, GraphicsQuality.Tier.HIGH, center)
+	GrassField.apply_field(high_nodes, high_scatter, center)
+	for kind: Dictionary in GrassField.KINDS:
+		var type := String(kind["type"])
+		var mm: MultiMesh = (high_nodes[type] \
+			as MultiMeshInstance3D).multimesh
+		assert_eq(mm.instance_count,
+			(high_scatter[type]["transforms"] as Array).size(),
+			"HIGH: весь вид в одной ноде (%s)" % type)
 
 
 # --- Т5: запретные зоны ---

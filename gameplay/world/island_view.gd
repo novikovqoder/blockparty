@@ -58,8 +58,11 @@ var _grass_field_center: Vector2 = Vector2(1e9, 1e9)
 ## Уровень, по которому поле построено (радиус/плотность/материал).
 var _grass_field_tier: int = 0
 ## П17 п.1: материалы листвы деревьев (включая уровни детализации) —
-## set_quality ставит им alpha-to-coverage на ULTRA (MSAA там есть).
+## set_quality ставит им alpha-to-coverage на ULTRA (MSAA там есть),
+## F3-галочка «Объём кроны» — volume_mix.
 var _canopy_materials: Array[ShaderMaterial] = []
+## П17 п.3: ноды импосторов дальних деревьев — F3-галочка видимости.
+var _impostor_nodes: Array[MultiMeshInstance3D] = []
 ## Клетка последней пересборки мелочи (быстрый выход).
 var _clutter_center: Vector2 = Vector2(1e9, 1e9)
 ## Уровень, по которому мелочь построена (тени/плотность).
@@ -203,13 +206,14 @@ func update_viewer(viewer_pos: Vector3) -> void:
 			GroundClutter.apply_clutter(_clutter_nodes,
 				GroundClutter.scatter(art, _clutter_tier, center))
 	# Поле травы (П17, сборка 3): пересборка при смене клетки CELL_M
-	# (детерминизм по мировым клеткам — снап не плавает).
+	# (детерминизм по мировым клеткам — снап не плавает); center нужен
+	# apply_field для ближнего кольца теней ULTRA.
 	if not _grass_field_nodes.is_empty():
 		var field_cell := (center / GrassField.CELL_M).floor()
 		if field_cell != _grass_field_center:
 			_grass_field_center = field_cell
 			GrassField.apply_field(_grass_field_nodes,
-				GrassField.scatter(art, _grass_field_tier, center))
+				GrassField.scatter(art, _grass_field_tier, center), center)
 	if center.distance_to(_lod_center) < 2.0:
 		return
 	_lod_center = center
@@ -352,6 +356,7 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 	var impostor := TreeImpostors.build(key, group)
 	if impostor != null:
 		add_child(impostor)
+		_impostor_nodes.append(impostor)
 
 
 ## П17 п.1: собрать материалы листвы из поверхностей уровня дерева
@@ -634,6 +639,21 @@ func set_clutter_visible(on: bool) -> void:
 func set_grass_field_visible(on: bool) -> void:
 	for type: String in _grass_field_nodes:
 		(_grass_field_nodes[type] as MultiMeshInstance3D).visible = on
+
+
+## Панель замера F3 (П17 п.13): показать/спрятать импосторы дальних
+## деревьев (за 90 м кроны сменяются биллбордами — переключатель замера).
+func set_tree_impostors_visible(on: bool) -> void:
+	for instance: MultiMeshInstance3D in _impostor_nodes:
+		instance.visible = on
+
+
+## Панель замера F3 (П17 п.13): выключить/вернуть объём кроны (П17 п.2 —
+## сферические нормали и AO запечены в меши; volume_mix сводит освещение
+## к «плоской карточке» до П17 — нормаль к камере, AO нейтрален).
+func set_canopy_volume(on: bool) -> void:
+	for material: ShaderMaterial in _canopy_materials:
+		material.set_shader_parameter("volume_mix", 1.0 if on else 0.0)
 
 
 ## Приминание травы возле персонажа (П17 п.7): позиция активного игрока

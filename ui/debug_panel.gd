@@ -18,12 +18,14 @@ const UPDATE_INTERVAL: float = 0.25
 ## Окно усреднения отчёта, с (П13 3.4).
 const REPORT_WINDOW_SEC: float = 5.0
 ## Галочки эффектов (П13 3.2; П14 5.2 — пять новых для замеров земли
-## и воды; П15 7 — «Каустика» и «Круги на воде»; П16 9 — «Окклюзия»):
-## порядок = порядок в панели.
+## и воды; П15 7 — «Каустика» и «Круги на воде»; П16 9 — «Окклюзия»;
+## П17 п.13 — «Трава (поле)», «Импосторы деревьев», «Объём кроны»,
+## «Свет персонажа»): порядок = порядок в панели.
 const EFFECTS: Array[StringName] = [
 	&"sdfgi", &"ssil", &"ssr", &"ssao", &"vfog", &"glow", &"aa",
 	&"lamps", &"grass", &"detail", &"pom", &"clutter", &"refr", &"ripple",
 	&"caustic", &"rings", &"occl",
+	&"gfield", &"timpostor", &"canopyvol", &"herolight",
 ]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
@@ -35,6 +37,8 @@ const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"ripple": "BU_DBG_RIPPLE",
 	&"caustic": "BU_DBG_CAUSTIC", &"rings": "BU_DBG_RINGS",
 	&"occl": "BU_DBG_OCCLUSION",
+	&"gfield": "BU_DBG_GFIELD", &"timpostor": "BU_DBG_TIMPOSTOR",
+	&"canopyvol": "BU_DBG_CANOPYVOL", &"herolight": "BU_DBG_HEROLIGHT",
 }
 ## Названия уровней для строк панели и отчёта (индекс = Tier).
 const TIER_LABELS: Array[String] = [
@@ -43,8 +47,9 @@ const TIER_LABELS: Array[String] = [
 ## Позиция блока эффектов: правее нижнего информационного блока,
 ## вмещается в минимальную канву 1280×720 (П14 5.2 — галочек стало 14,
 ## блок поднят, чтобы не вылезал за нижний край; П16 9 — 17 галочек
-## и кнопка авто-замера, поднят ещё).
-const EFFECTS_POS: Vector2 = Vector2(690, 232)
+## и кнопка авто-замера, поднят ещё; П17 п.13 — 21 галочка, список
+## переехал в скролл, блок поднят под заголовок вкладок).
+const EFFECTS_POS: Vector2 = Vector2(690, 140)
 ## Ползунки вкладки «Вода» (П15 8.1): id — ключ состояния, label — ключ
 ## перевода, диапазон и шаг — как hint_range шейдера, def — номинал из
 ## констант WaterArea («Сбросить» возвращает их), const — имя константы
@@ -277,13 +282,23 @@ func _build_effects(root: Control) -> void:
 	title.add_theme_font_size_override("font_size", 13)
 	title.add_theme_color_override("font_color", Color(0.95, 0.95, 0.85))
 	box.add_child(title)
+	# П17 п.13: галочек 21 — список в скролле (как вкладка «Вода»),
+	# чтобы блок влезал в минимальную канву; кнопки — вне скролла.
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0.0, 430.0)
+	scroll.horizontal_scroll_mode = \
+		ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var checks := VBoxContainer.new()
+	checks.add_theme_constant_override("separation", 2)
+	scroll.add_child(checks)
 	for id: StringName in EFFECTS:
 		var check := CheckBox.new()
 		check.text = tr(EFFECT_LABELS[id])
 		check.button_pressed = true
 		check.add_theme_font_size_override("font_size", 13)
 		check.toggled.connect(_on_effect_toggled.bind(id))
-		box.add_child(check)
+		checks.add_child(check)
 		_boxes[id] = check
 	var copy := Button.new()
 	copy.text = tr("BU_DBG_COPY")
@@ -551,6 +566,23 @@ func _on_effect_toggled(on: bool, id: StringName) -> void:
 			if is_inside_tree():
 				RenderingServer.viewport_set_use_occlusion_culling(
 					get_viewport().get_viewport_rid(), value)
+		&"gfield":
+			# П17 п.13: поле сканной травы (HIGH/ULTRA).
+			if _view != null:
+				_view.set_grass_field_visible(value)
+		&"timpostor":
+			# П17 п.13: импосторы дальних деревьев (все уровни).
+			if _view != null:
+				_view.set_tree_impostors_visible(value)
+		&"canopyvol":
+			# П17 п.13: объём кроны — сферические нормали + AO (все уровни).
+			if _view != null:
+				_view.set_canopy_volume(value)
+		&"herolight":
+			# П17 п.13: заполняющий свет персонажа (дешёвый, все уровни);
+			# visible = false у Light3D выключает свет.
+			for node: Node in get_tree().get_nodes_in_group(HeroFillLight.GROUP):
+				(node as HeroFillLight).visible = value
 
 
 ## Включён ли эффект на активном уровне: возврат галочки возвращает
@@ -580,6 +612,18 @@ func _tier_effect_on(id: StringName) -> bool:
 			return _tier >= GraphicsQuality.Tier.HIGH
 		&"occl":
 			# Окклюзия (П16 п. 5) включена проектом на всех уровнях.
+			return true
+		&"gfield":
+			# П17 п.13: поле сканной травы — только HIGH/ULTRA.
+			return _tier >= GraphicsQuality.Tier.HIGH
+		&"timpostor":
+			# Импосторы (П17 п.3) строятся на всех уровнях.
+			return true
+		&"canopyvol":
+			# Объём кроны (П17 п.2) запечён в меши на всех уровнях.
+			return true
+		&"herolight":
+			# Свет персонажа (П17 п.11) дешёвый — на всех уровнях.
 			return true
 	return true
 
