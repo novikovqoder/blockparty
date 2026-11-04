@@ -221,3 +221,55 @@ func test_tree_detail_slider_forces_recalc() -> void:
 	assert_eq(view._tree_lod_last_center, Vector2(1e9, 1e9),
 		"после смены ползунка пересчёт форсируется")
 	view.free()
+
+
+func test_tree_shadows_near_level_only() -> void:
+	# П18 Сборки 1 п.4: тень отбрасывает только ближний уровень-гибрид
+	# (виден до 70 м — тени деревьев до ~70 м; ветки гибрида и LOD1
+	# одинаковы, тень не рвётся на стыке); дальние уровни без тени.
+	var view := IslandView.new()
+	view._build_tree_lods("etree_bush:0", "etree_bush", _sample_group())
+	var nodes: Array[MultiMeshInstance3D] = view._tree_lods[0]["nodes"]
+	assert_eq(nodes[0].cast_shadow,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+		"ближний уровень отбрасывает тень")
+	assert_eq(nodes[1].cast_shadow,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"LOD1 без тени")
+	assert_eq(nodes[2].cast_shadow,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"LOD2 без тени")
+	# Галочка F3 «Тени деревьев»: снятая гасит тень и у ближнего уровня,
+	# возврат возвращает только ей.
+	view.set_tree_shadows(false)
+	for index: int in nodes.size():
+		assert_eq(nodes[index].cast_shadow,
+			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+			"lod%d: галочка погасила тень" % index)
+	view.set_tree_shadows(true)
+	assert_eq(nodes[0].cast_shadow,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+		"возврат галочки вернул тень ближнему уровню")
+	assert_eq(nodes[1].cast_shadow,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"дальние остаются без тени")
+	view.free()
+
+
+func test_f3_tree_shadow_checkbox() -> void:
+	# П18 Сборки 1 п.4: галочка «Тени деревьев» в EFFECTS с подписью i18n;
+	# уровневая база — тени солнца есть на NORMAL и выше (SIMPLE без теней,
+	# GraphicsQuality.apply).
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	assert_true(panel.EFFECTS.has(&"tshadow"), "галочка «Тени деревьев» есть")
+	assert_true(panel.EFFECT_LABELS.has(&"tshadow"),
+		"у «Тени деревьев» есть подпись i18n")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.SIMPLE)
+	assert_false(panel._tier_effect_on(&"tshadow"),
+		"SIMPLE: теней солнца нет — не эффект уровня")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.NORMAL)
+	assert_true(panel._tier_effect_on(&"tshadow"),
+		"NORMAL: тени деревьев — эффект уровня")
+	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.HIGH)
+	assert_true(panel._tier_effect_on(&"tshadow"), "HIGH: как NORMAL")

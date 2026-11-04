@@ -20,13 +20,13 @@ const REPORT_WINDOW_SEC: float = 5.0
 ## Галочки эффектов (П13 3.2; П14 5.2 — пять новых для замеров земли
 ## и воды; П15 7 — «Каустика» и «Круги на воде»; П16 9 — «Окклюзия»;
 ## П17 п.13 — «Трава (поле)», «Объём кроны», «Свет персонажа»;
-## П18 Сборка 1 п.2 — «Импосторы деревьев» убрана вместе с импосторами):
-## порядок = порядок в панели.
+## П18 Сборка 1 п.2 — «Импосторы деревьев» убрана вместе с импосторами,
+## п.4 — «Тени деревьев»): порядок = порядок в панели.
 const EFFECTS: Array[StringName] = [
 	&"sdfgi", &"ssil", &"ssr", &"ssao", &"vfog", &"glow", &"aa",
 	&"lamps", &"grass", &"detail", &"pom", &"clutter", &"refr", &"ripple",
 	&"caustic", &"rings", &"occl",
-	&"gfield", &"canopyvol", &"herolight",
+	&"gfield", &"canopyvol", &"tshadow", &"herolight",
 ]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
@@ -39,7 +39,8 @@ const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"caustic": "BU_DBG_CAUSTIC", &"rings": "BU_DBG_RINGS",
 	&"occl": "BU_DBG_OCCLUSION",
 	&"gfield": "BU_DBG_GFIELD",
-	&"canopyvol": "BU_DBG_CANOPYVOL", &"herolight": "BU_DBG_HEROLIGHT",
+	&"canopyvol": "BU_DBG_CANOPYVOL", &"tshadow": "BU_DBG_TSHADOW",
+	&"herolight": "BU_DBG_HEROLIGHT",
 }
 ## Названия уровней для строк панели и отчёта (индекс = Tier).
 const TIER_LABELS: Array[String] = [
@@ -598,6 +599,10 @@ func _on_effect_toggled(on: bool, id: StringName) -> void:
 			# П17 п.13: объём кроны — AO глубины кроны (все уровни).
 			if _view != null:
 				_view.set_canopy_volume(value)
+		&"tshadow":
+			# П18 Сборка 1 п.4: тени деревьев (ближний уровень).
+			if _view != null:
+				_view.set_tree_shadows(value)
 		&"herolight":
 			# П17 п.13: заполняющий свет персонажа (дешёвый, все уровни);
 			# visible = false у Light3D выключает свет.
@@ -639,6 +644,10 @@ func _tier_effect_on(id: StringName) -> bool:
 		&"canopyvol":
 			# Объём кроны (П17 п.2) запечён в меши на всех уровнях.
 			return true
+		&"tshadow":
+			# Тени деревьев (П18 Сборка 1 п.4) есть везде, где есть тени
+			# солнца (SIMPLE — без теней вовсе, GraphicsQuality.apply).
+			return _tier != GraphicsQuality.Tier.SIMPLE
 		&"herolight":
 			# Свет персонажа (П17 п.11) дешёвый — на всех уровнях.
 			return true

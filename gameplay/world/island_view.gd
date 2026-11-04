@@ -374,11 +374,13 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 		instance.name = "Props_%s_%s_lod%d" % [
 			type, key.get_slice(":", 1), index]
 		instance.multimesh = group.to_multimesh(meshes[index])
-		# Тень — у ближних уровней (П18 Сборки 1 п.4 сузит до гибрида);
-		# дальний LOD2 — без тени.
+		# П18 Сборка 1 п.4: тень — только у ближнего уровня-гибрида
+		# (виден до 70 м — тени деревьев до ~70 м и обрываются за ним,
+		# у гибрида и LOD1 ветки одинаковы, тень непрерывна); дальние
+		# уровни (LOD1/LOD2 демо) без тени — за границей теней солнца.
 		instance.cast_shadow = \
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
-			if index < 2 \
+			if index == 0 \
 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
 		_collect_canopy_materials(meshes[index])
@@ -853,6 +855,19 @@ func _set_type_visible(type: String, visible: bool) -> void:
 func set_tree_detail(mult: float) -> void:
 	_tree_detail_mult = clampf(mult, 0.1, 4.0)
 	_tree_lod_last_center = Vector2(1e9, 1e9)
+
+
+## Панель замера F3 (П18 Сборка 1 п.4): галочка «Тени деревьев» — вкл/выкл
+## cast_shadow уровней деревьев (тень отбрасывает только ближний уровень;
+## снятая галочка гасит и его). Дальние уровни всегда без тени.
+func set_tree_shadows(on: bool) -> void:
+	for state: Dictionary in _tree_lods:
+		var nodes: Array[MultiMeshInstance3D] = state["nodes"]
+		for index: int in nodes.size():
+			nodes[index].cast_shadow = \
+				GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+				if on and index == 0 \
+				else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 ## Спад густоты травы шейдера (трава «садится» в землю от fade_start до
