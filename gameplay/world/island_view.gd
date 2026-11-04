@@ -61,8 +61,6 @@ var _grass_field_tier: int = 0
 ## set_quality ставит им alpha-to-coverage на ULTRA (MSAA там есть),
 ## F3-галочка «Объём кроны» — volume_mix.
 var _canopy_materials: Array[ShaderMaterial] = []
-## П17 п.3: ноды импосторов дальних деревьев — F3-галочка видимости.
-var _impostor_nodes: Array[MultiMeshInstance3D] = []
 ## Клетка последней пересборки мелочи (быстрый выход).
 var _clutter_center: Vector2 = Vector2(1e9, 1e9)
 ## Уровень, по которому мелочь построена (тени/плотность).
@@ -318,15 +316,15 @@ func _build_props() -> void:
 
 
 ## Деревья по уровням дальности (раздел 16): полная модель до 45 м, LOD1 —
-## до 90 м. Дальше (П17 п.3) вместо прореженного LOD2 — импостор-биллборд
-## до 400 м (за туман юбки дна): атлас albedo+нормалей на 16 ракурсов
-## печатает tools/bake_tree_impostors.gd, кадр по углу на камеру и свет
-## по нормалям — impostor.gdshader. Переход LOD1 → импостор плавный:
-## дизеринг-фейд FADE_SELF у обоих, поля 10 м перекрываются — без «дыры».
+## до 90 м, дальше (П18 Сборка 1 п.2 — импосторы убраны целиком: атласы,
+## bake-тул, шейдер, FADE_SELF-стык) — прореженный LOD2 до 400 м (за туман
+## юбки дна), без тени (в П18 Сборке 1 п.3 границы переделываются под
+## 70/150 м с перетеканием, а не visibility_range по AABB всей группы).
 func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 	var levels: Array = [
 		{"mesh": group.mesh, "begin": 0.0, "end": 45.0, "shadow": true},
 		{"mesh": group.lods[0], "begin": 45.0, "end": 90.0, "shadow": true},
+		{"mesh": group.lods[1], "begin": 90.0, "end": 400.0, "shadow": false},
 	]
 	for index: int in levels.size():
 		var level: Dictionary = levels[index]
@@ -338,13 +336,6 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 		instance.visibility_range_end = float(level["end"])
 		instance.visibility_range_begin_margin = 6.0
 		instance.visibility_range_end_margin = 6.0
-		if index == 1:
-			# Стык с импостором: LOD1 гаснет дизеринг-фейдом, импостор
-			# встречно проявляется (поле стыка — TreeImpostors.RANGE_MARGIN).
-			instance.visibility_range_end = TreeImpostors.RANGE_BEGIN
-			instance.visibility_range_end_margin = TreeImpostors.RANGE_MARGIN
-			instance.visibility_range_fade_mode = \
-				GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		instance.cast_shadow = \
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
 			if level["shadow"] \
@@ -353,10 +344,6 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 		_collect_canopy_materials(level["mesh"])
 		if index == 0:
 			_register(type, instance)
-	var impostor := TreeImpostors.build(key, group)
-	if impostor != null:
-		add_child(impostor)
-		_impostor_nodes.append(impostor)
 
 
 ## П17 п.1: собрать материалы листвы из поверхностей уровня дерева
@@ -639,13 +626,6 @@ func set_clutter_visible(on: bool) -> void:
 func set_grass_field_visible(on: bool) -> void:
 	for type: String in _grass_field_nodes:
 		(_grass_field_nodes[type] as MultiMeshInstance3D).visible = on
-
-
-## Панель замера F3 (П17 п.13): показать/спрятать импосторы дальних
-## деревьев (за 90 м кроны сменяются биллбордами — переключатель замера).
-func set_tree_impostors_visible(on: bool) -> void:
-	for instance: MultiMeshInstance3D in _impostor_nodes:
-		instance.visible = on
 
 
 ## Панель замера F3 (П17 п.13): выключить/вернуть объём кроны (П17 п.2 —

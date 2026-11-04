@@ -652,17 +652,21 @@ func test_lamp_emission_out_of_sdfgi_on_high() -> void:
 # --- П16 п. 9/10: авто-замер F3 и галочка окклюзии; П17 п.13: галочки ---
 
 func test_f3_p17_checkboxes() -> void:
-	# П17 п.13: четыре новые галочки F3 — «Трава (поле)» (gfield),
-	# «Импосторы деревьев» (timpostor), «Объём кроны» (canopyvol),
-	# «Свет персонажа» (herolight). Уровневая база: поле — только
-	# HIGH/ULTRA (ниже печёная подложка), остальные три — все уровни;
+	# П17 п.13: галочки F3 — «Трава (поле)» (gfield), «Объём кроны»
+	# (canopyvol), «Свет персонажа» (herolight). Уровневая база: поле —
+	# только HIGH/ULTRA (ниже печёная подложка), остальные — все уровни;
 	# сеттеры IslandView гасят/возвращают объекты видимости, fill-свет —
-	# группой нод (visible = false у Light3D выключает свет).
+	# группой нод (visible = false у Light3D выключает свет). П18 Сборка
+	# 1 п.2: «Импосторы деревьев» убрана вместе с импосторами.
 	var panel := DebugPanel.new()
 	add_child_autofree(panel)
-	for id: StringName in [&"gfield", &"timpostor", &"canopyvol", &"herolight"]:
+	for id: StringName in [&"gfield", &"canopyvol", &"herolight"]:
 		assert_true(panel.EFFECTS.has(id), "галочка %s есть" % id)
 		assert_true(panel.EFFECT_LABELS.has(id), "у %s есть подпись i18n" % id)
+	assert_false(panel.EFFECTS.has(&"timpostor"),
+		"галочки импосторов больше нет (П18 п.2)")
+	assert_false(panel.EFFECT_LABELS.has(&"timpostor"),
+		"подписи импосторов больше нет")
 	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.NORMAL)
 	assert_false(panel._tier_effect_on(&"gfield"),
 		"NORMAL: поля нет — не эффект уровня")
@@ -671,29 +675,23 @@ func test_f3_p17_checkboxes() -> void:
 		"SIMPLE: поля нет (печёная подложка)")
 	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.HIGH)
 	assert_true(panel._tier_effect_on(&"gfield"), "HIGH: поле — эффект уровня")
-	assert_true(panel._tier_effect_on(&"timpostor"), "импосторы — все уровни")
 	assert_true(panel._tier_effect_on(&"canopyvol"), "объём кроны — все уровни")
 	assert_true(panel._tier_effect_on(&"herolight"), "свет персонажа — все уровни")
 	# Сеттеры IslandView гасят и возвращают объекты видимости (в т.ч.
 	# ближнее кольцо теней поля — ноды «<вид>_near»).
 	var view := IslandView.new()
 	view._grass_field_nodes = GrassField.make_nodes(GraphicsQuality.Tier.ULTRA)
-	var impostor := MultiMeshInstance3D.new()
-	view._impostor_nodes = [impostor]
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://assets/shaders/canopy.gdshader")
 	view._canopy_materials = [material]
 	panel._view = view
 	for on: bool in [false, true]:
 		panel._on_effect_toggled(on, &"gfield")
-		panel._on_effect_toggled(on, &"timpostor")
 		panel._on_effect_toggled(on, &"canopyvol")
 		for type: String in view._grass_field_nodes:
 			assert_eq((view._grass_field_nodes[type] \
 				as MultiMeshInstance3D).visible, on,
 				"поле %s (%s)" % ["скрыто" if not on else "возвращено", type])
-		assert_eq(impostor.visible, on,
-			"импосторы %s" % ["скрыты" if not on else "возвращены"])
 		assert_almost_eq(
 			float(material.get_shader_parameter("volume_mix")),
 			1.0 if on else 0.0, 0.0001,

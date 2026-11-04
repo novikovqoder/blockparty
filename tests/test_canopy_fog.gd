@@ -1,13 +1,12 @@
 # Тесты П17 п.4 «Туман крон»: у крон собственное смешение с туманом —
 # тон темнее и зеленее цвета дневного тумана палитры, начало раньше
-# Environment-тумана (плотность баланса при этом НЕ меняется), формула
-# одна у крон и импосторов (стык уровней не читается по туману).
+# Environment-тумана (плотность баланса при этом НЕ меняется). П18
+# Сборка 1 п.2 убрала импостор-шейдер — формула осталась одна, у крон.
 extends GutTest
 
 const B: Balance = preload("res://gameplay/balance.tres")
 const VPAL: VisualPalette = preload("res://assets/visual_palette.tres")
 const CANOPY: Shader = preload("res://assets/shaders/canopy.gdshader")
-const IMPOSTOR: Shader = preload("res://assets/shaders/impostor.gdshader")
 
 const ENV_DENSITY: float = 0.0035
 
@@ -40,20 +39,17 @@ func test_fog_starts_sooner_environment_untouched() -> void:
 		"плотность Environment-тумана не изменилась (0.0035)")
 
 
-func test_fog_shared_by_canopy_and_impostor() -> void:
-	# Формула одна у крон и импосторов: константы совпадают, FOG пишется
-	# из пользовательской fog() в обоих шейдерах — дальний ряд не меняет
-	# тон на стыке «меш ↔ импостор».
-	assert_eq(_const_vec3(IMPOSTOR.code, "FOG_TINT"),
-		_const_vec3(CANOPY.code, "FOG_TINT"),
-		"тон тумана крон и импосторов одинаков")
-	assert_eq(_const_float(IMPOSTOR.code, "FOG_DENSITY"),
-		_const_float(CANOPY.code, "FOG_DENSITY"),
-		"старт тумана крон и импосторов одинаков")
+func test_fog_written_from_user_fog_function() -> void:
+	# FOG пишется из пользовательской fog() (процессорной функции тумана
+	# в Godot нет, docs 4.7 spatial) — формула одна у крон, импосторного
+	# шейдера больше нет (П18 Сборка 1 п.2).
 	assert_true(CANOPY.code.contains("FOG = fog("),
 		"крона пишет FOG из fog()")
-	assert_true(IMPOSTOR.code.contains("FOG = fog("),
-		"импостор пишет FOG из fog()")
+	assert_false(ClassDB.class_exists("TreeImpostors"),
+		"класс импосторов удалён")
+	var shader_path := "res://assets/shaders/impostor.gdshader"
+	assert_false(FileAccess.file_exists(shader_path),
+		"impostor.gdshader удалён")
 
 
 func test_shader_code_parses() -> void:
@@ -61,7 +57,7 @@ func test_shader_code_parses() -> void:
 	# синтаксической ошибке список uniform'ов пуст — приём приёмки воды
 	# П15-ДОП блок 7): fog() — пользовательская функция с аргументами,
 	# запись в FOG — обе новинки должны разбираться движком.
-	for shader: Shader in [CANOPY, IMPOSTOR]:
+	for shader: Shader in [CANOPY]:
 		var fresh := Shader.new()
 		fresh.code = shader.code
 		var uniforms: Array = fresh.get_shader_uniform_list()

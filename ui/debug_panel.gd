@@ -19,13 +19,14 @@ const UPDATE_INTERVAL: float = 0.25
 const REPORT_WINDOW_SEC: float = 5.0
 ## Галочки эффектов (П13 3.2; П14 5.2 — пять новых для замеров земли
 ## и воды; П15 7 — «Каустика» и «Круги на воде»; П16 9 — «Окклюзия»;
-## П17 п.13 — «Трава (поле)», «Импосторы деревьев», «Объём кроны»,
-## «Свет персонажа»): порядок = порядок в панели.
+## П17 п.13 — «Трава (поле)», «Объём кроны», «Свет персонажа»;
+## П18 Сборка 1 п.2 — «Импосторы деревьев» убрана вместе с импосторами):
+## порядок = порядок в панели.
 const EFFECTS: Array[StringName] = [
 	&"sdfgi", &"ssil", &"ssr", &"ssao", &"vfog", &"glow", &"aa",
 	&"lamps", &"grass", &"detail", &"pom", &"clutter", &"refr", &"ripple",
 	&"caustic", &"rings", &"occl",
-	&"gfield", &"timpostor", &"canopyvol", &"herolight",
+	&"gfield", &"canopyvol", &"herolight",
 ]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
@@ -37,7 +38,7 @@ const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"ripple": "BU_DBG_RIPPLE",
 	&"caustic": "BU_DBG_CAUSTIC", &"rings": "BU_DBG_RINGS",
 	&"occl": "BU_DBG_OCCLUSION",
-	&"gfield": "BU_DBG_GFIELD", &"timpostor": "BU_DBG_TIMPOSTOR",
+	&"gfield": "BU_DBG_GFIELD",
 	&"canopyvol": "BU_DBG_CANOPYVOL", &"herolight": "BU_DBG_HEROLIGHT",
 }
 ## Названия уровней для строк панели и отчёта (индекс = Tier).
@@ -570,12 +571,8 @@ func _on_effect_toggled(on: bool, id: StringName) -> void:
 			# П17 п.13: поле сканной травы (HIGH/ULTRA).
 			if _view != null:
 				_view.set_grass_field_visible(value)
-		&"timpostor":
-			# П17 п.13: импосторы дальних деревьев (все уровни).
-			if _view != null:
-				_view.set_tree_impostors_visible(value)
 		&"canopyvol":
-			# П17 п.13: объём кроны — сферические нормали + AO (все уровни).
+			# П17 п.13: объём кроны — AO глубины кроны (все уровни).
 			if _view != null:
 				_view.set_canopy_volume(value)
 		&"herolight":
@@ -616,9 +613,6 @@ func _tier_effect_on(id: StringName) -> bool:
 		&"gfield":
 			# П17 п.13: поле сканной травы — только HIGH/ULTRA.
 			return _tier >= GraphicsQuality.Tier.HIGH
-		&"timpostor":
-			# Импосторы (П17 п.3) строятся на всех уровнях.
-			return true
 		&"canopyvol":
 			# Объём кроны (П17 п.2) запечён в меши на всех уровнях.
 			return true
