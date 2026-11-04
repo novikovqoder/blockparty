@@ -203,3 +203,25 @@ BU_W_SEAFLOOR_SHELF,Дно: шельф, м,Seafloor: shelf, m
 BU_W_SEAFLOOR_DEPTH,Дно: глубина вдали, м,Seafloor: far depth, m
 BU_DBG_EZLAB_ENTER,Лаборатория ezTree,ezTree lab
 BU_DBG_EZLAB_EXIT,Вернуться в мир,Back to world
+BU_DBG_LIGHT_TAB,Свет,Light
+BU_L_SUN_ENERGY,Солнце: сила,Sun: energy
+BU_L_SUN_ELEVATION,Солнце: высота °,Sun: elevation °
+BU_L_AMBIENT_ENERGY,Ambient: сила,Ambient: energy
+BU_L_EXPOSURE,Экспозиция,Exposure
+BU_L_SATURATION,Насыщенность,Saturation
+BU_L_CONTRAST,Контраст,Contrast
+BU_L_FOG_DENSITY,Туман: плотность,Fog: density
+BU_L_LEAF_BRIGHTNESS,Листва: яркость,Leaves: brightness
+BU_L_LEAF_GLOW,Листва: просвет,Leaves: translucency
+BU_L_SUN_COLOR,Солнце: цвет,Sun: color
+BU_L_AMBIENT_COLOR,Ambient: цвет,Ambient: color
+BU_L_FOG_COLOR,Туман: цвет,Fog: color
+BU_L_LEAF_COLOR,Листва: цвет,Leaves: color
+BU_L_BARK_COLOR,Кора: цвет,Bark: color
+BU_L_TONEMAP,Тонмаппинг,Tonemapping
+BU_L_AMBIENT_SOURCE,Ambient: источник,Ambient: source
+BU_L_SOURCE_SKY,от неба,from sky
+BU_L_SOURCE_FLAT,ровный,flat
+BU_L_FOG_ON,Туман,Fog
+BU_L_RESET,Сбросить,Reset
+BU_L_COPY,Скопировать значения,Copy values

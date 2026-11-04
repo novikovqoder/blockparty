@@ -98,6 +98,10 @@ func _ready() -> void:
 		_island.get_node("IslandView") as IslandView,
 		GraphicsQuality.tier_from_settings(),
 	)
+	# П18-ЛАБОРАТОРИЯ: вкладка F3 «Свет» — ползунки поверх DayCycle.
+	_debug.watch_light($WorldEnvironment.environment,
+		$WorldEnvironment/SunLight as DirectionalLight3D,
+		$WorldEnvironment.get_node("SkyDome") as SkyDome)
 	if Dev.debug_collisions:
 		_draw_debug_collisions(_island)
 	_wire_network()

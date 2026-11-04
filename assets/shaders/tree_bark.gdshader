@@ -14,10 +14,13 @@ uniform sampler2D bark_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform sampler2D normal_tex : filter_linear_mipmap_anisotropic;
 uniform sampler2D roughness_tex : filter_linear_mipmap_anisotropic;
 uniform vec2 uv_scale = vec2(1.0, 1.0);
+// П18-ЛАБОРАТОРИЯ: ползунок «цвет коры» (LightTuner). Дефолт-белый —
+// нейтральный множитель, картинка мира не меняется.
+uniform vec3 bark_tint : source_color = vec3(1.0);
 
 void fragment() {
 	vec2 bark_uv = UV * uv_scale;
-	ALBEDO = texture(bark_tex, bark_uv).rgb * COLOR.rgb;
+	ALBEDO = texture(bark_tex, bark_uv).rgb * COLOR.rgb * bark_tint;
 	NORMAL_MAP = texture(normal_tex, bark_uv).rgb;
 	ROUGHNESS = texture(roughness_tex, bark_uv).r;
 	METALLIC = 0.0;

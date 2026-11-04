@@ -220,6 +220,12 @@ func _process(_delta: float) -> void:
 		for node: Node in get_tree().get_nodes_in_group("water_surface"):
 			(node as WaterArea).update_sky(sky_top, sky_horizon,
 				water_light_dir, water_glint)
+	# П18-ЛАБОРАТОРИЯ: активные ползунки F3 → «Свет» перекрывают расчёты
+	# цикла дня (живой рендер, ничего не сохраняется). Вызов строго в конце
+	# _process — после купола и света, иначе SkyDome перезапишет энергию
+	# солнца своим гашением у горизонта. Все значения в дефолте (ползунки
+	# не трогали или нажали «Сбросить») — цикл дня ведёт мир как раньше.
+	LightTuner.apply_scene(_environment, _sun, _dome, to_sun)
 
 
 ## Смешение четырёх цветов палитры по весам времён суток.

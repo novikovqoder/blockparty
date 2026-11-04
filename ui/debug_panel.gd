@@ -171,6 +171,41 @@ const WAVE_BASE_CONSTS: Array[Dictionary] = [
 	{"const": "LAKE_WAVE_FREQ", "base": WaterArea.LAKE_WAVE_FREQ,
 		"mult": &"wave_freq"},
 ]
+## Ползунки вкладки «Свет» (П18-ЛАБОРАТОРИЯ): id — ключ LightTuner.DEFS,
+## label — ключ перевода, диапазон и шаг ползунка; значения и дефолты
+## (свет мира днём) хранит LightTuner — панель только показывают их и
+## пишет новые. Диапазоны с запасом поверх демо ezTree (солнце 5, туман
+## 0.0015, экспозиция 2): владелец подбирает на глаз, без ограничений
+## сверху, кроме разумного.
+const LIGHT_SLIDERS: Array[Dictionary] = [
+	{"id": &"sun_energy", "label": "BU_L_SUN_ENERGY",
+		"min": 0.0, "max": 6.0, "step": 0.05},
+	{"id": &"sun_elevation", "label": "BU_L_SUN_ELEVATION",
+		"min": 5.0, "max": 90.0, "step": 1.0},
+	{"id": &"ambient_energy", "label": "BU_L_AMBIENT_ENERGY",
+		"min": 0.0, "max": 1.5, "step": 0.01},
+	{"id": &"exposure", "label": "BU_L_EXPOSURE",
+		"min": 0.1, "max": 4.0, "step": 0.05},
+	{"id": &"saturation", "label": "BU_L_SATURATION",
+		"min": 0.0, "max": 2.0, "step": 0.05},
+	{"id": &"contrast", "label": "BU_L_CONTRAST",
+		"min": 0.0, "max": 2.0, "step": 0.05},
+	{"id": &"fog_density", "label": "BU_L_FOG_DENSITY",
+		"min": 0.0, "max": 0.02, "step": 0.0001},
+	{"id": &"leaf_brightness", "label": "BU_L_LEAF_BRIGHTNESS",
+		"min": 0.0, "max": 2.0, "step": 0.05},
+	{"id": &"leaf_glow", "label": "BU_L_LEAF_GLOW",
+		"min": 0.0, "max": 1.0, "step": 0.01},
+]
+## Цвета вкладки «Свет» (П18-ЛАБОРАТОРИЯ): солнце, ambient, туман и
+## деревья (листва/кора — множители поверх пресетов).
+const LIGHT_COLORS: Array[Dictionary] = [
+	{"id": &"sun_color", "label": "BU_L_SUN_COLOR"},
+	{"id": &"ambient_color", "label": "BU_L_AMBIENT_COLOR"},
+	{"id": &"fog_color", "label": "BU_L_FOG_COLOR"},
+	{"id": &"leaf_color", "label": "BU_L_LEAF_COLOR"},
+	{"id": &"bark_color", "label": "BU_L_BARK_COLOR"},
+]
 
 var _label: Label
 var _effects: PanelContainer
@@ -195,6 +230,19 @@ var _preset_buttons: Dictionary[StringName, Button] = {}
 ## «Сбросить» переставляет ползунки программно — сигналы погашены,
 ## промежуточные состояния в материалы не идут.
 var _water_applying: bool = false
+# --- Вкладка «Свет» (П18-ЛАБОРАТОРИЯ) ---
+var _light_tab: Control = null
+var _light_sliders: Dictionary[StringName, HSlider] = {}
+var _light_labels: Dictionary[StringName, Label] = {}
+var _light_pickers: Dictionary[StringName, ColorPickerButton] = {}
+var _light_options: Dictionary[StringName, OptionButton] = {}
+var _light_fog_check: CheckBox = null
+## Сцена применения света (мир: environment/солнце/купол; лаборатория:
+## environment/солнце/без купола) — watch_light от сцены.
+var _light_sun: DirectionalLight3D = null
+var _light_dome: SkyDome = null
+## Перестановка контролов «Сбросить» без промежуточных применений.
+var _light_applying: bool = false
 var _visible_panel: bool = false
 var _was_pressed: bool = false
 var _accum: float = 0.0
@@ -266,6 +314,19 @@ func watch_graphics(env: Environment, view: IslandView, tier: int) -> void:
 			_boxes[id].set_pressed_no_signal(true)
 
 
+## Свет сцены для вкладки «Свет» (П18-ЛАБОРАТОРИЯ): environment общий
+## с вкладкой эффектов, солнце и купол — для ползунков солнца; купола
+## нет в лаборатории ezTree (там DirectionalLight3D и небо-градиент).
+func watch_light(
+		env: Environment,
+		sun: DirectionalLight3D,
+		dome: SkyDome,
+) -> void:
+	_env = env
+	_light_sun = sun
+	_light_dome = dome
+
+
 func _ready() -> void:
 	layer = 20
 	var root := Control.new()
@@ -282,6 +343,11 @@ func _ready() -> void:
 	_label.visible = false
 	root.add_child(_label)
 	_build_effects(root)
+	# П18-ЛАБОРАТОРИЯ: материалы деревьев (canopy/bark) текущей сцены —
+	# для ползунков листвы/коры; сцены мира и лаборатории строят деревья
+	# до создания панели, повторный вызов пересобирает список.
+	if get_tree().current_scene != null:
+		LightTuner.bind_scene(get_tree().current_scene)
 
 
 ## Блок галочек и кнопки отчёта (П13 3.2; П15 8 — вкладка «Вода» рядом):
@@ -357,6 +423,7 @@ func _build_effects(root: Control) -> void:
 	_auto_button.pressed.connect(_on_auto_button)
 	box.add_child(_auto_button)
 	_build_water_tab(tabs)
+	_build_light_tab(tabs)
 	# П18-ЛАБОРАТОРИЯ: кнопка входа из мира и возврата — под вкладками.
 	_lab_button = Button.new()
 	_lab_button.text = tr("BU_DBG_EZLAB_ENTER")
@@ -475,8 +542,8 @@ func set_lab_mode(on: bool) -> void:
 		if tab != null:
 			_tabs.set_tab_hidden(
 				_tabs.get_tab_idx_from_control(tab), on)
-	# Пока видимых вкладок нет (вкладка «Свет» появляется следующим
-	# блоком П18-ЛАБОРАТОРИИ), прячем пустой контейнер заголовков.
+	# В лаборатории остаётся вкладка «Свет»; если видимых вкладок нет —
+	# прячем пустой контейнер заголовков.
 	var visible_tabs: int = 0
 	for i: int in _tabs.get_tab_count():
 		if not _tabs.is_tab_hidden(i):
@@ -1007,6 +1074,207 @@ func _copy_water_values() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	DisplayServer.clipboard_set(build_water_values_text())
+
+
+# --- Вкладка «Свет» (П18-ЛАБОРАТОРИЯ) ---
+
+## Вкладка «Свет»: ползунки, работающие и в лаборатории ezTree, и в мире,
+## на живом рендере (LightTuner перекрывает расчёты DayCycle; ничего не
+## сохраняется). «Сбросить» возвращает исходный свет сцены, «Скопировать
+## значения» кладёт в буфер все параметры с числами — владелец присылает
+## текст из игры, следующим этапом числа становятся светом мира.
+func _build_light_tab(tabs: TabContainer) -> void:
+	var scroll := ScrollContainer.new()
+	scroll.name = tr("BU_DBG_LIGHT_TAB")
+	scroll.custom_minimum_size = Vector2(0.0, 352.0)
+	scroll.horizontal_scroll_mode = \
+		ScrollContainer.SCROLL_MODE_DISABLED
+	tabs.add_child(scroll)
+	_light_tab = scroll
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
+	for def: Dictionary in LIGHT_COLORS:
+		var row := HBoxContainer.new()
+		box.add_child(row)
+		var name_label := Label.new()
+		name_label.text = tr(def["label"])
+		name_label.custom_minimum_size = Vector2(198.0, 0.0)
+		name_label.add_theme_font_size_override("font_size", 13)
+		row.add_child(name_label)
+		var picker := ColorPickerButton.new()
+		picker.custom_minimum_size = Vector2(92.0, 22.0)
+		picker.edit_alpha = false
+		picker.color = LightTuner.value(def["id"])
+		picker.color_changed.connect(
+			_on_light_color_changed.bind(def["id"]))
+		row.add_child(picker)
+		_light_pickers[def["id"]] = picker
+	for def: Dictionary in LIGHT_SLIDERS:
+		var row := HBoxContainer.new()
+		box.add_child(row)
+		var name_label := Label.new()
+		name_label.text = tr(def["label"])
+		name_label.custom_minimum_size = Vector2(198.0, 0.0)
+		name_label.add_theme_font_size_override("font_size", 13)
+		row.add_child(name_label)
+		var slider := HSlider.new()
+		slider.min_value = float(def["min"])
+		slider.max_value = float(def["max"])
+		slider.step = float(def["step"])
+		slider.value = float(LightTuner.value(def["id"]))
+		slider.custom_minimum_size = Vector2(122.0, 20.0)
+		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		slider.value_changed.connect(
+			_on_light_slider_changed.bind(def["id"]))
+		row.add_child(slider)
+		_light_sliders[def["id"]] = slider
+		var value_label := Label.new()
+		value_label.custom_minimum_size = Vector2(46.0, 0.0)
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value_label.add_theme_font_size_override("font_size", 13)
+		value_label.text = _fmt_light(float(def["step"]),
+			float(LightTuner.value(def["id"])))
+		row.add_child(value_label)
+		_light_labels[def["id"]] = value_label
+	# Тонмаппинг: имена режимов Environment.ToneMapper.
+	var tone_row := HBoxContainer.new()
+	box.add_child(tone_row)
+	var tone_label := Label.new()
+	tone_label.text = tr("BU_L_TONEMAP")
+	tone_label.custom_minimum_size = Vector2(198.0, 0.0)
+	tone_label.add_theme_font_size_override("font_size", 13)
+	tone_row.add_child(tone_label)
+	var tonemap := OptionButton.new()
+	for name: String in LightTuner.TONEMAP_NAMES:
+		tonemap.add_item(name)
+	tonemap.selected = int(LightTuner.value(&"tonemap"))
+	tonemap.item_selected.connect(
+		_on_light_option_selected.bind(&"tonemap"))
+	tone_row.add_child(tonemap)
+	_light_options[&"tonemap"] = tonemap
+	# Ambient: источник — небо (купол) или ровный цвет.
+	var source_row := HBoxContainer.new()
+	box.add_child(source_row)
+	var source_label := Label.new()
+	source_label.text = tr("BU_L_AMBIENT_SOURCE")
+	source_label.custom_minimum_size = Vector2(198.0, 0.0)
+	source_label.add_theme_font_size_override("font_size", 13)
+	source_row.add_child(source_label)
+	var source := OptionButton.new()
+	source.add_item(tr("BU_L_SOURCE_SKY"))
+	source.add_item(tr("BU_L_SOURCE_FLAT"))
+	source.selected = 0 if bool(LightTuner.value(&"ambient_sky")) else 1
+	source.item_selected.connect(
+		_on_light_option_selected.bind(&"ambient_sky"))
+	source_row.add_child(source)
+	_light_options[&"ambient_sky"] = source
+	# Туман: вкл/выкл.
+	var fog_row := HBoxContainer.new()
+	box.add_child(fog_row)
+	var fog := CheckBox.new()
+	fog.text = tr("BU_L_FOG_ON")
+	fog.button_pressed = bool(LightTuner.value(&"fog_on"))
+	fog.add_theme_font_size_override("font_size", 13)
+	fog.toggled.connect(_on_light_fog_toggled)
+	fog_row.add_child(fog)
+	_light_fog_check = fog
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 8)
+	box.add_child(buttons)
+	var reset := Button.new()
+	reset.text = tr("BU_L_RESET")
+	reset.add_theme_font_size_override("font_size", 13)
+	reset.pressed.connect(_reset_light)
+	buttons.add_child(reset)
+	var copy := Button.new()
+	copy.text = tr("BU_L_COPY")
+	copy.add_theme_font_size_override("font_size", 13)
+	copy.pressed.connect(_copy_light_values)
+	buttons.add_child(copy)
+
+
+func _on_light_slider_changed(value: float, id: StringName) -> void:
+	if _light_applying:
+		return
+	LightTuner.set_value(id, value)
+	if _light_labels.has(id):
+		var step: float = 0.0
+		for def: Dictionary in LIGHT_SLIDERS:
+			if def["id"] == id:
+				step = float(def["step"])
+		_light_labels[id].text = _fmt_light(step, value)
+	_apply_light()
+
+
+func _on_light_color_changed(color: Color, id: StringName) -> void:
+	if _light_applying:
+		return
+	LightTuner.set_value(id, color)
+	_apply_light()
+
+
+## Опции: тонмаппинг — индекс режима, ambient-источник — 0 небо/1 ровный.
+func _on_light_option_selected(index: int, id: StringName) -> void:
+	if _light_applying:
+		return
+	if id == &"tonemap":
+		LightTuner.set_value(id, index)
+	else:
+		LightTuner.set_value(id, index == 0)
+	_apply_light()
+
+
+func _on_light_fog_toggled(on: bool) -> void:
+	if _light_applying:
+		return
+	LightTuner.set_value(&"fog_on", on)
+	_apply_light()
+
+
+## Применить ползунки к сцене (в мире тот же кадр перекроет DayCycle —
+## значения совпадают; в лаборатории это единственное применение).
+func _apply_light() -> void:
+	LightTuner.apply_scene(_env, _light_sun, _light_dome)
+
+
+## «Сбросить»: значения LightTuner — в дефолты (DayCycle снова ведёт
+## мир сам), контролы переставляются молча, сцена возвращается к исходному
+## свету (в лаборатории — дефолтная сборка, в мире — следующий кадр
+## цикла дня).
+func _reset_light() -> void:
+	_light_applying = true
+	LightTuner.reset()
+	for def: Dictionary in LIGHT_SLIDERS:
+		var id: StringName = def["id"]
+		if _light_sliders.has(id):
+			_light_sliders[id].set_value_no_signal(
+				float(LightTuner.value(id)))
+			_light_labels[id].text = _fmt_light(float(def["step"]),
+				float(LightTuner.value(id)))
+	for def: Dictionary in LIGHT_COLORS:
+		_light_pickers[def["id"]].color = LightTuner.value(def["id"])
+	_light_options[&"tonemap"].selected = \
+		int(LightTuner.value(&"tonemap"))
+	_light_options[&"ambient_sky"].selected = \
+		0 if bool(LightTuner.value(&"ambient_sky")) else 1
+	_light_fog_check.set_pressed_no_signal(
+		bool(LightTuner.value(&"fog_on")))
+	_light_applying = false
+	LightTuner.apply_defaults(_env, _light_sun, _light_dome)
+
+
+func _copy_light_values() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	DisplayServer.clipboard_set(LightTuner.build_values_text())
+
+
+## Подпись ползунка: шаг крупнее сотой — два знака, мельче (плотность
+## тумана) — четыре.
+static func _fmt_light(step: float, value: float) -> String:
+	return ("%.4f" if step < 0.01 else "%.2f") % value
 
 
 ## Число без хвоста нулей, но с десятичной частью («0.016», «1.0»).

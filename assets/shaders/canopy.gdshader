@@ -41,6 +41,17 @@ uniform float volume_mix = 1.0;
 // вне перехода равен alpha_cut. Отдельный от alpha_cut uniform, чтобы
 // возвращать порог пресета, не читая manifest заново.
 uniform float reveal = 1.0;
+// П18-ЛАБОРАТОРИЯ: ползунки F3 → «Свет» (LightTuner). Дефолты нейтральны —
+// картинка мира не меняется, пока владелец не трогает ползунки.
+// leaf_tint_mul × leaf_brightness — цвет и яркость листвы (множители поверх
+// leaf_tint пресета и AO); leaf_glow — «просвет» сцены: эмиссия с теневой
+// стороны листьев напротив солнца (дешёвая аппроксимация sss-картинки демо
+// www.eztree.dev); sun_dir_world — направление НА солнце, в view-пространство
+// переводится здесь (VIEW_MATRIX доступен во fragment).
+uniform vec3 leaf_tint_mul : source_color = vec3(1.0);
+uniform float leaf_brightness = 1.0;
+uniform float leaf_glow = 0.0;
+uniform vec3 sun_dir_world = vec3(0.0, 1.0, 0.0);
 
 varying vec3 world_pos;
 
@@ -164,9 +175,20 @@ void fragment() {
 	ALPHA = leaf.a;
 	// Объём кроны (П17 п.2, после П18 — только AO): COLOR.rgb — запечённый
 	// AO глубины; при volume_mix = 0 AO нейтрален. Нормали — от генератора
-	// ez-tree (roundedNormals в GLB), шейдер их не меняет.
-	ALBEDO = leaf.rgb * leaf_tint * mix(vec3(1.0), COLOR.rgb, volume_mix);
+	// ez-tree (roundedNormals в GLB), шейдер их не меняет. Ползунки
+	// лаборатории умножают результат (нейтральные дефолты — без эффекта).
+	vec3 albedo = leaf.rgb * leaf_tint * leaf_tint_mul
+		* mix(vec3(1.0), COLOR.rgb, volume_mix) * leaf_brightness;
+	ALBEDO = albedo;
 	ROUGHNESS = 1.0;
 	METALLIC = 0.0;
+	// Просвет листвы (leaf_glow): квадрат смягчения, только теневая от
+	// солнца сторона (back > 0); при leaf_glow = 0 ветка не выполняется.
+	if (leaf_glow > 0.0) {
+		vec3 sun_view = normalize(
+			(VIEW_MATRIX * vec4(normalize(sun_dir_world), 0.0)).xyz);
+		float back = max(0.0, -dot(normalize(NORMAL), sun_view));
+		EMISSION = albedo * leaf_glow * back * back;
+	}
 	FOG = fog(world_pos, CAMERA_POSITION_WORLD);
 }

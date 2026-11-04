@@ -85,6 +85,9 @@ func _ready() -> void:
 	add_child(_debug)
 	_debug.set_lab_mode(true)
 	_debug.return_world_requested.connect(_on_return_world)
+	# П18-ЛАБОРАТОРИЯ: вкладка F3 «Свет» работает и здесь — купола Sky3D
+	# нет (null), солнце и environment лаборатории.
+	_debug.watch_light(_env, _sun, null)
 
 
 ## Ровная земля с пятнами травы: плоскость 760×760 м, материал демо —
@@ -233,6 +236,15 @@ func _build_camera() -> void:
 		PITCH_MIN, PITCH_MAX)
 	_camera.current = true
 	_apply_orbit()
+
+
+## Диск солнца неба-градиента и «просвет» листвы (leaf_glow) следуют за
+## лабораторным солнцем: его положение двигает ползунок высоты (LightTuner).
+## DirectionalLight3D светит вдоль −Z своей трансформации — НА солнце +Z.
+func _process(_delta: float) -> void:
+	var to_sun := _sun.global_transform.basis.z
+	_sky_material.set_shader_parameter("sun_dir", to_sun)
+	LightTuner.set_lab_sun_dir(to_sun)
 
 
 func _apply_orbit() -> void:
