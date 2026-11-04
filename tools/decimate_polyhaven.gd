@@ -47,13 +47,17 @@ const AO_STRENGTH := 0.35
 func _init() -> void:
 	await create_timer(0.01).timeout
 	var args := OS.get_cmdline_user_args()
-	if args.size() != 3:
-		push_error("аргументы: <набор> <целевые_треугольники> <имя_файла>")
+	if args.size() < 3 or args.size() > 4:
+		push_error("аргументы: <набор> <целевые_треугольники> <имя_файла> [bundle]")
 		quit(1)
 		return
 	var asset: String = args[0]
 	var target_total: int = int(args[1])
 	var out_name: String = args[2]
+	# bundle (поле травы, П17 сборка 3): корневые ноды скана — пучки,
+	# разложенные в ряд по X (см. декомпозицию ниже); каждый файл —
+	# компактная группа пучков, один инстанс поля = один пучок.
+	var bundle := args.size() == 4 and args[3] == "bundle"
 	var started := Time.get_ticks_msec()
 	var src := "res://.downloads/ph/%s/%s_1k.gltf" % [asset, asset]
 	var doc := GLTFDocument.new()
@@ -63,38 +67,81 @@ func _init() -> void:
 		quit(1)
 		return
 	var root := doc.generate_scene(state)
-	var parts: Array = []
-	_collect(root, Transform3D.IDENTITY, parts)
+	# Группы пучков: при bundle корневой нод-«пучок» скана переводом стоит
+	# в общем ряду по X; сдвиг-коррекция гасит его X/Z, и пучки группы
+	# сводятся в компакт вокруг начала координат (Y-постановка скана
+	# сохраняется — пучки стоят на земле, min y ≈ 0).
+	var groups: Dictionary = {}
+	if bundle:
+		for child: Node in root.get_children():
+			if not child is Node3D:
+				continue
+			var correction := Transform3D(Basis(), Vector3(
+				-(child as Node3D).transform.origin.x, 0.0,
+				-(child as Node3D).transform.origin.z))
+			var child_parts: Array = []
+			_collect(child as Node3D, correction, child_parts)
+			if child_parts.is_empty():
+				continue
+			var key := _group_key(String((child as Node3D).name), asset)
+			if groups.has(key):
+				(groups[key] as Array).append_array(child_parts)
+			else:
+				groups[key] = child_parts
+	else:
+		var parts: Array = []
+		_collect(root, Transform3D.IDENTITY, parts)
+		groups[""] = parts
 	root.free()
-	if parts.is_empty():
+	if groups.is_empty():
 		push_error("в модели нет треугольных поверхностей: " + src)
 		quit(1)
 		return
 	var total_before := 0
-	for part: Dictionary in parts:
-		total_before += (part["indices"] as PackedInt32Array).size() / 3
-	for part: Dictionary in parts:
-		var share: float = float((part["indices"] as PackedInt32Array).size() / 3) \
-			/ maxf(total_before, 1)
-		_decimate(part, maxi(24, roundi(target_total * share)))
-		_bake_colors(part, src)
+	for key: String in groups:
+		for part: Dictionary in groups[key]:
+			total_before += (part["indices"] as PackedInt32Array).size() / 3
 	var total_after := 0
 	var total_cut := 0
-	for part: Dictionary in parts:
-		total_after += (part["indices"] as PackedInt32Array).size() / 3
-		total_cut += int(part["cut"])
-	var mesh := _merge(parts)
 	var dir := "res://assets/third_party/polyhaven.com/%s" % asset
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
-	var path := "%s/%s.res" % [dir, out_name]
-	var save_error := ResourceSaver.save(mesh, path)
-	if save_error != OK:
-		push_error("не удалось сохранить %s (код %d)" % [path, save_error])
-		quit(1)
-		return
-	print("%s: %s → %s треугольников (вырезано фона %s), поверхностей %d, %s, %.1f с" % [
+	for key: String in groups:
+		var parts: Array = groups[key]
+		var group_before := 0
+		for part: Dictionary in parts:
+			group_before += (part["indices"] as PackedInt32Array).size() / 3
+		for part: Dictionary in parts:
+			var share: float = float((part["indices"] as PackedInt32Array).size() / 3) \
+				/ maxf(group_before, 1)
+			_decimate(part, maxi(24, roundi(target_total * share)))
+			_bake_colors(part, src)
+		var group_after := 0
+		var group_cut := 0
+		for part: Dictionary in parts:
+			group_after += (part["indices"] as PackedInt32Array).size() / 3
+			group_cut += int(part["cut"])
+		var suffix := "" if key == "" or key == "main" else "_" + key
+		if group_after == 0:
+			# Вырезка фона убрала группу целиком (мелкие пучки на атласе):
+			# пустой файл не пишем.
+			print("%s%s: вырезан фоном целиком, файл не записан" % [out_name, suffix])
+			continue
+		total_after += group_after
+		total_cut += group_cut
+		var mesh := _merge(parts)
+		var path := "%s/%s%s.res" % [dir, out_name, suffix]
+		var save_error := ResourceSaver.save(mesh, path)
+		if save_error != OK:
+			push_error("не удалось сохранить %s (код %d)" % [path, save_error])
+			quit(1)
+			return
+		print("%s%s: %s → %s треугольников (вырезано фона %s), поверхностей %d, %s" % [
+			out_name, suffix, _fmt(group_before), _fmt(group_after),
+			_fmt(group_cut), parts.size(), path,
+		])
+	print("итого %s: %s → %s треугольников (вырезано фона %s), групп %d, %.1f с" % [
 		out_name, _fmt(total_before), _fmt(total_after), _fmt(total_cut),
-		parts.size(), path, (Time.get_ticks_msec() - started) / 1000.0,
+		groups.size(), (Time.get_ticks_msec() - started) / 1000.0,
 	])
 	quit()
 
@@ -106,6 +153,20 @@ func _fmt(n: int) -> String:
 		out = " " + text.substr(text.length() - 3) + out
 		text = text.substr(0, text.length() - 3)
 	return (text + out).strip_edges()
+
+
+## Ключ группы пучков для bundle-режима. Имена нодов скана:
+## '<набор>_<тип>_<буква>[_LOD0]' → тип ('tall', 'dead', ...), у сканов без
+## типа ('<набор>_<буква>') весь набор — одна группа 'main' (суффикс в
+## имени файла не пишется).
+func _group_key(node_name: String, asset: String) -> String:
+	var stem := node_name.trim_suffix("_LOD0")
+	if stem.begins_with(asset + "_"):
+		stem = stem.substr(asset.length() + 1)
+	var tokens := stem.split("_")
+	if tokens.size() >= 2:
+		return tokens[0]
+	return "main"
 
 
 ## Обход сцены glTF: каждая треугольная поверхность — «деталь» с вершинами
