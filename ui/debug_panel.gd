@@ -21,14 +21,14 @@ const REPORT_WINDOW_SEC: float = 5.0
 ## и воды; П15 7 — «Каустика» и «Круги на воде»; П16 9 — «Окклюзия»;
 ## П17 п.13 — «Трава (поле)», «Объём кроны», «Свет персонажа»;
 ## П18 Сборка 1 п.2 — «Импосторы деревьев» убрана вместе с импосторами,
-## п.4 — «Тени деревьев», п.5 — «Свет: ezTree» и «LOD-перетекание»):
+## п.4 — «Тени деревьев», п.5 — «LOD-перетекание»):
 ## порядок = порядок в панели.
 const EFFECTS: Array[StringName] = [
 	&"sdfgi", &"ssil", &"ssr", &"ssao", &"vfog", &"glow", &"aa",
 	&"lamps", &"grass", &"detail", &"pom", &"clutter", &"refr", &"ripple",
 	&"caustic", &"rings", &"occl",
 	&"gfield", &"canopyvol", &"tshadow", &"herolight",
-	&"ezlight", &"lodblend",
+	&"lodblend",
 ]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
@@ -43,7 +43,7 @@ const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"gfield": "BU_DBG_GFIELD",
 	&"canopyvol": "BU_DBG_CANOPYVOL", &"tshadow": "BU_DBG_TSHADOW",
 	&"herolight": "BU_DBG_HEROLIGHT",
-	&"ezlight": "BU_DBG_EZLIGHT", &"lodblend": "BU_DBG_LODBLEND",
+	&"lodblend": "BU_DBG_LODBLEND",
 }
 ## Названия уровней для строк панели и отчёта (индекс = Tier).
 const TIER_LABELS: Array[String] = [
@@ -54,7 +54,7 @@ const TIER_LABELS: Array[String] = [
 ## блок поднят, чтобы не вылезал за нижний край; П16 9 — 17 галочек
 ## и кнопка авто-замера, поднят ещё; П17 п.13 — 21 галочка, список
 ## переехал в скролл, блок поднят под заголовок вкладок; П18 Сборка 1
-## п.5 — 23 галочки, в скролле).
+## п.5 — 22 галочки, в скролле).
 const EFFECTS_POS: Vector2 = Vector2(690, 140)
 ## Ползунки вкладки «Вода» (П15 8.1): id — ключ состояния, label — ключ
 ## перевода, диапазон и шаг — как hint_range шейдера, def — номинал из
@@ -612,13 +612,6 @@ func _on_effect_toggled(on: bool, id: StringName) -> void:
 			# visible = false у Light3D выключает свет.
 			for node: Node in get_tree().get_nodes_in_group(HeroFillLight.GROUP):
 				(node as HeroFillLight).visible = value
-		&"ezlight":
-			# П18 Сборка 1 п.5: пресет света ezTree — день к свету демо
-			# (сильное солнце, ровный ambient, голубой туман); снятая
-			# галочка возвращает «текущий» баланс. Переход плавный —
-			# DayCycle ведёт его сам (_eztree_mix).
-			for node: Node in get_tree().get_nodes_in_group(DayCycle.GROUP):
-				(node as DayCycle).eztree_light = value
 		&"lodblend":
 			# П18 Сборка 1 п.5: перетекание листвы при смене ближних
 			# уровней деревьев (0↔1); снятая — смена мгновенная.
@@ -666,10 +659,6 @@ func _tier_effect_on(id: StringName) -> bool:
 			return _tier != GraphicsQuality.Tier.SIMPLE
 		&"herolight":
 			# Свет персонажа (П17 п.11) дешёвый — на всех уровнях.
-			return true
-		&"ezlight":
-			# Пресет света (П18 Сборка 1 п.5) — не графический эффект,
-			# на всех уровнях.
 			return true
 		&"lodblend":
 			# Перетекание LOD (П18 Сборка 1 п.5) — на всех уровнях.

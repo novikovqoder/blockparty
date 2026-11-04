@@ -55,12 +55,6 @@ const SUN_DISK_SIZE: float = 0.03
 ## с дефолтной единицей почти не виден — AgX сжимает мягкое сияние в белое.
 ## Усиленный блик даёт тёплое «марево» вокруг светила, как в демо EZ-Tree.
 const SUN_MIE_INTENSITY: float = 2.5
-## Группа нод цикла дня (П18 Сборка 1 п.5): F3-галочка «Свет: ezTree» ищет
-## цикл через дерево — сцены друг друга не знают.
-const GROUP: StringName = &"day_cycle"
-## Плавность переключения пресета света, с (П18 Сборка 1 п.5): смена
-## «ezTree / текущий» не щёлкает, день переплывает за ~0.6 с.
-const EZTREE_FADE_SEC: float = 0.6
 
 
 var _sun: DirectionalLight3D
@@ -73,13 +67,6 @@ var _tod: TimeOfDay
 ## «Простая графика» (раздел 15): туман плотнее — мир меньше на вид.
 var simple: bool = false
 
-## П18 Сборка 1 п.5 «Свет: ezTree / текущий»: день — сильное солнце,
-## ровный белый ambient и голубой туман демо (по умолчанию ezTree);
-## ночь и закат пресетом не трогаются. Действует через dayness, поэтому
-## рассвет и закат переходят плавно; переключение галочки — _eztree_mix.
-var eztree_light: bool = true
-var _eztree_mix: float = 1.0
-
 var _fog_focus: Vector3 = Vector3.ZERO
 var _fog_focus_set: bool = false
 
@@ -87,7 +74,6 @@ var _fog_focus_set: bool = false
 func setup(sun: DirectionalLight3D, world_env: WorldEnvironment) -> void:
 	_sun = sun
 	_environment = world_env.environment
-	add_to_group(GROUP)
 	_dome = world_env.get_node_or_null("SkyDome") as SkyDome
 	_tod = world_env.get_node_or_null("TimeOfDay") as TimeOfDay
 	if _dome == null:
@@ -135,7 +121,7 @@ func apply_now() -> void:
 	_process(0.0)
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if _sun == null:
 		return
 	var world_time := Session.world_time
@@ -143,12 +129,6 @@ func _process(delta: float) -> void:
 	var mixes := DayMath.palette_mixes(world_time)
 	var warmth := DayMath.warmth(world_time)
 	var dayness := DayMath.dayness(world_time)
-	# П18 Сборка 1 п.5: доля пресета света ezTree в кадре — плавный ход
-	# галочки (mix) на дневную долю суток: ночью пресет не действует,
-	# переключение не щёлкает.
-	_eztree_mix = move_toward(_eztree_mix,
-		1.0 if eztree_light else 0.0, delta / EZTREE_FADE_SEC)
-	var light_mix: float = dayness * _eztree_mix
 	# Цвета из палитры (до позиций: обновление купола подхватит их).
 	var sun_color := _mix4(VPAL.dawn_sun, VPAL.day_sun, VPAL.dusk_sun,
 		VPAL.night_sun, mixes)
@@ -158,10 +138,6 @@ func _process(delta: float) -> void:
 		VPAL.dusk_sky_horizon, VPAL.night_sky_horizon, mixes)
 	_dome.sun_light_color = sun_color
 	_dome.sun_horizon_light_color = sun_color.lerp(VPAL.dusk_sun, 0.7 * warmth)
-	# П18 Сборка 1 п.5: днём в пресете ezTree солнце сильное (демо —
-	# DirectionalLight 5); по высоте светила энергию гасит сам купол.
-	_dome.sun_light_energy = lerpf(
-		B.sun_energy_noon, B.eztree_sun_energy, light_mix)
 	# Диск солнца — цвет светила этого часа (доработка П5.13: видимое
 	# солнце, тёплый крем днём и оранжевый спуск к горизонту); тем же
 	# цветом красится Mie-ореол вокруг диска.
@@ -193,26 +169,16 @@ func _process(delta: float) -> void:
 	# п.10): в мире ambient берётся из купола (AMBIENT_SOURCE_SKY) — радианс
 	# Sky3D ярче плоского цвета, база ниже; лаборатории с COLOR-источником
 	# получают прежнюю кривую.
-	var ambient := _mix4(VPAL.dawn_ambient,
+	_environment.ambient_light_color = _mix4(VPAL.dawn_ambient,
 		VPAL.day_ambient, VPAL.dusk_ambient, VPAL.night_ambient, mixes)
-	if light_mix > 0.0:
-		# П18 Сборка 1 п.5: день пресета — ровный белый ambient без окраски
-		# небом (демо AmbientLight 0x404040).
-		ambient = ambient.lerp(Color.WHITE, light_mix)
-	_environment.ambient_light_color = ambient
 	if _environment.ambient_light_source == Environment.AMBIENT_SOURCE_SKY:
-		_environment.ambient_light_energy = lerpf(
-			DayMath.ambient_energy_sky(world_time),
-			B.eztree_ambient_energy * DayMath.AMBIENT_SKY_SCALE, light_mix)
+		_environment.ambient_light_energy = \
+			DayMath.ambient_energy_sky(world_time)
 	else:
-		_environment.ambient_light_energy = lerpf(
-			DayMath.ambient_energy(world_time),
-			B.eztree_ambient_energy, light_mix)
+		_environment.ambient_light_energy = \
+			DayMath.ambient_energy(world_time)
 	# Ночью экспозиция выше — «мягкая светлая ночь» (глаза адаптировались).
-	# Днём в пресете ezTree — экспозиция демо (AgX темнее Neutral, число
-	# подобрано; П18 Сборка 1 п.5), в «текущем» — прежняя единица.
-	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE,
-		lerpf(1.0, B.eztree_exposure, _eztree_mix), dayness)
+	_environment.tonemap_exposure = lerpf(NIGHT_EXPOSURE, 1.0, dayness)
 	# SDFGI (П11 2.1; П13 1.1 — и на HIGH): SDFGI светит и под тёмным небом
 	# (отскоки, накопленный свет) — ночь светлеет. Энергия приглушается
 	# от времени суток, как экспозиция: днём — полная, глубокой ночью —
@@ -236,14 +202,8 @@ func _process(delta: float) -> void:
 		var zone_fog := IslandGen.zone_blend(focus, PAL.zone_fog)
 		fog = fog.lerp(zone_fog,
 			ZONE_FOG_MIX * IslandGen.zone_color_strength(focus))
-	if light_mix > 0.0:
-		# П18 Сборка 1 п.5: день пресета — голубой экспоненциальный туман
-		# демо (0x94b9f8) поверх палитры и оттенка зоны; ночь не трогается.
-		fog = fog.lerp(B.eztree_fog_color, light_mix)
 	_environment.fog_light_color = fog
-	var fog_density: float = B.fog_density_simple if simple else B.fog_density
-	_environment.fog_density = lerpf(
-		fog_density, B.eztree_fog_density, light_mix)
+	_environment.fog_density = B.fog_density_simple if simple else B.fog_density
 	# Дымка по высоте (раздел 16): низины и вода — в лёгкой дымке.
 	_environment.fog_height = B.fog_height_m
 	_environment.fog_height_density = B.fog_height_density
