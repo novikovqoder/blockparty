@@ -88,6 +88,9 @@ func _ready() -> void:
 	_esc_menu.exit_requested.connect(_exit_to_menu)
 	_debug = DebugPanel.new()
 	add_child(_debug)
+	# П18-ЛАБОРАТОРИЯ: кнопка F3 «Лаборатория ezTree» — вход из мира
+	# в сцену подбора света (возврат — кнопкой оттуда).
+	_debug.enter_lab_requested.connect(_enter_ez_lab)
 	_debug.watch_player(_player)
 	_debug.watch_island(_island)
 	_debug.watch_graphics(
@@ -224,6 +227,22 @@ func _exit_to_menu() -> void:
 		Net.left_world()
 	Session.leave_world()
 	get_tree().call_deferred("change_scene_to_file", Dev.MENU_SCENE)
+
+
+## П18-ЛАБОРАТОРИЯ: вход в сцену подбора света (кнопка F3). Мир закрывается
+## как при выходе в меню (Steam-лобби тоже закрывается, раздел 11), свет
+## подбирается в лаборатории-копии демо и ползунками прямо в мире.
+func _enter_ez_lab() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Net.mode == "steam":
+		Net.leave_steam_world()
+	else:
+		Net.left_world()
+	Session.leave_world()
+	get_tree().call_deferred("change_scene_to_file", Dev.EZ_LAB_SCENE)
 
 
 func _on_host_lost(_reason: String) -> void:

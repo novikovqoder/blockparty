@@ -14,6 +14,11 @@
 class_name DebugPanel
 extends CanvasLayer
 
+## П18-ЛАБОРАТОРИЯ: владелец попросил явную кнопку входа в лабораторию
+## ezTree из мира (и возврата) — ряд под вкладками.
+signal enter_lab_requested
+signal return_world_requested
+
 const UPDATE_INTERVAL: float = 0.25
 ## Окно усреднения отчёта, с (П13 3.4).
 const REPORT_WINDOW_SEC: float = 5.0
@@ -169,6 +174,14 @@ const WAVE_BASE_CONSTS: Array[Dictionary] = [
 
 var _label: Label
 var _effects: PanelContainer
+var _tabs: TabContainer = null
+var _effects_tab: Control = null
+var _water_tab: Control = null
+## Кнопка входа в лабораторию ezTree / возврата в мир (П18-ЛАБОРАТОРИЯ).
+var _lab_button: Button = null
+## Панель в лаборатории ezTree: вкладки эффектов и воды скрыты, кнопка —
+## «Вернуться в мир»; в мире — «Лаборатория ezTree».
+var _lab_mode: bool = false
 var _boxes: Dictionary[StringName, CheckBox] = {}
 # --- Вкладка «Вода» (П15 8) ---
 var _sliders: Dictionary[StringName, HSlider] = {}
@@ -282,10 +295,12 @@ func _build_effects(root: Control) -> void:
 	var tabs := TabContainer.new()
 	tabs.add_theme_font_size_override("font_size", 13)
 	_effects.add_child(tabs)
+	_tabs = tabs
 	var box := VBoxContainer.new()
 	box.name = tr("BU_DBG_EFFECTS_TAB")
 	box.add_theme_constant_override("separation", 2)
 	tabs.add_child(box)
+	_effects_tab = box
 	var title := Label.new()
 	title.text = tr("BU_DBG_EFFECTS")
 	title.add_theme_font_size_override("font_size", 13)
@@ -342,6 +357,12 @@ func _build_effects(root: Control) -> void:
 	_auto_button.pressed.connect(_on_auto_button)
 	box.add_child(_auto_button)
 	_build_water_tab(tabs)
+	# П18-ЛАБОРАТОРИЯ: кнопка входа из мира и возврата — под вкладками.
+	_lab_button = Button.new()
+	_lab_button.text = tr("BU_DBG_EZLAB_ENTER")
+	_lab_button.add_theme_font_size_override("font_size", 13)
+	_lab_button.pressed.connect(_on_lab_button)
+	_effects.add_child(_lab_button)
 
 
 ## Вкладка «Вода» (П15 8.1): цвета и ползунки, меняющие воду на лету;
@@ -360,6 +381,7 @@ func _build_water_tab(tabs: TabContainer) -> void:
 	scroll.horizontal_scroll_mode = \
 		ScrollContainer.SCROLL_MODE_DISABLED
 	tabs.add_child(scroll)
+	_water_tab = scroll
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 2)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -438,6 +460,38 @@ func _build_water_tab(tabs: TabContainer) -> void:
 	copy.add_theme_font_size_override("font_size", 13)
 	copy.pressed.connect(_copy_water_values)
 	buttons.add_child(copy)
+
+
+## Режим лаборатории ezTree (П18-ЛАБОРАТОРИЯ): панель живёт в сцене
+## scenes/ez_lab.tscn — вкладки эффектов и воды скрыты (остаются вкладка
+## «Свет» и кнопка «Вернуться в мир»). В мире кнопка под вкладками ведёт
+## в лабораторию (enter_lab_requested), в лаборатории — обратно в мир
+## (return_world_requested).
+func set_lab_mode(on: bool) -> void:
+	_lab_mode = on
+	if _tabs == null:
+		return
+	for tab: Control in [_effects_tab, _water_tab]:
+		if tab != null:
+			_tabs.set_tab_hidden(
+				_tabs.get_tab_idx_from_control(tab), on)
+	# Пока видимых вкладок нет (вкладка «Свет» появляется следующим
+	# блоком П18-ЛАБОРАТОРИИ), прячем пустой контейнер заголовков.
+	var visible_tabs: int = 0
+	for i: int in _tabs.get_tab_count():
+		if not _tabs.is_tab_hidden(i):
+			visible_tabs += 1
+	_tabs.visible = visible_tabs > 0
+	if _lab_button != null:
+		_lab_button.text = tr(
+			"BU_DBG_EZLAB_EXIT" if on else "BU_DBG_EZLAB_ENTER")
+
+
+func _on_lab_button() -> void:
+	if _lab_mode:
+		return_world_requested.emit()
+	else:
+		enter_lab_requested.emit()
 
 
 func _process(delta: float) -> void:

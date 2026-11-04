@@ -164,6 +164,27 @@ static func build_set(type: StringName, variant: int) -> Dictionary:
 	return set
 
 
+## Набор уровней лаборатории ezTree (П18-ЛАБОРАТОРИЯ): тот же состав, что
+## у build_set (гибрид + LOD1 + LOD2 демо), но масштаб — произвольный k
+## вместо целевой высоты вида: лаборатория — копия демо-сцены, деревья
+## стоят «натурального» размера генератора (демо-единицы × k), а не
+## нормированные высоты острова. Запекание острова эти вызовы не трогают.
+static func build_lab_set(base: String, k: float) -> Dictionary:
+	var key := "%s:lab%d" % [base, int(k * 1000.0)]
+	if _cache.has(key):
+		return _cache[key]
+	var info := entry(base)
+	var set := {
+		"mesh": _hybrid_mesh(base, k, info),
+		"lods": [
+			_lod_mesh(base, 1, k, info),
+			_lod_mesh(base, 2, k, info),
+		] as Array[Mesh],
+	}
+	_cache[key] = set
+	return set
+
+
 ## Ближний уровень (П18 Сборка 1 п.3 «LOD умнее демо»): листва — целиком
 ## LOD0 (leafStride 1 — «листва НЕ трогается»), ветки — LOD1 демо
 ## (sectionStride 3, segmentFactor 0.75 ≈ 2/3 треугольников; прорехи

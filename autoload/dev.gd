@@ -8,7 +8,9 @@
 # гоняется и на экспортированных сборках, возврат П5.8),
 # --selftest-world (самопроверка мира: тангенты чанков, земля и коллизия
 # во всех зонах, предметы не висят и не под водой, вода в чаше озера —
-# печатает SELFTEST-WORLD: PASS/FAIL, доработка П5.13).
+# печатает SELFTEST-WORLD: PASS/FAIL, доработка П5.13),
+# --ez-lab (сцена-лаборатория ezTree: копия демо для подбора света
+# ползунками F3, П18-ЛАБОРАТОРИЯ; Steam и мир не нужны).
 # Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
@@ -36,6 +38,7 @@ var ultra_quality: bool = false  # --ultra-quality: уровень «Ультр�
 var debug_collisions: bool = false  # --debug-collisions: показать формы коллизий
 var selftest_anim: bool = false  # --selftest-anim: проверка анимаций и выход
 var selftest_world: bool = false  # --selftest-world: проверка мира и выход
+var ez_lab: bool = false  # --ez-lab: сцена-лаборатория ezTree (П18) вместо мира
 
 
 func _init() -> void:
@@ -55,6 +58,7 @@ func _init() -> void:
 	debug_collisions = parsed["debug_collisions"]
 	selftest_anim = parsed["selftest_anim"]
 	selftest_world = parsed["selftest_world"]
+	ez_lab = parsed["ez_lab"]
 
 
 func _ready() -> void:
@@ -86,6 +90,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"debug_collisions": false,
 		"selftest_anim": false,
 		"selftest_world": false,
+		"ez_lab": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -121,6 +126,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["selftest_anim"] = true
 		elif arg == "--selftest-world":
 			result["selftest_world"] = true
+		elif arg == "--ez-lab":
+			result["ez_lab"] = true
 	return result
 
 
@@ -129,6 +136,10 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 ## вместе с наследием (born-unblessed). MENU_SCENE — обвязка,
 ## инстанцирующая сцену комплекта menu_bu как есть.
 const MENU_SCENE: String = "res://scenes/main_menu_game.tscn"
+
+## Сцена-лаборатория ezTree (П18-ЛАБОРАТОРИЯ): копия демо для подбора
+## света ползунками F3; вход — аргумент --ez-lab или кнопка F3 из мира.
+const EZ_LAB_SCENE: String = "res://scenes/ez_lab.tscn"
 
 
 static func _to_int(text: String, fallback: int) -> int:

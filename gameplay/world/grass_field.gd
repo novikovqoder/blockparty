@@ -521,3 +521,106 @@ static func apply_field(nodes: Dictionary, groups: Dictionary) -> void:
 		else:
 			for i: int in transforms.size():
 				mm.set_instance_transform(i, transforms[i])
+
+
+# --- Лаборатория ezTree (П18-ЛАБОРАТОРИЯ: копия демо на ровной земле) ---
+
+## Радиус круга травы демо, м: попытки r = 10+500·rand ед. (grass.js:164)
+## через k = 0.38; кромка шейдера — в последних EDGE_M метрах.
+const LAB_RADIUS: float = (10.0 + 500.0) * K
+## Показываемых пучков — instanceCount демо (grass.js GrassOptions; попыток
+## maxInstanceCount = 25000, раскладка гасится пятнистостью).
+const LAB_INSTANCE_COUNT: int = 5000
+## Попыток раскладки и цветов — по 50 на вид (grass.js flowerCount),
+## радиус цветочного круга r = 10+200·rand ед.
+const LAB_TRIES: int = 25000
+const LAB_FLOWER_TRIES: int = 50
+const LAB_FLOWER_RADIUS: float = (10.0 + 200.0) * K
+
+static var _lab_patch_noise: FastNoiseLite = null
+
+
+## Шум пятнистости демо в мировых метрах: n = 0.5 + 0.5·simplex2d(xz/scale),
+## scale = 100 ед. (GrassOptions.scale) × k. Тот же масштаб, что у земли
+## лаборатории (ez_lab_ground.gdshader) — пятна травы лежат на пятнах
+## текстуры, как в демо.
+static func lab_patch(x: float, z: float) -> float:
+	if _lab_patch_noise == null:
+		_lab_patch_noise = FastNoiseLite.new()
+		_lab_patch_noise.seed = SEED_GRASS_FIELD + 7
+		_lab_patch_noise.frequency = 1.0 / (100.0 * K)
+	return (_lab_patch_noise.get_noise_2d(x, z) + 1.0) * 0.5
+
+
+## Ноды поля лаборатории: те же пучки/цветы и материалы (grass_ez), кромка
+## шейдера — по кругу демо. Структура как у make_nodes — заполнение apply_field.
+static func lab_make_nodes() -> Dictionary:
+	var nodes: Dictionary = {}
+	var fade := Vector2(LAB_RADIUS - EDGE_M, LAB_RADIUS)
+	var tuft := tuft_data()
+	nodes["grass_tuft"] = _make_node(
+		"grass_tuft", tuft["mesh"], true, _tuft_material(tuft, fade), 0)
+	for kind: String in FLOWER_SCENES:
+		for s: int in flower_data(kind).size():
+			var surface: Dictionary = flower_data(kind)[s]
+			nodes["flower_%s_s%d" % [kind, s]] = _make_node(
+				"flower_%s_s%d" % [kind, s], surface["mesh"], false,
+				_flower_material(surface, fade), 0)
+	return nodes
+
+
+## Раскладка копии демо (grass.js generateGrassInstances/generateFlowers):
+## до 25000 попыток пучков в круге 3.8–193.8 м, пропуск «в пятне шума»
+## (n > 0.7 и rand+0.6 > 0.7), размер/поворот/цвет — формулы демо; цветы —
+## по 50 попыток вида в круге 3.8–79.8 м, пропуск n > 0.7 (rand+0.8 > 0.7
+## всегда истинно при n > 0.7 — цветы только вне пятен). Чистая функция
+## seed — детерминированная картинка лаборатории. Показываются первые
+## LAB_INSTANCE_COUNT принятых пучков, как instanceCount демо.
+static func lab_layout(seed_value: int) -> Dictionary:
+	var groups: Dictionary = {
+		"tuft": {"transforms": Array(), "colors": PackedColorArray()},
+	}
+	var tuft_colors: PackedColorArray = groups["tuft"]["colors"]
+	for kind: String in FLOWER_SCENES:
+		groups["flower_%s" % kind] = {"transforms": Array()}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for i: int in LAB_TRIES:
+		var r: float = (10.0 + rng.randf() * 500.0) * K
+		var theta: float = rng.randf() * TAU
+		var pos := Vector3(r * cos(theta), 0.0, r * sin(theta))
+		# Порядок бросков демо: проверка пятна — затем transform и цвет.
+		var n: float = lab_patch(pos.x, pos.z)
+		var skip_roll: float = rng.randf()
+		if n > 0.7 and skip_roll + 0.6 > 0.7:
+			continue
+		if (groups["tuft"]["transforms"] as Array).size() >= LAB_INSTANCE_COUNT:
+			continue
+		var sx: float = rng.randf_range(SIZE.x, SIZE.x + SIZE_VAR.x)
+		var sy: float = rng.randf_range(SIZE.y, SIZE.y + SIZE_VAR.y)
+		var sz: float = rng.randf_range(SIZE.z, SIZE.z + SIZE_VAR.z)
+		var cr: float = 0.25 + rng.randf() * 0.1
+		var cg: float = 0.3 + rng.randf() * 0.3
+		var yaw: float = rng.randf_range(0.0, TAU)
+		var basis := Basis(Vector3.UP, yaw) * Basis().scaled(Vector3(sx, sy, sz))
+		(groups["tuft"]["transforms"] as Array).append(
+			Transform3D(basis, pos))
+		tuft_colors.append(Color(cr, cg, 0.1, 1.0))
+	for kind: String in FLOWER_SCENES:
+		for i: int in LAB_FLOWER_TRIES:
+			var r: float = (10.0 + rng.randf() * 200.0) * K
+			var theta: float = rng.randf() * TAU
+			var pos := Vector3(r * cos(theta), 0.0, r * sin(theta))
+			var n: float = lab_patch(pos.x, pos.z)
+			var skip_roll: float = rng.randf()
+			if n > 0.7 and skip_roll + 0.8 > 0.7:
+				continue
+			var scale3: float = rng.randf_range(
+				FLOWER_SCALE_FROM, FLOWER_SCALE_TO)
+			var yaw: float = rng.randf_range(0.0, TAU)
+			var basis := Basis(Vector3.UP, yaw) * Basis().scaled(
+				Vector3.ONE * scale3)
+			(groups["flower_%s" % kind]["transforms"] as Array).append(
+				Transform3D(basis, pos))
+	groups["tuft"]["colors"] = tuft_colors
+	return groups

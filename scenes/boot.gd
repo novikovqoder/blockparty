@@ -16,7 +16,12 @@ func _ready() -> void:
 	Log.info("Boot: экран загрузки")
 	_screen.offline_requested.connect(_on_play_offline_pressed)
 	_screen.quit_requested.connect(_on_quit_pressed)
-	if Dev.host_mode or Dev.join_address != "":
+	if Dev.ez_lab:
+		# П18-ЛАБОРАТОРИЯ: сцена подбора света без Steam и мира — сразу.
+		Log.info("Boot: --ez-lab — вхожу в лабораторию ezTree", "Boot")
+		get_tree().call_deferred(
+			"change_scene_to_file", Dev.EZ_LAB_SCENE)
+	elif Dev.host_mode or Dev.join_address != "":
 		Log.info("Boot: режим разработки ENet — Steam не нужен, вхожу в меню", "Boot")
 		_go_to_menu()
 	elif SteamService.available:
