@@ -210,6 +210,29 @@ func test_blend_moves_reveal_and_restores_threshold() -> void:
 	view.free()
 
 
+func test_blend_off_makes_switch_instant() -> void:
+	# Галочка F3 «LOD-перетекание» (П18 Сборки 1 п.5): снятая — смена 0↔1
+	# мгновенная, как у дальних уровней; уходящий уровень гасится сразу,
+	# reveal никуда не едет.
+	var view := IslandView.new()
+	view.set_tree_blend(false)
+	assert_false(view._tree_lod_blend_on, "перетекание выключено")
+	view._build_tree_lods("etree_bush:0", "etree_bush", _sample_group())
+	var state: Dictionary = view._tree_lods[0]
+	var nodes: Array[MultiMeshInstance3D] = state["nodes"]
+
+	view._update_tree_lods(Vector2(90.0, 0.0))
+	assert_eq(state["level"], 0, "60 м до ближнего дерева — гибрид")
+	view._update_tree_lods(Vector2(105.0, 0.0))
+	assert_eq(state["level"], 1, "за 70 м — LOD1 сразу")
+	assert_eq(state["blend_from"], -1, "перетекания нет")
+	assert_almost_eq(_reveal(state["mats"], 0), 1.0, 0.0001,
+		"reveal уходящего не уезжал (порог пресетный)")
+	assert_false(nodes[0].visible, "гибрид погашен сразу")
+	assert_true(nodes[1].visible, "LOD1 включён сразу")
+	view.free()
+
+
 func test_tree_detail_slider_forces_recalc() -> void:
 	# Ползунок F3 «Детализация деревьев»: сеттер запоминает множитель
 	# (диапазон 0.5–2×) и форсирует пересчёт на ближайшем update_viewer.

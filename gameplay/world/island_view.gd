@@ -68,6 +68,9 @@ var _tree_lods: Array[Dictionary] = []
 ## Множитель границ уровней деревьев — ползунок F3 «Детализация
 ## деревьев» (0.5–2×; после смены пересчёт на ближайшем update_viewer).
 var _tree_detail_mult: float = 1.0
+## Перетекание 0↔1 включено — галочка F3 «LOD-перетекание» (П18 Сборка 1
+## п.5): снятая делает смену уровней мгновенной (замер цены плавности).
+var _tree_lod_blend_on: bool = true
 ## Центр последнего пересчёта уровней деревьев (быстрый выход).
 var _tree_lod_last_center: Vector2 = Vector2(1e9, 1e9)
 ## Клетка последней пересборки мелочи (быстрый выход).
@@ -457,9 +460,11 @@ func _update_tree_lods(center: Vector2) -> void:
 		if target == level:
 			continue
 		state["level"] = target
-		if level < 0 or absi(target - level) != 1 or target == 2 or level == 2:
-			# Старт (level < 0) и смена дальних уровней (1↔2, 0↔2) —
-			# мгновенно: дальние за туманом, стык не виден.
+		if level < 0 or absi(target - level) != 1 or target == 2 or level == 2 \
+				or not _tree_lod_blend_on:
+			# Старт (level < 0), смена дальних уровней (1↔2, 0↔2) и снятая
+			# галочка «LOD-перетекание» — мгновенно: дальние за туманом,
+			# стык не виден.
 			_finish_tree_blend(state)
 			_apply_tree_lod_visibility(state)
 		else:
@@ -855,6 +860,13 @@ func _set_type_visible(type: String, visible: bool) -> void:
 func set_tree_detail(mult: float) -> void:
 	_tree_detail_mult = clampf(mult, 0.1, 4.0)
 	_tree_lod_last_center = Vector2(1e9, 1e9)
+
+
+## Галочка F3 «LOD-перетекание» (П18 Сборка 1 п.5): снятая — смена 0↔1
+## мгновенная, как у дальних уровней (идущее перетекание не прерывается —
+## дотикает до конца в _process).
+func set_tree_blend(on: bool) -> void:
+	_tree_lod_blend_on = on
 
 
 ## Панель замера F3 (П18 Сборка 1 п.4): галочка «Тени деревьев» — вкл/выкл

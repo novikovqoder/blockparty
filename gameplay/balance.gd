@@ -148,6 +148,20 @@ extends Resource
 ## высота тумана, м, и плотность высотного тумана (0 — ровный туман).
 @export var fog_height_m: float = 0.6
 @export var fog_height_density: float = 0.05
+## П18 Сборка 1 п.5 «Пресет света ezTree» (только день; ночь и закат — как
+## раньше): сильное солнце и ровный белый ambient — в демо DirectionalLight 5
+## против AmbientLight 0.4 (12.5:1); здесь эквивалент при источнике-небе —
+## плоские 0.4 (DayMath.AMBIENT_SKY_SCALE уже снижает базу). Экспоненциальный
+## голубой туман демо: цвет 0x94b9f8, плотность 0.0015/k на метр (k ≈ 0.38
+## у крупных деревьев) ≈ 0.004. Экспозиция демо 2 — у нас AgX (Neutral в
+## 4.7.2 нет), он темнее в середине, поднят подбор до 1.6.
+@export_group("Свет: пресет ezTree (П18)")
+@export var eztree_sun_energy: float = 1.6
+## «Плоский» эквивалент ровного белого ambient (AmbientLight 0.4 демо).
+@export var eztree_ambient_energy: float = 0.4
+@export var eztree_exposure: float = 1.6
+@export var eztree_fog_color: Color = Color("94b9f8")
+@export var eztree_fog_density: float = 0.004
 
 @export_group("Сеть: авторитет хоста (разделы 9, 10)")
 ## Допуск проверяемых хостом дистанций на пинг (снапшот игрока устарел

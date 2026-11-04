@@ -172,6 +172,8 @@ BU_DBG_CANOPYVOL,Объём кроны,Canopy volume
 BU_DBG_TREEDETAIL,Детализация деревьев,Tree detail
 BU_DBG_TSHADOW,Тени деревьев,Tree shadows
 BU_DBG_HEROLIGHT,Свет персонажа,Character light
+BU_DBG_EZLIGHT,Свет: ezTree,Light: ezTree
+BU_DBG_LODBLEND,LOD-перетекание,LOD blending
 BU_DBG_AUTOM,Авто-замер (4 с/эффект),Auto measure (4 s/effect)
 BU_DBG_AUTOM_RUN,Авто-замер %d/%d — щёлкните для отмены,Auto measure %d/%d — click to cancel
 BU_W_PRESET,Пресет воды,Water preset

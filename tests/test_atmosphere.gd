@@ -274,6 +274,10 @@ func test_height_fog_from_balance() -> void:
 	var sky := _make_sky_rig()
 	var cycle := DayCycle.new()
 	cycle.setup(sky.sun, sky)
+	# П18 Сборки 1 п.5: контракт базового света — пресет ezTree выключен
+	# (по умолчанию он включён и ведёт день к демо).
+	cycle.eztree_light = false
+	cycle._eztree_mix = 0.0
 	var saved := Session.world_time
 	Session.world_time = 0.3 * B.day_cycle_sec
 	cycle._process(0.0)
@@ -361,9 +365,12 @@ func test_world_scene_sky3d_rig() -> void:
 func test_tonemap_exposure_brighter_at_night() -> void:
 	# П5.7 блок 3: «мягкая светлая ночь» (раздел 7 SPEC) под тёмным небом
 	# Sky3D — экспозиция тонемапа ночью выше дневной, день — единица.
+	# П18 Сборки 1 п.5: контракт базового света — пресет ezTree выключен.
 	var sky := _make_sky_rig()
 	var cycle := DayCycle.new()
 	cycle.setup(sky.sun, sky)
+	cycle.eztree_light = false
+	cycle._eztree_mix = 0.0
 	var saved := Session.world_time
 	Session.world_time = 0.3 * B.day_cycle_sec
 	cycle._process(0.0)
@@ -403,6 +410,9 @@ func test_ambient_energy_sky_night_below_day() -> void:
 	sky.environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	var cycle := DayCycle.new()
 	cycle.setup(sky.sun, sky)
+	# П18 Сборки 1 п.5: контракт базовой кривой ambient — пресет выключен.
+	cycle.eztree_light = false
+	cycle._eztree_mix = 0.0
 	var saved := Session.world_time
 	Session.world_time = 0.3 * B.day_cycle_sec  # полдень
 	cycle._process(0.0)

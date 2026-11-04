@@ -382,7 +382,9 @@ func test_water_fade_simple_only() -> void:
 func test_f3_panel_toggles_effects() -> void:
 	# П13 3.2 + П14 5.2: 14 галочек; П15 7 — ещё «Каустика» и «Круги
 	# на воде»; П16 9 — «Окклюзия»; П17 п.13 — «Трава (поле)»,
-	# «Импосторы деревьев», «Объём кроны», «Свет персонажа» (21).
+	# «Объём кроны», «Свет персонажа» (21); П18 Сборка 1 п.2 убрала
+	# «Импосторы деревьев», п.4 добавила «Тени деревьев», п.5 — «Свет:
+	# ezTree» и «LOD-перетекание» (23).
 	# Снятая выключает эффект, повторная возвращает состояние уровня
 	# (не «всё включено»); повторное применение качества сбрасывает галочки.
 	var panel := DebugPanel.new()
@@ -392,14 +394,14 @@ func test_f3_panel_toggles_effects() -> void:
 	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
 	assert_eq(
 		panel._boxes.size(), panel.EFFECTS.size(),
-		"галочек столько же, сколько эффектов (21)")
+		"галочек столько же, сколько эффектов (23)")
 	var checks: Array[CheckBox] = []
 	for id: StringName in panel.EFFECTS:
 		assert_true(
 			panel._boxes[id].button_pressed,
 			"галочка %s включена после применения уровня" % id)
 		checks.append(panel._boxes[id])
-	assert_eq(checks.size(), 21, "эффектов — 21")
+	assert_eq(checks.size(), 23, "эффектов — 23")
 	var env_props: Dictionary[StringName, String] = {
 		&"sdfgi": "sdfgi_enabled", &"ssil": "ssil_enabled",
 		&"ssr": "ssr_enabled", &"ssao": "ssao_enabled",
