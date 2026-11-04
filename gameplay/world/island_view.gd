@@ -61,6 +61,15 @@ var _grass_field_tier: int = 0
 ## set_quality ставит им alpha-to-coverage на ULTRA (MSAA там есть),
 ## F3-галочка «Объём кроны» — volume_mix.
 var _canopy_materials: Array[ShaderMaterial] = []
+## П18 Сборка 1 п.3: состояния LOD деревьев (по группе «тип:вариант») —
+## ноды уровней, их материалы листвы, позиции деревьев, текущий уровень
+## и перетекание; ведут _update_tree_lods/_process.
+var _tree_lods: Array[Dictionary] = []
+## Множитель границ уровней деревьев — ползунок F3 «Детализация
+## деревьев» (0.5–2×; после смены пересчёт на ближайшем update_viewer).
+var _tree_detail_mult: float = 1.0
+## Центр последнего пересчёта уровней деревьев (быстрый выход).
+var _tree_lod_last_center: Vector2 = Vector2(1e9, 1e9)
 ## Клетка последней пересборки мелочи (быстрый выход).
 var _clutter_center: Vector2 = Vector2(1e9, 1e9)
 ## Уровень, по которому мелочь построена (тени/плотность).
@@ -98,6 +107,17 @@ const OCCLUDER_DETAIL_TYPES: PackedStringArray = [
 ## Базовая сила параллакса земли (движковое значение uniform шейдера
 ## forest_ground; сюда панель F3 возвращает параллакс после замера).
 const FOREST_PARALLAX_SCALE: float = 0.06
+## П18 Сборка 1 п.3: границы уровней деревьев, м — гибрид → LOD1 демо
+## на 70, LOD1 → LOD2 демо на 150 (демо 100/250 ед. пересчитаны через k
+## и прикинуты к масштабу нашего острова, см. PLAN_p18); гистерезис 5 %
+## — как hysteresis демо; перетекание 0↔1 — TREE_LOD_BLEND_SEC.
+const TREE_LOD1_M: float = 70.0
+const TREE_LOD2_M: float = 150.0
+const TREE_LOD_HYSTERESIS: float = 0.05
+const TREE_LOD_BLEND_SEC: float = 0.4
+## Пересчёт дистанций уровней деревьев — при сдвиге зрителя дальше, м
+## (перетекание тикает в _process независимо, каждый кадр).
+const TREE_LOD_VIEWER_STEP_M: float = 1.0
 
 
 func _ready() -> void:
@@ -212,6 +232,9 @@ func update_viewer(viewer_pos: Vector3) -> void:
 			_grass_field_center = field_cell
 			GrassField.apply_field(_grass_field_nodes,
 				GrassField.scatter(art, _grass_field_tier, center), center)
+	# П18 Сборка 1 п.3: уровни деревьев по дистанции до ближайшего
+	# дерева группы (быстрый выход внутри — при сдвиге зрителя > 1 м).
+	_update_tree_lods(center)
 	if center.distance_to(_lod_center) < 2.0:
 		return
 	_lod_center = center
@@ -315,35 +338,190 @@ func _build_props() -> void:
 		_register(String(type), instance)
 
 
-## Деревья по уровням дальности (раздел 16): полная модель до 45 м, LOD1 —
-## до 90 м, дальше (П18 Сборка 1 п.2 — импосторы убраны целиком: атласы,
-## bake-тул, шейдер, FADE_SELF-стык) — прореженный LOD2 до 400 м (за туман
-## юбки дна), без тени (в П18 Сборке 1 п.3 границы переделываются под
-## 70/150 м с перетеканием, а не visibility_range по AABB всей группы).
+## Деревья по уровням дальности (раздел 16; П18 Сборка 1 п.3 «LOD умнее
+## демо»): три ноды-уровня на группу БЕЗ visibility_range (AABB группы —
+## весь остров, дальние уровни при ходьбе фактически не выключались).
+## Уровень ведёт IslandView по дистанции до ближайшего дерева группы:
+## 0 — гибрид (полная листва LOD0 + ветки LOD1), до TREE_LOD1_M;
+## 1 — LOD1 демо (sectionStride 3, segmentFactor 0.75, leafStride 2,
+## leafScale 1.25), до TREE_LOD2_M; 2 — LOD2 демо (sectionStride 6,
+## segmentFactor 0.4, leafScale 1.3), до края. Переход 0↔1 — плавное
+## перетекание листвы (uniform reveal canopy-шейдера: порог выреза едет
+## от пресетного до полного отсечения и встречно; ветки уровней
+## одинаковы — шва нет); 1↔2 — мгновенная смена (дальние уровни за
+## туманом неразличимы). Гистерезис TREE_LOD_HYSTERESIS против дребезга.
 func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
-	var levels: Array = [
-		{"mesh": group.mesh, "begin": 0.0, "end": 45.0, "shadow": true},
-		{"mesh": group.lods[0], "begin": 45.0, "end": 90.0, "shadow": true},
-		{"mesh": group.lods[1], "begin": 90.0, "end": 400.0, "shadow": false},
-	]
-	for index: int in levels.size():
-		var level: Dictionary = levels[index]
+	var meshes: Array[Mesh] = [group.mesh, group.lods[0], group.lods[1]]
+	var state: Dictionary = {
+		"type": type,
+		"nodes": [] as Array[MultiMeshInstance3D],
+		"mats": [] as Array[Array],
+		# Позиции XZ деревьев группы — дистанция уровня меряется до
+		# ближайшего дерева, не до AABB всей группы.
+		"points": PackedVector2Array(),
+		"level": -1,
+		"blend_from": -1,
+		"blend_t": 1.0,
+	}
+	var points := PackedVector2Array()
+	points.resize(group.transforms.size())
+	for i: int in group.transforms.size():
+		points[i] = Vector2(
+			group.transforms[i].origin.x, group.transforms[i].origin.z)
+	state["points"] = points
+	for index: int in meshes.size():
 		var instance := MultiMeshInstance3D.new()
 		instance.name = "Props_%s_%s_lod%d" % [
 			type, key.get_slice(":", 1), index]
-		instance.multimesh = group.to_multimesh(level["mesh"])
-		instance.visibility_range_begin = float(level["begin"])
-		instance.visibility_range_end = float(level["end"])
-		instance.visibility_range_begin_margin = 6.0
-		instance.visibility_range_end_margin = 6.0
+		instance.multimesh = group.to_multimesh(meshes[index])
+		# Тень — у ближних уровней (П18 Сборки 1 п.4 сузит до гибрида);
+		# дальний LOD2 — без тени.
 		instance.cast_shadow = \
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
-			if level["shadow"] \
+			if index < 2 \
 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
-		_collect_canopy_materials(level["mesh"])
-		if index == 0:
-			_register(type, instance)
+		_collect_canopy_materials(meshes[index])
+		(state["nodes"] as Array[MultiMeshInstance3D]).append(instance)
+		(state["mats"] as Array[Array]).append(
+			_canopy_materials_of(meshes[index]))
+		_register(type, instance)
+	# Старт: до первого update_viewer дистанция неизвестна — виден
+	# ближний уровень (первый пересчёт мгновенно поставит правильный).
+	if not (state["nodes"] as Array[MultiMeshInstance3D]).is_empty():
+		for index: int in (state["nodes"] as Array[MultiMeshInstance3D]).size():
+			(state["nodes"] as Array[MultiMeshInstance3D])[index].visible = \
+				index == 0
+	_tree_lods.append(state)
+
+
+## Материалы canopy-шейдера поверхностей меша (для reveal-перетекания;
+## материалы запечены в меши island_art.res и уникальны у каждой группы
+## и уровня — крутить reveal можно независимо).
+func _canopy_materials_of(mesh: Mesh) -> Array[ShaderMaterial]:
+	var found: Array[ShaderMaterial] = []
+	for surface: int in mesh.get_surface_count():
+		var material := mesh.surface_get_material(surface)
+		if material is ShaderMaterial \
+				and (material as ShaderMaterial).shader \
+				== EzTreeMeshes.CANOPY_SHADER:
+			found.append(material)
+	return found
+
+
+## Уровень дерева по дистанции до ближайшего дерева группы с гистерезисом
+## (5 %, как hysteresis демо): подъём уровня — за порогом, спуск — на 5 %
+## ниже. detail_mult — множитель границ ползунком F3 «Детализация
+## деревьев» (0.5–2×).
+static func _tree_lod_target(dist: float, level: int, detail_mult: float = 1.0) -> int:
+	var lod1: float = TREE_LOD1_M * detail_mult
+	var lod2: float = TREE_LOD2_M * detail_mult
+	if level == 0:
+		if dist < lod1:
+			return 0
+		return 1 if dist < lod2 else 2
+	if level == 1:
+		if dist < lod1 * (1.0 - TREE_LOD_HYSTERESIS):
+			return 0
+		return 1 if dist < lod2 else 2
+	# level == 2 (и стартовое -1: первый выбор — по верхней границе).
+	if dist < lod2 * (1.0 - TREE_LOD_HYSTERESIS):
+		return 1 if dist >= lod1 else 0
+	return 2
+
+
+## Пересчёт уровней деревьев по позиции зрителя (вызов из update_viewer;
+## перетекание тикает отдельно в _process по времени). Пересчёт — при
+## сдвиге зрителя больше TREE_LOD_VIEWER_STEP_M, дистанции групп внутри
+## Islands 256 × 256 м меняются плавно.
+func _update_tree_lods(center: Vector2) -> void:
+	if _tree_lods.is_empty():
+		return
+	if _tree_lod_last_center.distance_squared_to(center) \
+			< TREE_LOD_VIEWER_STEP_M * TREE_LOD_VIEWER_STEP_M:
+		return
+	_tree_lod_last_center = center
+	for state: Dictionary in _tree_lods:
+		var points: PackedVector2Array = state["points"]
+		if points.is_empty():
+			continue
+		var nearest_sq: float = points[0].distance_squared_to(center)
+		for i: int in range(1, points.size()):
+			nearest_sq = minf(
+				nearest_sq, points[i].distance_squared_to(center))
+		var dist: float = sqrt(nearest_sq)
+		var level: int = state["level"]
+		var target: int = _tree_lod_target(dist, level, _tree_detail_mult)
+		if target == level:
+			continue
+		state["level"] = target
+		if level < 0 or absi(target - level) != 1 or target == 2 or level == 2:
+			# Старт (level < 0) и смена дальних уровней (1↔2, 0↔2) —
+			# мгновенно: дальние за туманом, стык не виден.
+			_finish_tree_blend(state)
+			_apply_tree_lod_visibility(state)
+		else:
+			# 0↔1 — перетекание листвы: уходящий уровень остаётся видимым,
+			# его листва плавно вырезается (reveal), встречная проявляется.
+			state["blend_from"] = level
+			state["blend_t"] = 0.0
+			# Стартовые значения порогов: уходящий полный (reveal 1),
+			# встречный полностью вырезан (0) — до первого такта _process
+			# кадр не рисует оба уровня полными.
+			var blend_mats: Array[Array] = state["mats"]
+			for material: ShaderMaterial in blend_mats[level]:
+				material.set_shader_parameter("reveal", 1.0)
+			for material: ShaderMaterial in blend_mats[target]:
+				material.set_shader_parameter("reveal", 0.0)
+			_apply_tree_lod_visibility(state)
+
+
+## Видимость уровней группы: активный и уходящий в перетекании, остальные
+## скрыты (visibility_range больше не используется — см. _build_tree_lods).
+func _apply_tree_lod_visibility(state: Dictionary) -> void:
+	var nodes: Array[MultiMeshInstance3D] = state["nodes"]
+	var level: int = state["level"]
+	var blend_from: int = state["blend_from"]
+	for index: int in nodes.size():
+		nodes[index].visible = index == level or index == blend_from
+
+
+## Завершить перетекание: пороги выреза — пресетные, уходящий уровень
+## гасится.
+func _finish_tree_blend(state: Dictionary) -> void:
+	var from: int = state["blend_from"]
+	var mats: Array[Array] = state["mats"]
+	if from >= 0 and from < mats.size():
+		for material: ShaderMaterial in mats[from]:
+			material.set_shader_parameter("reveal", 1.0)
+	var level: int = state["level"]
+	if level >= 0 and level < mats.size():
+		for material: ShaderMaterial in mats[level]:
+			material.set_shader_parameter("reveal", 1.0)
+	state["blend_from"] = -1
+	state["blend_t"] = 1.0
+
+
+## Такт перетекания (каждый кадр): t = время / TREE_LOD_BLEND_SEC;
+## уходящему уровню reveal едет 1 → 0 (порог выреза растёт до полного
+## отсечения), встречному 0 → 1. По завершении — _finish_tree_blend.
+func _process(delta: float) -> void:
+	for state: Dictionary in _tree_lods:
+		var from: int = state["blend_from"]
+		if from < 0:
+			continue
+		var t: float = minf(
+			float(state["blend_t"]) + delta / TREE_LOD_BLEND_SEC, 1.0)
+		state["blend_t"] = t
+		var mats: Array[Array] = state["mats"]
+		var level: int = state["level"]
+		for material: ShaderMaterial in mats[from]:
+			material.set_shader_parameter("reveal", 1.0 - t)
+		for material: ShaderMaterial in mats[level]:
+			material.set_shader_parameter("reveal", t)
+		if t >= 1.0:
+			_finish_tree_blend(state)
+			_apply_tree_lod_visibility(state)
 
 
 ## П17 п.1: собрать материалы листвы из поверхностей уровня дерева
@@ -658,9 +836,23 @@ func set_seafloor_slope(shelf: float, far_depth: float) -> void:
 
 
 ## Видимость всех групп типа («Простая графика» прячет траву и цветы).
+## Деревьям после возврата видимости восстанавливается и раскладка
+## уровней LOD (все ноды группы зарегистрированы — включены были бы все).
 func _set_type_visible(type: String, visible: bool) -> void:
 	for instance: MultiMeshInstance3D in _props_by_type.get(type, []):
 		instance.visible = visible
+	if visible:
+		for state: Dictionary in _tree_lods:
+			if String(state["type"]) == type:
+				_apply_tree_lod_visibility(state)
+
+
+## Ползунок F3 «Детализация деревьев» (П18 Сборка 1 п.3): множитель
+## границ уровней (0.5–2×) — 70/150 м → 35/75 … 140/300 м; пересчёт
+## форсируется на ближайшем update_viewer.
+func set_tree_detail(mult: float) -> void:
+	_tree_detail_mult = clampf(mult, 0.1, 4.0)
+	_tree_lod_last_center = Vector2(1e9, 1e9)
 
 
 ## Спад густоты травы шейдера (трава «садится» в землю от fade_start до

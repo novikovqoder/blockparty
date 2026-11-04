@@ -154,9 +154,11 @@ void vertex() {
 
 void fragment() {
 	vec4 leaf = texture(leaf_tex, UV);
-	// Порог выреза: alpha_cut пресета, в перетекании LOD растёт до 1.0
-	// (IslandView ведёт reveal; 1.0 — порог пресета, 0.0 — всё отсечено).
-	ALPHA_SCISSOR_THRESHOLD = alpha_cut + (1.0 - alpha_cut) * (1.0 - reveal);
+	// Порог выреза: alpha_cut пресета, в перетекании LOD растёт до 1.001
+	// (IslandView ведёт reveal; 1.0 — порог пресета, 0.0 — всё отсечено;
+	// именно 1.001, а не 1.0 — центральные пиксели карточки с alpha = 1
+	// иначе доживают до конца перехода).
+	ALPHA_SCISSOR_THRESHOLD = alpha_cut + (1.001 - alpha_cut) * (1.0 - reveal);
 	// A2C-край действует только при MSAA (ULTRA); без MSAA — нейтрален.
 	ALPHA_ANTIALIASING_EDGE = a2c_edge;
 	ALPHA = leaf.a;

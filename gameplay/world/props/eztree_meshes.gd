@@ -124,9 +124,11 @@ static func entry(base: String) -> Dictionary:
 	return _manifest[base]
 
 
-## Меши уровней детализации дерева: {"mesh": полная модель,
-## "lods": [LOD1, LOD2]} — как LOD демо (details Tree.defaultLODLevels),
-## нормированные к целевой высоте; материалы запечены в поверхности.
+## Меши уровней детализации дерева: {"mesh": ближний уровень — гибрид
+## П18 Сборки 1 п.3 (полная листва LOD0 + ветки LOD1 демо), "lods":
+## [LOD1, LOD2]} — дальние уровни как LOD демо (details
+## Tree.defaultLODLevels), нормированные к целевой высоте; материалы
+## запечены в поверхности.
 static func build_set(type: StringName, variant: int) -> Dictionary:
 	var list: Array = ASSETS.get(type, [])
 	if list.is_empty():
@@ -146,7 +148,7 @@ static func build_set(type: StringName, variant: int) -> Dictionary:
 	var raw_h: float = float(max_v[1]) if max_v.size() >= 2 else target_h
 	var k: float = target_h / maxf(raw_h, 0.01)
 	var set := {
-		"mesh": _lod_mesh(base, 0, k, info),
+		"mesh": _hybrid_mesh(base, k, info),
 		"lods": [
 			_lod_mesh(base, 1, k, info),
 			_lod_mesh(base, 2, k, info),
@@ -156,23 +158,15 @@ static func build_set(type: StringName, variant: int) -> Dictionary:
 	return set
 
 
-## Один уровень: GLB → две поверхности в один ArrayMesh, вершины ×k,
-## материалы коры и листвы (шейдеры, параметры пресета из манифеста).
-## GLB читается GLTFDocument'ом в обход системы импорта: те же файлы
-## грузятся и при headless-запекании, и из экспортированной сборки
-## (GLB без .import уходит в пакет целиком).
-static func _lod_mesh(base: String, lod: int, k: float, info: Dictionary) -> ArrayMesh:
-	var path := "%s%s_lod%d.glb" % [DIR, base, lod]
-	var doc := GLTFDocument.new()
-	var state := GLTFState.new()
-	if doc.append_from_file(path, state) != OK:
-		push_error("Не читается GLB дерева: %s" % path)
-		return ArrayMesh.new()
-	var scene := doc.generate_scene(state)
-	var branches := _find_mesh(scene, "Branches")
-	var leaves := _find_mesh(scene, "Leaves")
-	scene.free()
-
+## Ближний уровень (П18 Сборка 1 п.3 «LOD умнее демо»): листва — целиком
+## LOD0 (leafStride 1 — «листва НЕ трогается»), ветки — LOD1 демо
+## (sectionStride 3, segmentFactor 0.75 ≈ 2/3 треугольников; прорехи
+## скрыты листвой). Ветки гибрида и уровня LOD1 совпадают — стык 0↔1 при
+## перетекании уровней бесшовный. Полный меш веток LOD0 (дороже всех)
+## больше не читается вовсе.
+static func _hybrid_mesh(base: String, k: float, info: Dictionary) -> ArrayMesh:
+	var branches := _glb_surface(base, 1, "Branches")
+	var leaves := _glb_surface(base, 0, "Leaves")
 	var bark: Dictionary = info.get("bark", {})
 	var leaf: Dictionary = info.get("leaves", {})
 	var mesh := ArrayMesh.new()
@@ -187,6 +181,46 @@ static func _lod_mesh(base: String, lod: int, k: float, info: Dictionary) -> Arr
 			Mesh.PRIMITIVE_TRIANGLES, leaf_arrays)
 		mesh.surface_set_material(mesh.get_surface_count() - 1,
 			_canopy_material(leaf, k))
+	return mesh
+
+
+## Один уровень: GLB → две поверхности в один ArrayMesh, вершины ×k,
+## материалы коры и листвы (шейдеры, параметры пресета из манифеста).
+## GLB читается GLTFDocument'ом в обход системы импорта: те же файлы
+## грузятся и при headless-запекании, и из экспортированной сборки
+## (GLB без .import уходит в пакет целиком).
+static func _lod_mesh(base: String, lod: int, k: float, info: Dictionary) -> ArrayMesh:
+	var branches := _glb_surface(base, lod, "Branches")
+	var leaves := _glb_surface(base, lod, "Leaves")
+	var bark: Dictionary = info.get("bark", {})
+	var leaf: Dictionary = info.get("leaves", {})
+	var mesh := ArrayMesh.new()
+	if branches != null:
+		mesh.add_surface_from_arrays(
+			Mesh.PRIMITIVE_TRIANGLES, _scaled(branches, k))
+		mesh.surface_set_material(0, _bark_material(bark))
+	if leaves != null:
+		var leaf_arrays := _scaled(leaves, k)
+		_bake_crown(leaf_arrays)
+		mesh.add_surface_from_arrays(
+			Mesh.PRIMITIVE_TRIANGLES, leaf_arrays)
+		mesh.surface_set_material(mesh.get_surface_count() - 1,
+			_canopy_material(leaf, k))
+	return mesh
+
+
+## Меш узла GLB уровня по имени (экспорт ez-tree: Tree_LOD{n} →
+## Branches/Leaves); null, если файла нет или узла в нём нет.
+static func _glb_surface(base: String, lod: int, node_name: String) -> Mesh:
+	var path := "%s%s_lod%d.glb" % [DIR, base, lod]
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		push_error("Не читается GLB дерева: %s" % path)
+		return null
+	var scene := doc.generate_scene(state)
+	var mesh := _find_mesh(scene, node_name)
+	scene.free()
 	return mesh
 
 

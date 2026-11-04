@@ -190,6 +190,9 @@ var _vp_rid: RID
 var _mouse_was_captured: bool = false
 ## Сэмплы (время с запуска, FPS, GPU-мс) — окно REPORT_WINDOW_SEC.
 var _samples: Array[Vector3] = []
+## П18 Сборка 1 п.3: ползунок «Детализация деревьев» (множитель границ
+## LOD 0.5–2×).
+var _tree_detail_value: HSlider = null
 
 # --- Авто-замер эффектов (П16 п. 9) ---
 
@@ -301,6 +304,26 @@ func _build_effects(root: Control) -> void:
 		check.toggled.connect(_on_effect_toggled.bind(id))
 		checks.add_child(check)
 		_boxes[id] = check
+	# П18 Сборка 1 п.3: ползунок «Детализация деревьев» — множитель границ
+	# уровней LOD (0.5–2×; не эффект-галочка, в авто-замер не входит).
+	var detail_row := HBoxContainer.new()
+	detail_row.add_theme_constant_override("separation", 6)
+	box.add_child(detail_row)
+	var detail_label := Label.new()
+	detail_label.text = tr("BU_DBG_TREEDETAIL")
+	detail_label.add_theme_font_size_override("font_size", 13)
+	detail_row.add_child(detail_label)
+	var detail_slider := HSlider.new()
+	detail_slider.min_value = 0.5
+	detail_slider.max_value = 2.0
+	detail_slider.step = 0.05
+	detail_slider.value = 1.0
+	detail_slider.custom_minimum_size = Vector2(122.0, 20.0)
+	detail_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	detail_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_slider.value_changed.connect(_on_tree_detail_changed)
+	detail_row.add_child(detail_slider)
+	_tree_detail_value = detail_slider
 	var copy := Button.new()
 	copy.text = tr("BU_DBG_COPY")
 	copy.add_theme_font_size_override("font_size", 13)
@@ -771,6 +794,14 @@ func build_auto_report() -> String:
 
 
 # --- Вкладка «Вода» (П15 8) ---
+
+## Ползунок «Детализация деревьев» (П18 Сборка 1 п.3): множитель границ
+## уровней LOD деревьев (0.5–2×) — IslandView пересчитывает уровни на
+## ближайшем update_viewer (форс-сброс внутри сеттера).
+func _on_tree_detail_changed(value: float) -> void:
+	if _view != null:
+		_view.set_tree_detail(value)
+
 
 func _on_water_slider_changed(value: float, id: StringName) -> void:
 	_water_values[id] = value
