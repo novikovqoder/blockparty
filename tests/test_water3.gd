@@ -1010,6 +1010,46 @@ func test_f3_caustic_and_rings_checkboxes() -> void:
 	WorldMaterials.textured_headless = false
 
 
+func test_f3_foam_checkbox_toggles_foam() -> void:
+	# Заказ 04.11: галочка «Пена» вкладки «Вода» выключает пену живых
+	# зон (foam_amount 0) и возвращает; ползунок количества помнит
+	# значение и при выключенной, круги на воде не трогает, озеро
+	# остаётся без пены при любом положении.
+	WorldMaterials.textured_headless = true
+	var sea := WaterArea.new()
+	add_child_autofree(sea)
+	var material := sea._surface_material(false) as ShaderMaterial
+	var lake := WaterArea.new()
+	add_child_autofree(lake)
+	var lake_material := lake._surface_material(true) as ShaderMaterial
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	assert_not_null(panel._foam_check, "галочка «Пена» есть во вкладке")
+	assert_true(panel._foam_check.button_pressed,
+		"по умолчанию пена включена")
+	# Ползунок количества множит базу моря, галочка гасит всё.
+	panel._sliders[&"foam_amount"].value = 0.5
+	assert_almost_eq(float(material.get_shader_parameter("foam_amount")),
+		0.5, 0.001, "море: ползунок количества работает при включённой пене")
+	panel._foam_check.button_pressed = false
+	assert_almost_eq(float(material.get_shader_parameter("foam_amount")),
+		0.0, 0.001, "галочка выключила пену моря")
+	assert_almost_eq(float(lake_material.get_shader_parameter("foam_amount")),
+		0.0, 0.001, "озеро и с галочкой без пены")
+	assert_almost_eq(
+		float(material.get_shader_parameter("ripple_fx_amount")), 1.0, 0.001,
+		"круги на воде галочка пены не трогает")
+	# Выключенная пена не включается ползунком, включение возвращает
+	# значение ползунка.
+	panel._sliders[&"foam_amount"].value = 1.5
+	assert_almost_eq(float(material.get_shader_parameter("foam_amount")),
+		0.0, 0.001, "при выключенной пене ползунок пену не включает")
+	panel._foam_check.button_pressed = true
+	assert_almost_eq(float(material.get_shader_parameter("foam_amount")),
+		1.5, 0.001, "повторная галочка вернула пену со значением ползунка")
+	WorldMaterials.textured_headless = false
+
+
 func test_water_tab_sliders_change_own_parameters() -> void:
 	# П15 8.5 / П15-ДОП: каждый ползунок меняет свой параметр материала
 	# воды (морская зона; база волн — константы моря, множители общие).
@@ -1146,7 +1186,10 @@ func test_water_tab_reset_returns_defaults() -> void:
 	for def: Dictionary in panel.WATER_COLORS:
 		panel._pickers[def["id"]].color = Color(0.9, 0.1, 0.9)
 	panel._select_water_preset(WaterArea.WATER_PRESET_BU)
+	panel._foam_check.button_pressed = false
 	panel._reset_water()
+	assert_true(panel._foam_check.button_pressed,
+		"«Сбросить» вернул галочку «Пена» (заказ 04.11)")
 	for def: Dictionary in panel.WATER_SLIDERS:
 		assert_almost_eq(panel._sliders[def["id"]].value,
 			float(def["def"]), 0.0001,
@@ -1165,6 +1208,9 @@ func test_water_tab_reset_returns_defaults() -> void:
 	assert_almost_eq(float(
 		material.get_shader_parameter("caustic_brightness")), 1.0, 0.001,
 		"материал: каустика вернулась к номиналу")
+	assert_almost_eq(float(
+		material.get_shader_parameter("foam_amount")), WaterArea.SEA_FOAM,
+		0.001, "материал: пена вернулась к номиналу")
 	assert_true(_vec3_close(material.get_shader_parameter("absorption"),
 		WaterArea.TUT_SEA_ABSORPTION), "материал: поглощение вернулось")
 	assert_eq(material.get_shader_parameter("color_deep"),
@@ -1176,7 +1222,8 @@ func test_water_i18n_keys_present() -> void:
 	# П15-ДОП блок 5 + заказ 04.11: ключи пресета и ползунков пены есть
 	# в strings_bu.csv с русским и английским текстом.
 	var keys: Array[String] = ["BU_W_PRESET", "BU_W_PRESET_TUTORIAL",
-		"BU_W_PRESET_BU", "BU_W_FOAM_ALPHA", "BU_W_FOAM_CREST"]
+		"BU_W_PRESET_BU", "BU_W_FOAM_ON", "BU_W_FOAM_ALPHA",
+		"BU_W_FOAM_CREST"]
 	var file := FileAccess.open(
 		"res://i18n/strings_bu.csv", FileAccess.READ)
 	assert_not_null(file, "файл строк есть")

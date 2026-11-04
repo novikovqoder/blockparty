@@ -190,6 +190,7 @@ BU_W_WAVE_FREQ,Частота волн,Wave frequency
 BU_W_RIPPLE_STRENGTH,Сила ряби,Ripple strength
 BU_W_RIPPLE_SCALE,Масштаб ряби,Ripple scale
 BU_W_REFRACTION,Сила преломления,Refraction strength
+BU_W_FOAM_ON,Пена,Foam
 BU_W_FOAM_AMOUNT,Пена: количество,Foam: amount
 BU_W_FOAM_WIDTH,Пена: ширина у берега,Foam: shore width
 BU_W_FOAM_ALPHA,Пена: прозрачность,Foam: opacity

@@ -224,6 +224,10 @@ var _slider_values: Dictionary[StringName, Label] = {}
 var _pickers: Dictionary[StringName, ColorPickerButton] = {}
 var _water_values: Dictionary[StringName, float] = {}
 var _water_colors: Dictionary[StringName, Color] = {}
+## Галочка «Пена» (заказ 04.11): выключает пену всех зон и возвращает
+## (круги от ног — отдельная галочка «Круги на воде»).
+var _foam_check: CheckBox = null
+var _foam_on: bool = true
 ## Активный пресет воды (П15-ДОП блок 5) и его кнопки-переключатели.
 var _water_preset: StringName = WaterArea.water_preset()
 var _preset_buttons: Dictionary[StringName, Button] = {}
@@ -432,10 +436,11 @@ func _build_effects(root: Control) -> void:
 	_effects.add_child(_lab_button)
 
 
-## Вкладка «Вода» (П15 8.1): цвета и ползунки, меняющие воду на лету;
-## «Сбросить» (8.2) и «Скопировать значения» (8.3). Строк больше, чем
-## галочек эффектов, — в ScrollContainer, чтобы влезть на минимальную
-## канву. Ничего не сохраняется и в сеть не идёт (8.4).
+## Вкладка «Вода» (П15 8.1): галочка «Пена» (заказ 04.11), цвета и
+## ползунки, меняющие воду на лету; «Сбросить» (8.2) и «Скопировать
+## значения» (8.3). Строк больше, чем галочек эффектов, — в
+## ScrollContainer, чтобы влезть на минимальную канву. Ничего не
+## сохраняется и в сеть не идёт (8.4).
 func _build_water_tab(tabs: TabContainer) -> void:
 	for def: Dictionary in WATER_SLIDERS:
 		_water_values[def["id"]] = def["def"]
@@ -453,6 +458,15 @@ func _build_water_tab(tabs: TabContainer) -> void:
 	box.add_theme_constant_override("separation", 2)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
+	# Галочка «Пена» (заказ 04.11): вкл/выкл пены всех зон; ползунки
+	# ниже подстраивают её, пока включена (озеро и так без пены).
+	var foam_check := CheckBox.new()
+	foam_check.text = tr("BU_W_FOAM_ON")
+	foam_check.button_pressed = true
+	foam_check.add_theme_font_size_override("font_size", 13)
+	foam_check.toggled.connect(_on_foam_toggled)
+	box.add_child(foam_check)
+	_foam_check = foam_check
 	# Переключатель пресетов (П15-ДОП блок 5): «Туториал» (по умолчанию)
 	# и «Born Unblessed»; выбор переставляет пикеры и зоны воды.
 	var preset_row := HBoxContainer.new()
@@ -952,6 +966,13 @@ func _on_water_slider_changed(value: float, id: StringName) -> void:
 	_apply_water()
 
 
+## Галочка «Пена» (заказ 04.11): гасит пену всех зон и возвращает —
+## значение ползунков панель помнит, повторное включение восстанавливает.
+func _on_foam_toggled(on: bool) -> void:
+	_foam_on = on
+	_apply_water()
+
+
 func _on_water_color_changed(color: Color, id: StringName) -> void:
 	_water_colors[id] = color
 	_apply_water()
@@ -1003,6 +1024,7 @@ func _apply_water() -> void:
 		area.set_ripple_fx(_water_values[&"ripple_strength"],
 			_water_values[&"ripple_scale"])
 		area.set_refraction_amount(_water_values[&"refraction"])
+		area.set_foam_enabled(_foam_on)
 		area.set_foam(_water_values[&"foam_amount"],
 			_water_values[&"foam_width"])
 		area.set_foam_look(_water_values[&"foam_alpha"],
@@ -1022,6 +1044,10 @@ func _apply_water() -> void:
 ## (сигналы погашены), затем одно применение.
 func _reset_water() -> void:
 	_water_applying = true
+	# Галочка «Пена» возвращается включённой (заказ 04.11).
+	_foam_on = true
+	if _foam_check != null:
+		_foam_check.set_pressed_no_signal(true)
 	for def: Dictionary in WATER_SLIDERS:
 		var id: StringName = def["id"]
 		_sliders[id].value = def["def"]
