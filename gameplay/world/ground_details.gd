@@ -432,6 +432,9 @@ static func _grass_cell_state(art: IslandArt, x: int, z: int) -> Dictionary:
 		"blocked": blocked,
 		"forest": x < 0 and z < 0,
 		"path": path,
+		# Уклон уже посчитан для блокировки — отдаём наружу (П18 Сборка 2:
+		# поле травы гасит плотность у скалы, второй вызов _slope не нужен).
+		"slope": slope,
 	}
 
 

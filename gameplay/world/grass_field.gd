@@ -1,134 +1,106 @@
-# П17, сборка 3 (пункты 6–8 плана docs/gfx_trees/PLAN_p17.md): поле
-# фотосканной травы вокруг игрока — пучки/цветы/папоротники Poly Haven
-# (децимированы bundle-режимом tools/decimate_polyhaven.gd, цвет в вершинах).
-# По образцу GroundClutter: MultiMesh по видам, пересборка при уходе зрителя
-# на клетку CELL_M, детерминизм по мировым клеткам — свой seed на клетку
-# 1 × 1 м (тот же кортеж-хеш, что у мелочи, с SEED_GRASS_FIELD), поэтому
-# повторные проходы и оба уровня качества дают одну и ту же раскладку
-# клетки (бросок rng потребляется всегда, сравнение с вероятностью — после;
-# радиус и плотность меняют только охват и отсечку). Печёная подложка
-# ForestPlants (rgrass) остаётся — поле садится поверх.
-# Зоны — те же, что у травы-буста (GroundDetails._grass_cell_state): вода/
-# пляж, Площадь, дворы построек, терраса руин, каньон, причал, тропа и
-# крутая скала. Луга и опушки гуще (×MEADOW_DENSITY), глубина Леса реже
-# (×FOREST_DENSITY) — там поле сменяется подстилкой с папоротниками у
-# стволов (etree_* из art.prop_groups, пространственная сетка). Цветы —
-# пятнами своего шума, вид пятна детерминирован крупной клеткой (два вида
-# не смешиваются); bermuda — низкая трава у троп (решение владельца:
-# плотность растёт с весом тропы, на самом гравии блок).
+# П18 Сборка 2 (docs/eztree_demo/PLAN_p18.md, исходник src/app/grass.js):
+# поле травы и цветов КАК В ДЕМО EZ-TREE — пучки grass.glb (3 скрещенные
+# плоскости, 6 треугольников, текстура 512², alphaTest 0.5, двусторонняя)
+# и flower_{white,blue,yellow}.glb (~800 треугольников). Пучки дешёвые,
+# поэтому поле крупнее печёной подложки П5.9: радиус 100–120 м против 40.
+#
+# Параметры — числа демо, пересчитанные через k = 0.38 (ель large,
+# ориентир владельца в П18): масштаб size {5,4,5} ± variation {1,2,1} на
+# осях, цвет экземпляра (0.25+0.1r, 0.3+0.3r, 0.1) × затемнение материала
+# 0.6, эмиссия 0x308040 × 0.05 («небольшой свет, чтобы трава имела цвет
+# там, где не освещена» — и лекарство от «угольных» клякс П17), ветер —
+# формула листвы демо (три синуса, фаза симплекс-шума по миру; амплитуда
+# и масштаб шума — те же, что у крон: трава качается вместе с деревьями),
+# пятнистость patchiness 0.7 — тем же шумом, что земля (IslandGen.
+# _grass_patch: в пустошах остаётся ~10 % пучков, как skip демо).
+# Плотность — целевой счёт пучков на круг уровня (демо 5000–25000).
+#
+# Раскладка чанками по МИРОВЫМ клеткам 1 × 1 м (свой seed на клетку,
+# бросок rng потребляется всегда — поток не зависит от уровня качества):
+# чанк CHUNK × CHUNK м строится один раз при входе в поле и не
+# пересобирается — трава не «плавает» за игроком. Плавное исчезновение
+# края — масштабом к нулю в шейдере (grass_ez.gdshader), а не обрезкой
+# раскладки. Зоны — карты ForestGround через GroundDetails.
+# _grass_cell_state: нет на воде/пляже, Площади, дворах, террасе руин,
+# каньоне, причале, крутой скале и гравии тропы; к тропе плотность
+# плавно гаснет, глубина Леса реже лугов.
+#
+# Цветы (3 модели, по ~50 на круге HIGH) — пятнами того же шума земли
+# (только гуща пятен), вид пятна детерминирован крупной клеткой
+# FLOWER_CELL м — в одном пятне виды не смешиваются. Масштаб демо
+# 0.02–0.05 на модель высотой ~86 ед. GLB (итог 0.65–1.63 м).
 class_name GrassField
 extends RefCounted
 
-const SHADER: Shader = preload("res://assets/shaders/grass_scan.gdshader")
+const SHADER: Shader = preload("res://assets/shaders/grass_ez.gdshader")
+const GRASS_SCENE: PackedScene = preload(
+	"res://assets/visual/grass_ez/grass.glb")
+const FLOWER_SCENES: Dictionary = {
+	"white": preload("res://assets/visual/grass_ez/flower_white.glb"),
+	"blue": preload("res://assets/visual/grass_ez/flower_blue.glb"),
+	"yellow": preload("res://assets/visual/grass_ez/flower_yellow.glb"),
+}
 
-## Свой seed слоя (не пересекается с мелочью и наполнением).
-const SEED_GRASS_FIELD: int = 20261104
-## Клетка пересборки вокруг игрока, м (снап IslandView.update_viewer).
-const CELL_M: float = 8.0
-## Радиус поля по уровню, м (П17 п.13: ULTRA ~45, HIGH ~30).
-const RADIUS_ULTRA: float = 45.0
-const RADIUS_HIGH: float = 30.0
-## Базовая плотность пучков на клетку 1 × 1 м (суммарно по видам, ULTRA);
-## HIGH = ½ (П17 п.13).
-const BASE_DENSITY: float = 0.30
-const DENSITY_HIGH: float = 0.5
-## Кромка поля: последние метры радиуса масштаб пучков плавно к нулю
-## (П17 п.8) — стык с пустым дальним планом не читается полосой.
-const EDGE_M: float = 3.0
-## Луга/опушки гуще, глубина Леса реже (П17 п.6).
-const MEADOW_DENSITY: float = 1.6
-const FOREST_DENSITY: float = 0.6
-## Ниже этой отметки (после дрожания точки) травы нет: песок чистый.
+## Свой seed слоя (не пересекается с мелочью и наполнением; П18 Сборка 2).
+const SEED_GRASS_FIELD: int = 20261106
+## Сторона чанка раскладки, м (шаг пересборки IslandView.update_viewer).
+const CHUNK: float = 8.0
+## Пересчёт демо-единиц в метры — k ели large (ориентир владельца, П18).
+const K: float = 0.38
+## Радиус поля и целевой счёт пучков по уровню (задание: «плотность как
+## в демо (5000–25000) или гуще — пучки дешёвые»; радиус ~80–120 м).
+## Счёт — базовая плотность COUNT/(π·R²) на клетку до зон и пятен:
+## зоны и пятнистость гасят его суммарно до ~¼, поэтому цель задана
+## с запасом — фактический счёт круга попадает в диапазон демо.
+const RADIUS_HIGH: float = 100.0
+const RADIUS_ULTRA: float = 120.0
+const COUNT_HIGH: int = 24000
+const COUNT_ULTRA: int = 48000
+## Кромка поля в шейдере (масштаб к нулю), м — раскладку не трогает.
+const EDGE_M: float = 12.0
+## Масштаб пучка по осям: size {5,4,5} + случайно variation {1,2,1}
+## (grass.js GrassOptions), ×k. Ширина итогового пучка ~3.7–4.5 м,
+## высота ~3.0–4.6 м — буквально пропорции демо (трава ≈ ⅙ ели).
+const SIZE: Vector3 = Vector3(5.0, 4.0, 5.0) * K
+const SIZE_VAR: Vector3 = Vector3(1.0, 2.0, 1.0) * K
+## Цветок: scale.set(s, s, s), s = 0.02 + 0.03·rand (grass.js:247) ×k.
+const FLOWER_SCALE_FROM: float = 0.02 * K
+const FLOWER_SCALE_TO: float = 0.05 * K
+## Ниже этой отметки (после дрожания) травы нет: песок чистый.
 const BEACH_H: float = 1.4
-## Дрожание наклона пучка от нормали рельефа, рад.
-const TILT_MAX: float = 0.175  # ~10°
-## Пятна цветов: свой шум (не кочки), внутри пятна плотность ×FLOWER_BOOST,
-## вне — ×FLOWER_FADE; вид пятна — по крупной клетке FLOWER_CELL м.
-const FLOWER_SEED: int = 20261105
-const FLOWER_FREQUENCY: float = 0.055
-const FLOWER_FROM: float = 0.60
-const FLOWER_TO: float = 0.68
-const FLOWER_BOOST: float = 6.0
-const FLOWER_FADE: float = 0.2
+## Присыпка основания пучка, м (доля масштаба не нужна — основание
+## модели в нуле, GLB травы стоит на y = 0).
+const SINK: float = 0.03
+## Минимальный уклон клетки, при котором пучок наклоняется по нормали
+## рельефа: на плоских лугах нормаль ≈ вертикаль, четыре выборки высот
+## ради неё — зря (замер: полный круг HIGH собирается ~1 с, каждая
+## экономия на клетке — минус десятки миллисекунд).
+const TILT_MIN: float = 0.03
+## Глубина Леса реже лугов (луг = базовая плотность; у кромки — лерп).
+const FOREST_DENSITY: float = 0.55
+## Тропа: сам гравий (вес ≥ 0.2) уже блокирует GroundDetails.
+## _grass_cell_state; к нему плотность плавно гаснет (задание: «тропы
+## реже»).
+const PATH_FADE_FULL: float = 0.2
+## Цветы: базовая плотность на клетку — с запасом на зоны и пятна даёт
+## ~150 цветков на круге R = 100 (по ~50 на вид, как flowerCount демо);
+## зоны и гуща пятен гасят её суммарно до ~1/12 (замер прогона теста).
+const FLOWER_DENSITY: float = 0.03
+const FLOWER_PATCH_FROM: float = 0.45
+const FLOWER_PATCH_TO: float = 0.75
+## Вид пятна цветов — крупная клетка FLOWER_CELL м (детерминирован,
+## в одном пятне виды не смешиваются, по канону П17).
 const FLOWER_CELL: float = 16.0
-## Папоротники тени Леса: множитель плотности у стволов (в радиусе
-## TRUNK_NEAR) и в остальном лесу.
-const FERN_TRUNK_BOOST: float = 2.2
-const FERN_FOREST_FACTOR: float = 0.8
-const TRUNK_NEAR: float = 5.0
-## Клетка пространственной сетки стволов (достаточно 9 соседних).
-const TRUNK_CELL: float = 8.0
-## Ближнее кольцо теней (П17 п.13): на ULTRA поле разбито на две ноды
-## на вид — ближняя (≤ SHADOW_RING_M, cast_shadow ON) и дальняя (без
-## теней); на HIGH поле целиком без теней.
-const SHADOW_RING_M: float = 10.0
+## Эмиссия травы демо: 0x308040 (grass.js:133) × 0.05.
+const EMISSION_COLOR: Color = Color(
+	0x30 / 255.0, 0x80 / 255.0, 0x40 / 255.0)
+const EMISSION_ENERGY: float = 0.05
 
-## Виды поля: share — доля базовой плотности, scale — диапазон масштаба
-## (0.7–1.4, «разной высоты» референса), slope — предельный уклон,
-## sink — утопление основания (м), mode — поведение раскладки
-## (grass/flower/fern/bermuda). Треугольники пучков (план п.5: пучки
-## ~1.5–3k, цветы ~1–2k) выверены под бюджет: тяжёлые large/mid — реже,
-## лёгкий tall — основной, кочки bermuda — почти бесплатны.
-const KINDS: Array[Dictionary] = [
-	{
-		"type": "gf_large", "mode": "grass",
-		"mesh": preload("res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_large.res"),
-		"scale": Vector2(0.8, 1.3), "slope": 0.65, "sink": 0.02,
-		"share": 0.08,
-	},
-	{
-		"type": "gf_mid", "mode": "grass",
-		"mesh": preload("res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_mid.res"),
-		"scale": Vector2(0.8, 1.3), "slope": 0.65, "sink": 0.02,
-		"share": 0.08,
-	},
-	{
-		"type": "gf_tall", "mode": "grass",
-		"mesh": preload("res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_tall.res"),
-		"scale": Vector2(0.85, 1.4), "slope": 0.65, "sink": 0.02,
-		"share": 0.20,
-	},
-	{
-		"type": "gf_small", "mode": "grass",
-		"mesh": preload("res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_small.res"),
-		"scale": Vector2(0.7, 1.1), "slope": 0.7, "sink": 0.02,
-		"share": 0.16,
-	},
-	{
-		"type": "gf_m2", "mode": "grass",
-		"mesh": preload("res://assets/third_party/polyhaven.com/grass_medium_02/grass_m2.res"),
-		"scale": Vector2(0.7, 1.2), "slope": 0.65, "sink": 0.02,
-		"share": 0.12,
-	},
-	{
-		"type": "gf_bermuda", "mode": "bermuda",
-		"mesh": preload("res://assets/third_party/polyhaven.com/grass_bermuda_01/bermuda_medium.res"),
-		"scale": Vector2(0.9, 1.4), "slope": 0.7, "sink": 0.01,
-		"share": 0.25,
-	},
-	{
-		"type": "gf_celandine", "mode": "flower",
-		"mesh": preload("res://assets/third_party/polyhaven.com/celandine_01/celandine.res"),
-		"scale": Vector2(0.8, 1.3), "slope": 0.6, "sink": 0.02,
-		"share": 0.05,
-	},
-	{
-		"type": "gf_dandelion", "mode": "flower",
-		"mesh": preload("res://assets/third_party/polyhaven.com/dandelion_01/dandelion.res"),
-		"scale": Vector2(0.8, 1.3), "slope": 0.6, "sink": 0.02,
-		"share": 0.05,
-	},
-	{
-		"type": "gf_fern", "mode": "fern",
-		"mesh": preload("res://assets/third_party/polyhaven.com/fern_02/fern_lo.res"),
-		"scale": Vector2(0.8, 1.3), "slope": 0.65, "sink": 0.04,
-		"share": 0.06,
-	},
-]
+static var _tuft: Dictionary = {}
+static var _flowers: Dictionary = {}
 
 
-## Поле включено на HIGH/ULTRA (как мелочь и трава-буст; SIMPLE/NORMAL —
-## печёная подложка rgrass, как раньше).
+## Поле включено на HIGH/ULTRA (SIMPLE/NORMAL — печёная подложка rgrass).
 static func is_field_enabled(tier: int) -> bool:
 	return tier >= GraphicsQuality.Tier.HIGH
 
@@ -139,9 +111,11 @@ static func radius_for_tier(tier: int) -> float:
 		else RADIUS_HIGH
 
 
-## Плотность слоя для уровня (HIGH = ½ ULTRA, П17 п.13).
+## Базовая плотность пучков на клетку 1 × 1 м (целевой счёт уровня).
 static func density_for_tier(tier: int) -> float:
-	return DENSITY_HIGH if tier == GraphicsQuality.Tier.HIGH else 1.0
+	var count: int = COUNT_ULTRA if tier == GraphicsQuality.Tier.ULTRA \
+		else COUNT_HIGH
+	return float(count) / (PI * radius_for_tier(tier) ** 2)
 
 
 ## Seed мировой клетки 1 × 1 м: та же схема, что у GroundClutter, со своим
@@ -151,7 +125,9 @@ static func cell_seed(x: int, z: int) -> int:
 
 
 ## Наклон нормали рельефа в точке (полуметровые разности билинейной выборки
-## — сглаженная нормаль, как карта нормалей ForestGround).
+## — сглаженная нормаль, как карта нормалей ForestGround). Демо сажает
+## пучки на плоскость (rotation.set(0, yaw, 0)); наш рельеф — наклон
+## по нормали, чтобы 4-метровые плоскости не висели углами на склонах.
 static func ground_normal(art: IslandArt, fx: float, fz: float) -> Vector3:
 	var dx: float = IslandGen.ground_height(art.heights, fx + 0.5, fz) \
 		- IslandGen.ground_height(art.heights, fx - 0.5, fz)
@@ -160,285 +136,388 @@ static func ground_normal(art: IslandArt, fx: float, fz: float) -> Vector3:
 	return Vector3(-dx, 1.0, -dz).normalized()
 
 
-## Вид цветов крупной клетки пятна: celandine или dandelion — детерминирован
-## координатами, в одном пятне виды не смешиваются (П17 п.6).
+## Вид цветов крупной клетки пятна — детерминирован координатами,
+## в одном пятне виды не смешиваются.
 static func flower_kind_for(x: int, z: int) -> String:
-	var cell: int = (SEED_GRASS_FIELD + 1) \
+	# keys() даёт нетипизированный Array — в Array[String] его класть
+	# нельзя (ошибка рантайма), поэтому сортируем как есть и берём ключ
+	# с приведением к String.
+	var names: Array = FLOWER_SCENES.keys()
+	names.sort()
+	var cell: int = (SEED_GRASS_FIELD + 2) \
 		^ (int(floorf(float(x) / FLOWER_CELL)) * 2654435761) \
 		^ (int(floorf(float(z) / FLOWER_CELL)) * 40503)
-	return "gf_dandelion" if cell & 1 != 0 else "gf_celandine"
+	return names[absi(cell) % names.size()] as String
 
 
-## Пространственная сетка стволов etree_* (клетки TRUNK_CELL м) — «гуще
-## у стволов» без прохода по всем деревьям на каждую клетку поля.
-static func trunk_grid(art: IslandArt) -> Dictionary:
-	var grid: Dictionary = {}
-	for key: String in art.prop_groups:
-		if not key.begins_with("etree_"):
-			continue
-		var group: PropGroup = art.prop_groups[key]
-		for xf: Transform3D in group.transforms:
-			var cell := Vector2i(
-				int(floorf(xf.origin.x / TRUNK_CELL)),
-				int(floorf(xf.origin.z / TRUNK_CELL)))
-			if not grid.has(cell):
-				grid[cell] = [] as Array[Vector2]
-			(grid[cell] as Array[Vector2]).append(
-				Vector2(xf.origin.x, xf.origin.z))
-	return grid
+## Пучок травы из grass.glb: меш (6 треугольников) + текстура + высота
+## модели для паруса ветра. Кэш статический — сцена читается один раз.
+static func tuft_data() -> Dictionary:
+	if _tuft.is_empty():
+		var mesh := _scene_mesh(GRASS_SCENE)
+		var material := _std_material(mesh, 0)
+		# Поверхностный материал GLB («GrassMaterial» демо, фильтр без
+		# анизотропии — планка П5.9) снимаем: поле рендерит override
+		# grass_ez, как у цветов — _surface_mesh без материала.
+		mesh.surface_set_material(0, null)
+		_tuft = {
+			"mesh": mesh, "texture": material.albedo_texture,
+			"height": maxf(mesh.get_aabb().size.y, 0.01),
+		}
+	return _tuft
 
 
-## Есть ли ствол в радиусе TRUNK_NEAR (просмотр 9 соседних клеток сетки).
-static func near_trunk(grid: Dictionary, x: float, z: float) -> bool:
-	var base := Vector2i(
-		int(floorf(x / TRUNK_CELL)), int(floorf(z / TRUNK_CELL)))
-	for cell_x: int in range(base.x - 1, base.x + 2):
-		for cell_z: int in range(base.y - 1, base.y + 2):
-			var trunks: Array = grid.get(Vector2i(cell_x, cell_z), [])
-			for trunk: Vector2 in trunks:
-				if Vector2(x, z).distance_to(trunk) <= TRUNK_NEAR:
-					return true
-	return false
+## Цветы: список поверхностей модели (меш + albedo + текстура + шерохова-
+## тость из GLB) — MultiMesh строится на каждую поверхность отдельно
+## (у цветка 6–7 материалов, раскладка вида у поверхностей общая).
+static func flower_data(kind: String) -> Array:
+	if not _flowers.has(kind):
+		var mesh := _scene_mesh(FLOWER_SCENES[kind])
+		var surfaces: Array[Dictionary] = []
+		for s: int in mesh.get_surface_count():
+			var material := _std_material(mesh, s)
+			surfaces.append({
+				"mesh": _surface_mesh(mesh, s),
+				"albedo": material.albedo_color,
+				"texture": material.albedo_texture,
+				"roughness": material.roughness,
+			})
+		_flowers[kind] = surfaces
+	return _flowers[kind]
 
 
-## Ноды поля по видам (меш, материал с ветром/приминанием). На ULTRA у
-## вида две ноды: ближняя «<вид>_near» (≤ SHADOW_RING_M, с тенями) и
-## дальняя без теней (П17 п.13); на HIGH — одна, без теней. Буферы
-## пустые — заполняет apply_field из scatter.
+## Первый MeshInstance3D сцены GLB (у моделей демо он один).
+static func _scene_mesh(scene: PackedScene) -> Mesh:
+	var instance := scene.instantiate()
+	var found: MeshInstance3D = null
+	for child: Node in instance.find_children("*", "MeshInstance3D"):
+		found = child
+		break
+	var mesh: Mesh = found.mesh if found != null else null
+	instance.free()
+	return mesh
+
+
+## Стандартный материал поверхности (импортер GLB кладёт его в меш).
+static func _std_material(mesh: Mesh, surface: int) -> StandardMaterial3D:
+	var material := mesh.surface_get_material(surface)
+	if material is StandardMaterial3D:
+		return material
+	var fallback := StandardMaterial3D.new()
+	fallback.albedo_color = Color.WHITE
+	return fallback
+
+
+## Отдельный ArrayMesh одной поверхности (для MultiMesh).
+static func _surface_mesh(source: Mesh, surface: int) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES, source.surface_get_arrays(surface))
+	return mesh
+
+
+## Ноды поля: «grass_tuft» (пучки, инстанс-цвета) и «flower_<вид>_s<i>»
+## на каждую поверхность цветочных моделей. Буферы пустые — заполняет
+## apply_field из gather. Тени — П18 Сборка 2 блок 4 (IslandView).
 static func make_nodes(tier: int) -> Dictionary:
 	var nodes: Dictionary = {}
-	var material := _material(tier)
-	for kind: Dictionary in KINDS:
-		var type := String(kind["type"])
-		nodes[type] = _make_node(type, kind["mesh"], material, false)
-		if tier == GraphicsQuality.Tier.ULTRA:
-			nodes[type + "_near"] = _make_node(
-				type + "_near", kind["mesh"], material, true)
+	var fade := _fade_for_tier(tier)
+	var tuft := tuft_data()
+	nodes["grass_tuft"] = _make_node(
+		"grass_tuft", tuft["mesh"], true,
+		_tuft_material(tuft, fade), tier)
+	for kind: String in FLOWER_SCENES:
+		for s: int in flower_data(kind).size():
+			var surface: Dictionary = flower_data(kind)[s]
+			nodes["flower_%s_s%d" % [kind, s]] = _make_node(
+				"flower_%s_s%d" % [kind, s], surface["mesh"], false,
+				_flower_material(surface, fade), tier)
 	return nodes
 
 
 static func _make_node(
-		type: String, mesh: Mesh, material: Material, shadow: bool
+		type: String,
+		mesh: Mesh,
+		use_colors: bool,
+		material: Material,
+		_tier: int,
 ) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
+	mm.use_colors = use_colors
 	mm.mesh = mesh
 	var instance := MultiMeshInstance3D.new()
 	instance.name = type
 	instance.multimesh = mm
 	instance.material_override = material
-	# Тени поля — только ближняя нода ULTRA (П17 п.13).
-	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
-		if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Тени: трава демо и отбрасывает, и принимает, но по заданию П18
+	# Сборки 2 (блок 4) поле НЕ отбрасывает тени (кляксы у ног, цена);
+	# принимает — PBR-материал без ручного light() получает тени сам.
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return instance
 
 
-## Материал поля: один на все виды (вариации — инстанс-цвета). В headless
-## шейдер не компилируется — плоский вершинно-цветной, как ForestMat.
-## Спад густоты (fade) — от радиуса уровня: кромка «садится» в землю.
-static func _material(tier: int) -> Material:
+## Кромка шейдера по уровню: масштаб к нулю в последних EDGE_M метрах.
+static func _fade_for_tier(tier: int) -> Vector2:
+	var radius := radius_for_tier(tier)
+	return Vector2(radius - EDGE_M, radius)
+
+
+## Материал пучков: текстура GLB × инстанс-тон (COLOR) × 0.6 демо,
+## эмиссия 0x308040 × 0.05, ветер формулы крон (grass_ez.gdshader).
+static func _tuft_material(tuft: Dictionary, fade: Vector2) -> Material:
 	if WorldMaterials.want_flat():
 		return LowPolyMat.flat_or_vertex()
-	var radius := radius_for_tier(tier)
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
-	material.set_shader_parameter("fade_start", radius * 0.55)
-	material.set_shader_parameter("fade_end", radius * 0.92)
+	material.set_shader_parameter("albedo_tex", tuft["texture"])
+	material.set_shader_parameter("albedo_color", Color.WHITE)
+	material.set_shader_parameter("roughness_v", 1.0)
+	material.set_shader_parameter("mat_dim", 0.6)
+	material.set_shader_parameter(
+		"emission_color", EMISSION_COLOR)
+	material.set_shader_parameter(
+		"emission_energy", EMISSION_ENERGY)
+	_set_common(material, tuft["height"], fade)
 	return material
 
 
-## Разложить поле вокруг center (мировые метры): чистая функция —
-## трансформы и цвета по видам; IslandView.apply_field переносит их в
-## MultiMesh, тесты читают напрямую.
-static func scatter(art: IslandArt, tier: int, center: Vector2) -> Dictionary:
-	var density := BASE_DENSITY * density_for_tier(tier)
-	var radius := radius_for_tier(tier)
-	var groups: Dictionary = {}
-	for kind: Dictionary in KINDS:
-		groups[kind["type"]] = {
-			"kind": kind, "transforms": Array(), "colors": PackedColorArray(),
-		}
-	var flower_patch := FastNoiseLite.new()
-	flower_patch.seed = FLOWER_SEED
-	flower_patch.frequency = FLOWER_FREQUENCY
-	var trunks := trunk_grid(art)
-	var r_cells: int = int(ceilf(radius))
-	var cx: int = roundi(center.x)
-	var cz: int = roundi(center.y)
-	for z: int in range(cz - r_cells, cz + r_cells + 1):
-		for x: int in range(cx - r_cells, cx + r_cells + 1):
-			var dist: float = Vector2(float(x), float(z)).distance_to(center)
-			if dist > radius:
-				continue
-			# За картой высот поля нет — и чтения высот не выходят за массив.
+## Материал поверхности цветка: albedo/текстура/шероховатость из GLB,
+## без затемнения и эмиссии (в демо они только у травы), ветер — тот же.
+static func _flower_material(surface: Dictionary, fade: Vector2) -> Material:
+	if WorldMaterials.want_flat():
+		return LowPolyMat.flat_or_vertex()
+	var material := ShaderMaterial.new()
+	material.shader = SHADER
+	if surface["texture"] != null:
+		material.set_shader_parameter("albedo_tex", surface["texture"])
+		material.set_shader_parameter("albedo_color", Color.WHITE)
+	else:
+		# Поверхности без текстуры (лепестки, зелень): плоский albedo
+		# материала GLB, нейтральная белая текстура (alpha = 1).
+		material.set_shader_parameter(
+			"albedo_tex", _white_texture())
+		material.set_shader_parameter("albedo_color", surface["albedo"])
+	material.set_shader_parameter("mat_dim", 1.0)
+	material.set_shader_parameter("emission_energy", 0.0)
+	material.set_shader_parameter("roughness_v", surface["roughness"])
+	var height: float = (surface["mesh"] as ArrayMesh).get_aabb().size.y
+	_set_common(material, maxf(height, 0.01), fade)
+	return material
+
+
+static func _set_common(
+		material: ShaderMaterial, model_height: float, fade: Vector2) -> void:
+	material.set_shader_parameter("model_height", model_height)
+	material.set_shader_parameter("fade_start", fade.x)
+	material.set_shader_parameter("fade_end", fade.y)
+	material.set_shader_parameter("wind_strength", 0.5 * K)
+	material.set_shader_parameter("wind_freq", 0.5)
+	material.set_shader_parameter("wind_noise_scale", 70.0 * K)
+
+
+static var _white: ImageTexture = null
+
+
+## Нейтральная белая текстура для поверхностей без карты (alpha = 1).
+static func _white_texture() -> ImageTexture:
+	if _white == null:
+		var image := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+		image.fill(Color.WHITE)
+		_white = ImageTexture.create_from_image(image)
+	return _white
+
+
+## Раскладка одного чанка CHUNK × CHUNK м (мировые клетки x0..x0+7 ×
+## z0..z0+7) — чистая функция мировых координат и уровня. Возвращает
+## {«tuft»: {transforms, colors}, «flower_<вид>»: {transforms}}; чанк
+## выходит пустым, если целиком за картой высот.
+static func build_chunk(art: IslandArt, tier: int, cx: int, cz: int) -> Dictionary:
+	var groups: Dictionary = {
+		"tuft": {"transforms": Array(), "colors": PackedColorArray()},
+	}
+	# PackedColorArray — тип-значение: append во временную копию из словаря
+	# в него не попадает, копию возвращают в словарь явно, в конце функции.
+	var tuft_colors: PackedColorArray = groups["tuft"]["colors"]
+	for kind: String in FLOWER_SCENES:
+		groups["flower_%s" % kind] = {"transforms": Array()}
+	var density := density_for_tier(tier)
+	var x0: int = cx * int(CHUNK)
+	var z0: int = cz * int(CHUNK)
+	# Один поток на чанк (seed по мировым координатам чанка): клетки
+	# обходятся в фиксированном порядке — раскладка остаётся чистой
+	# функцией мировых координат, а RandomNumberGenerator создаётся один
+	# раз на 64 клетки (создавать его на каждую клетку — главный тормоз
+	# круга из ~500 чанков).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = cell_seed(cx, cz)
+	for z: int in range(z0, z0 + int(CHUNK)):
+		for x: int in range(x0, x0 + int(CHUNK)):
 			if absi(x) > IslandGen.HALF or absi(z) > IslandGen.HALF:
+				continue
+			# Броски потребляются всегда и в фиксированном порядке — до
+			# любых вычислений (поток клетки не зависит от уровня
+			# качества и зон). Множители зон ≤ 1, поэтому максимум
+			# вероятности пучка — density, цветка — FLOWER_DENSITY:
+			# клетку с двумя «пустыми» бросками можно пропустить до
+			# дорогих карт зон и шума (~четверть клеток круга).
+			var tuft_roll: float = rng.randf()
+			var sx: float = rng.randf_range(SIZE.x, SIZE.x + SIZE_VAR.x)
+			var sy: float = rng.randf_range(SIZE.y, SIZE.y + SIZE_VAR.y)
+			var sz: float = rng.randf_range(SIZE.z, SIZE.z + SIZE_VAR.z)
+			var cr: float = 0.25 + rng.randf() * 0.1
+			var cg: float = 0.3 + rng.randf() * 0.3
+			var yaw: float = rng.randf_range(0.0, TAU)
+			var jx: float = rng.randf_range(-0.45, 0.45)
+			var jz: float = rng.randf_range(-0.45, 0.45)
+			var flower_roll: float = rng.randf()
+			var flower_scale: float = rng.randf_range(
+				FLOWER_SCALE_FROM, FLOWER_SCALE_TO)
+			var flower_yaw: float = rng.randf_range(0.0, TAU)
+			var fjx: float = rng.randf_range(-0.45, 0.45)
+			var fjz: float = rng.randf_range(-0.45, 0.45)
+			var may_tuft: bool = tuft_roll < density
+			var may_flower: bool = flower_roll < FLOWER_DENSITY
+			if not may_tuft and not may_flower:
 				continue
 			var cell := GroundDetails._grass_cell_state(art, x, z)
 			if cell["blocked"]:
 				continue
-			# Зона: луга ×1.6; в Лесу — от кромки (как опушка) вглубь к ×0.6.
-			var zone: float = MEADOW_DENSITY
+			# Зоны: луг — база, глубина Леса гасится к FOREST_DENSITY.
+			var zone: float = 1.0
 			if cell["forest"]:
-				zone = lerpf(MEADOW_DENSITY, FOREST_DENSITY, clampf(
+				zone = lerpf(1.0, FOREST_DENSITY, clampf(
 					ForestGround._forest_edge_dist(float(x), float(z))
 					/ ForestGround.EDGE_SOFT, 0.0, 1.0))
-			# Тропа: гравий читается — плотность плавно гаснет к блоку
-			# (в blocked у самой полосы; bermuda — наоборот, см. ниже).
-			var path: float = cell["path"]
+			# Тропа: к гравию (блок в _grass_cell_state, вес ≥ 0.2)
+			# плотность плавно гаснет.
 			var path_fade: float = 1.0 - clampf(
-				(path - 0.05) / 0.15, 0.0, 1.0) * 0.9
-			# Скала: от мягкого уклона плотность плавно падает к нулю
-			# (жёсткий блок — в _grass_cell_state, slope >= 0.7).
-			var slope: float = ForestGround._slope(
-				art, x + IslandGen.HALF, z + IslandGen.HALF)
+				float(cell["path"]) / PATH_FADE_FULL, 0.0, 1.0) * 0.9
+			# Скала: от мягкого уклона плотность плавно падает (жёсткий
+			# блок — в _grass_cell_state, slope >= 0.7; уклон оттуда же).
 			var rock_fade: float = 1.0 - smoothstep(
 				ForestGround.ROCK_SLOPE_SOFT,
-				ForestGround.ROCK_SLOPE_FULL, slope) * 0.9
-			# Пятна и проплешины: тот же шум, что печёные кочки и буст.
+				ForestGround.ROCK_SLOPE_FULL, float(cell["slope"])) * 0.9
+			# Пятнистость демо (patchiness 0.7): тем же шумом, что земля;
+			# в пустошах остаётся ~10 % пучков (skip-доля демо).
 			var patch: float = IslandGen._grass_patch(x, z)
-			# Свой поток на клетку — детерминизм по мировым координатам.
-			var rng := RandomNumberGenerator.new()
-			rng.seed = cell_seed(x, z)
-			for kind: Dictionary in KINDS:
-				var mode := String(kind["mode"])
-				# Папоротник — только тень Леса (x < 0, z < 0).
-				if mode == "fern" and not cell["forest"]:
-					continue
-				var p: float = density * float(kind["share"]) \
-					* zone * path_fade * rock_fade
-				p *= 0.25 + 0.75 * patch
-				if mode == "flower":
-					# Пятна цветов: свой шум; вид пятна детерминирован
-					# крупной клеткой — два вида не смешиваются.
-					var fp: float = smoothstep(
-						FLOWER_FROM, FLOWER_TO,
-						(flower_patch.get_noise_2d(x, z) + 1.0) * 0.5)
-					p *= lerpf(FLOWER_FADE, FLOWER_BOOST, fp)
-					if flower_kind_for(x, z) != String(kind["type"]):
-						continue
-				elif mode == "bermuda":
-					# Низкая трава у троп и вытоптанных мест (решение
-					# владельца): гуще к кромке гравия.
-					p *= lerpf(0.4, 3.0, path)
-				elif mode == "fern":
-					p *= FERN_TRUNK_BOOST if near_trunk(
-						trunks, float(x), float(z)) else FERN_FOREST_FACTOR
-				if slope > float(kind["slope"]):
-					continue
-				# Бросок потребляется всегда — поток rng не зависит от
-				# уровня качества (радиус/плотность), только охват клеток.
-				var roll: float = rng.randf()
-				if roll >= p:
-					continue
-				var scale: float = rng.randf_range(
-					float(kind["scale"].x), float(kind["scale"].y))
-				# Кромка поля: масштаб пучка плавно к нулю (П17 п.8),
-				# плотность у края не гасится.
-				var edge: float = clampf((radius - dist) / EDGE_M, 0.0, 1.0)
-				scale *= edge
-				if scale < 0.005:
-					continue
-				var pos := Vector3(
-					x + rng.randf_range(-0.45, 0.45), 0.0,
-					z + rng.randf_range(-0.45, 0.45))
-				var pos2 := Vector2(pos.x, pos.z)
-				# Дрожание вниз по склону не должно заносить пучок
-				# в запретные зоны (как у мелочи П14 3.3).
-				if IslandGen.on_village_pad(pos2):
-					continue
-				if ForestGround._plaza_weight(pos2.x, pos2.y) > 0.05:
-					continue
-				pos.y = IslandGen.ground_height(
-					art.heights, pos.x, pos.z) - float(kind["sink"]) * scale
-				if pos.y <= BEACH_H:
-					continue
-				# Посадка: нормаль рельефа + произвольный yaw + дрожание
-				# наклона до 10°; масштаб — равномерный по осям.
-				var yaw: float = rng.randf_range(0.0, TAU)
-				var tilt_axis := Vector3(
-					rng.randf_range(-1.0, 1.0), 0.0,
-					rng.randf_range(-1.0, 1.0)).normalized()
-				var basis := Basis(
-					Quaternion(Vector3.UP, ground_normal(art, pos.x, pos.z))) \
-					* Basis(Vector3.UP, yaw) \
-					* Basis(tilt_axis, rng.randf_range(0.0, TILT_MAX))
-				var group: Dictionary = groups[kind["type"]]
-				(group["transforms"] as Array).append(Transform3D(
-					basis * Basis().scaled(Vector3.ONE * scale), pos))
-				var brightness: float = rng.randf_range(0.92, 1.08)
-				# Цветки чуть теплее тона скана (П17 п.6).
-				if mode == "flower":
-					group["colors"].append(Color(
-						brightness * 1.05, brightness * 0.99,
-						brightness * 0.94, 1.0))
-				else:
-					group["colors"].append(Color(
-						brightness, brightness, brightness, 1.0))
+			var fades: float = zone * path_fade * rock_fade
+			if may_tuft and tuft_roll < density * fades \
+					* (0.1 + 0.9 * patch):
+				var placed := _place(
+					art, x, z, Vector2(jx, jz), Vector3(sx, sy, sz),
+					yaw, float(cell["slope"]))
+				if not placed.is_empty():
+					(groups["tuft"]["transforms"] as Array).append(
+						placed["transform"])
+					tuft_colors.append(Color(cr, cg, 0.1, 1.0))
+			# Цветы: только гуща пятен, ~по 50 на вид на круге HIGH.
+			if may_flower and flower_roll < FLOWER_DENSITY * fades \
+					* smoothstep(FLOWER_PATCH_FROM, FLOWER_PATCH_TO, patch):
+				var placed := _place(
+					art, x, z, Vector2(fjx, fjz),
+					Vector3.ONE * flower_scale, flower_yaw,
+					float(cell["slope"]))
+				if not placed.is_empty():
+					var kind := flower_kind_for(x, z)
+					(groups["flower_%s" % kind]["transforms"] as Array) \
+						.append(placed["transform"])
+	groups["tuft"]["colors"] = tuft_colors
 	return groups
 
 
-## Перенести раскладку scatter в ноды (буферы MultiMesh целиком). center —
-## центр раскладки: на ULTRA ближние инстансы (≤ SHADOW_RING_M) идут в
-## ноду с тенями «<вид>_near», остальные — в основную; без near-пары
-## (HIGH) всё ложится в основную.
-static func apply_field(
-		nodes: Dictionary, groups: Dictionary, center: Vector2
-) -> void:
+## Посадка инстанса в клетке: позиция по карте высот (с присыпкой),
+## базис — нормаль рельефа (склоны) × случайный yaw, масштаб по осям.
+## Пустой словарь, если дрожание занесло точку в запретную зону или
+## под воду (клетка чистой не гарантирует чистоту точки).
+static func _place(
+		art: IslandArt,
+		x: int,
+		z: int,
+		jitter: Vector2,
+		scale3: Vector3,
+		yaw: float,
+		slope: float,
+) -> Dictionary:
+	var pos := Vector3(x + jitter.x, 0.0, z + jitter.y)
+	var pos2 := Vector2(pos.x, pos.z)
+	# Дрожание не должно заносить пучок в запретные зоны (как у мелочи
+	# П14 3.3) — клетка была чистой, точка посадки обязана быть тоже.
+	if IslandGen.on_village_pad(pos2):
+		return {}
+	if ForestGround._plaza_weight(pos2.x, pos2.y) > 0.05:
+		return {}
+	pos.y = IslandGen.ground_height(art.heights, pos.x, pos.z) - SINK
+	if pos.y <= BEACH_H:
+		return {}
+	# Наклон по нормали — только на склонах (см. TILT_MIN).
+	var basis := Basis(Vector3.UP, yaw)
+	if slope > TILT_MIN:
+		basis = Basis(
+			Quaternion(Vector3.UP, ground_normal(art, pos.x, pos.z))) \
+			* basis
+	return {"transform": Transform3D(
+		basis * Basis().scaled(scale3), pos)}
+
+
+## Ключи чанков поля вокруг center (мировые метры) для уровня — центры
+## чанков в радиусе уровня (+ пол-чанка диагонали на крайние клетки).
+## Сортировка даёт стабильный порядок конкатенации буферов.
+static func chunk_keys(tier: int, center: Vector2) -> Array[Vector2i]:
+	var keys: Array[Vector2i] = []
+	var radius := radius_for_tier(tier)
+	var reach: int = int(ceilf((radius + CHUNK) / CHUNK))
+	var base := Vector2i(
+		int(floorf(center.x / CHUNK)), int(floorf(center.y / CHUNK)))
+	for cz: int in range(base.y - reach, base.y + reach + 1):
+		for cx: int in range(base.x - reach, base.x + reach + 1):
+			var center_world := Vector2(
+				(float(cx) + 0.5) * CHUNK, (float(cz) + 0.5) * CHUNK)
+			if center_world.distance_to(center) > radius + CHUNK * 0.71:
+				continue
+			keys.append(Vector2i(cx, cz))
+	keys.sort()
+	return keys
+
+
+## Собрать раскладку поля из кэша чанков (ключ Vector2i → build_chunk):
+## конкатенация по видам — чистая функция, IslandView применяет её к нодам.
+static func gather_from(chunks: Dictionary) -> Dictionary:
+	var groups: Dictionary = {
+		"tuft": {"transforms": Array(), "colors": PackedColorArray()},
+	}
+	# Цвета — PackedColorArray (тип-значение): копию возвращают в словарь.
+	var tuft_colors: PackedColorArray = groups["tuft"]["colors"]
+	for kind: String in FLOWER_SCENES:
+		groups["flower_%s" % kind] = {"transforms": Array()}
+	for key: Vector2i in chunks:
+		var chunk: Dictionary = chunks[key]
+		for type: String in groups:
+			(groups[type]["transforms"] as Array).append_array(
+				chunk[type]["transforms"])
+			if type == "tuft":
+				tuft_colors.append_array(chunk["tuft"]["colors"])
+	groups["tuft"]["colors"] = tuft_colors
+	return groups
+
+
+## Перенести собранную раскладку в ноды (буферы MultiMesh целиком).
+static func apply_field(nodes: Dictionary, groups: Dictionary) -> void:
 	for type: String in nodes:
-		if type.ends_with("_near"):
-			continue  # заполняется из раскладки базового вида
 		var instance: MultiMeshInstance3D = nodes[type]
-		var group: Dictionary = groups.get(type, {})
+		var key := "tuft" if type == "grass_tuft" \
+			else type.substr(0, type.rfind("_s"))
+		var group: Dictionary = groups.get(key, {})
 		var transforms: Array = group.get("transforms", [])
-		if not transforms.is_empty() and nodes.has(type + "_near"):
-			# Разбивка вынесена в чистую функцию: буферы мультимеша в
-			# headless не читаются (get_instance_transform — identity),
-			# тест проверяет принадлежность по раскладке scatter.
-			var split := near_far_indices(transforms, center)
-			_fill_multimesh(
-				instance.multimesh, transforms, split["far"], group)
-			_fill_multimesh(
-				(nodes[type + "_near"] as MultiMeshInstance3D).multimesh,
-				transforms, split["near"], group)
+		var mm := instance.multimesh
+		mm.instance_count = transforms.size()
+		if key == "tuft":
+			var colors: PackedColorArray = group.get(
+				"colors", PackedColorArray())
+			for i: int in transforms.size():
+				mm.set_instance_transform(i, transforms[i])
+				if i < colors.size():
+					mm.set_instance_color(i, colors[i])
 		else:
-			_fill_multimesh(
-				instance.multimesh, transforms,
-				range(transforms.size()), group)
-			if nodes.has(type + "_near"):
-				# Вид пуст в этой раскладке — ближнее кольцо тоже пусто
-				# (иначе в ноде остались бы прошлые буферы).
-				(nodes[type + "_near"] as MultiMeshInstance3D) \
-					.multimesh.instance_count = 0
-
-
-## Разбивка раскладки вида на ближнее кольцо теней (≤ SHADOW_RING_M от
-## center) и дальнюю часть — индексы в transforms (П17 п.13, ULTRA).
-static func near_far_indices(transforms: Array, center: Vector2) -> Dictionary:
-	var near: Array[int] = []
-	var far: Array[int] = []
-	for i: int in transforms.size():
-		var xf: Transform3D = transforms[i]
-		if Vector2(xf.origin.x, xf.origin.z).distance_to(center) \
-				<= SHADOW_RING_M:
-			near.append(i)
-		else:
-			far.append(i)
-	return {"near": near, "far": far}
-
-
-## Буфер одной ноды: трансформы/цвета исходной раскладки по индексам
-## (near/far-наборы — подмножества одной раскладки вида).
-static func _fill_multimesh(
-		mm: MultiMesh,
-		transforms: Array,
-		indices: Array,
-		group: Dictionary,
-) -> void:
-	mm.instance_count = indices.size()
-	var colors: PackedColorArray = group.get("colors", PackedColorArray())
-	for slot: int in indices.size():
-		var i: int = indices[slot]
-		mm.set_instance_transform(slot, transforms[i])
-		if i < colors.size():
-			mm.set_instance_color(slot, colors[i])
+			for i: int in transforms.size():
+				mm.set_instance_transform(i, transforms[i])

@@ -50,11 +50,21 @@ var _ring_placed: bool = false
 var _ring_step: float = 0.25
 ## П14 3.3: слой мелочи вокруг зрителя (ноды MultiMesh по видам).
 var _clutter_nodes: Dictionary = {}
-## П17, сборка 3: поле фотосканной травы вокруг зрителя (HIGH/ULTRA) —
-## ноды MultiMesh по видам, буферы пересобирает update_viewer.
+## Бюджет сборки чанков поля травы за вызов update_viewer (П18 Сборка 2):
+## полный круг HIGH/ULTRA — ~500 чанков и ~1 с чистой сборки; порциями
+## по 16 чанков (~30-40 мс) вход в мир не фризит, круг вырастает вокруг
+## игрока меньше чем за секунду, при ходьбе кольцо из ~15 новых чанков
+## достраивается за один-два кадра.
+const GRASS_CHUNK_BUDGET: int = 16
+## П18 Сборка 2: поле травы/цветов демо ez-tree вокруг зрителя
+## (HIGH/ULTRA) — ноды MultiMesh (пучки + поверхности цветов), буферы
+## пересобирает update_viewer из чанков раскладки.
 var _grass_field_nodes: Dictionary = {}
-## Клетка последней пересборки поля (быстрый выход).
-var _grass_field_center: Vector2 = Vector2(1e9, 1e9)
+## Кэш чанков раскладки поля (ключ Vector2i — координата чанка CHUNK м;
+## раскладка — чистая функция мировых клеток, кэш не «плавает»).
+var _grass_field_chunks: Dictionary = {}
+## Чанк последней пересборки поля (быстрый выход).
+var _grass_field_center := Vector2i(0x7fffffff, 0x7fffffff)
 ## Уровень, по которому поле построено (радиус/плотность/материал).
 var _grass_field_tier: int = 0
 ## П17 п.1: материалы листвы деревьев (включая уровни детализации) —
@@ -226,15 +236,18 @@ func update_viewer(viewer_pos: Vector3) -> void:
 			_clutter_center = cell
 			GroundClutter.apply_clutter(_clutter_nodes,
 				GroundClutter.scatter(art, _clutter_tier, center))
-	# Поле травы (П17, сборка 3): пересборка при смене клетки CELL_M
-	# (детерминизм по мировым клеткам — снап не плавает); center нужен
-	# apply_field для ближнего кольца теней ULTRA.
+	# Поле травы (П18 Сборка 2): пересборка при смене чанка CHUNK м —
+	# чанки раскладки входят в круг уровня и кэшируются (детерминизм по
+	# мировым клеткам, раскладка не «плавает» за зрителем). Пока круг
+	# не достроен порциями бюджета, _grass_field_center не двигается —
+	# следующий кадр достроит остаток.
 	if not _grass_field_nodes.is_empty():
-		var field_cell := (center / GrassField.CELL_M).floor()
+		var field_cell := Vector2i(
+			int(floorf(center.x / GrassField.CHUNK)),
+			int(floorf(center.y / GrassField.CHUNK)))
 		if field_cell != _grass_field_center:
-			_grass_field_center = field_cell
-			GrassField.apply_field(_grass_field_nodes,
-				GrassField.scatter(art, _grass_field_tier, center), center)
+			if _refresh_grass_field(center):
+				_grass_field_center = field_cell
 	# П18 Сборка 1 п.3: уровни деревьев по дистанции до ближайшего
 	# дерева группы (быстрый выход внутри — при сдвиге зрителя > 1 м).
 	_update_tree_lods(center)
@@ -615,9 +628,10 @@ func _build_details() -> void:
 		_clutter_nodes = GroundClutter.make_nodes(_clutter_tier)
 		for type: String in _clutter_nodes:
 			add_child(_clutter_nodes[type])
-	# П17, сборка 3: поле фотосканной травы вокруг зрителя (HIGH/ULTRA) —
-	# ноды строятся здесь, буферы заполняет первый update_viewer; радиус,
-	# плотность и материал — по уровню входа (как у мелочи и травы-буста).
+	# П18 Сборка 2: поле травы/цветов демо ez-tree вокруг зрителя
+	# (HIGH/ULTRA) — ноды строятся здесь, буферы заполняет первый
+	# update_viewer; радиус, плотность и материал — по уровню входа
+	# (как у мелочи и травы-буста).
 	_grass_field_tier = GraphicsQuality.tier_from_settings()
 	if GrassField.is_field_enabled(_grass_field_tier):
 		_grass_field_nodes = GrassField.make_nodes(_grass_field_tier)
@@ -806,11 +820,52 @@ func set_clutter_visible(on: bool) -> void:
 		(_clutter_nodes[type] as MultiMeshInstance3D).visible = on
 
 
-## Панель замера F3 (П17, сборка 3): показать/спрятать поле сканной травы
+## Панель замера F3 (П18 Сборка 2): показать/спрятать поле травы/цветов
 ## (мгновенно, без пересборки — переключатель замера).
 func set_grass_field_visible(on: bool) -> void:
 	for type: String in _grass_field_nodes:
 		(_grass_field_nodes[type] as MultiMeshInstance3D).visible = on
+
+
+## Пересборка буферов поля травы (П18 Сборка 2): нужные чанки раскладки
+## (круг радиуса уровня) строятся в кэш по мере входа — не больше
+## GRASS_CHUNK_BUDGET чанков за вызов, ближние раньше (полный круг ~500
+## чанков строился бы ~1 с одним куском — фриз на входе в мир); покинутые
+## чанки удаляются сразу. Буферы MultiMesh пересобираются из живых чанков
+## целиком после каждой порции. Раскладка чанка — чистая функция мировых
+## клеток: повторный вход в клетку даёт ту же траву (детерминизм).
+## Возврат — построен ли весь круг (false: остаток достроит следующий
+## кадр, вызовитель не двигает _grass_field_center).
+func _refresh_grass_field(center: Vector2) -> bool:
+	var alive: Dictionary = {}
+	var missing: Array[Vector2i] = []
+	for key: Vector2i in GrassField.chunk_keys(_grass_field_tier, center):
+		alive[key] = true
+		if not _grass_field_chunks.has(key):
+			missing.append(key)
+	for key: Vector2i in _grass_field_chunks.keys():
+		if not alive.has(key):
+			_grass_field_chunks.erase(key)
+	if missing.is_empty():
+		return true
+	missing.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var ca := Vector2(
+			(float(a.x) + 0.5) * GrassField.CHUNK,
+			(float(a.y) + 0.5) * GrassField.CHUNK)
+		var cb := Vector2(
+			(float(b.x) + 0.5) * GrassField.CHUNK,
+			(float(b.y) + 0.5) * GrassField.CHUNK)
+		return ca.distance_to(center) < cb.distance_to(center))
+	var budget: int = GRASS_CHUNK_BUDGET
+	for key: Vector2i in missing:
+		if budget <= 0:
+			break
+		budget -= 1
+		_grass_field_chunks[key] = GrassField.build_chunk(
+			art, _grass_field_tier, key.x, key.y)
+	GrassField.apply_field(
+		_grass_field_nodes, GrassField.gather_from(_grass_field_chunks))
+	return missing.size() <= GRASS_CHUNK_BUDGET
 
 
 ## Панель замера F3 (П17 п.13): выключить/вернуть объём кроны (П17 п.2 —
@@ -820,19 +875,6 @@ func set_grass_field_visible(on: bool) -> void:
 func set_canopy_volume(on: bool) -> void:
 	for material: ShaderMaterial in _canopy_materials:
 		material.set_shader_parameter("volume_mix", 1.0 if on else 0.0)
-
-
-## Приминание травы возле персонажа (П17 п.7): позиция активного игрока
-## в uniform press_pos материала поля (материал один на все виды).
-func set_grass_press(world_pos: Vector3) -> void:
-	if _grass_field_nodes.is_empty():
-		return
-	var material: Material = (_grass_field_nodes[
-		_grass_field_nodes.keys()[0]] as MultiMeshInstance3D) \
-		.material_override
-	if material is ShaderMaterial:
-		(material as ShaderMaterial).set_shader_parameter(
-			"press_pos", world_pos)
 
 
 ## Ползунки F3, вкладка «Вода» (П15-ДОП2, п. 1): сменить склон юбки

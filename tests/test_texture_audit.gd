@@ -49,10 +49,14 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ##     мип-мапов, как menu_bu;
 ##   vfx — спрайты частиц (доработка П9): нарезки 40–96 px с прозрачной
 ##     кромкой, билборды 3D — с мип-мапами, чтобы на отдалении не рябили;
-##     порог 40 px — размер наименьшего спрайта (лист).
+##     порог 40 px — размер наименьшего спрайта (лист);
+##   grass_ez — трава/цветы поля демо ez-tree (П18 Сборка 2): текстуры
+##     бандла самого демо (трава 512², лепестки 21–49 px при цветке
+##     ~1 м), с мип-мапами; порог 20 — наименьший лепесток демо.
 const CATEGORIES: Array = [
 	["assets/third_party/ambientcg.com/", {"min_side": 1024, "mips": true}],
 	["assets/third_party/polyhaven.com/", {"min_side": 1024, "mips": true}],
+	["assets/visual/grass_ez/", {"min_side": 20, "mips": true}],
 	["assets/visual/", {"min_side": 1024, "mips": true}],
 	["assets/menu_bu/", {"min_side": 256, "mips": false}],
 	["assets/hero_bu/", {"min_side": 512, "mips": true}],
@@ -124,10 +128,10 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 	# П14 3.3: мелочь на земле (gc_*) — нетекстурные low-poly модели
 	# наборов П12 (вершинные цвета), как печёные Props_*.
 	"gc_",
-	# П17, сборка 3: поле фотосканной травы вокруг игрока (gf_*) — пучки
-	# Poly Haven с цветом в вершинах (bundle-режим decimate_polyhaven),
-	# материал grass_scan текстур не читает.
-	"gf_",
+	# П18 Сборка 2: цветы поля (flower_*) — часть поверхностей GLB демо
+	# ez-tree идёт плоским albedo материала без карты (лепестки, зелень;
+	# шейдер grass_ez подставляет белую текстуру), как в самом демо.
+	"flower_",
 	# П14 4: вода Born Unblessed процедурна — шейдер water_bu не читает
 	# текстур вовсе (пена и рябь — шум, «БЕЗ текстур Boujie» SPEC 4.5).
 	"LakeSurface", "/Ocean/",
