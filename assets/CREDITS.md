@@ -9,6 +9,7 @@
 | `assets/third_party/ambientcg.com/` (текстуры земли Леса) | ambientcg.com | CC0 — детали в `assets/third_party/LICENSES.md` |
 | `assets/vfx/particles/` (спрайты частиц из-под ног: земля/трава, лист, мягкое пятно) | нарезки из CC0-текстур ambientcg.com и polyhaven.com (`tools/make_vfx_textures.gd`) | CC0 — детали в `assets/third_party/LICENSES.md` |
 | `assets/visual/trees/` (деревья ez-tree и текстуры листвы) | github.com/dgreenheck/ez-tree | MIT — детали в `assets/third_party/LICENSES.md` |
+| `assets/visual/grass_ez/` (трава и цветы демо ez-tree) | github.com/dgreenheck/ez-tree | MIT — детали в `assets/third_party/LICENSES.md` |
 | `assets/third_party/polyhaven.com/` (текстуры, бывшие фотосканы и HDRI) | polyhaven.com | CC0 — детали в `assets/third_party/LICENSES.md`; П5.9 вывел фотоматериал из Леса, HDRI заменены Sky3D |
 | `addons/sky_3d/` (Sky3D 2.1 — небо мира) | github.com/TokisanGames/Sky3D | MIT — детали и замена текстур звёзд в `assets/third_party/LICENSES.md` |
 | `assets/visual/sky_starmap.png`, `assets/visual/sky_starfield.png` (звёздное небо) | сделано для проекта | CC0 (как и весь код проекта) |
