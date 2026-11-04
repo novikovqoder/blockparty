@@ -296,3 +296,43 @@ func test_f3_tree_shadow_checkbox() -> void:
 		"NORMAL: тени деревьев — эффект уровня")
 	panel.watch_graphics(Environment.new(), null, GraphicsQuality.Tier.HIGH)
 	assert_true(panel._tier_effect_on(&"tshadow"), "HIGH: как NORMAL")
+
+
+func test_bark_tangents_all_variants_and_lods() -> void:
+	# П18-фикс 1 «белые стволы и ветки»: кора с П17 читает NORMAL_MAP
+	# шейдера, у GLB ez-tree тангентов нет (их считает three.js) — без
+	# касательного базиса карта нормалей ломала освещение, и кора светилась
+	# белым. Тангенты строятся при запекании у коры всех вариантов всех
+	# видов на всех уровнях (гибрид, LOD1, LOD2); кора при этом матовая —
+	# шероховатость из карты, металличность 0 (без блеска).
+	var shader_code := EzTreeMeshes.BARK_SHADER.code
+	assert_true(shader_code.contains("NORMAL_MAP"),
+		"кора читает карту нормалей (тангенты обязаны быть)")
+	assert_true(shader_code.contains("ROUGHNESS = texture(roughness_tex"),
+		"шероховатость коры — из карты (матовая)")
+	assert_true(shader_code.contains("METALLIC = 0.0"),
+		"металличность 0 — без блеска")
+	for type: StringName in EzTreeMeshes.ASSETS:
+		var list: Array = EzTreeMeshes.ASSETS[type]
+		for variant: int in list.size():
+			var set: Dictionary = EzTreeMeshes.build_set(type, variant)
+			var meshes: Array = [set["mesh"]]
+			meshes.append_array(set["lods"])
+			for mesh: Mesh in meshes:
+				var material := mesh.surface_get_material(0) as ShaderMaterial
+				assert_eq(material.shader, EzTreeMeshes.BARK_SHADER,
+					"%s v%d: поверхность 0 — кора" % [type, variant])
+				var arrays := mesh.surface_get_arrays(0)
+				var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var tangent: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
+				assert_eq(tangent.size(), verts.size() * 4,
+					"%s v%d: у коры тангенты (4 флоата на вершину)"
+						% [type, variant])
+				var live := 0
+				for f: float in tangent:
+					if f != 0.0:
+						live += 1
+				assert_gt(live, 0,
+					"%s v%d: тангенты коры не нулевые" % [type, variant])
+				assert_not_null(material.get_shader_parameter("roughness_tex"),
+					"%s v%d: карта шероховатости коры задана" % [type, variant])

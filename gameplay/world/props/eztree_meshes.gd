@@ -172,7 +172,7 @@ static func _hybrid_mesh(base: String, k: float, info: Dictionary) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	if branches != null:
 		mesh.add_surface_from_arrays(
-			Mesh.PRIMITIVE_TRIANGLES, _scaled(branches, k))
+			Mesh.PRIMITIVE_TRIANGLES, _scaled(branches, k, true))
 		mesh.surface_set_material(0, _bark_material(bark))
 	if leaves != null:
 		var leaf_arrays := _scaled(leaves, k)
@@ -197,7 +197,7 @@ static func _lod_mesh(base: String, lod: int, k: float, info: Dictionary) -> Arr
 	var mesh := ArrayMesh.new()
 	if branches != null:
 		mesh.add_surface_from_arrays(
-			Mesh.PRIMITIVE_TRIANGLES, _scaled(branches, k))
+			Mesh.PRIMITIVE_TRIANGLES, _scaled(branches, k, true))
 		mesh.surface_set_material(0, _bark_material(bark))
 	if leaves != null:
 		var leaf_arrays := _scaled(leaves, k)
@@ -282,12 +282,22 @@ static func _find_child_by_name(node: Node, name: String) -> Node:
 
 ## Массивы вершин поверхности меша (у исходных мешей ez-tree она одна),
 ## умноженные на k — равномерная нормировка сохраняет нормали и UV.
-static func _scaled(source: Mesh, k: float) -> Array:
+## tangents — построить касательный базис коры (П18-фикс 1): ez-tree
+## тангенты не экспортирует (их считает three.js), а кора с П17 читает
+## NORMAL_MAP шейдера — без базиса карта нормалей ломала освещение,
+## стволы и ветки светились белым. SurfaceTool строит тангенты по
+## нормалям и UV поверхности.
+static func _scaled(source: Mesh, k: float, tangents: bool = false) -> Array:
 	var arrays: Array = source.surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	for i: int in verts.size():
 		verts[i] *= k
 	arrays[Mesh.ARRAY_VERTEX] = verts
+	if tangents:
+		var tool := SurfaceTool.new()
+		tool.create_from_arrays(arrays, Mesh.PRIMITIVE_TRIANGLES)
+		tool.generate_tangents()
+		arrays = tool.commit_to_arrays()
 	return arrays
 
 
