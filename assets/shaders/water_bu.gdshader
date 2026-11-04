@@ -19,14 +19,19 @@
 // сцены). П15 3: отражение неба — движковое (IBL radiance Sky3D с
 // френелем F0 ≈ 0.02), ручного двухцветного неба нет; дорожка светила —
 // спекуляр движка.
-// Пена — тоже туториал: маска мелководья (толщина) + гребни по
-// нормали, анимированный Вороной с domain warp и emergence-пульсацией;
-// второй смещённый проход Вороного — тёмная кромка, третий мелкий —
-// пузырьки. Наше, чего в туториале нет: SDF-карта берега и накат
-// (плавная линия из карты высот, П15 9.3-9.4), мягкая кромка последних
-// сантиметров толщины, круги вокруг ног, рябь поверх волн, гашение
-// вершинного смещения вдали (грубые кольца Ocean). Дешёвая версия для
-// SIMPLE/NORMAL — water_bu_cheap.gdshader (без экранной выборки).
+// Пена — заказ владельца 04.11 «убрать мультяшность»: Вороного,
+// тёмную обводку и пузырьки туториала П15-ДОП убрали. Осталось
+// только: тонкое кружево у самой кромки в зоне наката — узкая рваная
+// полоса из мягкого многослойного симплекс-шума (без чётких клеток),
+// полупрозрачная, медленно тает при отливе; и редкие барашки на самых
+// высоких гребнях — рождаются и тают за 1-2 с «дыханием» 3D-шума,
+// не висят пятнами. Линия кружева — по SDF-карте берега (запечена из
+// карты высот, П15 9.3-9.4), не по рёбрам depth. Озеро строится
+// с foam_amount = 0 — пены нет совсем. Наше, чего в туториале не
+// было: мягкая кромка последних сантиметров толщины, круги вокруг
+// ног, рябь поверх волн, гашение вершинного смещения вдали (грубые
+// кольца Ocean). Дешёвая версия для SIMPLE/NORMAL —
+// water_bu_cheap.gdshader (без экранной выборки).
 // Сетка: море —
 // Ocean-кольца аддона, озеро — PlaneMesh; ноды воды без поворота и
 // масштаба, координаты сразу мировые.
@@ -90,26 +95,26 @@ uniform int iter_fragment = 4;
 group_uniforms;
 
 group_uniforms Foam;
-// П15 4 + 9.3 + П15-ДОП блок 2: пена — где мелко (толщина из буфера
-// глубины), на гребнях волн (нормаль) и в полосе берега: линия берега
-// — по карте расстояния до береговой линии (SDF: суша > 0, вода < 0,
-// метры), запечённой из карты высот (ShoreBand.sdf_texture), НЕ по
-// толщине: линия — плавная кривая, не рёбра треугольников земли.
+// Заказ 04.11 + П15 4 + 9.3: пена — только кружево у кромки наката
+// (линия — по карте расстояния до береговой линии: SDF суша > 0,
+// вода < 0, метры, запечена из карты высот ShoreBand.sdf_texture,
+// НЕ по толщине: линия — плавная кривая, не рёбра треугольников) и
+// редкие барашки на самых высоких гребнях. Вороного, тёмной обводки
+// и пузырьков туториала больше нет.
 uniform sampler2D shore_sdf : filter_linear_mipmap;
-// Количество пены (море 1.0, озеро ~0.15 — почти без пены) и ширина
-// полосы у кромки, м (2-8 см; ползунки F3 «Вода»).
+// Количество пены (море 1.0, озеро 0.0 — пены нет совсем) и ширина
+// рваной полосы кружева у кромки, м (ползунки F3 «Вода»).
 uniform float foam_amount : hint_range(0.0, 2.0) = 1.0;
 uniform float foam_width : hint_range(0.02, 0.3) = 0.06;
-// Амплитуда наката, м (море 0.1-0.4, озеро чуть-чуть): линия пены
-// ползёт туда-обратно (П15 9.4).
+// Амплитуда наката, м (море 0.1-0.4): линия кружева ползёт
+// туда-обратно (П15 9.4).
 uniform float runup_amp : hint_range(0.0, 0.6) = 0.35;
-// П15-ДОП блок 2 (туториал): цвет пены и тёмной кромки-тени, сила
-// кромки (0 — без ободка) и плотность пузырьков внутри комьев.
+// Цвет пены — сероватый, не чисто белый (освещается светом сцены);
+// непрозрачность (полупрозрачная — по умолчанию 0.5) и количество
+// барашков (0 — совсем нет; ползунки F3 «Вода»).
 uniform vec4 foam_color : source_color = vec4(0.76, 0.77, 0.79, 1.0);
-uniform vec4 foam_edge_color : source_color =
-	vec4(0.02, 0.03, 0.05, 1.0);
-uniform float foam_edge : hint_range(0.0, 1.0) = 0.8;
-uniform float foam_bubbles : hint_range(0.0, 4.0) = 0.8;
+uniform float foam_alpha : hint_range(0.05, 1.0) = 0.5;
+uniform float foam_crest : hint_range(0.0, 2.0) = 1.0;
 group_uniforms;
 
 group_uniforms Effects;
@@ -159,24 +164,34 @@ const float FILTER_MAX_PX = 4.0;
 // нет — раньше период брался от самой длинной волны Герстнера).
 const float RUNUP_PERIOD_SEC = 7.0;
 
-// Пена туториала (П15-ДОП блок 2): цвета — uniform (пресеты F3,
-// блок 5), пороги и масштабы — константы. Мелководье: пена при
-// толщине < FOAM_DEPTH_START м (толщина вдоль взгляда, как у Бера).
-// Гребни: пена при nrm.y < FOAM_CREST_THRESHOLD (острые гребни
-// sea_octave круче плоских впадин), вес × FOAM_CREST_AMOUNT.
-// Вороной: FOAM_NOISE_SCALE — масштаб комьев, FOAM_NOISE_SPEED —
-// темп их жизни, FOAM_CUTOFF — порог массы, FOAM_EDGE_OFFSET — сдвиг
-// выборки кромки (м), VORONOI_SCALE — масштаб пузырьков. Порог
-// гребней поднят с туториальных 0.7: наши волны ниже и длинее.
-const float FOAM_DEPTH_START = 0.8;
-const float FOAM_DEPTH_END = 0.0;
-const float FOAM_CREST_THRESHOLD = 0.85;
-const float FOAM_CREST_AMOUNT = 2.0;
-const float FOAM_NOISE_SCALE = 2.0;
-const float FOAM_NOISE_SPEED = 1.0;
-const float FOAM_CUTOFF = 0.7;
-const vec2 FOAM_EDGE_OFFSET = vec2(0.02, 0.02);
-const float VORONOI_SCALE = 9.0;
+// Пена (заказ 04.11): кружево — три слоя симплекса с масштабами
+// LACE_SCALE ×1/×2.3/×4.9 и встречным дрейфом (скорости в долях
+// мировых метров в секунду умножаются на TIME): суммы 0.55/0.30/0.15
+// дают мягкое поле 0..1 без чётких клеток; порог LACE_CUT_* рвёт
+// полосу наката кружевом с мягкими краями. LACE_EBB — остаток
+// яркости кружева в фазе отлива (sin наката < 0): медленно тает,
+// накат возвращает полную силу.
+const float LACE_SCALE = 1.1;
+const vec2 LACE_DRIFT1 = vec2(0.06, -0.045);
+const vec2 LACE_DRIFT2 = vec2(0.09, 0.07);
+const vec2 LACE_DRIFT3 = vec2(-0.12, -0.10);
+const float LACE_CUT_LO = 0.42;
+const float LACE_CUT_HI = 0.78;
+const float LACE_EBB = 0.25;
+// Барашки: только самые высокие гребни — доля вершинной высоты волны
+// от sea_height (CREST_H_*; высота — varying из vertex, вдали гасится
+// вместе с волнами) И крутые — nrm.y ниже CREST_STEEP_* (гребни
+// sea_octave круче впадин). «Дыхание» — 3D value-шум по времени
+// (CREST_LIFE_SPEED): пятно барашка рождается и тает за ~1-2 с,
+// не висит. CREST_MAX — вклад барашка в маску пены.
+const float CREST_H_LO = 0.5;
+const float CREST_H_HI = 0.65;
+const float CREST_STEEP_HI = 0.88;
+const float CREST_STEEP_LO = 0.78;
+const float CREST_LIFE_SPEED = 0.55;
+const float CREST_LIFE_LO = 0.42;
+const float CREST_LIFE_HI = 0.78;
+const float CREST_MAX = 0.9;
 // Мягкий край воды (П15 9.2): последние сантиметры толщины (5-15 см)
 // плавно гасят всё, кроме дна, — вода у кромки полностью прозрачная.
 const float EDGE_SOFT_M = 0.12;
@@ -342,41 +357,16 @@ float wave_weight(float lambda_m, float dist, float px_per_rad) {
 		px_per_rad * lambda_m / max(dist, 0.001));
 }
 
-// --- Пена туториала (П15-ДОП блок 2): шумы Вороного и 3D value ---
-// Хэш 3D — тот же ряд, что hash12, с третьим измерением; hash22
-// роняет точку в ячейку сетки Вороного.
+// --- Пена (заказ 04.11): 3D value-шум «дыхания» барашков ---
+// Вороного туториала убран целиком (вместе с hash22 и fbm-обвязкой):
+// остался один 3D value-шум — им барашки рождаются и тают по времени.
+// Хэш 3D — тот же ряд, что hash12, с третьим измерением.
 float hash13(vec3 p) {
 	uvec3 q = uvec3(ivec3(p)) * uvec3(1597334677u, 3812015801u, 2798796415u);
 	uint n = (q.x ^ q.y ^ q.z) * 1597334677u;
 	return float(n) * (1.0 / 4294967295.0);
 }
 
-vec2 hash22(vec2 p) {
-	vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-	p3 += dot(p3, p3.yzx + 33.33);
-	return fract((p3.xx + p3.yz) * p3.zy);
-}
-
-// Вороной: квадрат расстояния до ближайшей точки сетки; точки
-// дрейфуют по синусу от TIME — комья пены живут, а не стоят.
-float voronoi(vec2 uv) {
-	vec2 n = floor(uv);
-	vec2 f = fract(uv);
-	float m_dist = 1.0;
-	for (int j = -1; j <= 1; j++) {
-		for (int i = -1; i <= 1; i++) {
-			vec2 g = vec2(float(i), float(j));
-			vec2 o = hash22(n + g);
-			o = 0.5 + 0.5 * sin(TIME * FOAM_NOISE_SPEED + 6.2831 * o);
-			vec2 r = g - f + o;
-			float d = dot(r, r);
-			m_dist = min(m_dist, d);
-		}
-	}
-	return m_dist;
-}
-
-// 3D value-шум — emergence пены: комья появляются и исчезают волнами.
 float noise3d(vec3 p) {
 	vec3 i = floor(p);
 	vec3 f = fract(p);
@@ -397,27 +387,13 @@ float noise3d(vec3 p) {
 		f.z);
 }
 
-// Масса пены: три октавы Вороного (между октавами — поворот и сдвиг),
-// pow заостряет комья — редкие пузыри, между ними вода.
-float fbm_voronoi(vec2 uv) {
-	float v = 0.0;
-	float a = 0.5;
-	vec2 shift = vec2(100.0);
-	mat2 rot = mat2(vec2(cos(0.5), sin(0.5)), vec2(-sin(0.5), cos(0.5)));
-	for (int i = 0; i < 3; i++) {
-		float val = 1.0 - voronoi(uv);
-		val = pow(val, 2.0);
-		v += a * val;
-		uv = rot * uv * 2.0 + shift;
-		a *= 0.5;
-	}
-	return v;
-}
-
 varying vec3 world_pos;
 // Геометрическая нормаль волн из vertex (3 октавы): к ней fragment
 // плавно сводит детальную нормаль вдали (переход без мерцания).
 varying vec3 vertex_normal_world;
+// Высота волны в вершине, м (с гашением вдали): барашки живут только
+// на самых высоких гребнях — вдали гасятся вместе с волнами.
+varying float vertex_wave_h;
 
 void vertex() {
 	// Исходная мировая позиция (до смещения): по ней fragment считает
@@ -440,6 +416,7 @@ void vertex() {
 		* wave_fade;
 	vertex_normal_world = normalize(
 		vec3(h_c - h_x, vertex_eps, h_c - h_z));
+	vertex_wave_h = h_c;
 	world_pos = wp;
 }
 
@@ -617,18 +594,13 @@ void fragment() {
 	vec3 water = bottom * mix(vec3(1.0), volume, edge) * transmit
 		+ scatter * (1.0 - transmit) * edge;
 
-	// Пена туториала (П15-ДОП блок 2), только smoothstep: где пена
-	// может быть — сумма трёх слагаемых: мелководье (толщина Бера),
-	// гребни волн (нормаль: острые гребни sea_octave круче впадин) и
-	// наша SDF-полоса берега с накатом (туториал знает только глубину —
-	// у нас линия берега плавная кривая карты высот, П15 9.3-9.4).
-	// Предмет над водой в кадре пеной не покрывается; всё умножается
-	// на foam_amount (озеро ≈ 0.15 — почти без пены).
+	// Пена (заказ 04.11 «убрать мультяшность»), только smoothstep:
+	// тонкое кружево у самой кромки в зоне наката (SDF-полоса берега —
+	// линия плавная кривая карты высот, П15 9.3-9.4) и редкие барашки
+	// на самых высоких гребнях. Вороного, тёмной обводки и пузырьков
+	// туториала больше нет. Предмет над водой пеной не покрывается;
+	// всё умножается на foam_amount (озеро 0.0 — пены нет совсем).
 	float underwater = thickness_signed > 0.0 ? 1.0 : 0.0;
-	float depth_foam = smoothstep(FOAM_DEPTH_START, FOAM_DEPTH_END,
-		thickness);
-	float crest_foam = smoothstep(FOAM_CREST_THRESHOLD,
-		FOAM_CREST_THRESHOLD - 0.1, nrm.y) * FOAM_CREST_AMOUNT;
 	float n_coarse = snoise(world_pos.xz * 1.667
 		- vec2(TIME * 0.05, TIME * 0.06));
 	float sdf = texture(shore_sdf,
@@ -637,57 +609,46 @@ void fragment() {
 		* cos(TIME * TAU / RUNUP_PERIOD_SEC));
 	float shore_line = -sdf - (runup + n_coarse * 0.20);
 	float shore_band = 1.0 - smoothstep(0.0, foam_width, shore_line);
-	float foam_level = clamp(depth_foam + crest_foam + shore_band,
-		0.0, 1.0) * foam_amount * underwater;
 
-	// Масса пены (П15-ДОП блок 6): Вороной — самое дорогое место
-	// шейдера, считается только там, где пена возможна (маска
-	// foam_level или круги от ног); открытая вода платит только
-	// масками.
+	// Кружево и барашки — только там, где пена вообще возможна
+	// (foam_amount > 0 и под водой); открытое море платит только
+	// дешёвыми масками, кружево с тремя шумами — за ветвлением полосы.
 	float foam_mask = 0.0;
-	float foam_edge_mask = 0.0;
-	if (foam_level > 0.001 || rings_foam > 0.001) {
-		// Domain warp: течение крутит пену двумя шумами (второй — со
-		// сдвигом фазы). Emergence: 3D-шум пульсирует — комья
-		// появляются волнами; у берега и на гребнях принудительно
-		// полный.
-		vec2 flow_uv = world_pos.xz * 0.5
-			+ TIME * 0.05 * FOAM_NOISE_SPEED;
-		vec2 warp = vec2(vnoise(flow_uv),
-			vnoise(flow_uv + vec2(5.2, 1.3))) * 0.5;
-		float emergence = noise3d(vec3(world_pos.xz * 0.5,
-			TIME * 0.2 * FOAM_NOISE_SPEED));
-		emergence = smoothstep(0.0, 1.0, emergence * 0.5 + 0.5);
-		float eff_emergence = mix(emergence, 1.0, foam_level);
-
-		// Масса пены: fbm-Вороной + foam_level, порог — мягкий
-		// smoothstep. Кромка-тень: тот же Вороной из смещённой точки —
-		// там, где он есть, а массы нет, тёмный ободок (фальшивая
-		// толщина пены).
-		float foam_noise = fbm_voronoi(
-			world_pos.xz * FOAM_NOISE_SCALE + warp) * eff_emergence;
-		float foam_shadow_noise = fbm_voronoi(
-			(world_pos.xz + FOAM_EDGE_OFFSET) * FOAM_NOISE_SCALE + warp)
-			* eff_emergence;
-		foam_mask = smoothstep(FOAM_CUTOFF + 0.5, FOAM_CUTOFF + 0.6,
-			foam_noise + foam_level);
-		float shadow_shape = smoothstep(FOAM_CUTOFF + 0.5,
-			FOAM_CUTOFF + 0.6, foam_shadow_noise + foam_level);
-		foam_edge_mask = clamp(shadow_shape - foam_mask, 0.0, 1.0)
-			* foam_edge;
-
-		// Пузырьки: мелкий Вороной рвёт плотность массы изнутри.
-		float voronoi_val = 1.0 - sqrt(voronoi(
-			world_pos.xz * VORONOI_SCALE + warp));
-		voronoi_val = smoothstep(0.2, 0.8, voronoi_val);
-		float bubble_alpha = 1.0 - clamp(
-			(1.0 - voronoi_val) * foam_bubbles, 0.0, 1.0);
-		foam_mask *= bubble_alpha;
-
-		// Круги вокруг ног — тоже пена (локально, без Вороного).
-		foam_mask = max(foam_mask, rings_foam);
+	if (foam_amount > 0.001 && underwater > 0.5) {
+		// Кружево: три мягких слоя симплекса со встречным дрейфом рвут
+		// полосу наката без клеток; фаза наката (sin) ведёт таяние —
+		// при отливе кружево ослабевает до LACE_EBB, накат возвращает
+		// полную силу. Медленно, темпом морской зыби.
+		if (shore_band > 0.001) {
+			vec2 lace_p = world_pos.xz * LACE_SCALE;
+			float l1 = 0.5 + 0.5 * snoise(lace_p + TIME * LACE_DRIFT1);
+			float l2 = 0.5 + 0.5 * snoise(
+				lace_p * 2.3 + TIME * LACE_DRIFT2 + vec2(7.3, 1.9));
+			float l3 = 0.5 + 0.5 * snoise(
+				lace_p * 4.9 + TIME * LACE_DRIFT3 + vec2(19.1, 11.7));
+			float lace = smoothstep(LACE_CUT_LO, LACE_CUT_HI,
+				l1 * 0.55 + l2 * 0.30 + l3 * 0.15);
+			float tide = LACE_EBB + (1.0 - LACE_EBB) * (0.5 + 0.5
+				* sin(TIME * TAU / RUNUP_PERIOD_SEC));
+			foam_mask = shore_band * lace * tide;
+		}
+		// Барашки: самые высокие (доля sea_height вершинной высоты,
+		// вдали гасится вместе с волнами) и крутые (нормаль) гребни;
+		// «дыхание» 3D-шума рождает и растворяет пятно за ~1-2 с —
+		// не висит. Ползунок F3 «Барашки» множит.
+		float high = smoothstep(sea_height * CREST_H_LO,
+			sea_height * CREST_H_HI, vertex_wave_h);
+		float steep = smoothstep(CREST_STEEP_HI, CREST_STEEP_LO, nrm.y);
+		float life = noise3d(vec3(world_pos.xz * 1.7,
+			TIME * CREST_LIFE_SPEED));
+		life = smoothstep(CREST_LIFE_LO, CREST_LIFE_HI, life);
+		foam_mask = clamp(max(foam_mask,
+			high * steep * life * CREST_MAX * foam_crest)
+			* foam_amount, 0.0, 1.0);
 	}
-	float foam = clamp(foam_mask + foam_edge_mask, 0.0, 1.0);
+	// Круги вокруг ног — тоже пена (локально, без кружева; отдельный
+	// тумблер F3 «Круги на воде»).
+	foam_mask = max(foam_mask, rings_foam);
 
 	// П15 3: отражение — движковое: движок сам кладёт на воду radiance
 	// настоящего неба Sky3D (облака, солнце, луна), отфильтрованную по
@@ -706,15 +667,15 @@ void fragment() {
 	float dist_fade = 1.0 - smoothstep(
 		distance_fade_min, distance_fade_max, surf_dist);
 	EMISSION = water * (1.0 - fresnel) * dist_fade
-		* (1.0 - foam) * edge;
-	// Пена освещается светом сцены: ALBEDO — цвет массы поверх
-	// тёмной кромки (ободок виден только там, где массы нет).
-	ALBEDO = foam_edge_color.rgb * foam_edge_mask * (1.0 - foam_mask)
-		+ foam_color.rgb * foam_mask;
-	ALPHA = clamp(max(edge, foam * 0.6), 0.0, 1.0);
-	// Пена шершавая (туториал): roughness → 0.8 по массе и кромке.
-	ROUGHNESS = mix(rough, 0.8, foam);
-	SPECULAR = specular * edge * (1.0 - foam);
+		* (1.0 - foam_mask) * edge;
+	// Пена освещается светом сцены (в тени темнее): ALBEDO — сероватый
+	// цвет маски, без обводок; непрозрачность — foam_alpha (0.5 —
+	// полупрозрачное кружево, не выше по умолчанию).
+	ALBEDO = foam_color.rgb * foam_mask;
+	ALPHA = clamp(max(edge, foam_mask * foam_alpha), 0.0, 1.0);
+	// Пена шершавая: roughness → 0.8 по массе.
+	ROUGHNESS = mix(rough, 0.8, foam_mask);
+	SPECULAR = specular * edge * (1.0 - foam_mask);
 	METALLIC = metallic;
 	NORMAL = normalize((VIEW_MATRIX * vec4(nrm, 0.0)).xyz);
 }

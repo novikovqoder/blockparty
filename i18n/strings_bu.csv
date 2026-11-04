@@ -191,9 +191,9 @@ BU_W_RIPPLE_STRENGTH,Сила ряби,Ripple strength
 BU_W_RIPPLE_SCALE,Масштаб ряби,Ripple scale
 BU_W_REFRACTION,Сила преломления,Refraction strength
 BU_W_FOAM_AMOUNT,Пена: количество,Foam: amount
-BU_W_FOAM_WIDTH,Пена: ширина полосы,Foam: band width
-BU_W_FOAM_EDGE,Пена: сила кромки,Foam: edge strength
-BU_W_FOAM_BUBBLES,Пена: пузырьки,Foam: bubbles
+BU_W_FOAM_WIDTH,Пена: ширина у берега,Foam: shore width
+BU_W_FOAM_ALPHA,Пена: прозрачность,Foam: opacity
+BU_W_FOAM_CREST,Пена: барашки,Foam: whitecaps
 BU_W_ROUGH_NEAR,Шероховатость вблизи,Roughness near
 BU_W_ROUGH_FAR,Шероховатость у горизонта,Roughness far
 BU_W_CAUSTIC,Яркость каустики,Caustic brightness

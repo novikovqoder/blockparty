@@ -99,12 +99,12 @@ const WATER_SLIDERS: Array[Dictionary] = [
 	{"id": &"foam_width", "label": "BU_W_FOAM_WIDTH",
 		"min": 0.02, "max": 0.3, "step": 0.01,
 		"def": WaterArea.FOAM_WIDTH, "const": "FOAM_WIDTH"},
-	{"id": &"foam_edge", "label": "BU_W_FOAM_EDGE",
-		"min": 0.0, "max": 1.0, "step": 0.05,
-		"def": WaterArea.FOAM_EDGE, "const": "FOAM_EDGE"},
-	{"id": &"foam_bubbles", "label": "BU_W_FOAM_BUBBLES",
-		"min": 0.0, "max": 4.0, "step": 0.1,
-		"def": WaterArea.FOAM_BUBBLES, "const": "FOAM_BUBBLES"},
+	{"id": &"foam_alpha", "label": "BU_W_FOAM_ALPHA",
+		"min": 0.05, "max": 1.0, "step": 0.05,
+		"def": WaterArea.FOAM_ALPHA, "const": "FOAM_ALPHA"},
+	{"id": &"foam_crest", "label": "BU_W_FOAM_CREST",
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"def": WaterArea.FOAM_CREST, "const": "FOAM_CREST"},
 	{"id": &"rough_near", "label": "BU_W_ROUGH_NEAR",
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"def": WaterArea.ROUGHNESS_NEAR, "const": "ROUGHNESS_NEAR"},
@@ -1005,8 +1005,8 @@ func _apply_water() -> void:
 		area.set_refraction_amount(_water_values[&"refraction"])
 		area.set_foam(_water_values[&"foam_amount"],
 			_water_values[&"foam_width"])
-		area.set_foam_edge(_water_values[&"foam_edge"],
-			_water_values[&"foam_bubbles"])
+		area.set_foam_look(_water_values[&"foam_alpha"],
+			_water_values[&"foam_crest"])
 		area.set_roughness(_water_values[&"rough_near"],
 			_water_values[&"rough_far"])
 		area.set_caustic_brightness(_water_values[&"caustic"])
