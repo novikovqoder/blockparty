@@ -1,7 +1,9 @@
-# Тесты П17 п.2 «Объём кроны»: нормали карточек листвы сферические от
-# центра кроны (запекаются в EzTreeMeshes._lod_mesh на всех трёх уровнях
-# детализации), AO по глубине — в COLOR.rgb вершин листвы, у коры
-# подключены карты нормалей и шероховатости по породам (Bark001–003),
+# Тесты П17 п.2 «Объём кроны» (после П18 Сборки 1 п.1): нормали карточек
+# листвы — «круглые» roundedNormals самого генератора ez-tree, приходят
+# из GLB без подмены (П18 снял сферические от центра кроны), AO по
+# глубине — в COLOR.rgb вершин листвы, у коры подключены карты нормалей
+# и шероховатости по породам (Bark001–003), шейдеры коры и листвы — без
+# своего light() (стандартный PBR Godot, как MeshStandardMaterial демо),
 # вариация тона per-instance детерминирована и ограничена ±6 %, а
 # перезапечённый island_art.res держит ту же карту высот (хеш генератора
 # не менялся — генератор/коллизия не тронуты).
@@ -33,41 +35,89 @@ func _leaves_surface(mesh: Mesh) -> int:
 	return -1
 
 
-func test_leaf_normals_spherical_from_crown_center() -> void:
-	# Т2 плана: ≥ 95 % вершин листвы смотрят от центра кроны
-	# (dot(normal, vertex − центр) > 0) на каждом уровне детализации —
-	# крона освещается объёмной сферой, а не россыпью плоскостей.
-	for type: String in ["etree_pine", "etree_oak", "etree_aspen",
-			"etree_bush", "etree_giant"]:
-		var set: Dictionary = EzTreeMeshes.build_set(StringName(type), 0)
+func test_leaf_normals_are_glb_rounded_normals() -> void:
+	# П18 п.1: нормали листвы каждого уровня — нормали GLB
+	# (roundedNormals генератора ez-tree: normal = направление листа +
+	# вершина от центра листа; options.js default true). Подмены нет:
+	# порядок вершин у EzTreeMeshes._lod_mesh тот же (×k меняет только
+	# позиции), сравниваем поэлементно с GLB, прочитанным GLTFDocument'ом.
+	# Допуск — по углу (dot > 0.9999 ≈ 0.8°): ArrayMesh квантует нормали
+	# (~5e-5, это шире is_equal_approx), а прежняя подмена сферическими
+	# нормалями от центра кроны уводила большинство вершин на десятки
+	# градусов — порог ловит её с запасом.
+	for type: StringName in [&"etree_pine", &"etree_oak", &"etree_bush"]:
+		var list: Array = EzTreeMeshes.ASSETS[type]
+		var base := String(list[0][0])
+		var set: Dictionary = EzTreeMeshes.build_set(type, 0)
 		var levels: Array[Mesh] = [set["mesh"]]
 		levels.append_array(set["lods"] as Array[Mesh])
 		for level_index: int in levels.size():
-			var label := "%s/lod%d" % [type, level_index - 1]
-			var mesh: Mesh = levels[level_index]
-			var surface := _leaves_surface(mesh)
-			assert_gte(surface, 0, "%s: есть поверхность листвы" % label)
-			if surface < 0:
-				continue
-			var arrays: Array = mesh.surface_get_arrays(surface)
-			var verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
-			var normals := arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array
-			var aabb := AABB(verts[0], Vector3.ZERO)
-			for vertex: Vector3 in verts:
-				aabb = aabb.expand(vertex)
-			var center := EzTreeMeshes.crown_center(aabb)
-			var aligned := 0
-			var unit := 0
-			for i: int in verts.size():
-				if normals[i].dot(verts[i] - center) > 0.0:
-					aligned += 1
-				if absf(normals[i].length() - 1.0) < 0.001:
-					unit += 1
-			assert_eq(unit, verts.size(), "%s: нормали единичные" % label)
-			assert_gt(
-				float(aligned) / float(verts.size()), 0.95,
-				"%s: ≥ 95 %% вершин от центра кроны (факт %.3f)" % [
-					label, float(aligned) / float(verts.size())])
+			var label := "%s/lod%d" % [base, level_index]
+			var baked_normals := levels[level_index].surface_get_arrays(
+				_leaves_surface(levels[level_index]))[Mesh.ARRAY_NORMAL] \
+				as PackedVector3Array
+			var glb_normals := _glb_leaf_normals(base, level_index)
+			assert_eq(baked_normals.size(), glb_normals.size(),
+				"%s: вершин листвы столько же, сколько в GLB" % label)
+			var mismatched := 0
+			var worst := 1.0
+			for i: int in minf(baked_normals.size(), glb_normals.size()):
+				var dot: float = baked_normals[i].normalized().dot(
+					glb_normals[i].normalized())
+				if dot < worst:
+					worst = dot
+				if dot < 0.9999:
+					mismatched += 1
+			assert_eq(mismatched, 0,
+				"%s: нормали листвы = GLB roundedNormals (расхождений %d, худший dot %.6f)" % [
+					label, mismatched, worst])
+
+
+## Нормали поверхности листвы из GLB уровня (Branches/Leaves экспорта
+## generate_trees.mjs), без запекания — как вышло из генератора.
+func _glb_leaf_normals(base: String, lod: int) -> PackedVector3Array:
+	var path := "%s%s_lod%d.glb" % [EzTreeMeshes.DIR, base, lod]
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		return PackedVector3Array()
+	var scene := doc.generate_scene(state)
+	var node := _find_node_by_name(scene, "Leaves")
+	var arrays: Array = PackedVector3Array()
+	if node is MeshInstance3D:
+		arrays = (node as MeshInstance3D).mesh.surface_get_arrays(0)
+	scene.free()
+	if arrays.is_empty():
+		return PackedVector3Array()
+	return arrays[Mesh.ARRAY_NORMAL]
+
+
+func _find_node_by_name(root: Node, node_name: String) -> Node:
+	var node := root.get_node_or_null(NodePath(node_name))
+	if node != null:
+		return node
+	for child: Node in root.get_children():
+		node = _find_node_by_name(child, node_name)
+		if node != null:
+			return node
+	return null
+
+
+func test_tree_shaders_have_no_custom_light() -> void:
+	# П18 п.1: свет коры и листвы считает стандартный PBR Godot —
+	# собственного light() в шейдерах нет (в демо MeshStandardMaterial),
+	# листва двусторонняя (cull_disabled) и с порогом выреза (scissor).
+	for shader: Shader in [EzTreeMeshes.CANOPY_SHADER,
+			EzTreeMeshes.BARK_SHADER]:
+		assert_false(shader.code.contains("void light()"),
+			"%s: без своего light()" % shader.resource_path.get_file())
+	assert_true(EzTreeMeshes.CANOPY_SHADER.code.contains("cull_disabled"),
+		"листва двусторонняя (cull_disabled)")
+	assert_true(EzTreeMeshes.CANOPY_SHADER.code.contains(
+			"ALPHA_SCISSOR_THRESHOLD"),
+		"листва режется alpha scissor по порогу пресета")
+	assert_false(EzTreeMeshes.CANOPY_SHADER.code.contains("specular_disabled"),
+		"спекуляр листвы — стандартный PBR (render_mode не глушит)")
 
 
 func test_leaf_ao_baked_in_color() -> void:
@@ -154,7 +204,7 @@ func test_crown_tone_jitter_bounded_and_deterministic() -> void:
 
 
 func test_island_art_heights_match_generator() -> void:
-	# Т2 плана: перезапёк island_art.res (сферические нормали, AO, тоны)
+	# Т2 плана: перезапёк island_art.res (нормали из GLB, AO, тоны)
 	# не меняет карту высот — хеш данных генератора прежний, высоты
 	# в ресурсе равны свежесгенерированным (генератор и коллизия не
 	# тронуты, мир одинаков у всех).
@@ -166,3 +216,30 @@ func test_island_art_heights_match_generator() -> void:
 	assert_eq(
 		hash(art.heights), hash(data["heights"]),
 		"высоты island_art.res равны свежесгенерированным")
+	assert_island_art_leaf_normals_rebaked(art)
+
+
+## Перепечённый island_art.res несёт нормали листвы из GLB (roundedNormals),
+## а не остаток прежних сферических от центра кроны: сверяем группу
+## etree_oak:0 — все три уровня против соответствующих GLB (как в
+## test_leaf_normals_are_glb_rounded_normals, но из файла на диске).
+func assert_island_art_leaf_normals_rebaked(art: IslandArt) -> void:
+	var group := art.prop_groups["etree_oak:0"] as PropGroup
+	assert_not_null(group, "группа etree_oak:0 в island_art.res")
+	if group == null:
+		return
+	var base := String((EzTreeMeshes.ASSETS[&"etree_oak"] as Array)[0][0])
+	var surfaces: Array[Mesh] = [group.mesh]
+	surfaces.append_array(group.lods)
+	for level_index: int in surfaces.size():
+		var mesh := surfaces[level_index] as Mesh
+		var normals := mesh.surface_get_arrays(
+			_leaves_surface(mesh))[Mesh.ARRAY_NORMAL] as PackedVector3Array
+		var glb_normals := _glb_leaf_normals(base, level_index)
+		var bad := 0
+		for i: int in minf(normals.size(), glb_normals.size()):
+			if normals[i].normalized().dot(
+					glb_normals[i].normalized()) < 0.9999:
+				bad += 1
+		assert_eq(bad, 0,
+			"island_art.res lod%d: нормали листвы перепечены из GLB" % level_index)

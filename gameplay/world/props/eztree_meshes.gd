@@ -52,14 +52,15 @@ const BARK_ROUGHNESS: Dictionary = {
 		"res://assets/third_party/ambientcg.com/Bark003/Bark003_1K-JPG_Roughness.jpg"),
 }
 
-## П17 п.2 «Объём кроны»: нормали карточек листвы — сферические от центра
-## кроны (крона освещается объёмной сферой, а не россыпью плоскостей —
-## генератор ставил карточкам нормали произвольно), в COLOR.rgb печётся AO
-## по глубине внутри кроны (canopy.gdshader умножает albedo на COLOR.rgb).
-## Сдвиг центра к верхушке — там листва гуще. Запекается на всех трёх LOD;
-## тест test_canopy_bake сверяет нормали/AO через crown_center().
+## П17 п.2 «Объём кроны» (П18 Сборка 1 п.1 — нормали больше не трогаем):
+## в COLOR.rgb печётся AO по глубине внутри кроны (canopy.gdshader
+## умножает albedo на COLOR.rgb). Нормали листвы — «круглые» roundedNormals
+## самого генератора ez-tree (normal = направление листа + вершина от
+## центра листа; options.js default true) приходят прямо из GLB, П18
+## снял прежнюю подмену сферическими от центра кроны. Сдвиг центра AO к
+## верхушке — там листва гуще. Запекается на всех трёх LOD; тест
+## test_canopy_bake сверяет AO и нормали-из-GLB через crown_center().
 const CROWN_UP_BIAS: float = 0.1
-const CROWN_NORMAL_UP: float = 0.2
 const CROWN_AO_DEPTH: float = 0.45
 
 ## Листва — PNG из репозитория ez-tree (MIT, bundled with the demo app);
@@ -197,14 +198,14 @@ static func crown_center(aabb: AABB) -> Vector3:
 		0.0, aabb.size.y * CROWN_UP_BIAS, 0.0)
 
 
-## П17 п.2: перепечь нормали и цвет вершин листвы под объём кроны —
-## NORMAL = normalize(vertex − центр + CROWN_NORMAL_UP·UP) — карточка
-## освещается как участок сферы кроны; COLOR = AO: у поверхности кроны 1,
-## к середине затемнение до CROWN_AO_DEPTH (глубина — эллипсоид AABB:
-## длина (vertex − центр)/полуразмеры, ограничена 1). Собственных цветов
-## у карточек ez-tree нет — массив COLOR создаётся здесь; нулевое
-## направление (вершина в центре кроны) заменяется UP, чтобы нормали
-## оставались единичными.
+## П17 п.2 (П18 — только AO): перепечь цвет вершин листвы под объём
+## кроны — COLOR = AO: у поверхности кроны 1, к середине затемнение до
+## CROWN_AO_DEPTH (глубина — эллипсоид AABB: длина (vertex − центр)/
+## полуразмеры, ограничена 1). Нормали не перезаписываются — в GLB уже
+## лежат «круглые» roundedNormals генератора ez-tree (options.js default
+## true), П18 п.1 вернул их вместо сферических от центра кроны.
+## Собственных цветов у карточек ez-tree нет — массив COLOR создаётся
+## здесь.
 static func _bake_crown(arrays: Array) -> void:
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var aabb := AABB(verts[0], Vector3.ZERO)
@@ -214,20 +215,14 @@ static func _bake_crown(arrays: Array) -> void:
 	var half := aabb.size * 0.5
 	half = Vector3(
 		maxf(half.x, 0.01), maxf(half.y, 0.01), maxf(half.z, 0.01))
-	var normals := PackedVector3Array()
-	normals.resize(verts.size())
 	var colors := PackedColorArray()
 	colors.resize(verts.size())
 	for i: int in verts.size():
 		var rel: Vector3 = verts[i] - center
-		var direction := rel + Vector3.UP * CROWN_NORMAL_UP
-		normals[i] = direction.normalized() \
-			if direction.length_squared() > 1e-8 else Vector3.UP
 		var depth: float = 1.0 - clampf(
 			(rel / half).length(), 0.0, 1.0)
 		var ao: float = 1.0 - CROWN_AO_DEPTH * depth
 		colors[i] = Color(ao, ao, ao)
-	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
 
 

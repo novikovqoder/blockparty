@@ -649,8 +649,9 @@ func set_tree_impostors_visible(on: bool) -> void:
 
 
 ## Панель замера F3 (П17 п.13): выключить/вернуть объём кроны (П17 п.2 —
-## сферические нормали и AO запечены в меши; volume_mix сводит освещение
-## к «плоской карточке» до П17 — нормаль к камере, AO нейтрален).
+## после П18 п.1 это запечённый AO глубины кроны в COLOR.rgb; volume_mix
+## сводит его к нейтральному — «плоская» листва, как до П17. Нормали
+## листвы больше не трогает: с П18 они из GLB и volume_mix не гасит).
 func set_canopy_volume(on: bool) -> void:
 	for material: ShaderMaterial in _canopy_materials:
 		material.set_shader_parameter("volume_mix", 1.0 if on else 0.0)

@@ -1,15 +1,24 @@
 // Крона деревьев Леса, сгенерированных EZ-Tree (П5.9, переделка под
 // реальную демо-сцену): карточки листьев с альфа-текстурой вида
 // (pine/oak/aspen/ash из репозитория ez-tree), цвет — текстура × тон
-// пресета × инстанс-тон острова. Свет — wrap-Ламберт с небесным
-// заполнителем и просветом солнца сквозь листву (владелец просил).
+// пресета × инстанс-тон острова.
+// П18 Сборка 1 п.1 «Материалы как в демо»: свой light() (wrap-Ламберт,
+// небесный заполнитель, просвет солнца) убран — свет считает стандартный
+// PBR Godot, у демо MeshStandardMaterial (metalness 0, roughness 1).
+// Нормали листвы — «круглые» roundedNormals генератора ez-tree
+// (normal = направление листа + вершина от центра листа, options.js
+// default true) запечены прямо в GLB — П18 больше не подменяет их
+// сферическими от центра кроны. Двустороннее освещение без переворота
+// нормали задней грани, как в демо ('normal *= faceDirection' отключали):
+// у Godot в стандартном пути такого переворота нет — обе стороны карточки
+// освещаются нормалью листа как есть.
 // Ветер — формула ez-tree (#createLeafMaterial): смещение по UV.y
 // (черешок → кончик) с фазой из 3D-симплекс-шума по мировому положению
 // (инстансы вращаются произвольно — фаза по миру, у соседних листьев
 // вразнобой); ветви, как в демо, неподвижны.
 // Simplex noise 3D: https://github.com/ashima/webgl-noise (как в ez-tree).
 shader_type spatial;
-render_mode specular_disabled, cull_disabled, depth_draw_opaque;
+render_mode cull_disabled, depth_draw_opaque;
 
 uniform sampler2D leaf_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform vec3 leaf_tint : source_color = vec3(1.0);
@@ -23,10 +32,15 @@ uniform float wind_noise_scale = 24.0;
 // стенсила. На уровнях без MSAA значение 0 — остаётся scissor
 // + coverage-мипы (tools/make_leaf_mips.gd).
 uniform float a2c_edge = 0.0;
-// П17 п.2/п.13: доля «объёма кроны» (1 — сферические нормали и AO,
-// запечённые в меши; 0 — плоская карточка, как до П17). F3-галочка
-// «Объём кроны» сводит к 0 для замера цены эффекта.
+// П17 п.2 (после П18 — только AO): доля запечённого AO глубины кроны в
+// COLOR.rgb (1 — затенение внутри кроны действует, 0 — «плоская» листва,
+// как до П17). F3-галочка «Объём кроны» сводит к 0 для замера цены.
 uniform float volume_mix = 1.0;
+// П18 Сборка 1 п.3 «LOD умнее демо»: порог выреза во время перетекания
+// уровней двигает IslandView (порог пресета → 1.0 — полное отсечение);
+// вне перехода равен alpha_cut. Отдельный от alpha_cut uniform, чтобы
+// возвращать порог пресета, не читая manifest заново.
+uniform float reveal = 1.0;
 
 varying vec3 world_pos;
 
@@ -140,29 +154,17 @@ void vertex() {
 
 void fragment() {
 	vec4 leaf = texture(leaf_tex, UV);
-	ALPHA_SCISSOR_THRESHOLD = alpha_cut;
+	// Порог выреза: alpha_cut пресета, в перетекании LOD растёт до 1.0
+	// (IslandView ведёт reveal; 1.0 — порог пресета, 0.0 — всё отсечено).
+	ALPHA_SCISSOR_THRESHOLD = alpha_cut + (1.0 - alpha_cut) * (1.0 - reveal);
 	// A2C-край действует только при MSAA (ULTRA); без MSAA — нейтрален.
 	ALPHA_ANTIALIASING_EDGE = a2c_edge;
 	ALPHA = leaf.a;
-	// Объём кроны (П17 п.2): COLOR.rgb — запечённый AO глубины; при
-	// volume_mix = 0 AO нейтрален, а нормаль сводится к плоскости
-	// карточки — в view space это нормаль «на камеру» (0, 0, -1).
+	// Объём кроны (П17 п.2, после П18 — только AO): COLOR.rgb — запечённый
+	// AO глубины; при volume_mix = 0 AO нейтрален. Нормали — от генератора
+	// ez-tree (roundedNormals в GLB), шейдер их не меняет.
 	ALBEDO = leaf.rgb * leaf_tint * mix(vec3(1.0), COLOR.rgb, volume_mix);
-	NORMAL = mix(NORMAL, vec3(0.0, 0.0, -1.0), 1.0 - volume_mix);
+	ROUGHNESS = 1.0;
+	METALLIC = 0.0;
 	FOG = fog(world_pos, CAMERA_POSITION_WORLD);
-}
-
-void light() {
-	float ndl = dot(NORMAL, LIGHT);
-	float wrap = 0.5;
-	float lambert = clamp((ndl + wrap) / (1.0 + wrap), 0.0, 1.0);
-	// Небесный заполнитель: теневая сторона кроны читается тёмной глубиной,
-	// а не угольной дырой (ambient из Environment в кастомный light() не
-	// доходит, внутри густой кроны ATTENUATION ≈ 0).
-	float sky_fill = clamp(0.5 + 0.5 * NORMAL.y, 0.0, 1.0) * 0.25;
-	float lit = max(lambert * ATTENUATION, sky_fill);
-	DIFFUSE_LIGHT += LIGHT_COLOR * ALBEDO * lit;
-	// Просвет насквозь: солнце за кроной относительно камеры.
-	float backlight = pow(max(-dot(VIEW, LIGHT), 0.0), 2.5);
-	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * ALBEDO * backlight * 0.55;
 }
