@@ -58,6 +58,14 @@ const COUNT_HIGH: int = 24000
 const COUNT_ULTRA: int = 48000
 ## Кромка поля в шейдере (масштаб к нулю), м — раскладку не трогает.
 const EDGE_M: float = 12.0
+## Ближнее кольцо теней ULTRA (П18 Сборка 2 блок 3): пучки не дальше
+## этого радиуса от игрока живут в отдельной ноде «grass_tuft_near»
+## с cast_shadow — как в П17 («ближнее кольцо отбрасывает»); кольцо
+## крошечное (~330 пучков × 6 треугольников), дальняя нода не отбрасы-
+## вает никогда. HIGH не отбрасывает совсем (кляксы у ног, бюджет
+## уровня Radeon 780M — П16), но принимает тени: шейдер grass_ez без
+## ручного light(), стандартный PBR получает тени сам.
+const SHADOW_RING: float = 10.0
 ## Масштаб пучка по осям: size {5,4,5} + случайно variation {1,2,1}
 ## (grass.js GrassOptions), ×k. Ширина итогового пучка ~3.7–4.5 м,
 ## высота ~3.0–4.6 м — буквально пропорции демо (трава ≈ ⅙ ели).
@@ -216,22 +224,30 @@ static func _surface_mesh(source: Mesh, surface: int) -> ArrayMesh:
 	return mesh
 
 
-## Ноды поля: «grass_tuft» (пучки, инстанс-цвета) и «flower_<вид>_s<i>»
-## на каждую поверхность цветочных моделей. Буферы пустые — заполняет
-## apply_field из gather. Тени — П18 Сборка 2 блок 4 (IslandView).
+## Ноды поля: «grass_tuft» (дальние пучки, инстанс-цвета),
+## «grass_tuft_near» (ближнее кольцо теней ULTRA, заполняет apply_field
+## делением split_tuft_near_far) и «flower_<вид>_s<i>» на каждую
+## поверхность цветочных моделей. Буферы пустые — заполняет apply_field
+## из gather. Тени — П18 Сборка 2 блок 3: поле принимает (PBR без
+## ручного light()), отбрасывает только ближнее кольцо и только на
+## ULTRA — как было в П17.
 static func make_nodes(tier: int) -> Dictionary:
 	var nodes: Dictionary = {}
 	var fade := _fade_for_tier(tier)
 	var tuft := tuft_data()
+	var near_cast: bool = tier == GraphicsQuality.Tier.ULTRA
 	nodes["grass_tuft"] = _make_node(
 		"grass_tuft", tuft["mesh"], true,
-		_tuft_material(tuft, fade), tier)
+		_tuft_material(tuft, fade), false)
+	nodes["grass_tuft_near"] = _make_node(
+		"grass_tuft_near", tuft["mesh"], true,
+		_tuft_material(tuft, fade), near_cast)
 	for kind: String in FLOWER_SCENES:
 		for s: int in flower_data(kind).size():
 			var surface: Dictionary = flower_data(kind)[s]
 			nodes["flower_%s_s%d" % [kind, s]] = _make_node(
 				"flower_%s_s%d" % [kind, s], surface["mesh"], false,
-				_flower_material(surface, fade), tier)
+				_flower_material(surface, fade), false)
 	return nodes
 
 
@@ -240,7 +256,7 @@ static func _make_node(
 		mesh: Mesh,
 		use_colors: bool,
 		material: Material,
-		_tier: int,
+		cast: bool,
 ) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -250,10 +266,12 @@ static func _make_node(
 	instance.name = type
 	instance.multimesh = mm
 	instance.material_override = material
-	# Тени: трава демо и отбрасывает, и принимает, но по заданию П18
-	# Сборки 2 (блок 4) поле НЕ отбрасывает тени (кляксы у ног, цена);
-	# принимает — PBR-материал без ручного light() получает тени сам.
-	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Тени: трава демо и отбрасывает, и принимает; по заданию П18
+	# Сборки 2 (блок 3) поле принимает тени всегда (PBR-материал без
+	# ручного light() получает их сам), отбрасывает — только ближнее
+	# кольцо ULTRA (кляксы у ног и цена полных теней поля).
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+		if cast else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return instance
 
 
@@ -501,26 +519,57 @@ static func gather_from(chunks: Dictionary) -> Dictionary:
 	return groups
 
 
+## Деление пучков на ближнее кольцо (≤ SHADOW_RING от центра поля) и
+## дальнюю часть — чистая функция раскладки и центра: в headless буферы
+## мультимеша не читаются (та же находка П17), поэтому делится слой
+## до нод. Цвета следуют своим трансформам, сумма сохраняется.
+static func split_tuft_near_far(
+		tuft: Dictionary, center: Vector2) -> Dictionary:
+	var near := {"transforms": Array()}
+	var far := {"transforms": Array()}
+	var near_colors := PackedColorArray()
+	var far_colors := PackedColorArray()
+	var colors: PackedColorArray = tuft.get("colors", PackedColorArray())
+	var transforms: Array = tuft.get("transforms", [])
+	for i: int in transforms.size():
+		var xf: Transform3D = transforms[i]
+		var near_one: bool = Vector2(
+			xf.origin.x, xf.origin.z).distance_to(center) <= SHADOW_RING
+		((near["transforms"] if near_one else far["transforms"]) as Array) \
+			.append(xf)
+		if i < colors.size():
+			(near_colors if near_one else far_colors).append(colors[i])
+	near["colors"] = near_colors
+	far["colors"] = far_colors
+	return {"near": near, "far": far}
+
+
 ## Перенести собранную раскладку в ноды (буферы MultiMesh целиком).
-static func apply_field(nodes: Dictionary, groups: Dictionary) -> void:
+## Пучки делятся по кольцу теней (center — позиция зрителя), цветы —
+## целиком в свои ноды.
+static func apply_field(
+		nodes: Dictionary, groups: Dictionary, center: Vector2) -> void:
+	var split := split_tuft_near_far(groups.get("tuft", {}), center)
+	_fill_node(nodes["grass_tuft"], split["far"])
+	_fill_node(nodes["grass_tuft_near"], split["near"])
 	for type: String in nodes:
-		var instance: MultiMeshInstance3D = nodes[type]
-		var key := "tuft" if type == "grass_tuft" \
-			else type.substr(0, type.rfind("_s"))
-		var group: Dictionary = groups.get(key, {})
-		var transforms: Array = group.get("transforms", [])
-		var mm := instance.multimesh
-		mm.instance_count = transforms.size()
-		if key == "tuft":
-			var colors: PackedColorArray = group.get(
-				"colors", PackedColorArray())
-			for i: int in transforms.size():
-				mm.set_instance_transform(i, transforms[i])
-				if i < colors.size():
-					mm.set_instance_color(i, colors[i])
-		else:
-			for i: int in transforms.size():
-				mm.set_instance_transform(i, transforms[i])
+		if type == "grass_tuft" or type == "grass_tuft_near":
+			continue
+		_fill_node(nodes[type], groups.get(
+			type.substr(0, type.rfind("_s")), {}))
+
+
+## Заполнить одну ноду поля буфером группы (с инстанс-цветами).
+static func _fill_node(instance_v: Variant, group: Dictionary) -> void:
+	var instance: MultiMeshInstance3D = instance_v
+	var transforms: Array = group.get("transforms", [])
+	var colors: PackedColorArray = group.get("colors", PackedColorArray())
+	var mm := instance.multimesh
+	mm.instance_count = transforms.size()
+	for i: int in transforms.size():
+		mm.set_instance_transform(i, transforms[i])
+		if i < colors.size():
+			mm.set_instance_color(i, colors[i])
 
 
 # --- Лаборатория ezTree (П18-ЛАБОРАТОРИЯ: копия демо на ровной земле) ---
@@ -553,19 +602,25 @@ static func lab_patch(x: float, z: float) -> float:
 
 
 ## Ноды поля лаборатории: те же пучки/цветы и материалы (grass_ez), кромка
-## шейдера — по кругу демо. Структура как у make_nodes — заполнение apply_field.
+## шейдера — по кругу демо. Структура как у make_nodes (включая ближнюю
+## ноду кольца теней — в лаборатории она не отбрасывает, копия демо
+## статична) — заполнение apply_field.
 static func lab_make_nodes() -> Dictionary:
 	var nodes: Dictionary = {}
 	var fade := Vector2(LAB_RADIUS - EDGE_M, LAB_RADIUS)
 	var tuft := tuft_data()
 	nodes["grass_tuft"] = _make_node(
-		"grass_tuft", tuft["mesh"], true, _tuft_material(tuft, fade), 0)
+		"grass_tuft", tuft["mesh"], true, _tuft_material(tuft, fade),
+		false)
+	nodes["grass_tuft_near"] = _make_node(
+		"grass_tuft_near", tuft["mesh"], true, _tuft_material(tuft, fade),
+		false)
 	for kind: String in FLOWER_SCENES:
 		for s: int in flower_data(kind).size():
 			var surface: Dictionary = flower_data(kind)[s]
 			nodes["flower_%s_s%d" % [kind, s]] = _make_node(
 				"flower_%s_s%d" % [kind, s], surface["mesh"], false,
-				_flower_material(surface, fade), 0)
+				_flower_material(surface, fade), false)
 	return nodes
 
 

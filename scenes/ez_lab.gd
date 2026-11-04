@@ -165,7 +165,9 @@ func _build_grass() -> void:
 	var nodes: Dictionary = GrassField.lab_make_nodes()
 	for type: String in nodes:
 		add_child(nodes[type])
-	GrassField.apply_field(nodes, GrassField.lab_layout(LAB_SEED + 1))
+	# Центр кольца теней — центр круга демо (лаборатория статична).
+	GrassField.apply_field(
+		nodes, GrassField.lab_layout(LAB_SEED + 1), Vector2.ZERO)
 
 
 ## Свет и небо: параметры — дефолты мира днём (Balance/VisualPalette),

@@ -864,7 +864,8 @@ func _refresh_grass_field(center: Vector2) -> bool:
 		_grass_field_chunks[key] = GrassField.build_chunk(
 			art, _grass_field_tier, key.x, key.y)
 	GrassField.apply_field(
-		_grass_field_nodes, GrassField.gather_from(_grass_field_chunks))
+		_grass_field_nodes, GrassField.gather_from(_grass_field_chunks),
+		center)
 	return missing.size() <= GRASS_CHUNK_BUDGET
 
 

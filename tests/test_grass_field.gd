@@ -296,8 +296,9 @@ func test_flowers_follow_tuft_zones() -> void:
 func test_field_nodes_and_material() -> void:
 	# Ноды: пучки с инстанс-цветами и по ноде на поверхность цветов
 	# (раскладка вида общая); материал — PBR-шейдер grass_ez без ручного
-	# light() (тени принимает), без тени отбрасывания (П18 блок 4 —
-	# кляксы у ног), кромка fade от радиуса уровня, ветер формулы крон,
+	# light() (тени принимает), HIGH не отбрасывает совсем (П18 блок 3 —
+	# кляксы у ног, бюджет уровня; ULTRA и ближнее кольцо — отдельный
+	# тест), кромка fade от радиуса уровня, ветер формулы крон,
 	# эмиссия и затемнение — числа демо.
 	var code := FIELD_SHADER.code
 	assert_false(code.contains("void light()"),
@@ -347,18 +348,26 @@ func test_field_nodes_and_material() -> void:
 
 func test_field_apply_fills_buffers() -> void:
 	# apply_field переносит gather в ноды: счётчики пучков и цветов
-	# честны, пустая раскладка очищает буферы.
+	# честны (ближнее + дальнее = раскладка gather), пустая раскладка
+	# очищает буферы.
 	var nodes := GrassField.make_nodes(GraphicsQuality.Tier.HIGH)
 	var gathered := _gather_around(Vector2(20.0, 25.0), GraphicsQuality.Tier.HIGH)
-	GrassField.apply_field(nodes, gathered)
-	var mm: MultiMesh = (nodes["grass_tuft"] as MultiMeshInstance3D).multimesh
-	assert_eq(mm.instance_count,
-		(gathered["tuft"]["transforms"] as Array).size(),
-		"счётчик пучков = раскладка gather")
-	assert_gt(mm.instance_count, 0, "поле не пусто")
-	GrassField.apply_field(nodes, GrassField.gather_from({}))
+	GrassField.apply_field(nodes, gathered, Vector2(20.0, 25.0))
+	var total: int = (gathered["tuft"]["transforms"] as Array).size()
+	var far: int = (nodes["grass_tuft"] as MultiMeshInstance3D) \
+		.multimesh.instance_count
+	var near: int = (nodes["grass_tuft_near"] as MultiMeshInstance3D) \
+		.multimesh.instance_count
+	assert_eq(far + near, total,
+		"ближнее кольцо + дальние = раскладка gather (%d+%d=%d)"
+		% [near, far, total])
+	assert_gt(total, 0, "поле не пусто")
+	GrassField.apply_field(
+		nodes, GrassField.gather_from({}), Vector2.ZERO)
 	assert_eq((nodes["grass_tuft"] as MultiMeshInstance3D) \
 		.multimesh.instance_count, 0, "пустая раскладка очищает буфер")
+	assert_eq((nodes["grass_tuft_near"] as MultiMeshInstance3D) \
+		.multimesh.instance_count, 0, "пустая раскладка очищает ближнюю")
 
 
 # --- прежнее поле П17 удалено (П18 Сборка 2 блок 2) ---
@@ -406,6 +415,74 @@ func test_p17_scan_field_licenses_clean() -> void:
 	assert_true(licenses.contains(
 		"ez-tree (трава и цветы демо) | Dan Greenheck"),
 		"LICENSES.md: набор травы/цветов демо описан")
+
+
+# --- тени поля по уровням (П18 Сборка 2 блок 3) ---
+
+func test_shadow_casting_by_tier() -> void:
+	# HIGH: поле НЕ отбрасывает совсем (обе ноды пучков и цветы) — бюджет
+	# уровня и кляксы у ног; ULTRA: только ближнее кольцо
+	# «grass_tuft_near» (≤ SHADOW_RING, как в П17), дальняя нода и цветы
+	# не отбрасывают. Принимает тени поле на обоих уровнях — шейдер
+	# grass_ez без ручного light() и без shadows_disabled (стандартный
+	# PBR), лекарство клякс П17 — эмиссия демо и никакого приминания.
+	var code := FIELD_SHADER.code
+	assert_false(code.contains("void light("),
+		"без ручного light(): тени принимает стандартный PBR")
+	assert_false(code.contains("shadows_disabled"), "тени не выключены")
+	assert_false(code.contains("press"),
+		"приминания press_pos П17 нет (источник клякс)")
+	assert_gt(GrassField.EMISSION_ENERGY, 0.0,
+		"эмиссия демо — цвет в тени (лекарство «угольных» клякс)")
+	for pair: Array in [
+		[GraphicsQuality.Tier.HIGH, false],
+		[GraphicsQuality.Tier.ULTRA, true],
+	]:
+		var tier: int = pair[0]
+		var near_cast: bool = pair[1]
+		WorldMaterials.textured_headless = true
+		var nodes: Dictionary = GrassField.make_nodes(tier)
+		WorldMaterials.textured_headless = false
+		assert_true(nodes.has("grass_tuft_near"),
+			"ближняя нода есть (Tier.%d)" % tier)
+		for type: String in nodes:
+			var want: int = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+				if near_cast and type == "grass_tuft_near" \
+				else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			assert_eq((nodes[type] as MultiMeshInstance3D).cast_shadow, want,
+				"Tier.%d отбрасывание: %s" % [tier, type])
+
+
+func test_near_far_split_by_ring() -> void:
+	# Чистая функция деления: пучок ≤ SHADOW_RING от центра — в ближнее
+	# кольцо, дальше — в дальнюю ноду; цвета следуют своим трансформам,
+	# сумма сохраняется, кольцо следует центру (зрителю).
+	var layout := {
+		"transforms": [
+			Transform3D(Basis(), Vector3(0.0, 0.0, 0.0)),
+			Transform3D(Basis(), Vector3(9.99, 0.0, 0.0)),
+			Transform3D(Basis(), Vector3(10.01, 0.0, 0.0)),
+			Transform3D(Basis(), Vector3(0.0, 0.0, 30.0)),
+		],
+		"colors": PackedColorArray([
+			Color(0.1, 0.1, 0.1), Color(0.2, 0.2, 0.2),
+			Color(0.3, 0.3, 0.3), Color(0.4, 0.4, 0.4),
+		]),
+	}
+	var split: Dictionary = GrassField.split_tuft_near_far(
+		layout, Vector2.ZERO)
+	assert_eq((split["near"]["transforms"] as Array).size(), 2,
+		"в кольце два ближних пучка")
+	assert_eq((split["far"]["transforms"] as Array).size(), 2,
+		"за кольцом два дальних")
+	assert_eq((split["near"]["colors"] as PackedColorArray)[0],
+		Color(0.1, 0.1, 0.1), "цвет следовал ближнему трансформу")
+	assert_eq((split["far"]["colors"] as PackedColorArray)[1],
+		Color(0.4, 0.4, 0.4), "цвет следовал дальнему трансформу")
+	var moved: Dictionary = GrassField.split_tuft_near_far(
+		layout, Vector2(0.0, 30.0))
+	assert_eq((moved["near"]["transforms"] as Array).size(), 1,
+		"кольцо следует центру поля (зрителю)")
 
 
 # --- земля не менялась ---
