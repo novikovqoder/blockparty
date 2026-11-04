@@ -14,7 +14,8 @@ const CUTS: Dictionary = {
 	"ash": [0.5],
 }
 ## Мип, на котором план требует сохранить плотность (128 × 128 от 1024):
-## деревья переключаются на импосторы за ~90 м — глубже мипы не сэмплятся.
+## дальше 150 м деревья — LOD2 и малы на экране, глубже мипы почти не
+## сэмплятся.
 const CHECK_MIP: int = 3
 const KEEP: float = 0.85
 
@@ -158,8 +159,10 @@ func test_a2c_edge_only_on_ultra() -> void:
 
 
 func test_island_view_applies_a2c_to_canopy_materials() -> void:
-	# IslandView собирает материалы листвы из мешей дерева (включая LOD)
-	# и применяет край по уровню: ULTRA — CANOPY_A2C_EDGE, HIGH — 0.
+	# IslandView собирает материалы листвы из мешей трёх уровней дерева
+	# (LOD0/LOD1/LOD2 — настоящие меши, по одному материалу на уровень,
+	# кора отфильтрована) и применяет край по качеству:
+	# ULTRA — CANOPY_A2C_EDGE, HIGH — 0.
 	var view := IslandView.new()
 	var art := IslandArt.new()
 	var set: Dictionary = EzTreeMeshes.build_set(&"etree_oak", 0)
@@ -169,12 +172,11 @@ func test_island_view_applies_a2c_to_canopy_materials() -> void:
 	group.transforms = [Transform3D(Basis(), Vector3(3.0, 0.0, 3.0))]
 	group.colors = [Color.WHITE]
 	art.prop_groups = {"etree_oak:0": group}
-	view.art = art
 	view._build_tree_lods("etree_oak:0", "etree_oak", group)
 	assert_eq(
-		view._canopy_materials.size(), 2,
-		"материалы листвы собраны с двух уровней (по одному — кора "
-		+ "отфильтрована; LOD2 заменён импостором — свой шейдер, П17 п.3)")
+		view._canopy_materials.size(), 3,
+		"материалы листвы собраны с трёх уровней LOD (по одному на "
+		+ "уровень — кора отфильтрована)")
 	view.set_quality(GraphicsQuality.Tier.ULTRA)
 	for material: ShaderMaterial in view._canopy_materials:
 		assert_almost_eq(
