@@ -32,6 +32,13 @@ const RUINS_NEAR_R: float = 10.0
 const BEACH_H: float = 1.4
 ## Отступ лёгкой мелочи от стен руин, м.
 const RUINS_CLEAR: float = 2.2
+## Папоротники Леса гуще у стволов (П18 Сборка 2: динамическое поле П17
+## с папоротниками у стволов удалено — то же правило стало статичным):
+## радиус «у ствола» etree_* и множитель плотности в нём.
+const FERN_TRUNK_R: float = 5.0
+const FERN_TRUNK_BOOST: float = 2.2
+## Клетка пространственной сетки стволов, м.
+const TRUNK_CELL: float = 8.0
 
 ## Константа травы-буста (SPEC 3.2: плотнее в Лесу на HIGH/ULTRA): доля
 ## клеток с добавочным промежуточным пучком (в пятнах травы, между
@@ -131,6 +138,7 @@ static func build(art: IslandArt, tier: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED_GROUND_DETAIL
 	var ruins := _ruin_positions(art)
+	var trunks := _trunk_grid(art)
 	var groups: Dictionary = {}
 	for kind: Dictionary in KINDS:
 		groups[kind["type"]] = {
@@ -142,7 +150,8 @@ static func build(art: IslandArt, tier: int) -> Dictionary:
 			if cell["blocked"]:
 				continue
 			for kind: Dictionary in KINDS:
-				_place_kind(groups[kind["type"]], rng, art, x, z, cell, ruins)
+				_place_kind(groups[kind["type"]], rng, art, x, z, cell, ruins,
+					trunks)
 	var instances: Array[MultiMeshInstance3D] = []
 	var ranges: Dictionary = {}
 	var colliders: Array[Dictionary] = []
@@ -200,6 +209,7 @@ static func kind_mesh(type: StringName) -> Mesh:
 static func _place_kind(
 	group: Dictionary, rng: RandomNumberGenerator, art: IslandArt,
 	x: int, z: int, cell: Dictionary, ruins: Array[Vector2],
+	trunks: Dictionary,
 ) -> void:
 	var kind: Dictionary = group["kind"]
 	if cell["solid_blocked"] and kind["solid"]:
@@ -220,6 +230,10 @@ static func _place_kind(
 	if String(kind["type"]) == "gd_fern":
 		var patch: float = IslandGen._grass_patch(x, z)
 		p *= (0.3 + 0.7 * patch) if cell["forest"] else 0.3
+		# В Лесу — гуще у стволов etree_* (П18 Сборка 2: статичная замена
+		# папоротникам прежнего динамического поля П17).
+		if cell["forest"] and _near_trunk(trunks, float(x), float(z)):
+			p *= FERN_TRUNK_BOOST
 	# Тропа: плотность гасится — утоптанная земля читается (вес ForestGround).
 	p *= 1.0 - cell["path"] * 0.85
 	if rng.randf() >= p:
@@ -455,6 +469,39 @@ static func _near_ruins(pos: Vector2, ruins: Array[Vector2]) -> bool:
 	for ruin: Vector2 in ruins:
 		if pos.distance_to(ruin) <= RUINS_NEAR_R:
 			return true
+	return false
+
+
+## Пространственная сетка стволов etree_* (клетки TRUNK_CELL м) — поиск
+## «у ствола» за 9 соседних клеток; как _ruin_positions, по запечённым
+## prop_groups арта (П18 Сборка 2: папоротники Леса у стволов).
+static func _trunk_grid(art: IslandArt) -> Dictionary:
+	var grid: Dictionary = {}
+	for key: String in art.prop_groups:
+		if not key.begins_with("etree_"):
+			continue
+		var group: PropGroup = art.prop_groups[key]
+		for xf: Transform3D in group.transforms:
+			var cell := Vector2i(
+				int(floorf(xf.origin.x / TRUNK_CELL)),
+				int(floorf(xf.origin.z / TRUNK_CELL)))
+			if not grid.has(cell):
+				grid[cell] = [] as Array[Vector2]
+			(grid[cell] as Array[Vector2]).append(
+				Vector2(xf.origin.x, xf.origin.z))
+	return grid
+
+
+## Есть ли ствол в радиусе FERN_TRUNK_R (просмотр 9 соседних клеток сетки).
+static func _near_trunk(grid: Dictionary, x: float, z: float) -> bool:
+	var base := Vector2i(
+		int(floorf(x / TRUNK_CELL)), int(floorf(z / TRUNK_CELL)))
+	for cell_x: int in range(base.x - 1, base.x + 2):
+		for cell_z: int in range(base.y - 1, base.y + 2):
+			var trunks: Array = grid.get(Vector2i(cell_x, cell_z), [])
+			for trunk: Vector2 in trunks:
+				if Vector2(x, z).distance_to(trunk) <= FERN_TRUNK_R:
+					return true
 	return false
 
 

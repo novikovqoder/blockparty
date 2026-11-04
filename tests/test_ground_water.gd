@@ -186,6 +186,45 @@ func test_details_deterministic_and_sane() -> void:
 		% [total, colliders.size()])
 
 
+func test_ferns_static_denser_near_trunks() -> void:
+	# П18 Сборка 2 блок 2: папоротники Леса — статичное наполнение
+	# (динамическое поле П17 удалено), в Лесу гуще у стволов etree_*
+	# (кольцо FERN_TRUNK_R, множитель FERN_TRUNK_BOOST). Плотность
+	# «у ствола» сравнивается с лесными клетками вдали от стволов
+	# на единицу площади — множитель виден без статистики на глаз.
+	var details: Dictionary = GroundDetails.build(ART, GraphicsQuality.Tier.HIGH)
+	var ferns: Array = details["transforms"]["gd_fern"]
+	assert_gt(ferns.size(), 0, "папоротники в мире есть")
+	var grid: Dictionary = GroundDetails._trunk_grid(ART)
+	assert_false(grid.is_empty(), "стволы etree_* в арте есть")
+	var forest_near := 0
+	var forest_far := 0
+	for xf_variant: Variant in ferns:
+		var pos: Vector3 = (xf_variant as Transform3D).origin
+		if pos.x < 0.0 and pos.z < 0.0:
+			if GroundDetails._near_trunk(grid, pos.x, pos.z):
+				forest_near += 1
+			else:
+				forest_far += 1
+	assert_gt(forest_near, 0, "в Лесу у стволов папоротники есть")
+	# Клетки-площади тех же зон (чистый перебор лесного сектора).
+	var near_area := 0
+	var far_area := 0
+	for z: int in range(-IslandGen.HALF, 0):
+		for x: int in range(-IslandGen.HALF, 0):
+			if GroundDetails._near_trunk(grid, float(x), float(z)):
+				near_area += 1
+			else:
+				far_area += 1
+	var near_density: float = float(forest_near) / float(near_area)
+	var far_density: float = float(forest_far) / float(far_area)
+	assert_gt(near_density, far_density * 1.5,
+		"у стволов гуще (×%.1f): %.5f против %.5f"
+		% [GroundDetails.FERN_TRUNK_BOOST, near_density, far_density])
+	print("П18: папоротники Леса — у стволов %d/%d м², вдали %d/%d м²"
+		% [forest_near, near_area, forest_far, far_area])
+
+
 func test_grass_boost_by_tier() -> void:
 	# SPEC П12 3.2: слой травы-буста только на HIGH/ULTRA, на ULTRA плотнее.
 	for tier: int in [

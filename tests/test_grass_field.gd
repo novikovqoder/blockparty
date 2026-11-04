@@ -361,6 +361,53 @@ func test_field_apply_fills_buffers() -> void:
 		.multimesh.instance_count, 0, "пустая раскладка очищает буфер")
 
 
+# --- прежнее поле П17 удалено (П18 Сборка 2 блок 2) ---
+
+func test_p17_scan_field_files_removed() -> void:
+	# Фотосканы поля П17 (пучки m1/m2, bermuda, цветы celandine/dandelion)
+	# и шейдер grass_scan удалены из проекта целиком — поле демо их не
+	# использует. Папоротник fern_02 остался (статичное наполнение).
+	for path: String in [
+		"res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_large.res",
+		"res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_mid.res",
+		"res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_small.res",
+		"res://assets/third_party/polyhaven.com/grass_medium_01/grass_m1_tall.res",
+		"res://assets/third_party/polyhaven.com/grass_medium_02/grass_m2.res",
+		"res://assets/third_party/polyhaven.com/grass_bermuda_01/bermuda_medium.res",
+		"res://assets/third_party/polyhaven.com/celandine_01/celandine.res",
+		"res://assets/third_party/polyhaven.com/dandelion_01/dandelion.res",
+		"res://assets/shaders/grass_scan.gdshader",
+	]:
+		assert_false(
+			FileAccess.file_exists(path) or ResourceLoader.exists(path),
+			"файл П17-поля удалён: %s" % path)
+	assert_true(ResourceLoader.exists(
+		"res://assets/third_party/polyhaven.com/fern_02/fern_lo.res"),
+		"папоротник fern_02 остался (статичное наполнение)")
+	assert_true(ResourceLoader.exists("res://assets/visual/grass_ez/grass.glb"),
+		"пучок демо на месте")
+
+
+func test_p17_scan_field_licenses_clean() -> void:
+	# LICENSES.md без строк удалённых наборов; строка fern_02 обновлена
+	# (статичные папоротники), набор травы/цветов демо — на месте.
+	var licenses := _read_licenses()
+	for row: String in [
+		"grass_medium_01 | Poly Haven",
+		"grass_medium_02 | Poly Haven",
+		"grass_bermuda_01 | Poly Haven",
+		"celandine_01 | Poly Haven",
+		"dandelion_01 | Poly Haven",
+	]:
+		assert_false(licenses.contains(row),
+			"LICENSES.md без строки удалённого набора: %s" % row)
+	assert_true(licenses.contains("fern_02 | Poly Haven"),
+		"LICENSES.md: fern_02 остался")
+	assert_true(licenses.contains(
+		"ez-tree (трава и цветы демо) | Dan Greenheck"),
+		"LICENSES.md: набор травы/цветов демо описан")
+
+
 # --- земля не менялась ---
 
 func test_field_heights_hash_unchanged() -> void:
@@ -392,3 +439,13 @@ func _tuft_transforms(gathered: Dictionary) -> Array:
 
 func _tuft_colors(gathered: Dictionary) -> PackedColorArray:
 	return gathered["tuft"]["colors"]
+
+
+func _read_licenses() -> String:
+	var file := FileAccess.open(
+		"res://assets/third_party/LICENSES.md", FileAccess.READ)
+	if file == null:
+		return ""
+	var text := file.get_as_text()
+	file.close()
+	return text
