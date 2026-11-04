@@ -171,7 +171,12 @@ static func _apply_fields(
 			dome.sun_azimuth = atan2(dir.x, dir.z)
 		elif sun != null:
 			sun.global_position = dir * 100.0
-			sun.look_at(Vector3.ZERO, Vector3.UP)
+			# В зените/надире цель ровно по up-вектору — коллинеарно,
+			# Godot сыплет ошибкой вращения; up наклоняем вперёд.
+			var up := (
+				Vector3.UP if absf(dir.y) < 0.999
+				else Vector3.FORWARD)
+			sun.look_at(Vector3.ZERO, up)
 	if vals.has(&"ambient_color"):
 		env.ambient_light_color = vals[&"ambient_color"] as Color
 	if vals.has(&"ambient_energy"):
