@@ -85,12 +85,17 @@ static func ambient_energy(world_time: float) -> float:
 ## день сопоставим с прежним COLOR-источником. Ночь < дня по построению
 ## (и радианс ночного неба сам по себе тёмный). Подбор — владельцем.
 const AMBIENT_SKY_SCALE: float = 0.4
+## Днём (bu-claude, по демо-миру): небесный ambient ~0,55 — тени и кроны
+## не проваливаются в черноту. Ночью множитель прежний (0,4) — ночь тёмная.
+const AMBIENT_SKY_SCALE_DAY: float = 1.05
 
 
 ## Энергия ambient при источнике AMBIENT_SOURCE_SKY (П17 п.10): кривая суток
-## та же (ночь < дня), база ниже — см. AMBIENT_SKY_SCALE.
+## та же (ночь < дня); множитель от AMBIENT_SKY_SCALE ночью до
+## AMBIENT_SKY_SCALE_DAY днём.
 static func ambient_energy_sky(world_time: float) -> float:
-	return ambient_energy(world_time) * AMBIENT_SKY_SCALE
+	return ambient_energy(world_time) * lerpf(AMBIENT_SKY_SCALE,
+		AMBIENT_SKY_SCALE_DAY, dayness(world_time))
 
 
 ## Высота солнца в долях: днём sin(π·прогресса дня) [0..1], ночью —

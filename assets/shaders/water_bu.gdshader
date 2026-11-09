@@ -194,7 +194,9 @@ const float CREST_LIFE_HI = 0.78;
 const float CREST_MAX = 0.9;
 // Мягкий край воды (П15 9.2): последние сантиметры толщины (5-15 см)
 // плавно гасят всё, кроме дна, — вода у кромки полностью прозрачная.
-const float EDGE_SOFT_M = 0.12;
+// bu-claude: шире (0,12 → 0,4 м) — ступенчатый контур чаши озера под самой
+// кромкой растворяется в плавном переходе к прозрачной воде.
+const float EDGE_SOFT_M = 0.4;
 // Круги от ног (П15 6): гауссовы кольца, скорость фронта, время жизни
 // и ширина пакета, м; второе кольцо отстаёт на RING_TRAIL_M и слабее.
 const float RING_LIFE_SEC = 2.2;
@@ -591,7 +593,9 @@ void fragment() {
 	float depth_ratio = 1.0 - exp(-thickness * 0.9);
 	vec3 volume = mix(color_shallow.rgb, color_deep.rgb, depth_ratio);
 	vec3 scatter = volume;
-	vec3 water = bottom * mix(vec3(1.0), volume, edge) * transmit
+	// bu-claude (как в демо-мире): дно на мелком — в своём цвете, гаснет
+	// поканальным поглощением; тон воды добавляется только толщей.
+	vec3 water = bottom * mix(vec3(1.0), volume, edge * 0.2) * transmit
 		+ scatter * (1.0 - transmit) * edge;
 
 	// Пена (заказ 04.11 «убрать мультяшность»), только smoothstep:

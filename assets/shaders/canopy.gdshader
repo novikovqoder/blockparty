@@ -51,6 +51,8 @@ uniform float reveal = 1.0;
 uniform vec3 leaf_tint_mul : source_color = vec3(1.0);
 uniform float leaf_brightness = 1.0;
 uniform float leaf_glow = 0.0;
+// bu-claude: просвечивание листвы на солнце (BACKLIGHT, как в демо-мире).
+uniform float leaf_translucency = 0.35;
 uniform vec3 sun_dir_world = vec3(0.0, 1.0, 0.0);
 
 varying vec3 world_pos;
@@ -182,6 +184,14 @@ void fragment() {
 	ALBEDO = albedo;
 	ROUGHNESS = 1.0;
 	METALLIC = 0.0;
+	// Как uCustomNormals у ez-tree: у задней стороны карточки нормаль НЕ
+	// переворачивается — «круглые» нормали кроны работают с обеих сторон.
+	// Godot у двусторонних материалов переворачивает её сам; без этой строки
+	// половина листьев считалась отвернувшейся от света и крона чернела.
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
+	BACKLIGHT = albedo * leaf_translucency;
 	// Просвет листвы (leaf_glow): квадрат смягчения, только теневая от
 	// солнца сторона (back > 0); при leaf_glow = 0 ветка не выполняется.
 	if (leaf_glow > 0.0) {

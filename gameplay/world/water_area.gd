@@ -137,10 +137,13 @@ const SEA_WAVE_HEIGHT: float = 0.35
 const SEA_WAVE_CHOPPY: float = 4.0
 const SEA_WAVE_SPEED: float = 0.8
 const SEA_WAVE_FREQ: float = 0.08
-const LAKE_WAVE_HEIGHT: float = 0.06
-const LAKE_WAVE_CHOPPY: float = 2.5
-const LAKE_WAVE_SPEED: float = 0.3
-const LAKE_WAVE_FREQ: float = 0.2
+## Озеро (bu-claude, по демо-миру): мелкая ветровая рябь (база ~5 м, верхние
+## октавы — десятки сантиметров), медленная — вода дрожит на месте, а не
+## «течёт» длинными валами в одну сторону.
+const LAKE_WAVE_HEIGHT: float = 0.025
+const LAKE_WAVE_CHOPPY: float = 1.6
+const LAKE_WAVE_SPEED: float = 0.18
+const LAKE_WAVE_FREQ: float = 1.2
 
 ## Высота зоны под поверхностью воды, м.
 const DEPTH: float = 1.4
