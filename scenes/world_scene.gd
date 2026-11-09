@@ -711,7 +711,12 @@ func _ground_at(xz: Vector2) -> float:
 
 ## Пауза на кадр рендера и сохранение снимка.
 func _snap(camera: Camera3D, file_name: String) -> void:
-	await get_tree().create_timer(0.3).timeout
+	# SHOT_WAIT=секунды — дать картинке устояться (SDFGI сходится ~30 кадров;
+	# на программном рендере за 0,3 с проходит 1–2 кадра).
+	var wait := 0.3
+	if not OS.get_environment("SHOT_WAIT").is_empty():
+		wait = maxf(0.3, OS.get_environment("SHOT_WAIT").to_float())
+	await get_tree().create_timer(wait).timeout
 	Log.info("Тур: %s primitives=%d draw_calls=%d"
 		% [
 			file_name,
