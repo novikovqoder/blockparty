@@ -368,6 +368,15 @@ func _build_props() -> void:
 ## туманом неразличимы). Гистерезис TREE_LOD_HYSTERESIS против дребезга.
 func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 	var meshes: Array[Mesh] = [group.mesh, group.lods[0], group.lods[1]]
+	# bu-claude: тинт коры пресета ez-tree (демо: color материала коры) —
+	# ставится при загрузке, остров (island_art.res) не перепекается.
+	var bark_tint: Color = EzTreeMeshes.bark_tint_for(
+		StringName(type), int(key.get_slice(":", 1)))
+	for m: Mesh in meshes:
+		for si: int in m.get_surface_count():
+			var mat := m.surface_get_material(si) as ShaderMaterial
+			if mat != null and mat.shader == EzTreeMeshes.BARK_SHADER:
+				mat.set_shader_parameter("preset_tint", bark_tint)
 	var state: Dictionary = {
 		"type": type,
 		"nodes": [] as Array[MultiMeshInstance3D],

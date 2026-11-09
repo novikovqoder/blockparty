@@ -111,6 +111,16 @@ static var _manifest: Dictionary = {}
 static var _cache: Dictionary = {}
 
 
+## Тинт коры пресета для типа/варианта (белый, если записи нет).
+static func bark_tint_for(type: StringName, variant: int) -> Color:
+	var list: Array = ASSETS.get(type, [])
+	if list.is_empty():
+		return Color.WHITE
+	var info := entry(String(list[variant % list.size()][0]))
+	var tint: int = int((info.get("bark", {}) as Dictionary).get("tint", 16777215))
+	return Color8((tint >> 16) & 0xff, (tint >> 8) & 0xff, tint & 0xff)
+
+
 ## Тип — дерево ez-tree (у таких групп есть дальние уровни детализации).
 static func is_tree(type: StringName) -> bool:
 	return ASSETS.has(type)
@@ -345,6 +355,10 @@ static func _bark_material(bark: Dictionary) -> ShaderMaterial:
 	var scale: Dictionary = bark.get("textureScale", {"x": 1.0, "y": 1.0})
 	material.set_shader_parameter(
 		"uv_scale", Vector2(1.0, 1.0 / maxf(float(scale.get("y", 1.0)), 0.01)))
+	# bu-claude: тинт коры пресета (демо: color материала коры = tint).
+	var tint: int = int(bark.get("tint", 16777215))
+	material.set_shader_parameter("preset_tint", Color8(
+		(tint >> 16) & 0xff, (tint >> 8) & 0xff, tint & 0xff))
 	return material
 
 
