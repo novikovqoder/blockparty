@@ -396,11 +396,12 @@ func test_foam_lit_by_scene_light() -> void:
 
 
 func test_soft_edge_fades_all_but_bottom() -> void:
-	# П15 9.2: последние 5-15 см толщины гасят отражение/френель/
-	# рассеяние/рябь — вода у кромки полностью прозрачная; дно остаётся.
+	# П15 9.2 (+ bu-claude): последние десятки сантиметров толщины гасят
+	# отражение/френель/рассеяние/рябь — вода у кромки полностью прозрачная,
+	# ступенчатый контур чаши озера растворяется; дно остаётся.
 	var code := WATER_BU_CODE
-	assert_between(_const_of(code, "EDGE_SOFT_M"), 0.05, 0.15,
-		"мягкий край — 5-15 см толщины")
+	assert_between(_const_of(code, "EDGE_SOFT_M"), 0.25, 0.6,
+		"мягкий край — 25-60 см толщины")
 	assert_true(code.contains(
 		"float edge = smoothstep(0.0, EDGE_SOFT_M, thickness);"),
 		"гашение края — по толщине воды")
@@ -847,8 +848,8 @@ func test_volume_color_tints_bottom() -> void:
 	assert_true(code.contains("float depth_ratio = 1.0 - exp("),
 		"доля глубины растёт с толщиной")
 	assert_true(code.contains(
-			"bottom * mix(vec3(1.0), volume, edge) * transmit"),
-		"дно тонируется объёмным цветом, у кромки — нет")
+			"bottom * mix(vec3(1.0), volume, edge * 0.2) * transmit"),
+		"дно на мелком в своём цвете (лёгкий тон воды), гаснет поглощением")
 	assert_true(code.contains("vec3 transmit = exp(-absorption * thickness);"),
 		"поглощение Бера — наше, поканальное")
 	assert_true(code.contains("vec3 scatter = volume;"),

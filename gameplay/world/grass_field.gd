@@ -591,15 +591,13 @@ static func _fill_node(instance_v: Variant, group: Dictionary) -> void:
 
 ## Радиус круга травы демо, м: попытки r = 10+500·rand ед. (grass.js:164)
 ## через k = 0.38; кромка шейдера — в последних EDGE_M метрах.
-const LAB_RADIUS: float = (10.0 + 500.0) * K
-## Показываемых пучков — instanceCount демо (grass.js GrassOptions; попыток
-## maxInstanceCount = 25000, раскладка гасится пятнистостью).
-const LAB_INSTANCE_COUNT: int = 5000
-## Попыток раскладки и цветов — по 50 на вид (grass.js flowerCount),
-## радиус цветочного круга r = 10+200·rand ед.
-const LAB_TRIES: int = 25000
-const LAB_FLOWER_TRIES: int = 50
-const LAB_FLOWER_RADIUS: float = (10.0 + 200.0) * K
+## bu-claude: пучки реального размера (0,45–0,85 м) — круг меньше и гуще,
+## раскладка равномерная по площади (√rand), как поле острова.
+const LAB_RADIUS: float = 60.0
+const LAB_INSTANCE_COUNT: int = 40000
+const LAB_TRIES: int = 90000
+const LAB_FLOWER_TRIES: int = 400
+const LAB_FLOWER_RADIUS: float = 40.0
 
 static var _lab_patch_noise: FastNoiseLite = null
 
@@ -656,7 +654,7 @@ static func lab_layout(seed_value: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	for i: int in LAB_TRIES:
-		var r: float = (10.0 + rng.randf() * 500.0) * K
+		var r: float = 1.5 + sqrt(rng.randf()) * (LAB_RADIUS - 1.5)
 		var theta: float = rng.randf() * TAU
 		var pos := Vector3(r * cos(theta), 0.0, r * sin(theta))
 		# Порядок бросков демо: проверка пятна — затем transform и цвет.
@@ -678,7 +676,7 @@ static func lab_layout(seed_value: int) -> Dictionary:
 		tuft_colors.append(Color(cr, cg, 0.1, 1.0))
 	for kind: String in FLOWER_SCENES:
 		for i: int in LAB_FLOWER_TRIES:
-			var r: float = (10.0 + rng.randf() * 200.0) * K
+			var r: float = 2.0 + sqrt(rng.randf()) * (LAB_FLOWER_RADIUS - 2.0)
 			var theta: float = rng.randf() * TAU
 			var pos := Vector3(r * cos(theta), 0.0, r * sin(theta))
 			var n: float = lab_patch(pos.x, pos.z)

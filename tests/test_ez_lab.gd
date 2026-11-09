@@ -57,7 +57,7 @@ func test_ez_lab_scene_builds_demo_copy() -> void:
 	assert_eq(
 		(layout["tuft"]["transforms"] as Array).size(),
 		GrassField.LAB_INSTANCE_COUNT,
-		"пучков травы — 5000 (instanceCount демо)")
+		"пучков травы — LAB_INSTANCE_COUNT (круг набран полностью)")
 
 
 func test_ez_lab_layout_deterministic() -> void:

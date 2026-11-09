@@ -15,7 +15,7 @@ const DEFS: Dictionary = {
 	&"sun_color": Color(1.0, 0.945098, 0.839216),
 	&"sun_elevation": 62.0,
 	&"ambient_color": Color(0.756863, 0.807843, 0.898039),
-	&"ambient_energy": 0.208,
+	&"ambient_energy": 0.546,  # = DayMath.ambient_energy_sky(полдень), bu-claude
 	&"ambient_sky": true,
 	&"tonemap": 4,
 	&"exposure": 1.0,

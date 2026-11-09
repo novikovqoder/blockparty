@@ -244,9 +244,31 @@ func _build_camera() -> void:
 ## лабораторным солнцем: его положение двигает ползунок высоты (LightTuner).
 ## DirectionalLight3D светит вдоль −Z своей трансформации — НА солнце +Z.
 func _process(_delta: float) -> void:
+	_lab_shot_tick()
 	var to_sun := _sun.global_transform.basis.z
 	_sky_material.set_shader_parameter("sun_dir", to_sun)
 	LightTuner.set_lab_sun_dir(to_sun)
+
+
+## LAB_SHOT=путь.png — снимок для самопроверки (после LAB_SHOT_FRAMES кадров,
+## по умолчанию 20) и выход; LAB_SHOT_DIST=м — дистанция камеры орбиты.
+var _lab_shot_frames: int = -1
+
+
+func _lab_shot_tick() -> void:
+	var path := OS.get_environment("LAB_SHOT")
+	if path.is_empty():
+		return
+	if _lab_shot_frames < 0:
+		_lab_shot_frames = int(OS.get_environment("LAB_SHOT_FRAMES")) \
+			if not OS.get_environment("LAB_SHOT_FRAMES").is_empty() else 20
+		if not OS.get_environment("LAB_SHOT_DIST").is_empty():
+			_dist = OS.get_environment("LAB_SHOT_DIST").to_float()
+			_apply_orbit()
+	_lab_shot_frames -= 1
+	if _lab_shot_frames == 0:
+		get_viewport().get_texture().get_image().save_png(path)
+		get_tree().quit()
 
 
 func _apply_orbit() -> void:

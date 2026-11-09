@@ -416,8 +416,12 @@ func test_ambient_energy_sky_night_below_day() -> void:
 		"при SKY-источнике DayCycle ставит кривую ambient_energy_sky")
 	assert_lt(night_energy, day_energy,
 		"ночью ambient слабее дневного (ночь тёмная)")
-	assert_lt(day_energy, DayMath.ambient_energy(0.3 * B.day_cycle_sec),
-		"база SKY-кривой ниже прежней плоской (радианс купола ярче)")
+	# bu-claude: днём небесный ambient на уровне демо-мира (~0,55), ночью
+	# база прежняя (×0,4) — тени не чёрные, ночь тёмная.
+	assert_between(day_energy, 0.45, 0.65,
+		"днём ambient неба ~0,55 (как в демо-мире)")
+	assert_lt(night_energy, DayMath.ambient_energy(0.8 * B.day_cycle_sec),
+		"ночью база SKY-кривой ниже прежней плоской")
 	cycle.free()
 	sky.free()
 
