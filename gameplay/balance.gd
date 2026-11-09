@@ -6,10 +6,11 @@ class_name Balance
 extends Resource
 
 @export_group("Персонаж (раздел 5)")
-## Бег, м/с.
-@export var run_speed: float = 6.5
-## Шаг (Shift), м/с.
-@export var walk_speed: float = 2.5
+## Бег (с зажатым Shift), м/с. Подогнан к клипу бега без оружия
+## (естественная скорость 4,2 м/с — темп ног ×1,3, стопы не скользят).
+@export var run_speed: float = 5.5
+## Шаг — по умолчанию, м/с (клип шага — 1,57 м/с, темп ×1,27).
+@export var walk_speed: float = 2.0
 ## Ускорение на земле, м/с².
 @export var acceleration: float = 40.0
 ## Торможение на земле, м/с².
@@ -56,7 +57,7 @@ extends Resource
 @export var anim_idle_speed: float = 0.3
 ## Выше этой скорости снапшот несёт состояние бега (клип внутри —
 ## Walk/Jog/Sprint — модель выбирает по фактической скорости, Д3), м/с.
-@export var anim_walk_run_speed: float = 4.5
+@export var anim_walk_run_speed: float = 3.6
 ## Приземление после прыжка, с (Д2: короткое, сразу локомоция по скорости).
 @export var land_time: float = 0.2
 ## Капсула персонажа: радиус и высота, м (герой BU — рост 1,8, П10).

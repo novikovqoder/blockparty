@@ -138,8 +138,8 @@ func test_chunk_layout_deterministic() -> void:
 
 func test_field_tiers_radius_and_counts() -> void:
 	# Поле на HIGH/ULTRA (SIMPLE/NORMAL — печёная подложка), радиусы
-	# 100/120 м; фактический счёт пучков — в диапазоне демо 5000–25000
-	# («плотность как в демо или гуще — пучки дешёвые»), HIGH ≈ ½ ULTRA.
+	# 55/75 м (bu-claude: пучки реального размера 0,45–0,85 м, несколько
+	# на м²); фактический счёт — тысячи–десятки тысяч, HIGH ≈ ½ ULTRA.
 	assert_true(GrassField.is_field_enabled(GraphicsQuality.Tier.HIGH),
 		"HIGH: поле включено")
 	assert_true(GrassField.is_field_enabled(GraphicsQuality.Tier.ULTRA),
@@ -147,19 +147,19 @@ func test_field_tiers_radius_and_counts() -> void:
 	assert_false(GrassField.is_field_enabled(GraphicsQuality.Tier.NORMAL),
 		"NORMAL: только печёная подложка rgrass")
 	assert_almost_eq(GrassField.radius_for_tier(GraphicsQuality.Tier.HIGH),
-		100.0, 0.0001, "радиус HIGH ~100 м")
+		55.0, 0.0001, "радиус HIGH ~55 м")
 	assert_almost_eq(GrassField.radius_for_tier(GraphicsQuality.Tier.ULTRA),
-		120.0, 0.0001, "радиус ULTRA ~120 м")
+		75.0, 0.0001, "радиус ULTRA ~75 м")
 	var started := Time.get_ticks_msec()
 	var high := _gather_around(Vector2(20.0, 25.0), GraphicsQuality.Tier.HIGH)
 	var elapsed := Time.get_ticks_msec() - started
 	var high_count := (high["tuft"]["transforms"] as Array).size()
-	assert_between(high_count, 4000, 25000,
+	assert_between(high_count, 4000, 40000,
 		"HIGH: фактический счёт пучков в диапазоне демо (факт %d)"
 			% high_count)
 	var ultra := _gather_around(Vector2(20.0, 25.0), GraphicsQuality.Tier.ULTRA)
 	var ultra_count := (ultra["tuft"]["transforms"] as Array).size()
-	assert_between(ultra_count, 5000, 25000,
+	assert_between(ultra_count, 8000, 70000,
 		"ULTRA: фактический счёт пучков в диапазоне демо (факт %d)"
 			% ultra_count)
 	assert_between(float(high_count) / float(ultra_count), 0.35, 0.75,

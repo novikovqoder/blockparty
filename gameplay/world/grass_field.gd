@@ -52,10 +52,16 @@ const K: float = 0.38
 ## Счёт — базовая плотность COUNT/(π·R²) на клетку до зон и пятен:
 ## зоны и пятнистость гасят его суммарно до ~¼, поэтому цель задана
 ## с запасом — фактический счёт круга попадает в диапазон демо.
-const RADIUS_HIGH: float = 100.0
-const RADIUS_ULTRA: float = 120.0
-const COUNT_HIGH: int = 24000
-const COUNT_ULTRA: int = 48000
+## bu-claude: пучки уменьшены до реальных 0,45–0,85 м (как в демо-мире), поэтому
+## плотность — до нескольких пучков на клетку 1 × 1 м, а радиус меньше: трава
+## дальше 50–70 м всё равно тает в кромке, а пучки рядом важнее для 780M.
+const RADIUS_HIGH: float = 55.0
+const RADIUS_ULTRA: float = 75.0
+## Пучков на 1 м² до зон и пятен (зоны/пятна гасят до ~⅓ на лугу).
+const DENSITY_HIGH: float = 6.0
+const DENSITY_ULTRA: float = 8.0
+## Сколько бросков пучка на клетку (вероятность одного = плотность / число).
+const TUFTS_PER_CELL: int = 10
 ## Кромка поля в шейдере (масштаб к нулю), м — раскладку не трогает.
 const EDGE_M: float = 12.0
 ## Ближнее кольцо теней ULTRA (П18 Сборка 2 блок 3): пучки не дальше
@@ -66,14 +72,14 @@ const EDGE_M: float = 12.0
 ## уровня Radeon 780M — П16), но принимает тени: шейдер grass_ez без
 ## ручного light(), стандартный PBR получает тени сам.
 const SHADOW_RING: float = 10.0
-## Масштаб пучка по осям: size {5,4,5} + случайно variation {1,2,1}
-## (grass.js GrassOptions), ×k. Ширина итогового пучка ~3.7–4.5 м,
-## высота ~3.0–4.6 м — буквально пропорции демо (трава ≈ ⅙ ели).
-const SIZE: Vector3 = Vector3(5.0, 4.0, 5.0) * K
-const SIZE_VAR: Vector3 = Vector3(1.0, 2.0, 1.0) * K
-## Цветок: scale.set(s, s, s), s = 0.02 + 0.03·rand (grass.js:247) ×k.
-const FLOWER_SCALE_FROM: float = 0.02 * K
-const FLOWER_SCALE_TO: float = 0.05 * K
+## Масштаб пучка по осям (модель 2 ед. высотой, ~2 ед. шириной): итог —
+## ширина 0,6–0,85 м, высота 0,45–0,85 м, как в демо-мире bu-claude (в П18
+## пропорции демо дали траву 3–4,5 м — выше героя).
+const SIZE: Vector3 = Vector3(0.30, 0.22, 0.30)
+const SIZE_VAR: Vector3 = Vector3(0.12, 0.20, 0.12)
+## Цветок: модель ~86 ед. высотой → 0,28–0,5 м.
+const FLOWER_SCALE_FROM: float = 0.0033
+const FLOWER_SCALE_TO: float = 0.0058
 ## Ниже этой отметки (после дрожания) травы нет: песок чистый.
 const BEACH_H: float = 1.4
 ## Присыпка основания пучка, м (доля масштаба не нужна — основание
@@ -93,7 +99,7 @@ const PATH_FADE_FULL: float = 0.2
 ## Цветы: базовая плотность на клетку — с запасом на зоны и пятна даёт
 ## ~150 цветков на круге R = 100 (по ~50 на вид, как flowerCount демо);
 ## зоны и гуща пятен гасят её суммарно до ~1/12 (замер прогона теста).
-const FLOWER_DENSITY: float = 0.03
+const FLOWER_DENSITY: float = 0.1
 const FLOWER_PATCH_FROM: float = 0.45
 const FLOWER_PATCH_TO: float = 0.75
 ## Вид пятна цветов — крупная клетка FLOWER_CELL м (детерминирован,
@@ -121,9 +127,7 @@ static func radius_for_tier(tier: int) -> float:
 
 ## Базовая плотность пучков на клетку 1 × 1 м (целевой счёт уровня).
 static func density_for_tier(tier: int) -> float:
-	var count: int = COUNT_ULTRA if tier == GraphicsQuality.Tier.ULTRA \
-		else COUNT_HIGH
-	return float(count) / (PI * radius_for_tier(tier) ** 2)
+	return DENSITY_ULTRA if tier == GraphicsQuality.Tier.ULTRA else DENSITY_HIGH
 
 
 ## Seed мировой клетки 1 × 1 м: та же схема, что у GroundClutter, со своим
@@ -379,22 +383,28 @@ static func build_chunk(art: IslandArt, tier: int, cx: int, cz: int) -> Dictiona
 			# вероятности пучка — density, цветка — FLOWER_DENSITY:
 			# клетку с двумя «пустыми» бросками можно пропустить до
 			# дорогих карт зон и шума (~четверть клеток круга).
-			var tuft_roll: float = rng.randf()
-			var sx: float = rng.randf_range(SIZE.x, SIZE.x + SIZE_VAR.x)
-			var sy: float = rng.randf_range(SIZE.y, SIZE.y + SIZE_VAR.y)
-			var sz: float = rng.randf_range(SIZE.z, SIZE.z + SIZE_VAR.z)
-			var cr: float = 0.25 + rng.randf() * 0.1
-			var cg: float = 0.3 + rng.randf() * 0.3
-			var yaw: float = rng.randf_range(0.0, TAU)
-			var jx: float = rng.randf_range(-0.45, 0.45)
-			var jz: float = rng.randf_range(-0.45, 0.45)
+			var tuft_rolls: Array[Vector4] = []   # roll, sx, sy, sz
+			var tuft_extra: Array[Vector4] = []   # cr, cg, yaw, —
+			var tuft_jit: Array[Vector2] = []
+			var per_tuft: float = density / float(TUFTS_PER_CELL)
+			var may_tuft: bool = false
+			for _t: int in TUFTS_PER_CELL:
+				var roll: float = rng.randf()
+				tuft_rolls.append(Vector4(roll,
+					rng.randf_range(SIZE.x, SIZE.x + SIZE_VAR.x),
+					rng.randf_range(SIZE.y, SIZE.y + SIZE_VAR.y),
+					rng.randf_range(SIZE.z, SIZE.z + SIZE_VAR.z)))
+				tuft_extra.append(Vector4(0.25 + rng.randf() * 0.1,
+					0.3 + rng.randf() * 0.3, rng.randf_range(0.0, TAU), 0.0))
+				tuft_jit.append(Vector2(rng.randf_range(-0.5, 0.5),
+					rng.randf_range(-0.5, 0.5)))
+				may_tuft = may_tuft or roll < per_tuft
 			var flower_roll: float = rng.randf()
 			var flower_scale: float = rng.randf_range(
 				FLOWER_SCALE_FROM, FLOWER_SCALE_TO)
 			var flower_yaw: float = rng.randf_range(0.0, TAU)
 			var fjx: float = rng.randf_range(-0.45, 0.45)
 			var fjz: float = rng.randf_range(-0.45, 0.45)
-			var may_tuft: bool = tuft_roll < density
 			var may_flower: bool = flower_roll < FLOWER_DENSITY
 			if not may_tuft and not may_flower:
 				continue
@@ -420,15 +430,20 @@ static func build_chunk(art: IslandArt, tier: int, cx: int, cz: int) -> Dictiona
 			# в пустошах остаётся ~10 % пучков (skip-доля демо).
 			var patch: float = IslandGen._grass_patch(x, z)
 			var fades: float = zone * path_fade * rock_fade
-			if may_tuft and tuft_roll < density * fades \
-					* (0.1 + 0.9 * patch):
-				var placed := _place(
-					art, x, z, Vector2(jx, jz), Vector3(sx, sy, sz),
-					yaw, float(cell["slope"]))
-				if not placed.is_empty():
-					(groups["tuft"]["transforms"] as Array).append(
-						placed["transform"])
-					tuft_colors.append(Color(cr, cg, 0.1, 1.0))
+			if may_tuft:
+				var keep: float = per_tuft * fades * (0.1 + 0.9 * patch)
+				for t: int in TUFTS_PER_CELL:
+					var r: Vector4 = tuft_rolls[t]
+					if r.x >= keep:
+						continue
+					var e: Vector4 = tuft_extra[t]
+					var placed := _place(
+						art, x, z, tuft_jit[t], Vector3(r.y, r.z, r.w),
+						e.z, float(cell["slope"]))
+					if not placed.is_empty():
+						(groups["tuft"]["transforms"] as Array).append(
+							placed["transform"])
+						tuft_colors.append(Color(e.x, e.y, 0.1, 1.0))
 			# Цветы: только гуща пятен, ~по 50 на вид на круге HIGH.
 			if may_flower and flower_roll < FLOWER_DENSITY * fades \
 					* smoothstep(FLOWER_PATCH_FROM, FLOWER_PATCH_TO, patch):

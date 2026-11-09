@@ -59,7 +59,7 @@ move_backward={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":83), Object(InputEventKey,"physical_keycode":4194322)]
 }
-walk={
+sprint={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":4194325)]
 }

@@ -39,8 +39,8 @@ func test_jump_cut_makes_jump_lower() -> void:
 
 
 func test_locomotion_speeds_from_spec() -> void:
-	assert_between(B.run_speed, 6.0, 7.0, "бег 6.5 м/с")
-	assert_between(B.walk_speed, 2.0, 3.0, "шаг 2.5 м/с")
+	assert_between(B.run_speed, 5.0, 6.0, "бег 5.5 м/с (Shift)")
+	assert_between(B.walk_speed, 1.6, 2.4, "шаг 2.0 м/с (по умолчанию)")
 	assert_gt(B.run_speed, B.walk_speed)
 
 

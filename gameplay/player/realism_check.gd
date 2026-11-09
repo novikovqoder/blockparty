@@ -17,7 +17,7 @@ extends RefCounted
 const B: Balance = preload("res://gameplay/balance.tres")
 
 
-## Сценарий приземления (mode: "run" — W, "walk" — W+Shift, "still" —
+## Сценарий приземления (mode: "run" — W+Shift, "walk" — W, "still" —
 ## прыжок на месте). Возвращает {ok, reasons, metrics}.
 static func check_landing_blend(player: Player, mode: String = "run",
 		verbose: bool = false) -> Dictionary:
@@ -33,8 +33,8 @@ static func check_landing_blend(player: Player, mode: String = "run",
 	if hold_move:
 		_face_clear_direction(player)
 		Input.action_press("move_forward")
-		if mode == "walk":
-			Input.action_press("walk")
+		if mode == "run":
+			Input.action_press("sprint")
 		var target: float = B.walk_speed if mode == "walk" else B.run_speed
 		for i: int in int(0.6 * hz):
 			await player.get_tree().physics_frame
@@ -129,13 +129,14 @@ static func _model_clip(visual: CharacterVisual) -> String:
 	if ap == null or ap.current_animation.is_empty():
 		return "-"
 	var parts := (ap.current_animation as String).split("/")
-	return parts[parts.size() - 1]
+	# клипы без оружия (base_walk…) — те же состояния, что loco_walk…
+	return parts[parts.size() - 1].replace("base_", "loco_")
 
 
 static func _release_move(hold_move: bool) -> void:
 	Input.action_release("move_forward")
-	if hold_move and Input.is_action_pressed("walk"):
-		Input.action_release("walk")
+	if hold_move and Input.is_action_pressed("sprint"):
+		Input.action_release("sprint")
 
 
 ## Повернуть камеру игрока в самое свободное из 8 направлений (по

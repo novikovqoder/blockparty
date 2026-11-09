@@ -327,7 +327,7 @@ func _ran_past_segment() -> bool:
 
 func _next_scene() -> void:
 	Input.action_release("move_forward")
-	Input.action_release("walk")
+	Input.action_release("sprint")
 	Input.action_release("jump")
 	_restore_player_cam()
 	if _legacy_fx != null:
@@ -380,8 +380,8 @@ func _teleport(scene: Dictionary) -> void:
 			_foot_fx.visible = false
 		_build_legacy(_kind_of(scene["seg"]))
 	Input.action_press("move_forward")
-	if scene["walk"]:
-		Input.action_press("walk")
+	if not scene["walk"]:
+		Input.action_press("sprint")
 
 
 ## Камера «у ног»: собственная камера игрока отцепляется от руки

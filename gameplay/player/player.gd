@@ -212,8 +212,10 @@ func _attack_pressed() -> bool:
 
 
 func _move_horizontally(wish: Vector3, delta: float) -> void:
-	var walking: bool = Input.is_action_pressed("walk") if _bot == null else false
-	var speed: float = B.walk_speed if walking else B.run_speed
+	# Шаг по умолчанию, бег — пока зажат Shift (действие «sprint»).
+	# Боты бегают, как раньше (нагрузочные прогоны).
+	var running: bool = Input.is_action_pressed("sprint") if _bot == null else true
+	var speed: float = B.run_speed if running else B.walk_speed
 	if _in_water:
 		# Плавание медленнее бега (раздел 6): одна скорость для всех.
 		speed = minf(speed, B.swim_speed)

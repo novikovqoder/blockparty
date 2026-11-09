@@ -21,6 +21,20 @@ const ANIMS: AnimationLibrary = preload("res://assets/hero/hero_sword_anims.res"
 const SWORD_SCENE: PackedScene = preload("res://assets/sword_bu/sword_bu.glb")
 ## Имя библиотеки внутри AnimationPlayer (клипы «sword/…», как у комплекта меча).
 const LIB_NAME: StringName = &"sword"
+## Локомоция без оружия (ветка bu-claude, tools/build_base_anims_bu.gd):
+## пока меч в ножнах — обычные покой/шаг/бег/прыжок, боевая стойка только
+## с выхваченным мечом. Если библиотеки нет — всё как раньше (боевые клипы).
+const BASE_ANIMS_PATH: String = "res://assets/hero/hero_base_anims.res"
+const BASE_LIB: StringName = &"base"
+const BASE_CLIPS: Dictionary = {
+	&"loco_idle": &"base_idle",
+	&"loco_walk": &"base_walk",
+	&"loco_run": &"base_run",
+	&"loco_turn": &"base_turn",
+	&"loco_jump_up": &"base_jump_up",
+	&"loco_jump_fly": &"base_jump_fly",
+	&"loco_jump_land": &"base_jump_land",
+}
 
 ## Состояние (Protocol.AnimState) → клип; чего в паке нет — не играется
 ## (set_state ставит loco_idle, разовые просто пропускаются).
@@ -74,6 +88,7 @@ var _loco_display: float = 0.0
 var _turn_accum: float = 0.0
 var _turn_last_yaw: float = 0.0
 var _turn_lock: float = 0.0
+var _has_base: bool = false
 
 
 func _ready() -> void:
@@ -86,6 +101,11 @@ func _ready() -> void:
 	_player.name = "HeroAnims"
 	_hero.add_child(_player)
 	_player.add_animation_library(LIB_NAME, ANIMS)
+	if ResourceLoader.exists(BASE_ANIMS_PATH):
+		var base := load(BASE_ANIMS_PATH) as AnimationLibrary
+		if base != null:
+			_player.add_animation_library(BASE_LIB, base)
+			_has_base = true
 	# Меч (комплект меча П10): на поясе, выхватывание/убирание по анимациям.
 	# Пути задаются до add_child — EquipControllerBU резолвит их в своём _ready.
 	# Узел меча — ребёнок HeroModelBU, поэтому «..» к корню и дальше внутрь героя.
@@ -118,7 +138,7 @@ func set_state(state: int) -> void:
 	if _is_locomotion(state):
 		_apply_locomotion()
 		return
-	if _playing_clip() != clip:
+	if not _is_playing(clip):
 		_play_clip(clip, 1.0)
 
 
@@ -228,7 +248,7 @@ func _is_locomotion(state: int) -> bool:
 
 func _apply_locomotion() -> void:
 	var clip := STATE_CLIPS.get(_state, &"loco_idle") as StringName
-	if _playing_clip() != clip:
+	if not _is_playing(clip):
 		_play_clip(clip, _speed_scale(clip))
 	else:
 		_player.speed_scale = _speed_scale(clip)
@@ -236,24 +256,43 @@ func _apply_locomotion() -> void:
 
 func _speed_scale(clip: StringName) -> float:
 	var natural: float = float(NATURAL_SPEED.get(clip, 1.0))
+	var full := _full_name(clip)
+	if full.begins_with(String(BASE_LIB) + "/"):
+		var a := _player.get_animation(full)
+		if a != null and a.has_meta("natural_speed") and float(a.get_meta("natural_speed")) > 0.2:
+			natural = float(a.get_meta("natural_speed"))
 	return clampf(_loco_display / natural, SPEED_SCALE_MIN, SPEED_SCALE_MAX)
+
+
+## Полное имя клипа в плеере: без меча — из библиотеки base (если там есть
+## пара), с мечом или без пары — боевой клип библиотеки sword.
+func _full_name(clip: StringName) -> String:
+	if _has_base and not is_sword_drawn() and BASE_CLIPS.has(clip):
+		var b := "%s/%s" % [BASE_LIB, BASE_CLIPS[clip]]
+		if _player.has_animation(b):
+			return b
+	return "%s/%s" % [LIB_NAME, clip]
 
 
 func _playing_clip() -> StringName:
 	if _player == null or _player.current_animation.is_empty():
 		return &""
-	var full: PackedStringArray = _player.current_animation.split("/")
-	return StringName(full[full.size() - 1])
+	# сравнение по полному имени: смена набора (меч выхвачен/убран) — смена клипа
+	return StringName(_player.current_animation)
+
+
+func _is_playing(clip: StringName) -> bool:
+	return _playing_clip() == StringName(_full_name(clip))
 
 
 func _play_clip(clip: StringName, speed: float) -> void:
 	_player.speed_scale = speed
-	_player.play("%s/%s" % [LIB_NAME, clip], ANIM_BLEND)
+	_player.play(_full_name(clip), ANIM_BLEND)
 
 
 ## Разовый клип с темпом length/duration в пределах [min_s, max_s].
 func _play_fitted(clip: StringName, duration: float, min_s: float, max_s: float) -> void:
-	var length: float = (_player.get_animation("%s/%s" % [LIB_NAME, clip]) as Animation).length
+	var length: float = (_player.get_animation(_full_name(clip)) as Animation).length
 	var speed: float = clampf(length / maxf(duration, 0.05), min_s, max_s)
 	_one_shot_left = length / speed
 	_play_clip(clip, speed)
