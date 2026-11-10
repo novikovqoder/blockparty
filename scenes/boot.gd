@@ -21,6 +21,11 @@ func _ready() -> void:
 		Log.info("Boot: --ez-lab — вхожу в лабораторию ezTree", "Boot")
 		get_tree().call_deferred(
 			"change_scene_to_file", Dev.EZ_LAB_SCENE)
+	elif Dev.district:
+		# Район-заготовка из коробок: без Steam и мира — сразу.
+		Log.info("Boot: --district — вхожу в район-заготовку", "Boot")
+		get_tree().call_deferred(
+			"change_scene_to_file", Dev.DISTRICT_SCENE)
 	elif Dev.host_mode or Dev.join_address != "":
 		Log.info("Boot: режим разработки ENet — Steam не нужен, вхожу в меню", "Boot")
 		_go_to_menu()

@@ -10,7 +10,9 @@
 # во всех зонах, предметы не висят и не под водой, вода в чаше озера —
 # печатает SELFTEST-WORLD: PASS/FAIL, доработка П5.13),
 # --ez-lab (сцена-лаборатория ezTree: копия демо для подбора света
-# ползунками F3, П18-ЛАБОРАТОРИЯ; Steam и мир не нужны).
+# ползунками F3, П18-ЛАБОРАТОРИЯ; Steam и мир не нужны),
+# --district (район-заготовка постапокалипсиса из серых коробок по карте:
+# проверка расстояний и масштаба; Steam и мир не нужны).
 # Аргументы передаются Godot после «--» и читаются через OS.get_cmdline_user_args().
 # Не делает: не применяет аргументы сам — их применяют Net, Session, SteamService.
 extends Node
@@ -39,6 +41,7 @@ var debug_collisions: bool = false  # --debug-collisions: показать фо�
 var selftest_anim: bool = false  # --selftest-anim: проверка анимаций и выход
 var selftest_world: bool = false  # --selftest-world: проверка мира и выход
 var ez_lab: bool = false  # --ez-lab: сцена-лаборатория ezTree (П18) вместо мира
+var district: bool = false  # --district: район-заготовка из коробок вместо мира
 
 
 func _init() -> void:
@@ -59,6 +62,7 @@ func _init() -> void:
 	selftest_anim = parsed["selftest_anim"]
 	selftest_world = parsed["selftest_world"]
 	ez_lab = parsed["ez_lab"]
+	district = parsed["district"]
 
 
 func _ready() -> void:
@@ -91,6 +95,7 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 		"selftest_anim": false,
 		"selftest_world": false,
 		"ez_lab": false,
+		"district": false,
 	}
 	for arg: String in args:
 		if arg == "--dev-host":
@@ -128,6 +133,8 @@ static func parse_args(args: PackedStringArray) -> Dictionary:
 			result["selftest_world"] = true
 		elif arg == "--ez-lab":
 			result["ez_lab"] = true
+		elif arg == "--district":
+			result["district"] = true
 	return result
 
 
@@ -140,6 +147,10 @@ const MENU_SCENE: String = "res://scenes/main_menu_game.tscn"
 ## Сцена-лаборатория ezTree (П18-ЛАБОРАТОРИЯ): копия демо для подбора
 ## света ползунками F3; вход — аргумент --ez-lab или кнопка F3 из мира.
 const EZ_LAB_SCENE: String = "res://scenes/ez_lab.tscn"
+
+## Район-заготовка постапокалипсиса (серые коробки по карте): вход —
+## аргумент --district.
+const DISTRICT_SCENE: String = "res://scenes/district_lab.tscn"
 
 
 static func _to_int(text: String, fallback: int) -> int:
