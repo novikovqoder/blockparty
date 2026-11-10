@@ -20,8 +20,19 @@ const CAR_SCENE: PackedScene = preload(
 	"res://assets/third_party/polyhaven.com/covered_car/covered_car_1k.gltf")
 const GROUND_SHADER: Shader = preload("res://assets/shaders/ez_lab_ground.gdshader")
 
-## Время суток района, с цикла мира (600 — вторая половина дня, солнце ~30°).
-const TIME_SEC: float = 600.0
+## Время суток района, с цикла мира: «золотой час» — солнце ~10° над
+## горизонтом, тёплый свет (как на референсах ChatGPT).
+const TIME_SEC: float = 680.0
+## Атмосфера поверх цикла дня (референсы: тёплая дымка, лучи сквозь кроны):
+## туман-дымка (цвет, плотность, рассеяние к солнцу) и объёмный туман
+## (HIGH/ULTRA — он включён GraphicsQuality.apply).
+const HAZE_COLOR: Color = Color(0.86, 0.70, 0.52)
+const HAZE_DENSITY: float = 0.0024
+const HAZE_SUN_SCATTER: float = 0.35
+const VOLUME_DENSITY: float = 0.009
+const VOLUME_ALBEDO: Color = Color(0.95, 0.82, 0.66)
+const VOLUME_ANISOTROPY: float = 0.6
+const SUN_FOG_ENERGY: float = 2.6
 ## Сторона клетки сетки земли, м, и запас земли за границей участка.
 const GROUND_CELL: float = 2.0
 const GROUND_MARGIN: float = 60.0
@@ -39,6 +50,9 @@ var _debug: DebugPanel
 
 
 func _ready() -> void:
+	# Атмосфера района правит окружение после цикла дня (он — дочерний узел
+	# и обрабатывается позже родителя без приоритета).
+	process_priority = 100
 	DisplayServer.window_set_title("Born Unblessed — district")
 	Log.info("Район: строю квартал", "DistrictLab")
 	Session.world_time = TIME_SEC
@@ -73,9 +87,25 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	# Время района стоит: часы мира ведёт сеть, здесь её нет.
 	Session.world_time = TIME_SEC
+	_apply_atmosphere()
 	if _player != null:
 		_nature.update_viewer(_player.global_position)
-		_day_cycle.set_fog_focus(_player.global_position)
+
+
+## Дымка и объёмный туман района поверх значений цикла дня (тот каждый кадр
+## ставит туман острова — здесь он заменяется тёплой дымкой).
+func _apply_atmosphere() -> void:
+	var env: Environment = _world_env.environment
+	env.fog_light_color = HAZE_COLOR
+	env.fog_density = HAZE_DENSITY
+	env.fog_sun_scatter = HAZE_SUN_SCATTER
+	env.fog_height_density = 0.0
+	if env.volumetric_fog_enabled:
+		env.volumetric_fog_density = VOLUME_DENSITY
+		env.volumetric_fog_albedo = VOLUME_ALBEDO
+		env.volumetric_fog_anisotropy = VOLUME_ANISOTROPY
+		env.volumetric_fog_length = 140.0
+		_sun.light_volumetric_fog_energy = SUN_FOG_ENERGY
 
 
 ## Небо, солнце и туман — как в мире (копия узла окружения), цикл дня ведёт

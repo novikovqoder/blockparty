@@ -1,5 +1,7 @@
 # Природа района (постапокалипсис): лиственные деревья и кусты ez-tree
-# (те же меши и материалы, что в лесу Born Unblessed) и поле травы и цветов
+# (те же меши и материалы, что в лесу Born Unblessed — берутся из
+# запечённого острова island_art.res: сами GLB генератора лежат под
+# .gdignore и в сборку не попадают) и поле травы и цветов
 # вокруг игрока (пучки GrassField). Раскладка детерминирована (seed).
 # Деревья: на каждый вид три MultiMesh — ближний, средний и дальний уровень;
 # экземпляры раскладываются по уровням по расстоянию до зрителя.
@@ -9,13 +11,17 @@ class_name DistrictNature
 extends Node3D
 
 const SEED: int = 20261110
+## Запечённый остров: меши деревьев (PropGroup.mesh + lods) по ключам «тип:вариант».
+const ART_PATH: String = "res://gameplay/world/island_art.res"
+## Вариантов каждого вида в запечённом острове (etree_oak:0..4 и т. д.).
+const ART_VARIANTS: int = 5
 ## Попытки посадки деревьев и кустов (часть отбраковывается).
-const TREE_TRIES: int = 1500
-const BUSH_TRIES: int = 700
+const TREE_TRIES: int = 2600
+const BUSH_TRIES: int = 900
 ## Лес растёт и за границей участка — на столько метров.
 const FOREST_MARGIN: float = 55.0
 ## Минимум между стволами, м.
-const TREE_GAP: float = 4.5
+const TREE_GAP: float = 4.0
 ## Границы уровней деревьев, м (мир: 70 и 150; район плотнее застроен).
 const LOD1_M: float = 60.0
 const LOD2_M: float = 130.0
@@ -72,14 +78,19 @@ static func tree_layout(seed_value: int) -> Dictionary:
 		var pick: float = rng.randf()
 		var yaw: float = rng.randf_range(0.0, TAU)
 		var size: float = rng.randf_range(0.85, 1.15)
+		var thin: float = rng.randf()
 		var inside: bool = absf(p.x) < DistrictLayout.HALF and absf(p.y) < DistrictLayout.HALF
 		var surface: int = DistrictLayout.surface_at(p)
 		if surface == DistrictLayout.Surface.YARD:
-			if roll > 0.3:
+			if roll > 0.12:
 				continue
+		# Внутри района деревьев реже, чем в лесу вокруг: дома видны
+		# сквозь деревья, улицы и двор не превращаются в чащу.
+		elif inside and not bush and thin > 0.45:
+			continue
 		elif surface != DistrictLayout.Surface.GRASS:
 			continue
-		if DistrictLayout.in_footprint(p, 1.2 if bush else 4.0):
+		if DistrictLayout.in_footprint(p, 1.0 if bush else 2.5):
 			continue
 		if p.distance_to(start) < (4.0 if bush else 14.0):
 			continue
@@ -98,15 +109,15 @@ static func tree_layout(seed_value: int) -> Dictionary:
 			if busy:
 				continue
 			grid[cell] = p
+		# Виды запечённого острова: etree_pine — высокие (дуб/ясень/осина
+		# 19–26 м), etree_oak — средние, etree_bush — кусты.
 		var type: StringName = &"etree_bush"
 		if not bush:
 			if inside:
-				type = &"etree_aspen" if pick < 0.45 else &"etree_oak"
+				type = &"etree_oak" if pick < 0.55 else &"etree_pine"
 			else:
-				type = &"etree_pine" if pick < 0.5 else (
-					&"etree_oak" if pick < 0.8 else &"etree_aspen")
-		var variants: int = (EzTreeMeshes.ASSETS[type] as Array).size()
-		var variant: int = int(floorf(roll * 997.0)) % variants
+				type = &"etree_pine" if pick < 0.6 else &"etree_oak"
+		var variant: int = int(floorf(roll * 997.0)) % ART_VARIANTS
 		var key := "%s:%d" % [type, variant]
 		if not result.has(key):
 			result[key] = []
@@ -114,6 +125,21 @@ static func tree_layout(seed_value: int) -> Dictionary:
 		(result[key] as Array).append(Transform3D(
 			basis, Vector3(p.x, DistrictLayout.ground_height(p) - 0.05, p.y)))
 	return result
+
+
+## Меши уровней дерева [ближний, средний, дальний] по ключу «тип:вариант»:
+## из запечённого острова; запасной путь — генератор (только в редакторе,
+## где GLB доступны).
+static func tree_meshes(key: String) -> Array[Mesh]:
+	var art := load(ART_PATH) as IslandArt
+	if art != null and art.prop_groups.has(key):
+		var group: PropGroup = art.prop_groups[key]
+		if group.mesh != null and group.lods.size() >= 2:
+			return [group.mesh, group.lods[0], group.lods[1]] as Array[Mesh]
+	push_warning("Район: дерева %s нет в island_art.res — генератор" % key)
+	var type := StringName(key.get_slice(":", 0))
+	var tree_set: Dictionary = EzTreeMeshes.build_set(type, key.get_slice(":", 1).to_int())
+	return [tree_set["mesh"], tree_set["lods"][0], tree_set["lods"][1]] as Array[Mesh]
 
 
 func _build_trees() -> void:
@@ -129,8 +155,14 @@ func _build_trees() -> void:
 		var type := StringName(key.get_slice(":", 0))
 		var variant: int = key.get_slice(":", 1).to_int()
 		var transforms: Array = layout[key]
-		var tree_set: Dictionary = EzTreeMeshes.build_set(type, variant)
-		var meshes: Array[Mesh] = [tree_set["mesh"], tree_set["lods"][0], tree_set["lods"][1]]
+		var meshes: Array[Mesh] = tree_meshes(key)
+		# Тинт коры пресета ez-tree (как в мире, IslandView._build_tree_lods).
+		var bark_tint: Color = EzTreeMeshes.bark_tint_for(type, variant)
+		for m: Mesh in meshes:
+			for si: int in m.get_surface_count():
+				var mat := m.surface_get_material(si) as ShaderMaterial
+				if mat != null and mat.shader == EzTreeMeshes.BARK_SHADER:
+					mat.set_shader_parameter("preset_tint", bark_tint)
 		var colors := PackedColorArray()
 		for xform: Transform3D in transforms:
 			colors.append(IslandArt.crown_tone(Color.WHITE, xform.origin))

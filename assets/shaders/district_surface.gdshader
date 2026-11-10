@@ -20,6 +20,9 @@ uniform float moss_amount : hint_range(0.0, 1.0) = 0.25;
 uniform float moss_patch_m : hint_range(0.2, 40.0) = 5.0;
 uniform float moss_ground_m : hint_range(0.0, 10.0) = 1.5;
 uniform vec3 moss_tint : source_color = vec3(1.0);
+// Потёки на стенах (вертикальные тёмные полосы от дождя) и грязь у земли.
+uniform float streak_amount : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 streak_tint : source_color = vec3(0.36, 0.33, 0.27);
 
 varying vec3 world_pos;
 varying vec3 world_nrm;
@@ -90,6 +93,13 @@ void fragment() {
 	float m = smoothstep(1.0 - cover - 0.08, 1.0 - cover + 0.08, n)
 		* step(0.001, moss_amount);
 	vec3 moss = texture(moss_tex, UV / 1.7).rgb * moss_tint;
+	// Потёки: шум, сильно вытянутый по вертикали UV стены (UV.y — высота).
+	float wall = 1.0 - smoothstep(0.35, 0.6, abs(world_nrm.y));
+	float st = 0.5 + 0.5 * simplex2d(vec2(UV.x * 1.9, UV.y * 0.07) + 31.7);
+	float st2 = 0.5 + 0.5 * simplex2d(vec2(UV.x * 0.35, UV.y * 0.3) + 5.1);
+	float streak = smoothstep(0.55, 0.85, st) * smoothstep(0.3, 0.7, st2)
+		+ (1.0 - smoothstep(0.0, 1.2, world_pos.y)) * 0.6;
+	base = mix(base, base * streak_tint * 1.6, clamp(streak, 0.0, 1.0) * streak_amount * wall);
 	ALBEDO = mix(base, moss, m * 0.85);
 	ROUGHNESS = clamp(mix(arm.g * rough_mult, 0.95, m), 0.03, 1.0);
 	METALLIC = arm.b * metal_mult * (1.0 - m);

@@ -93,7 +93,7 @@ func test_panel_house_structure() -> void:
 	var top: float = mesh.get_aabb().end.y
 	assert_almost_eq(top, PanelHouse.wall_top(5) + 1.2, 0.3, "высота с будками на крыше")
 	var triangles: int = house.get_meta(&"triangles")
-	assert_between(triangles, 3000, 40000, "треугольников в доме в бюджете")
+	assert_between(triangles, 3000, 60000, "треугольников в доме в бюджете")
 	# Та же сборка — тот же дом (детерминизм по seed).
 	var again: Node3D = PanelHouse.build("T", 56.5, 13.4, 5, 4, 1, 7)
 	add_child_autofree(again)
@@ -123,6 +123,32 @@ func test_trees_deterministic_and_clear() -> void:
 				return
 	assert_gt(total, 300, "деревьев и кустов достаточно (%d)" % total)
 	assert_false(same_as_c, "другой seed — другая раскладка")
+
+
+func test_tree_keys_baked_in_island_art() -> void:
+	# GLB генератора ez-tree лежат под .gdignore и в сборку не попадают —
+	# каждое дерево района обязано быть в запечённом острове (иначе в
+	# Windows-сборке деревьев нет: 10.11.2026 так и было).
+	var art := load(DistrictNature.ART_PATH) as IslandArt
+	assert_not_null(art, "island_art.res грузится")
+	for key: String in DistrictNature.tree_layout(DistrictNature.SEED):
+		assert_true(art.prop_groups.has(key), "дерево %s запечено в острове" % key)
+		var meshes: Array[Mesh] = DistrictNature.tree_meshes(key)
+		assert_eq(meshes.size(), 3, "три уровня у %s" % key)
+		for m: Mesh in meshes:
+			assert_gt(m.get_surface_count(), 0, "у меша %s есть поверхности" % key)
+
+
+func test_houses_have_ivy() -> void:
+	var house: Node3D = PanelHouse.build("T", 44.5, 12.0, 5, 3, -1, 3)
+	add_child_autofree(house)
+	var mesh: ArrayMesh = (house.get_node("Mesh") as MeshInstance3D).mesh
+	var found: bool = false
+	for i: int in mesh.get_surface_count():
+		if mesh.surface_get_name(i) == "ivy":
+			found = true
+			assert_gt(mesh.surface_get_array_len(i), 600, "листьев плюща достаточно")
+	assert_true(found, "на доме есть плющ")
 
 
 func test_nature_lods_cover_all_trees() -> void:

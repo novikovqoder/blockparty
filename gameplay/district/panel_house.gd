@@ -97,6 +97,8 @@ static func build(
 					end_w, FLOOR_H, Rect2(), _panel_tone(rng, f, floors, brick),
 					0, rng, not brick)
 
+	_ivy(kit, rng, length, depth, top, brick)
+
 	# Крыша с парапетом, будки выходов на крышу и вентшахты.
 	var hx: float = length * 0.5
 	var hz: float = depth * 0.5
@@ -138,6 +140,54 @@ static func build(
 	shape.size = Vector3(length, top + PARAPET, depth)
 	SolidBody.add(root, shape, Vector3(0.0, (top + PARAPET) * 0.5, 0.0))
 	return root
+
+
+## Плющ: «шторы» листьев снизу вверх на всех четырёх стенах (у руин гуще),
+## плотность листьев убывает к верху шторы.
+static func _ivy(
+	kit: MeshKit, rng: RandomNumberGenerator, length: float, depth: float,
+	top: float, brick: bool
+) -> void:
+	var hx: float = length * 0.5
+	var hz: float = depth * 0.5
+	# Стены: начало, направление вдоль стены, наружная нормаль, длина.
+	var walls: Array = [
+		[Vector3(-hx, 0.0, hz), Vector3.RIGHT, Vector3.BACK, length],
+		[Vector3(hx, 0.0, -hz), Vector3.LEFT, Vector3.FORWARD, length],
+		[Vector3(hx, 0.0, hz), Vector3.FORWARD, Vector3.RIGHT, depth],
+		[Vector3(-hx, 0.0, -hz), Vector3.BACK, Vector3.LEFT, depth],
+	]
+	var per_m: float = 1.0 / 5.0 if brick else 1.0 / 9.0
+	for wall: Array in walls:
+		var start: Vector3 = wall[0]
+		var along: Vector3 = wall[1]
+		var normal: Vector3 = wall[2]
+		var span: float = wall[3]
+		var columns: int = maxi(1, roundi(span * per_m * rng.randf_range(0.6, 1.3)))
+		for c: int in columns:
+			var cx: float = rng.randf_range(0.6, span - 0.6)
+			var height: float = minf(top + 0.3, rng.randf_range(2.5, top * (1.0 if brick else 0.85)))
+			var width: float = rng.randf_range(1.0, 3.2)
+			var area: float = width * height * 0.7
+			var leaves: int = int(area * (34.0 if brick else 26.0))
+			for i: int in leaves:
+				# Высота: чаще внизу (квадрат случайного), штора сужается к верху.
+				var t: float = rng.randf()
+				var y: float = t * t * height
+				var w_here: float = width * (1.0 - 0.6 * y / height)
+				var u: float = clampf(cx + rng.randf_range(-0.5, 0.5) * w_here, 0.1, span - 0.1)
+				var size: float = rng.randf_range(0.16, 0.26)
+				var angle: float = rng.randf_range(0.0, TAU)
+				var out: float = rng.randf_range(0.03, 0.14)
+				var tilt: float = rng.randf_range(0.2, 0.7)
+				var center: Vector3 = start + along * u + Vector3.UP * (y + 0.05) + normal * out
+				var right: Vector3 = (along * cos(angle) + Vector3.UP * sin(angle)) * size
+				var up: Vector3 = (Vector3.UP * cos(angle) - along * sin(angle)) * size
+				up = (up + normal * size * tilt).normalized() * size
+				var tone: float = rng.randf_range(0.55, 1.0)
+				kit.add_card(
+					&"ivy", center, right, up, (normal + Vector3.UP * 0.3).normalized(),
+					Color(tone * rng.randf_range(0.85, 1.05), tone, tone * 0.8))
 
 
 static func _panel_tone(

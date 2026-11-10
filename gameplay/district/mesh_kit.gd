@@ -41,6 +41,24 @@ func add_quad(
 	_counts[key] = int(_counts[key]) + 2
 
 
+## Карточка с UV 0..1 (листья плюща): центр, полуоси right/up, нормаль
+## освещения normal (лицо карточки).
+func add_card(
+	key: StringName, center: Vector3, right: Vector3, up: Vector3,
+	normal: Vector3, color: Color = Color.WHITE
+) -> void:
+	var st: SurfaceTool = _tool(key)
+	var corners: Array[Vector3] = [
+		center - right - up, center + right - up, center + right + up, center - right + up]
+	var uvs: Array[Vector2] = [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
+	for i: int in [0, 2, 1, 0, 3, 2]:
+		st.set_normal(normal)
+		st.set_color(color)
+		st.set_uv(uvs[i])
+		st.add_vertex(corners[i])
+	_counts[key] = int(_counts[key]) + 2
+
+
 ## Коробка: центр, размер, базис (оси коробки). Без нижней грани, если
 ## skip_bottom (стоит на земле).
 func add_box(
