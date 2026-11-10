@@ -13,3 +13,9 @@
 *.dylib filter=lfs diff=lfs merge=lfs -text
 
 *.glb filter=lfs diff=lfs merge=lfs -text
+
+# Выкладка ассетов постапока (assets_inbox/postapoc): бинарное и геометрия — в LFS,
+# документы (LICENSES.md, README.md) — обычный текст в git
+assets_inbox/postapoc/** filter=lfs diff=lfs merge=lfs -text
+assets_inbox/postapoc/*.md -filter -diff -merge text
+assets_inbox/postapoc/**/*.md -filter -diff -merge text
