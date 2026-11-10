@@ -1,0 +1,96 @@
+; Окружение района (постапокалипсис): копия узла WorldEnvironment сцены мира
+; (scenes/world_scene.tscn) — небо Sky3D, солнце, луна, туман. Менять вместе с ней.
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/sky_3d/src/Sky3D.gd" id="2_sky3d"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/SkyDome.gd" id="3_skydome"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/TimeOfDay.gd" id="4_tod"]
+; П17 п.9: небо мира — на проектной копии шейдера Sky3D (дизеринг марша
+; кучевости без TIME + шаги по уровню качества); аддон не тронут.
+[ext_resource type="Shader" path="res://assets/shaders/sky_material_p17.gdshader" id="5_sky"]
+
+[sub_resource type="ShaderMaterial" id="SkyMaterial_1"]
+shader = ExtResource("5_sky")
+shader_parameter/ground_color = Color(0.378, 0.406, 0.394, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("SkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+; П17 п.10: ambient из панорамы купола (AMBIENT_SOURCE_SKY) — заполняющий
+; свет виден в тени, ночь остаётся тёмной (энергию ведёт DayCycle,
+; DayMath.ambient_energy_sky). Цвет ниже — контракт палитры, движком при
+; SKY-источнике не используется.
+ambient_light_source = 3
+ambient_light_color = Color(0.82, 0.8, 0.76, 1)
+ambient_light_energy = 0.25
+; Доработка П5.13 (свет и небо, эталон — демо EZ-Tree): тонмап AgX —
+; мягкий спад яркости гасит «кислотную» синеву неба и пестроту леса
+; (демо: нейтральный Khronos-тонмап при экспозиции 2; AgX — ближайший
+; по духу годевский). Насыщенность чуть приподнята: AgX приглушает
+; цвета, лёгкая компенсация возвращает пастельную сочность.
+tonemap_mode = 4
+tonemap_white = 6.0
+ssao_enabled = false
+glow_enabled = false
+adjustment_enabled = true
+adjustment_contrast = 1.05
+adjustment_saturation = 1.15
+; Планка качества П5.9: мягкие градиенты неба и тумана без ступенек
+; яркости (дебандинг добавляет незаметный шум и убирает «полосы»
+; на плавных переходах).
+use_debanding = true
+fog_enabled = true
+fog_sky_affect = 0.0
+fog_light_color = Color(0.78, 0.85, 0.91, 1)
+fog_density = 0.0025
+fog_height = 0.6
+fog_height_density = 0.05
+
+[node name="DistrictEnv" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+script = ExtResource("2_sky3d")
+
+[node name="SunLight" type="DirectionalLight3D" parent="WorldEnvironment"]
+light_energy = 0.3
+shadow_enabled = true
+shadow_blur = 1.4
+
+[node name="MoonLight" type="DirectionalLight3D" parent="WorldEnvironment"]
+light_color = Color(0.663, 0.725, 0.902, 1)
+light_energy = 0.22
+shadow_enabled = true
+
+[node name="SkyDome" type="Node" parent="WorldEnvironment"]
+script = ExtResource("3_skydome")
+sun_light_color = Color(1, 0.945, 0.839, 1)
+sun_horizon_light_color = Color(1, 0.518, 0.322, 1)
+sun_light_energy = 0.3
+sun_disk_color = Color(1, 0.518, 0.322, 1)
+moon_color = Color(0.747, 0.794, 0.926, 1)
+moon_light_color = Color(0.663, 0.725, 0.902, 1)
+moon_light_energy = 0.22
+atm_day_tint = Color(0.496, 0.718, 1, 1)
+atm_horizon_light_tint = Color(1, 0.548, 0.366, 1)
+atm_night_tint = Color(0.26, 0.383, 1, 1)
+ground_color = Color(0.378, 0.406, 0.394, 1)
+clouds_night_color = Color(0.11, 0.138, 0.25, 1)
+; Облака мягче дефолтов Sky3D: при coverage 0.55 и absorption 2.0 плотное
+; кучевое пятно в секторе северо-востока уходило в почти чёрный провал
+; (кадры тура П5.7, точка 2). Меньше покрытие — реже сплошная тьма,
+; ниже поглощение — низ облака читается светло-серым, а не угольным.
+cumulus_coverage = 0.38
+cumulus_absorption = 1.2
+fog_visible = false
+sun_light_path = NodePath("../SunLight")
+moon_light_path = NodePath("../MoonLight")
+
+[node name="TimeOfDay" type="Node" parent="WorldEnvironment"]
+script = ExtResource("4_tod")
+game_time_enabled = false
+editor_time_enabled = false
+dome_path = NodePath("../SkyDome")
