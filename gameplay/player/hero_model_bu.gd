@@ -92,38 +92,58 @@ var _has_base: bool = false
 
 
 func _ready() -> void:
-	_hero = HERO_SCENE.instantiate() as Node3D
+	_hero = _hero_scene().instantiate() as Node3D
 	add_child(_hero)
 	_skeleton = _hero.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 	# Плеер — ребёнок корня героя: треки библиотеки записаны путями
-	# «Armature/Skeleton3D:<кость>» от него (root_node по умолчанию «..»).
+	# «<арматура>/Skeleton3D:<кость>» от него (root_node по умолчанию «..»).
 	_player = AnimationPlayer.new()
 	_player.name = "HeroAnims"
 	_hero.add_child(_player)
-	_player.add_animation_library(LIB_NAME, ANIMS)
-	if ResourceLoader.exists(BASE_ANIMS_PATH):
-		var base := load(BASE_ANIMS_PATH) as AnimationLibrary
+	var sword_lib: AnimationLibrary = _sword_library()
+	if sword_lib != null:
+		_player.add_animation_library(LIB_NAME, sword_lib)
+	var base_path: String = _base_library_path()
+	if ResourceLoader.exists(base_path):
+		var base := load(base_path) as AnimationLibrary
 		if base != null:
 			_player.add_animation_library(BASE_LIB, base)
 			_has_base = true
-	# Меч (комплект меча П10): на поясе, выхватывание/убирание по анимациям.
-	# Пути задаются до add_child — EquipControllerBU резолвит их в своём _ready.
-	# Узел меча — ребёнок HeroModelBU, поэтому «..» к корню и дальше внутрь героя.
-	equip = EquipControllerBU.new()
-	equip.name = "EquipBU"
-	equip.wheel_enabled = sword_wheel
-	equip.skeleton_path = NodePath("../%s/%s" % [_hero.name, _hero.get_path_to(_skeleton)])
-	equip.animation_player_path = NodePath("../%s/%s" % [_hero.name, _hero.get_path_to(_player)])
-	equip.sword_scene = SWORD_SCENE
-	add_child(equip)
-	# Пока идёт выхватывание/убирание, клипы состояния меч не перебивают;
-	# по окончании возвращаем состояние сами.
-	equip.equip_finished.connect(_on_equip_finished)
+	if sword_lib != null:
+		# Меч (комплект меча П10): на поясе, выхватывание/убирание по анимациям.
+		# Пути задаются до add_child — EquipControllerBU резолвит их в своём _ready.
+		# Узел меча — ребёнок HeroModelBU, поэтому «..» к корню и дальше внутрь героя.
+		equip = EquipControllerBU.new()
+		equip.name = "EquipBU"
+		equip.wheel_enabled = sword_wheel
+		equip.skeleton_path = NodePath("../%s/%s" % [_hero.name, _hero.get_path_to(_skeleton)])
+		equip.animation_player_path = NodePath("../%s/%s" % [_hero.name, _hero.get_path_to(_player)])
+		equip.sword_scene = SWORD_SCENE
+		add_child(equip)
+		# Пока идёт выхватывание/убирание, клипы состояния меч не перебивают;
+		# по окончании возвращаем состояние сами.
+		equip.equip_finished.connect(_on_equip_finished)
 	_quality_materials()
 	# П17 п.11: визуал персонажа — на слой заполняющего света героя
 	# (HeroFillLight светит только этот слой; бит безвреден без света).
 	HeroFillLight.mark_visual(self)
 	set_state(_state)
+
+
+## Сцена модели (наследник — свой персонаж, например робот района).
+func _hero_scene() -> PackedScene:
+	return HERO_SCENE
+
+
+## Боевая библиотека с мечом (клипы «sword/…»); null — персонаж без меча:
+## снаряжения нет, локомоция — только из библиотеки base.
+func _sword_library() -> AnimationLibrary:
+	return ANIMS
+
+
+## Путь библиотеки локомоции без оружия (клипы «base/…»).
+func _base_library_path() -> String:
+	return BASE_ANIMS_PATH
 
 
 func set_state(state: int) -> void:
@@ -292,7 +312,11 @@ func _play_clip(clip: StringName, speed: float) -> void:
 
 ## Разовый клип с темпом length/duration в пределах [min_s, max_s].
 func _play_fitted(clip: StringName, duration: float, min_s: float, max_s: float) -> void:
-	var length: float = (_player.get_animation(_full_name(clip)) as Animation).length
+	var full := _full_name(clip)
+	if not _player.has_animation(full):
+		# Клипа у этого персонажа нет (робот без меча — удара ss_slash нет).
+		return
+	var length: float = (_player.get_animation(full) as Animation).length
 	var speed: float = clampf(length / maxf(duration, 0.05), min_s, max_s)
 	_one_shot_left = length / speed
 	_play_clip(clip, speed)

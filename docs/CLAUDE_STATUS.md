@@ -1,23 +1,26 @@
 СТАТУС: ГОТОВО К СБОРКЕ
 
-# Статус работы Claude (ветка bu-claude) — 10.11.2026, район-постапокалипсис
+# Статус работы Claude (ветка bu-claude) — 10.11.2026, робот в районе
 
 Что сделано (подробно — последний раздел docs/STATUS.md):
-1. Новая сцена «район» (постапокалипсис) — заброшенный квартал по карте:
-   панельные пятиэтажки, гаражи, магазин, руины, дорога, двор, озеро.
-2. Природа Born Unblessed в районе: деревья ez-tree с уровнями детализации,
-   трава и цветы вокруг игрока, небо/свет/туман и вода мира.
-3. Born Unblessed не затронут: район открывается только аргументом --district.
+1. В районе (--district) герой теперь робот вместо рыцаря.
+2. Born Unblessed не изменился (обычный запуск — рыцарь).
 
-Тесты: GUT 395 — 394 passed, 1 pending (известный П5.8). --selftest-anim: PASS
-(персонажи, риг и анимации не менялись).
+Тесты у Claude: GUT 400 — 399 passed, 1 pending (известный П5.8).
+--selftest-anim: PASS (рыцарь). --district --selftest-anim: PASS (робот).
 
-Для claw: git checkout bu-claude && git pull && git lfs pull, прогнать GUT и
---selftest-anim, собрать Windows-сборку (tools/build_windows.sh), сообщить в Telegram.
-В сборку рядом с exe положи файл district.bat с одной строкой:
-    start "" BornUnblessed.exe -- --district
-(чтобы район запускался двойным щелчком). В born-unblessed/main не сливать.
+Для claw:
+1. git checkout bu-claude && git pull && git lfs pull
+2. GUT целиком.
+3. Самопроверка анимаций — ДВА прогона, оба на экспортированной Linux-сборке
+   (те же настройки экспорта, что у Windows):
+     <сборка> --headless -- --selftest-anim              → ждём SELFTEST-ANIM: PASS
+     <сборка> --headless -- --district --selftest-anim   → ждём SELFTEST-ANIM: PASS (робот района)
+   Если любой FAIL — сборку не выкладывай, пришли владельцу строки SELFTEST-ANIM.
+4. Windows-сборка (tools/build_windows.sh) + district.bat рядом с exe
+   (строка: start "" BornUnblessed.exe -- --district), пересобрать архив.
+5. Код не меняй, в born-unblessed/main не сливай, 43 «изменённых» .glb не коммить.
+6. Напиши владельцу в Telegram: результаты GUT, обоих selftest и готова ли сборка.
 
-Проверить в сборке: запустить district.bat (или BornUnblessed.exe -- --district).
-FPS на «Высоком» (F3 → авто-замер, цель ≥30) у причала, во дворе и на дороге;
-вид домов вблизи и издали, деревья и трава, вода озера, башня на северо-востоке.
+Проверить в сборке: district.bat — робот у причала; шаг, бег (Shift), прыжок,
+поворот на месте; стопы не проваливаются, шарниры таза видны при шаге.

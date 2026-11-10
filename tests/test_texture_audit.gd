@@ -45,6 +45,8 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ##   hero_bu — герой Born Unblessed (MakeHuman, П10): кожа/одежда 2–4K,
 ##     глаза 1K, брови/ресницы — мелкая деталь 512; всё с мип-мапами;
 ##   sword_bu — меч героя (П10): кладка 1K с мип-мапами;
+##   robot_pa — робот района-постапокалипсиса: цвет и ORM 2K из GLB,
+##     с мип-мапами;
 ##   loading_bu — картина экрана загрузки (П10): канва 2D 1920×1080 без
 ##     мип-мапов, как menu_bu;
 ##   vfx — спрайты частиц (доработка П9): нарезки 40–96 px с прозрачной
@@ -61,6 +63,7 @@ const CATEGORIES: Array = [
 	["assets/menu_bu/", {"min_side": 256, "mips": false}],
 	["assets/hero_bu/", {"min_side": 512, "mips": true}],
 	["assets/sword_bu/", {"min_side": 1024, "mips": true}],
+	["assets/robot_pa/", {"min_side": 1024, "mips": true}],
 	["assets/loading_bu/", {"min_side": 256, "mips": false}],
 	["assets/island_map.png", {"min_side": 256, "mips": true}],
 	["assets/vfx/", {"min_side": 40, "mips": true}],

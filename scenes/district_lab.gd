@@ -4,10 +4,13 @@
 # с чашей озера, асфальт и покрытия, панельные пятиэтажки и малые постройки
 # с текстурами (CC0). Раскладка — DistrictLayout, дома — PanelHouse,
 # природа — DistrictNature.
+# Герой — робот RobotModelPA (вместо рыцаря в том же игроке).
 # Чего пока нет: интерьеров (в дома зайти нельзя), уличного наполнения,
 # настоящих машин (стоят машины под тентом; автобус и грузовики — ржавые
 # коробки-заглушки).
 # Запуск: аргумент --district. Выход в меню — Esc.
+# Самопроверка анимаций робота: --district --selftest-anim (PASS/FAIL, код
+# возврата 1 при FAIL) — те же проверки, что у рыцаря.
 class_name DistrictLab
 extends Node3D
 
@@ -379,7 +382,47 @@ func _build_tower() -> void:
 func _spawn_player() -> void:
 	_player = PLAYER_SCENE.instantiate() as Player
 	_player.position = DistrictLayout.START
+	put_robot(_player)
 	add_child(_player)
+	if Session.selftest_anim:
+		_selftest_anim.call_deferred()
+
+
+## Заменить визуал игрока (рыцарь BU) на робота. Звать до add_child игрока:
+## player.gd берёт $Model/Visual в @onready.
+static func put_robot(player: Player) -> RobotModelPA:
+	var model: Node3D = player.get_node("Model") as Node3D
+	var old: Node = model.get_node("Visual")
+	model.remove_child(old)
+	old.free()
+	var robot := RobotModelPA.new()
+	robot.name = "Visual"
+	model.add_child(robot)
+	return robot
+
+
+## --district --selftest-anim: проверки анимаций (CLAUDE.md, «этапы с
+## персонажами») на роботе — позы костей, резолв дорожек, скиннинг ног
+## (AnimSelfCheckBU) и приземление на бегу (RealismCheck). PASS/FAIL и выход.
+func _selftest_anim() -> void:
+	for i: int in 40:
+		await get_tree().physics_frame
+	var reasons: PackedStringArray = PackedStringArray()
+	var result: Dictionary = await AnimSelfCheckBU.run(_player.visual as HeroModelBU, true)
+	if not result["ok"]:
+		reasons.append_array(result["reasons"])
+	print("SELFTEST-ANIM: робот района, приземление на бегу (сценарий Д2)")
+	var landing: Dictionary = await RealismCheck.check_landing_blend(_player, "run", true)
+	if not landing["ok"]:
+		reasons.append_array(landing["reasons"])
+	if reasons.is_empty():
+		print("SELFTEST-ANIM: PASS (робот района)")
+		get_tree().quit(0)
+		return
+	print("SELFTEST-ANIM: FAIL (робот района)")
+	for reason: String in reasons:
+		print("SELFTEST-ANIM: %s" % reason)
+	get_tree().quit(1)
 
 
 func _unhandled_input(event: InputEvent) -> void:

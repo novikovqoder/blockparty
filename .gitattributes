@@ -13,3 +13,7 @@
 *.dylib filter=lfs diff=lfs merge=lfs -text
 
 *.glb filter=lfs diff=lfs merge=lfs -text
+
+# Робот района: хранится в git без LFS (10.11.2026, решение владельца —
+# загрузка LFS из облачной сессии Claude была закрыта). ~9 МБ.
+assets/robot_pa/** -filter -diff -merge -text

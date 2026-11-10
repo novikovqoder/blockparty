@@ -15,4 +15,6 @@
 | `assets/visual/sky_starmap.png`, `assets/visual/sky_starfield.png` (звёздное небо) | сделано для проекта | CC0 (как и весь код проекта) |
 | `assets/visual/cabin/log_cabin.glb` (дом жителей деревни) | sketchfab.com — Kless | CC-BY 4.0 — единственный не-CC0 ресурс, дословная атрибуция в `assets/third_party/LICENSES.md` и титрах игры |
 | `assets/menu_bu/*` (иллюстрации главного меню Born Unblessed, П9) | владелец проекта, сгенерировано ИИ (ChatGPT) | **исключение** по решению владельца (не CC0) — детали в `assets/third_party/LICENSES.md` |
+| `assets/robot_pa/robot_pa.glb` (робот — герой района-постапокалипсиса) | модель: Meshy (бесплатный тариф) по картинке владельца (ChatGPT); доработка рига, шарниры и текстура — Claude | CC BY 4.0 — в титрах: «3D-модель робота создана с помощью Meshy (meshy.ai)»; картинка-образец — исключение владельца, как иллюстрации меню |
+| `assets/robot_pa/robot_base_anims.res` (локомоция робота) | Mixamo «Male Locomotion Pack», перенос `tools/retarget_mixamo_bu.gd` | условия Adobe Mixamo (как анимации героя BU) |
 | `ui/theme_bu/fonts/*` (Cormorant, Manrope — П9) | Catharsis Fonts; Mikhail Sharanda | SIL OFL 1.1 — **исключение** по решению владельца, тексты лицензий рядом со шрифтами |

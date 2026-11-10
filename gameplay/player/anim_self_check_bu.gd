@@ -130,7 +130,9 @@ static func _reach_position(model: HeroModelBU, target: float) -> bool:
 
 
 ## Сдвиг вершин меша ног между снимками (формула рендера Σ w·(pose·bind)·v,
-## ручной скиннинг): у героя BU ноги — меш Pants (штаны) или Boots.
+## ручной скиннинг): у героя BU ноги — меш Pants (штаны) или Boots, у робота
+## района — единый меш тела. Индексы костей в массивах меша — номера биндов
+## скина; кость скелета бинда — get_bind_bone (или по имени бинда).
 static func _leg_mesh_shift(skel: Skeleton3D, pose_idle: Array[Transform3D],
 		pose_walk: Array[Transform3D]) -> Dictionary:
 	var max_shift := 0.0
@@ -140,53 +142,71 @@ static func _leg_mesh_shift(skel: Skeleton3D, pose_idle: Array[Transform3D],
 		return {"max": max_shift, "count": count}
 	var arrays := (legs.mesh as ArrayMesh).surface_get_arrays(0)
 	var verts := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
-	var bones := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
+	var binds := arrays[Mesh.ARRAY_BONES] as PackedInt32Array
 	var weights := arrays[Mesh.ARRAY_WEIGHTS] as PackedFloat32Array
 	var leg_bones := {}
 	for bone: String in LEG_BONES:
 		leg_bones[skel.find_bone(bone)] = true
-	var bind_of := {}
+	# Бинд → кость скелета и поза бинда.
+	var bone_of: Dictionary = {}
+	var bind_of: Dictionary = {}
 	for i: int in legs.skin.get_bind_count():
-		bind_of[legs.skin.get_bind_bone(i)] = legs.skin.get_bind_pose(i)
-	# Godot рендерит кость без бинда с identity-позой — так же считаем
-	# (у мешей MakeHuman бинды не на каждую кость скелета).
+		var bone: int = legs.skin.get_bind_bone(i)
+		if bone < 0:
+			bone = skel.find_bone(legs.skin.get_bind_name(i))
+		bone_of[i] = bone
+		bind_of[i] = legs.skin.get_bind_pose(i)
 	for v: int in verts.size():
 		var on_leg := false
 		for j: int in 4:
-			if leg_bones.has(bones[v * 4 + j]) and weights[v * 4 + j] > 0.05:
+			if leg_bones.has(bone_of.get(binds[v * 4 + j], -1)) and weights[v * 4 + j] > 0.05:
 				on_leg = true
 				break
 		if not on_leg:
 			continue
 		count += 1
-		var pw := _skinned(verts[v], bones, weights, v, pose_walk, bind_of)
-		var pi := _skinned(verts[v], bones, weights, v, pose_idle, bind_of)
+		var pw := _skinned(verts[v], binds, weights, v, pose_walk, bone_of, bind_of)
+		var pi := _skinned(verts[v], binds, weights, v, pose_idle, bone_of, bind_of)
 		max_shift = maxf(max_shift, (pw - pi).length())
 	return {"max": max_shift, "count": count}
 
 
-static func _skinned(v: Vector3, bones: PackedInt32Array,
+static func _skinned(v: Vector3, binds: PackedInt32Array,
 		weights: PackedFloat32Array, index: int,
-		poses: Array[Transform3D], bind_of: Dictionary) -> Vector3:
+		poses: Array[Transform3D], bone_of: Dictionary, bind_of: Dictionary) -> Vector3:
 	var out := Vector3.ZERO
 	var total := 0.0
 	for j: int in 4:
 		var w: float = weights[index * 4 + j]
 		if w <= 0.0:
 			continue
+		var bind: int = binds[index * 4 + j]
+		var bone: int = bone_of.get(bind, -1)
+		if bone < 0:
+			continue
 		total += w
-		var bone: int = bones[index * 4 + j]
 		var t: Transform3D = poses[bone] * (
-			bind_of.get(bone, Transform3D.IDENTITY) as Transform3D)
+			bind_of.get(bind, Transform3D.IDENTITY) as Transform3D)
 		out += t * v * w
 	return out / maxf(total, 1e-06)
 
 
-## Меш ног героя: штаны (Pants) под скелетом, запасной — обувь (Boots).
+## Меш ног героя: штаны (Pants) под скелетом, запасной — обувь (Boots);
+## у робота района (одна сетка) — крупнейший меш со скином.
 static func _legs_mesh(skel: Skeleton3D) -> MeshInstance3D:
 	for name: String in ["Pants", "Boots"]:
 		for node: Node in skel.find_children(name, "MeshInstance3D", true, false):
 			var mi := node as MeshInstance3D
 			if mi.visible and mi.mesh is ArrayMesh:
 				return mi
-	return null
+	var best: MeshInstance3D = null
+	var best_size: int = 0
+	for node: Node in skel.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if not mi.visible or mi.skin == null or not (mi.mesh is ArrayMesh):
+			continue
+		var size: int = (mi.mesh as ArrayMesh).surface_get_array_len(0)
+		if size > best_size:
+			best = mi
+			best_size = size
+	return best

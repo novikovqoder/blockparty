@@ -11,7 +11,9 @@ extends SceneTree
 ## HeroModelBU подбирает темп, чтобы стопы не скользили.
 ## Фазы прыжка режутся по кривой высоты таза: низ приседа перед толчком →
 ## верх → низ после касания.
-## Запуск: godot --headless --path . -s res://tools/build_base_anims_bu.gd -- <сырой .res>
+## Запуск: godot --headless --path . -s res://tools/build_base_anims_bu.gd -- <сырой .res> [выход .res]
+## (без выхода — assets/hero/hero_base_anims.res рыцаря; робот района —
+## assets/robot_pa/robot_base_anims.res).
 
 const OUT_PATH: String = "res://assets/hero/hero_base_anims.res"
 const HIPS_SUFFIX: String = "mixamorig_Hips"
@@ -36,6 +38,7 @@ func _initialize() -> void:
 		push_error("не загрузилась библиотека %s" % args[0])
 		quit(1)
 		return
+	var out_path: String = args[1] if args.size() > 1 else OUT_PATH
 	print("в сырой библиотеке: ", ", ".join(raw.get_animation_list()))
 	var out := AnimationLibrary.new()
 	for clip: String in CANDIDATES:
@@ -56,8 +59,8 @@ func _initialize() -> void:
 	for name: String in out.get_animation_list():
 		var a: Animation = out.get_animation(name)
 		a.loop_mode = Animation.LOOP_LINEAR if LOOPED.has(name) else Animation.LOOP_NONE
-	var err := ResourceSaver.save(out, OUT_PATH)
-	print("saved %s err=%s clips=%s" % [OUT_PATH, err, out.get_animation_list().size()])
+	var err := ResourceSaver.save(out, out_path)
+	print("saved %s err=%s clips=%s" % [out_path, err, out.get_animation_list().size()])
 	quit(0 if err == OK and out.has_animation("base_walk") and out.has_animation("base_run") \
 		and out.has_animation("base_idle") else 1)
 
