@@ -100,6 +100,52 @@ func test_panel_house_structure() -> void:
 	assert_eq(again.get_meta(&"triangles"), triangles, "детерминирован")
 
 
+## Владелец 11.11.2026: стартовая атмосфера района — пасмурный день, не
+## золотой час ef99e84. Что проверяемо headless: флаг пресета, стартовые
+## часы (солнце высоко, время суток без тёплых краёв), поднятая облачность,
+## холодно-нейтральный свет и дымка без тёплого золотого оттенка, слабые
+## прямые лучи, объёмные лучи едва заметны (по константам пресета).
+func test_district_starts_overcast_day() -> void:
+	var saved: float = Session.world_time
+	var lab: DistrictLab = _make_lab()
+	assert_eq(
+		DistrictLab.MOOD, DistrictLab.Mood.OVERCAST,
+		"стартовый пресет района — пасмурный день")
+	assert_almost_eq(
+		Session.world_time, DistrictLab.TIME_SEC_OVERCAST, 0.001,
+		"стартовые часы — полдень мира")
+	assert_gt(
+		DayMath.sun_direction(DistrictLab.TIME_SEC_OVERCAST).y, 0.5,
+		"солнце высоко: день, не вечер (у золотого часа 680 с — ~0.17)")
+	assert_almost_eq(
+		DayMath.warmth(DistrictLab.TIME_SEC_OVERCAST), 0.0, 0.001,
+		"время суток не подмешивает тёплых краёв")
+	# Купол — на стартовые часы (цикл дня), затем стартовый пресет поверх.
+	lab._day_cycle._process(0.0)
+	lab._apply_atmosphere()
+	var dome: SkyDome = lab._dome
+	assert_gt(
+		dome.cumulus_coverage, 0.6,
+		"небо серо-облачное: облачность поднята (у мира 0.38)")
+	assert_lte(
+		dome.sun_light_color.r - dome.sun_light_color.b, 0.02,
+		"тёплый золотой оттенок света выключен (холодно-нейтральный)")
+	var env: Environment = lab._world_env.environment
+	assert_lt(
+		env.fog_light_color.r - env.fog_light_color.b, 0.06,
+		"дымка нейтральная сероватая (у золотой r−b = 0.34)")
+	assert_almost_eq(
+		lab._sun.light_energy, DistrictLab.OVERCAST_SUN_ENERGY, 0.001,
+		"прямые лучи слабые")
+	assert_lt(
+		DistrictLab.OVERCAST_SUN_FOG_ENERGY, 0.5,
+		"объёмные лучи едва заметны (у золотого часа 2.6)")
+	assert_lt(
+		DistrictLab.OVERCAST_VOLUME_ANISOTROPY, 0.3,
+		"объёмный туман почти изотропный — без «лучей»")
+	Session.world_time = saved
+
+
 func test_trees_deterministic_and_clear() -> void:
 	var a: Dictionary = DistrictNature.tree_layout(5)
 	var b: Dictionary = DistrictNature.tree_layout(5)

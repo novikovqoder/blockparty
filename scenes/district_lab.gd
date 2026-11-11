@@ -20,12 +20,46 @@ const CAR_SCENE: PackedScene = preload(
 	"res://assets/third_party/polyhaven.com/covered_car/covered_car_1k.gltf")
 const GROUND_SHADER: Shader = preload("res://assets/shaders/ez_lab_ground.gdshader")
 
-## Время суток района, с цикла мира: «золотой час» — солнце ~10° над
-## горизонтом, тёплый свет (как на референсах ChatGPT).
-const TIME_SEC: float = 680.0
-## Атмосфера поверх цикла дня (референсы: тёплая дымка, лучи сквозь кроны):
-## туман-дымка (цвет, плотность, рассеяние к солнцу) и объёмный туман
-## (HIGH/ULTRA — он включён GraphicsQuality.apply).
+## Настроение района — пресет стартовой атмосферы (время суток и правки
+## поверх цикла дня). Владелец 11.11.2026: старт — ПАСМУРНЫЙ ДЕНЬ (ровный
+## мягкий свет, серо-облачное небо, нейтральная дымка). Пресет золотого
+## часа (тёплое низкое солнце, дымка и лучи, ef99e84) остаётся рядом —
+## вернуть его переключением MOOD на Mood.GOLDEN.
+enum Mood { OVERCAST, GOLDEN }
+const MOOD: Mood = Mood.OVERCAST
+## Часы суток (сутки мира — 1200 с из Balance, день 0..720 с): полдень —
+## солнце в максимуме (~62°), warmth = 0 — время суток не подмешивает
+## тёплых краёв; золотой час — 680 с, солнце ~10° над горизонтом.
+const TIME_SEC_OVERCAST: float = 360.0
+const TIME_SEC_GOLDEN: float = 680.0
+
+## Пасмурный день (старт): прямые лучи слабые и холодно-нейтральные,
+## преобладает небесный ambient; тени слабые и мягкие; серо-облачное
+## небо — кучевость почти сплошная (поглощение ниже дефолта купола — низ
+## облаков светлый, а не угольный), солнечный диск за пеленой — диск и
+## Mie-ореол приглушены; дымка нейтральная сероватая без «лучей к
+## солнцу»; объёмный туман (HIGH/ULTRA) едва заметен — почти изотропный,
+## энергия солнца в нём мала.
+const OVERCAST_HAZE_COLOR: Color = Color(0.72, 0.745, 0.78)
+const OVERCAST_HAZE_DENSITY: float = 0.0018
+const OVERCAST_VOLUME_DENSITY: float = 0.005
+const OVERCAST_VOLUME_ALBEDO: Color = Color(0.8, 0.81, 0.84)
+const OVERCAST_VOLUME_ANISOTROPY: float = 0.1
+const OVERCAST_SUN_FOG_ENERGY: float = 0.2
+const OVERCAST_SUN_ENERGY: float = 0.12
+const OVERCAST_SUN_COLOR: Color = Color(0.87, 0.91, 0.98)
+const OVERCAST_AMBIENT_ENERGY: float = 0.78
+const OVERCAST_SHADOW_BLUR: float = 3.5
+const OVERCAST_CUMULUS_COVERAGE: float = 0.8
+const OVERCAST_CUMULUS_ABSORPTION: float = 0.8
+const OVERCAST_CIRRUS_COVERAGE: float = 0.75
+const OVERCAST_SUN_DISK_INTENSITY: float = 3.0
+const OVERCAST_SUN_MIE_INTENSITY: float = 0.4
+
+## Золотой час: тёплая дымка и лучи сквозь кроны — туман-дымка (цвет,
+## плотность, рассеяние к солнцу) и объёмный туман (HIGH/ULTRA — он
+## включён GraphicsQuality.apply); тёплый низкий свет даёт цикл дня на
+## TIME_SEC_GOLDEN.
 const HAZE_COLOR: Color = Color(0.86, 0.70, 0.52)
 const HAZE_DENSITY: float = 0.0024
 const HAZE_SUN_SCATTER: float = 0.35
@@ -45,6 +79,7 @@ var _player: Player
 var _nature: DistrictNature
 var _world_env: WorldEnvironment
 var _sun: DirectionalLight3D
+var _dome: SkyDome
 var _day_cycle: DayCycle
 var _debug: DebugPanel
 
@@ -55,7 +90,7 @@ func _ready() -> void:
 	process_priority = 100
 	DisplayServer.window_set_title("Born Unblessed — district")
 	Log.info("Район: строю квартал", "DistrictLab")
-	Session.world_time = TIME_SEC
+	Session.world_time = _time_sec()
 	_build_env()
 	_build_ground()
 	_build_surfaces()
@@ -86,15 +121,67 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	# Время района стоит: часы мира ведёт сеть, здесь её нет.
-	Session.world_time = TIME_SEC
+	Session.world_time = _time_sec()
 	_apply_atmosphere()
 	if _player != null:
 		_nature.update_viewer(_player.global_position)
 
 
-## Дымка и объёмный туман района поверх значений цикла дня (тот каждый кадр
-## ставит туман острова — здесь он заменяется тёплой дымкой).
+## Часы мира стартового пресета района.
+func _time_sec() -> float:
+	return TIME_SEC_GOLDEN if MOOD == Mood.GOLDEN else TIME_SEC_OVERCAST
+
+
+## Атмосфера района поверх значений цикла дня (тот каждый кадр ставит
+## свет и туман мира — здесь их заменяет пресет настроения; район
+## обрабатывается позже цикла, process_priority 100).
 func _apply_atmosphere() -> void:
+	if MOOD == Mood.OVERCAST:
+		_apply_overcast()
+	else:
+		_apply_golden()
+
+
+## Пасмурный день (старт): после цикла дня переписывает его тёплые
+## полуденные цвета — ровный холодно-нейтральный свет, слабые прямые
+## лучи при повышенном небесном ambient, серо-облачное небо, нейтральная
+## дымка, объёмные лучи едва заметны.
+func _apply_overcast() -> void:
+	var env: Environment = _world_env.environment
+	# Серо-облачное небо: почти сплошная кучевость и перистая пелена;
+	# солнце за облаками — видимый диск и Mie-ореол приглушены.
+	_dome.cumulus_coverage = OVERCAST_CUMULUS_COVERAGE
+	_dome.cumulus_absorption = OVERCAST_CUMULUS_ABSORPTION
+	_dome.cirrus_coverage = OVERCAST_CIRRUS_COVERAGE
+	_dome.sun_disk_intensity = OVERCAST_SUN_DISK_INTENSITY
+	_dome.atm_sun_mie_intensity = OVERCAST_SUN_MIE_INTENSITY
+	_dome.sun_disk_color = OVERCAST_SUN_COLOR
+	_dome.atm_sun_mie_tint = OVERCAST_SUN_COLOR
+	# Свет ровный рассеянный: слабые прямые лучи холодно-нейтрального
+	# тона (цикл дня каждый кадр возвращает палитру — пишем после него),
+	# преобладает небесный ambient; тени слабые и мягкие.
+	_dome.sun_light_color = OVERCAST_SUN_COLOR
+	_dome.sun_horizon_light_color = OVERCAST_SUN_COLOR
+	_dome.sun_light_energy = OVERCAST_SUN_ENERGY
+	env.ambient_light_energy = OVERCAST_AMBIENT_ENERGY
+	_sun.shadow_blur = OVERCAST_SHADOW_BLUR
+	# Дымка нейтральная сероватая, без рассеяния к солнцу.
+	env.fog_light_color = OVERCAST_HAZE_COLOR
+	env.fog_density = OVERCAST_HAZE_DENSITY
+	env.fog_sun_scatter = 0.0
+	env.fog_height_density = 0.0
+	if env.volumetric_fog_enabled:
+		env.volumetric_fog_density = OVERCAST_VOLUME_DENSITY
+		env.volumetric_fog_albedo = OVERCAST_VOLUME_ALBEDO
+		env.volumetric_fog_anisotropy = OVERCAST_VOLUME_ANISOTROPY
+		env.volumetric_fog_length = 140.0
+		_sun.light_volumetric_fog_energy = OVERCAST_SUN_FOG_ENERGY
+
+
+## Золотой час (ef99e84): тёплая дымка и лучи сквозь кроны поверх цикла
+## дня — тот каждый кадр ставит туман острова, здесь он заменяется
+## тёплой дымкой.
+func _apply_golden() -> void:
 	var env: Environment = _world_env.environment
 	env.fog_light_color = HAZE_COLOR
 	env.fog_density = HAZE_DENSITY
@@ -116,6 +203,7 @@ func _build_env() -> void:
 	add_child(env_root)
 	_world_env = env_root.get_node("WorldEnvironment") as WorldEnvironment
 	_sun = _world_env.get_node("SunLight") as DirectionalLight3D
+	_dome = _world_env.get_node_or_null("SkyDome") as SkyDome
 	_day_cycle = DayCycle.new()
 	_day_cycle.name = "DayCycle"
 	add_child(_day_cycle)
