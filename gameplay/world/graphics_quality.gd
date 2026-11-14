@@ -196,6 +196,14 @@ const CLOUD_STEPS_SIMPLE: int = 6
 const CLOUD_STEPS_NORMAL: int = 8
 const CLOUD_STEPS_HIGH: int = 10
 const CLOUD_STEPS_ULTRA: int = 14
+## PERF_DISTRICT п. 4: шаги марша облаков района (--district). Район
+## прежде не ставил cumulus_steps вовсе — марш шёл дефолтными 10 шагами
+## на любом уровне (включая «Низкое»). Пасмурный купол района почти
+## сплошной, и стоимость марша от кучевости не зависит (цикл фиксирован) —
+## режем шаги: SIMPLE 4, HIGH/NORMAL 6 (≈ −40% бюджета неба против 10),
+## ULTRA 14 — красиво, как было.
+const DISTRICT_CLOUD_STEPS_SIMPLE: int = 4
+const DISTRICT_CLOUD_STEPS_HIGH: int = 6
 ## П17 п.1: ширина антиалиасинга края выреза листвы (ALPHA_ANTIALIASING_EDGE
 ## canopy.gdshader). Alpha-to-coverage работает только на мультисэмпловом
 ## буфере — включаем на ULTRA (MSAA 4x); на HIGH SMAA без MSAA, там A2C
@@ -274,6 +282,18 @@ static func cloud_steps(tier: int) -> int:
 		Tier.ULTRA:
 			return CLOUD_STEPS_ULTRA
 	return CLOUD_STEPS_HIGH
+
+
+## PERF_DISTRICT п. 4: шаги марша облаков района — дешевле острова на
+## HIGH/NORMAL (пасмурный купол сплошной, дискретность выборок размазывает
+## дизеринг П17); ULTRA — островные 14.
+static func district_cloud_steps(tier: int) -> int:
+	match tier:
+		Tier.SIMPLE:
+			return DISTRICT_CLOUD_STEPS_SIMPLE
+		Tier.ULTRA:
+			return CLOUD_STEPS_ULTRA
+	return DISTRICT_CLOUD_STEPS_HIGH
 
 
 ## П17 п.1: край антиалиасинга выреза листвы по уровню — только ULTRA

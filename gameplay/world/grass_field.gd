@@ -235,9 +235,11 @@ static func _surface_mesh(source: Mesh, surface: int) -> ArrayMesh:
 ## из gather. Тени — П18 Сборка 2 блок 3: поле принимает (PBR без
 ## ручного light()), отбрасывает только ближнее кольцо и только на
 ## ULTRA — как было в П17.
-static func make_nodes(tier: int) -> Dictionary:
+## radius > 0 переопределяет радиус уровня (кромка шейдера под него) —
+## так район (PERF_DISTRICT п. 5) сужает поле, не трогая остров.
+static func make_nodes(tier: int, radius: float = 0.0) -> Dictionary:
 	var nodes: Dictionary = {}
-	var fade := _fade_for_tier(tier)
+	var fade := _fade_for_tier(tier, radius)
 	var tuft := tuft_data()
 	var near_cast: bool = tier == GraphicsQuality.Tier.ULTRA
 	nodes["grass_tuft"] = _make_node(
@@ -280,9 +282,10 @@ static func _make_node(
 
 
 ## Кромка шейдера по уровню: масштаб к нулю в последних EDGE_M метрах.
-static func _fade_for_tier(tier: int) -> Vector2:
-	var radius := radius_for_tier(tier)
-	return Vector2(radius - EDGE_M, radius)
+## radius > 0 — переопределение радиуса (район).
+static func _fade_for_tier(tier: int, radius: float = 0.0) -> Vector2:
+	var r: float = radius if radius > 0.0 else radius_for_tier(tier)
+	return Vector2(r - EDGE_M, r)
 
 
 ## Материал пучков: текстура GLB × инстанс-тон (COLOR) × 0.6 демо,
@@ -496,17 +499,19 @@ static func _place(
 ## Ключи чанков поля вокруг center (мировые метры) для уровня — центры
 ## чанков в радиусе уровня (+ пол-чанка диагонали на крайние клетки).
 ## Сортировка даёт стабильный порядок конкатенации буферов.
-static func chunk_keys(tier: int, center: Vector2) -> Array[Vector2i]:
+static func chunk_keys(
+		tier: int, center: Vector2, radius: float = 0.0
+) -> Array[Vector2i]:
 	var keys: Array[Vector2i] = []
-	var radius := radius_for_tier(tier)
-	var reach: int = int(ceilf((radius + CHUNK) / CHUNK))
+	var r: float = radius if radius > 0.0 else radius_for_tier(tier)
+	var reach: int = int(ceilf((r + CHUNK) / CHUNK))
 	var base := Vector2i(
 		int(floorf(center.x / CHUNK)), int(floorf(center.y / CHUNK)))
 	for cz: int in range(base.y - reach, base.y + reach + 1):
 		for cx: int in range(base.x - reach, base.x + reach + 1):
 			var center_world := Vector2(
 				(float(cx) + 0.5) * CHUNK, (float(cz) + 0.5) * CHUNK)
-			if center_world.distance_to(center) > radius + CHUNK * 0.71:
+			if center_world.distance_to(center) > r + CHUNK * 0.71:
 				continue
 			keys.append(Vector2i(cx, cz))
 	keys.sort()

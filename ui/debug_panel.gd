@@ -35,6 +35,13 @@ const EFFECTS: Array[StringName] = [
 	&"gfield", &"canopyvol", &"tshadow", &"herolight",
 	&"lodblend",
 ]
+## Эффекты вида острова (IslandView) — без вида (район, лаборатория)
+## галочки инертны: сцена снимает их, чтобы авто-замер не гнал пустые
+## шаги (PERF_DISTRICT).
+const VIEW_EFFECTS: Array[StringName] = [
+	&"grass", &"detail", &"pom", &"clutter",
+	&"gfield", &"canopyvol", &"tshadow", &"lodblend",
+]
 ## Ключи перевода подписей и заголовка блока.
 const EFFECT_LABELS: Dictionary[StringName, String] = {
 	&"sdfgi": "BU_DBG_SDFGI", &"ssil": "BU_DBG_SSIL", &"ssr": "BU_DBG_SSR",
@@ -316,6 +323,16 @@ func watch_graphics(env: Environment, view: IslandView, tier: int) -> void:
 	for id: StringName in EFFECTS:
 		if _boxes.has(id):
 			_boxes[id].set_pressed_no_signal(true)
+
+
+## Поставить галочку эффекта в фактическое состояние сцены, не трогая
+## сам эффект (PERF_DISTRICT: район стартово вырубает тяжёлые эффекты и
+## не имеет IslandView — галочки обязаны это показывать, иначе авто-замер
+## «выключит» уже выключенное и вернёт его включённым после шага).
+## Снятое состояние убирает эффект из очереди авто-замера.
+func set_effect_enabled(id: StringName, on: bool) -> void:
+	if _boxes.has(id):
+		_boxes[id].set_pressed_no_signal(on)
 
 
 ## Свет сцены для вкладки «Свет» (П18-ЛАБОРАТОРИЯ): environment общий

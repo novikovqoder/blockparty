@@ -55,6 +55,15 @@ const OVERCAST_CUMULUS_ABSORPTION: float = 0.8
 const OVERCAST_CIRRUS_COVERAGE: float = 0.75
 const OVERCAST_SUN_DISK_INTENSITY: float = 3.0
 const OVERCAST_SUN_MIE_INTENSITY: float = 0.4
+## PERF_DISTRICT п. 7: дальность направленных теней района на «Высоком»
+## (мир: 70): длинных теней пасмурный день не рисует (солнце 0.12), 50 м
+## покрывают двор и ближайшие дома, дальние сплиты пустые.
+const SHADOW_DISTANCE_HIGH: float = 50.0
+## PERF_DISTRICT пп. 1–3: тяжёлые полнокадровые эффекты, вырубаемые
+## районом на «Высоком» (ULTRA не трогаем): пасмурный день их почти не
+## показывает, а цену на встройке они берут полную. Галочки F3 включают
+## каждый по одному — для замера цены.
+const CUT_EFFECTS_HIGH: Array[StringName] = [&"sdfgi", &"ssil", &"ssr", &"vfog"]
 
 ## Золотой час: тёплая дымка и лучи сквозь кроны — туман-дымка (цвет,
 ## плотность, рассеяние к солнцу) и объёмный туман (HIGH/ULTRA — он
@@ -116,6 +125,15 @@ func _ready() -> void:
 		_debug.watch_light(
 			_world_env.environment, _sun,
 			_world_env.get_node_or_null("SkyDome") as SkyDome)
+		# Галочки F3 — фактическое состояние: островные эффекты вида
+		# (IslandView) в районе не работают, вырубленное стартом (пп. 1–3)
+		# показано выключенным — авто-замер не «вернёт» его включённым
+		# после своего шага, а ручная галочка включает эффект для замера.
+		for id: StringName in DebugPanel.VIEW_EFFECTS:
+			_debug.set_effect_enabled(id, false)
+		if tier == GraphicsQuality.Tier.HIGH:
+			for id: StringName in CUT_EFFECTS_HIGH:
+				_debug.set_effect_enabled(id, false)
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
@@ -170,12 +188,14 @@ func _apply_overcast() -> void:
 	env.fog_density = OVERCAST_HAZE_DENSITY
 	env.fog_sun_scatter = 0.0
 	env.fog_height_density = 0.0
-	if env.volumetric_fog_enabled:
-		env.volumetric_fog_density = OVERCAST_VOLUME_DENSITY
-		env.volumetric_fog_albedo = OVERCAST_VOLUME_ALBEDO
-		env.volumetric_fog_anisotropy = OVERCAST_VOLUME_ANISOTROPY
-		env.volumetric_fog_length = 140.0
-		_sun.light_volumetric_fog_energy = OVERCAST_SUN_FOG_ENERGY
+	# Параметры объёмного тумана пишем и когда он выключен стартом
+	# (PERF_DISTRICT п. 1: на «Высоком» района его нет) — ручная галочка F3
+	# обязана включить туман с пресетом пасмурности, а не с дефолтами сцены.
+	env.volumetric_fog_density = OVERCAST_VOLUME_DENSITY
+	env.volumetric_fog_albedo = OVERCAST_VOLUME_ALBEDO
+	env.volumetric_fog_anisotropy = OVERCAST_VOLUME_ANISOTROPY
+	env.volumetric_fog_length = 140.0
+	_sun.light_volumetric_fog_energy = OVERCAST_SUN_FOG_ENERGY
 
 
 ## Золотой час (ef99e84): тёплая дымка и лучи сквозь кроны поверх цикла
@@ -187,12 +207,12 @@ func _apply_golden() -> void:
 	env.fog_density = HAZE_DENSITY
 	env.fog_sun_scatter = HAZE_SUN_SCATTER
 	env.fog_height_density = 0.0
-	if env.volumetric_fog_enabled:
-		env.volumetric_fog_density = VOLUME_DENSITY
-		env.volumetric_fog_albedo = VOLUME_ALBEDO
-		env.volumetric_fog_anisotropy = VOLUME_ANISOTROPY
-		env.volumetric_fog_length = 140.0
-		_sun.light_volumetric_fog_energy = SUN_FOG_ENERGY
+	# Как в пасмурном пресете: параметры и при выключенном тумане.
+	env.volumetric_fog_density = VOLUME_DENSITY
+	env.volumetric_fog_albedo = VOLUME_ALBEDO
+	env.volumetric_fog_anisotropy = VOLUME_ANISOTROPY
+	env.volumetric_fog_length = 140.0
+	_sun.light_volumetric_fog_energy = SUN_FOG_ENERGY
 
 
 ## Небо, солнце и туман — как в мире (копия узла окружения), цикл дня ведёт
@@ -215,6 +235,32 @@ func _apply_graphics(tier: int) -> void:
 	GraphicsQuality.apply(
 		_world_env.environment, _sun, tier, get_viewport(),
 		_world_env.get_node_or_null("MoonLight") as DirectionalLight3D)
+	# PERF_DISTRICT пп. 1–3: на «Высоком» район срезает самые дорогие
+	# полнокадровые эффекты — вид пасмурного дня их почти не показывает,
+	# а на встройке (780M) цену они берут полную: объёмный туман пресета
+	# едва заметен (серую дымку несёт дистанционный туман мира — цвет и
+	# плотность ниже пишет _apply_overcast), рассеянный свет ровный,
+	# GI-отскоки прячутся в низком контрасте, SSIL/SSR на сером свете
+	# не видны. SSAO и glow остаются (дешёвые, держат картинку). ULTRA —
+	# всё как было.
+	if tier == GraphicsQuality.Tier.HIGH:
+		var env: Environment = _world_env.environment
+		for prop: String in [
+			"volumetric_fog_enabled", "sdfgi_enabled",
+			"ssil_enabled", "ssr_enabled",
+		]:
+			env.set(prop, false)
+		# п. 7: тени 70 → 50 м (см. SHADOW_DISTANCE_HIGH).
+		_sun.directional_shadow_max_distance = SHADOW_DISTANCE_HIGH
+		var moon: DirectionalLight3D = \
+			_world_env.get_node_or_null("MoonLight") as DirectionalLight3D
+		if moon != null:
+			moon.directional_shadow_max_distance = SHADOW_DISTANCE_HIGH
+	# п. 4: шаги марша облаков по уровню — район прежде не ставил их
+	# вовсе, и марш шёл дефолтными 10 шагами на любом уровне.
+	if _dome != null:
+		_dome.sky_material.set_shader_parameter(
+			"cumulus_steps", GraphicsQuality.district_cloud_steps(tier))
 	var vignette: ColorRect = GraphicsQuality.make_vignette()
 	vignette.visible = tier >= GraphicsQuality.Tier.HIGH
 	add_child(vignette)

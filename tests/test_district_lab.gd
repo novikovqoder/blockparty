@@ -240,3 +240,195 @@ func test_grass_chunks_follow_surfaces() -> void:
 	assert_lt(
 		(road["tuft"]["transforms"] as Array).size(), tufts.size() / 3,
 		"на асфальте трава редкая")
+
+
+# --- Оптимизация района (PERF_DISTRICT, 780M): «Высокое» срезает
+# --- тяжёлые полнокадровые эффекты, вид пасмурного дня несёт
+# --- дистанционный туман; ULTRA — всё как было.
+
+func test_district_high_cuts_heavy_effects() -> void:
+	var lab: DistrictLab = _make_lab()
+	lab._apply_graphics(GraphicsQuality.Tier.HIGH)
+	var env: Environment = lab._world_env.environment
+	assert_false(env.volumetric_fog_enabled, "HIGH: объёмного тумана нет (п. 1)")
+	assert_false(env.sdfgi_enabled, "HIGH: SDFGI нет (п. 2)")
+	assert_false(env.ssil_enabled, "HIGH: SSIL нет (п. 3)")
+	assert_false(env.ssr_enabled, "HIGH: SSR нет (п. 3)")
+	assert_true(env.ssao_enabled, "HIGH: SSAO остаётся — контактные тени")
+	assert_true(env.glow_enabled, "HIGH: glow остаётся")
+	# Вид пасмурного дня несёт дистанционный туман мира: включён, цвет
+	# и плотность прежние (п. 1 — серая дымка жива без vfog).
+	lab._apply_atmosphere()
+	assert_true(env.fog_enabled, "дистанционный туман включён")
+	assert_eq(env.fog_light_color, DistrictLab.OVERCAST_HAZE_COLOR,
+		"цвет дымки прежний")
+	assert_almost_eq(
+		env.fog_density, DistrictLab.OVERCAST_HAZE_DENSITY, 0.0001,
+		"плотность дымки прежняя")
+	# Параметры объёмного тумана пишутся и при выключенном: галочка F3
+	# включает его с пресетом пасмурности, а не с дефолтами сцены.
+	assert_eq(env.volumetric_fog_albedo, DistrictLab.OVERCAST_VOLUME_ALBEDO,
+		"пресет vfog готов даже когда он выключен")
+	# Тени 70 → 50 м (п. 7): у солнца и луны.
+	assert_almost_eq(
+		lab._sun.directional_shadow_max_distance,
+		DistrictLab.SHADOW_DISTANCE_HIGH, 0.1, "тени солнца 50 м")
+	var moon: DirectionalLight3D = \
+		lab._world_env.get_node_or_null("MoonLight") as DirectionalLight3D
+	assert_almost_eq(
+		moon.directional_shadow_max_distance,
+		DistrictLab.SHADOW_DISTANCE_HIGH, 0.1, "тени луны 50 м")
+	# Облака: марш по уровню (п. 4), не дефолтные 10 шагов на любом уровне.
+	assert_almost_eq(
+		float(lab._dome.sky_material.get_shader_parameter("cumulus_steps")),
+		6.0, 0.1, "HIGH: марш облаков района 6 шагов")
+	get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+
+
+func test_district_ultra_keeps_heavy_effects() -> void:
+	var lab: DistrictLab = _make_lab()
+	lab._apply_graphics(GraphicsQuality.Tier.ULTRA)
+	var env: Environment = lab._world_env.environment
+	assert_true(env.volumetric_fog_enabled, "ULTRA: объёмный туман как было")
+	assert_true(env.sdfgi_enabled, "ULTRA: SDFGI как было")
+	assert_true(env.ssil_enabled, "ULTRA: SSIL как было")
+	assert_true(env.ssr_enabled, "ULTRA: SSR как было")
+	assert_almost_eq(
+		lab._sun.directional_shadow_max_distance,
+		GraphicsQuality.ULTRA_SHADOW_MAX_DISTANCE, 0.1,
+		"ULTRA: тени уровня, район их не режет")
+	assert_almost_eq(
+		float(lab._dome.sky_material.get_shader_parameter("cumulus_steps")),
+		float(GraphicsQuality.CLOUD_STEPS_ULTRA), 0.1,
+		"ULTRA: марш облаков островной")
+	get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+
+
+func test_district_cloud_steps_by_tier() -> void:
+	assert_eq(
+		GraphicsQuality.district_cloud_steps(GraphicsQuality.Tier.SIMPLE), 4,
+		"SIMPLE: 4 шага")
+	assert_eq(
+		GraphicsQuality.district_cloud_steps(GraphicsQuality.Tier.NORMAL), 6,
+		"NORMAL: 6 шагов")
+	assert_eq(
+		GraphicsQuality.district_cloud_steps(GraphicsQuality.Tier.HIGH), 6,
+		"HIGH: 6 шагов")
+	assert_eq(
+		GraphicsQuality.district_cloud_steps(GraphicsQuality.Tier.ULTRA),
+		GraphicsQuality.CLOUD_STEPS_ULTRA, "ULTRA: 14, красиво как было")
+	assert_lt(
+		GraphicsQuality.district_cloud_steps(GraphicsQuality.Tier.HIGH),
+		GraphicsQuality.CLOUD_STEPS_HIGH,
+		"район на HIGH дешевле острова (10)")
+
+
+func test_district_grass_cheaper_on_high() -> void:
+	assert_almost_eq(
+		DistrictNature.grass_radius(GraphicsQuality.Tier.HIGH), 40.0, 0.1,
+		"HIGH: радиус поля 40 м (×0.73 островного)")
+	assert_eq(
+		DistrictNature.grass_radius(GraphicsQuality.Tier.ULTRA),
+		GrassField.RADIUS_ULTRA, "ULTRA: островной радиус")
+	assert_almost_eq(
+		DistrictNature.grass_density(GraphicsQuality.Tier.HIGH), 4.0, 0.1,
+		"HIGH: плотность 4 пучка/м² (×0.67 островной)")
+	assert_eq(
+		DistrictNature.grass_density(GraphicsQuality.Tier.ULTRA),
+		GrassField.DENSITY_ULTRA, "ULTRA: островная плотность")
+	# Тот же чанк на HIGH реже, чем на ULTRA (раскладка детерминирована).
+	var hi: Dictionary = DistrictNature.build_grass_chunk(
+		GraphicsQuality.Tier.HIGH, 7, -12)
+	var ultra: Dictionary = DistrictNature.build_grass_chunk(
+		GraphicsQuality.Tier.ULTRA, 7, -12)
+	assert_gt(
+		(ultra["tuft"]["transforms"] as Array).size(),
+		(hi["tuft"]["transforms"] as Array).size(),
+		"HIGH реже ULTRA на том же чанке")
+	# Радиус района проходит в кромку шейдера и ключи чанков — граница
+	# поля совпадает с кромкой (без «ступеньки» на краю).
+	WorldMaterials.textured_headless = true
+	var nodes: Dictionary = GrassField.make_nodes(
+		GraphicsQuality.Tier.HIGH, DistrictNature.grass_radius(
+			GraphicsQuality.Tier.HIGH))
+	var material := (nodes["grass_tuft"] as MultiMeshInstance3D) \
+		.material_override as ShaderMaterial
+	assert_almost_eq(float(material.get_shader_parameter("fade_end")),
+		DistrictNature.GRASS_RADIUS_HIGH, 0.1,
+		"кромка шейдера на радиусе района")
+	WorldMaterials.textured_headless = false
+	var keys: Array[Vector2i] = GrassField.chunk_keys(
+		GraphicsQuality.Tier.HIGH, Vector2.ZERO,
+		DistrictNature.grass_radius(GraphicsQuality.Tier.HIGH))
+	assert_lt(keys.size(),
+		GrassField.chunk_keys(GraphicsQuality.Tier.HIGH, Vector2.ZERO).size(),
+		"чанков меньше островного радиуса")
+	for key: Vector2i in keys:
+		var center_world := Vector2(
+			(float(key.x) + 0.5) * GrassField.CHUNK,
+			(float(key.y) + 0.5) * GrassField.CHUNK)
+		assert_lt(center_world.length(),
+			DistrictNature.GRASS_RADIUS_HIGH + GrassField.CHUNK * 0.71,
+			"чанк внутри радиуса района")
+
+
+func test_district_tree_lod_thresholds_by_tier() -> void:
+	var cheap: Vector2 = DistrictNature.lod_limits(GraphicsQuality.Tier.HIGH)
+	assert_almost_eq(cheap.x, 35.0, 0.1, "HIGH: LOD1 с 35 м (было 60)")
+	assert_almost_eq(cheap.y, 80.0, 0.1, "HIGH: LOD2 с 80 м (было 130)")
+	for tier: int in [
+		GraphicsQuality.Tier.SIMPLE,
+		GraphicsQuality.Tier.NORMAL,
+	]:
+		assert_eq(
+			DistrictNature.lod_limits(tier), cheap,
+			"ниже HIGH — те же ближние пороги, не дороже HIGH")
+	var ultra: Vector2 = DistrictNature.lod_limits(GraphicsQuality.Tier.ULTRA)
+	assert_almost_eq(ultra.x, 60.0, 0.1, "ULTRA: LOD1 прежний")
+	assert_almost_eq(ultra.y, 130.0, 0.1, "ULTRA: LOD2 прежний")
+	# Раскладка живёт на новых порогах: на HIGH деревья в 50 м от зрителя —
+	# уже средний уровень (не ближний), на ULTRA — ближний.
+	var nature := DistrictNature.new()
+	add_child_autofree(nature)
+	nature.setup(GraphicsQuality.Tier.HIGH)
+	nature.update_viewer(Vector3(1000.0, 0.0, 1000.0))
+	var far: Array[int] = nature.lod_counts()
+	var layout: Dictionary = DistrictNature.tree_layout(DistrictNature.SEED)
+	var total: int = 0
+	for key: String in layout:
+		total += (layout[key] as Array).size()
+	assert_eq(far[0], 0, "в 1 км от леса ближнего уровня нет")
+	assert_eq(far[1] + far[2], total, "все деревья на дальних уровнях")
+
+
+func test_f3_panel_reflects_district_state() -> void:
+	# Район стартово вырубает эффекты и не имеет IslandView: галочки
+	# показывают фактическое состояние, авто-замер не «вернёт» вырубленное
+	# включённым (шаг «выключить» ничего не меняет, возврат включил бы).
+	var panel := DebugPanel.new()
+	add_child_autofree(panel)
+	var env := Environment.new()
+	panel.watch_graphics(env, null, GraphicsQuality.Tier.HIGH)
+	assert_true(panel._boxes[&"sdfgi"].button_pressed,
+		"после применения уровня галочки включены (остров)")
+	for id: StringName in DebugPanel.VIEW_EFFECTS:
+		panel.set_effect_enabled(id, false)
+		assert_false(panel._boxes[id].button_pressed,
+			"эффект вида %s без IslandView выключен" % id)
+	panel.set_effect_enabled(&"sdfgi", false)
+	assert_false(panel._boxes[&"sdfgi"].button_pressed,
+		"вырубленный стартом эффект показан выключенным")
+	# Вырубленный не входит в очередь авто-замера: база — уровень целиком.
+	panel.start_auto_measure(0.001, 0.0)
+	assert_false(panel._auto_queue.has(&"sdfgi"),
+		"вырубленный эффект не в очереди авто-замера")
+	assert_false(panel._auto_queue.has(&"grass"),
+		"эффект вида не в очереди без IslandView")
+	panel._auto_finish(true)
+	# Ручная галочка включает эффект — уровень позволяет (замер цены).
+	panel.set_effect_enabled(&"sdfgi", false)
+	panel._boxes[&"sdfgi"].button_pressed = true
+	assert_true(env.sdfgi_enabled,
+		"ручная галочка включила SDFGI (HIGH позволяет)")

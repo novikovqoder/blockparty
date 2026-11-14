@@ -22,13 +22,25 @@ const BUSH_TRIES: int = 900
 const FOREST_MARGIN: float = 55.0
 ## Минимум между стволами, м.
 const TREE_GAP: float = 4.0
-## Границы уровней деревьев, м (мир: 70 и 150; район плотнее застроен).
-const LOD1_M: float = 60.0
-const LOD2_M: float = 130.0
+## Границы уровней деревьев, м (мир: 70 и 150; район плотнее застроен —
+## база 60/130). PERF_DISTRICT п. 6: на HIGH и ниже пороги ближе (35/80) —
+## деревья раньше уходят на дешёвые меши, а кастеров тени меньше (тень
+## отбрасывает только ближний уровень). ULTRA — база, красиво как было.
+const LOD1_M_BASE: float = 60.0
+const LOD2_M_BASE: float = 130.0
+const LOD1_M_CHEAP: float = 35.0
+const LOD2_M_CHEAP: float = 80.0
 ## Пересчёт уровней — при сдвиге зрителя на столько метров.
 const LOD_STEP_M: float = 2.0
 ## Чанков травы за один кадр (остальное достроится следующими).
 const GRASS_CHUNK_BUDGET: int = 10
+## PERF_DISTRICT п. 5: поле травы района на HIGH теснее и реже островного
+## (55 м / 6 пучков на м²): район плотно застроен — луг читается и в 30 м
+## от игрока, а пучков на встройке много (alpha-scissor + ветер в вершинном
+## шейдере). Радиус 55 → 40 м (×0.73), плотность 6 → 4 пучка/м² (×0.67) —
+## примерно половина пучков круга. ULTRA — островные 75 м / 8 пучков.
+const GRASS_RADIUS_HIGH: float = 40.0
+const GRASS_DENSITY_HIGH: float = 4.0
 ## Плотность травы по покрытию (доля от луговой).
 const GRASS_FACTOR: Dictionary = {
 	DistrictLayout.Surface.GRASS: 1.0,
@@ -38,11 +50,15 @@ const GRASS_FACTOR: Dictionary = {
 }
 
 var _tier: int = GraphicsQuality.Tier.HIGH
+## Границы уровней деревьев [LOD1, LOD2], м — по тиру (см. lod_limits).
+var _lod1_m: float = LOD1_M_BASE
+var _lod2_m: float = LOD2_M_BASE
 ## Группы деревьев: {transforms, colors, nodes: [MMI ×3], counts}.
 var _groups: Array[Dictionary] = []
 var _lod_center := Vector2(INF, INF)
 var _grass_nodes: Dictionary = {}
 var _grass_chunks: Dictionary = {}
+var _grass_radius: float = 0.0
 var _grass_center := Vector2i(999999, 999999)
 var _grass_done: bool = false
 var _tree_points: Array[Vector2] = []
@@ -50,11 +66,34 @@ var _tree_points: Array[Vector2] = []
 
 func setup(tier: int) -> void:
 	_tier = tier
+	var limits := lod_limits(tier)
+	_lod1_m = limits.x
+	_lod2_m = limits.y
 	_build_trees()
 	if GrassField.is_field_enabled(tier):
-		_grass_nodes = GrassField.make_nodes(tier)
+		_grass_radius = grass_radius(tier)
+		_grass_nodes = GrassField.make_nodes(tier, _grass_radius)
 		for type: String in _grass_nodes:
 			add_child(_grass_nodes[type])
+
+
+## Границы уровней деревьев [LOD1, LOD2], м, по тиру (PERF_DISTRICT п. 6).
+static func lod_limits(tier: int) -> Vector2:
+	if tier == GraphicsQuality.Tier.ULTRA:
+		return Vector2(LOD1_M_BASE, LOD2_M_BASE)
+	return Vector2(LOD1_M_CHEAP, LOD2_M_CHEAP)
+
+
+## Радиус поля травы района, м, по тиру (PERF_DISTRICT п. 5).
+static func grass_radius(tier: int) -> float:
+	return GrassField.RADIUS_ULTRA if tier == GraphicsQuality.Tier.ULTRA \
+		else GRASS_RADIUS_HIGH
+
+
+## Базовая плотность пучков травы района на 1 м² по тиру (PERF_DISTRICT п. 5).
+static func grass_density(tier: int) -> float:
+	return GrassField.DENSITY_ULTRA if tier == GraphicsQuality.Tier.ULTRA \
+		else GRASS_DENSITY_HIGH
 
 
 ## Точки стволов деревьев (X/Z) — для тестов и коллизий.
@@ -233,7 +272,7 @@ func _assign_lods(group: Dictionary, center: Vector2) -> void:
 	for i: int in transforms.size():
 		var xform: Transform3D = transforms[i]
 		var dist: float = Vector2(xform.origin.x, xform.origin.z).distance_to(center)
-		var lod: int = 0 if dist < LOD1_M else (1 if dist < LOD2_M else 2)
+		var lod: int = 0 if dist < _lod1_m else (1 if dist < _lod2_m else 2)
 		var mm: MultiMesh = (nodes[lod] as MultiMeshInstance3D).multimesh
 		mm.set_instance_transform(fill[lod], xform)
 		mm.set_instance_color(fill[lod], colors[i])
@@ -251,8 +290,7 @@ static func build_grass_chunk(tier: int, cx: int, cz: int) -> Dictionary:
 	var tuft_colors: PackedColorArray = groups["tuft"]["colors"]
 	for kind: String in GrassField.FLOWER_SCENES:
 		groups["flower_%s" % kind] = {"transforms": Array()}
-	var per_tuft: float = GrassField.density_for_tier(tier) \
-		/ float(GrassField.TUFTS_PER_CELL)
+	var per_tuft: float = grass_density(tier) / float(GrassField.TUFTS_PER_CELL)
 	var size: int = int(GrassField.CHUNK)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = GrassField.cell_seed(cx, cz)
@@ -300,7 +338,7 @@ static func build_grass_chunk(tier: int, cx: int, cz: int) -> Dictionary:
 func _refresh_grass(center: Vector2) -> bool:
 	var alive: Dictionary = {}
 	var missing: Array[Vector2i] = []
-	for key: Vector2i in GrassField.chunk_keys(_tier, center):
+	for key: Vector2i in GrassField.chunk_keys(_tier, center, _grass_radius):
 		alive[key] = true
 		if not _grass_chunks.has(key):
 			missing.append(key)
