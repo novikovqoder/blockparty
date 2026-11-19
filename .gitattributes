@@ -13,3 +13,7 @@
 *.dylib filter=lfs diff=lfs merge=lfs -text
 
 *.glb filter=lfs diff=lfs merge=lfs -text
+
+# Расширение карты (слова владельца): печёный island_art.res вырастет
+# 27 → ~55–80 МБ — под LFS, как остальные бинарники.
+*.res filter=lfs diff=lfs merge=lfs -text
