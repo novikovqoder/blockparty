@@ -26,8 +26,13 @@ func _check() -> void:
 		if wing not in zone_names:
 			push_error("зоны нет: " + wing)
 			ok = false
-	print("art.points=%d heights=%d zones=%d chunks=%d colliders=%d groups=%d"
+	# Чексумма высот — та же формула, что тесты-заморозки (обновление
+	# HEIGHTS_CHECKSUM при расширении карты: test_grass_field/test_water3).
+	var checksum := 0
+	for h: float in art.heights:
+		checksum = hash([checksum, h])
+	print("art.points=%d heights=%d zones=%d chunks=%d colliders=%d groups=%d heights.checksum=%d"
 		% [points, art.heights.size(), zone_names.size(), art.chunks.size(),
-			art.colliders.size(), art.prop_groups.size()])
+			art.colliders.size(), art.prop_groups.size(), checksum])
 	print("ART-CHECK " + ("PASS" if ok else "FAIL"))
 	quit(0 if ok else 1)

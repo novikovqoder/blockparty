@@ -17,7 +17,9 @@ const WATER_BU_CODE: String = WaterArea.WATER_BU.code
 const WATER_CHEAP_CODE: String = WaterArea.WATER_BU_CHEAP.code
 ## Контрольная сумма heights печёного арта: П15 землю не трогает,
 ## карта высот (коллизия) обязана совпасть побитово.
-const HEIGHTS_CHECKSUM: int = 2041845998
+## Расширение карты (сборка 1, каркас 512): карта 257² → 513², чексумма
+## обновлена осознанно (та же история, что test_grass_field:19).
+const HEIGHTS_CHECKSUM: int = 1840650773
 
 
 # --- П15 1-2: нормали во fragment, фильтрация с расстоянием ---
@@ -251,9 +253,12 @@ func test_shore_sdf_signs_and_accuracy() -> void:
 			rng.randf_range(0.5, 3.0), 0.0).rotated(rng.randf() * TAU)
 		for mult: float in [1.0, -1.0]:
 			var probe := point + offset * mult
+			# Кламп к краю карты (расширение карты: ±255 вместо ±120
+			# карты 256 — проба у берега крыла не слипается с краем).
+			var edge: float = float(IslandGen.HALF) - 1.0
 			probe = Vector2(
-				clampf(probe.x, -120.0, 120.0),
-				clampf(probe.y, -120.0, 120.0))
+				clampf(probe.x, -edge, edge),
+				clampf(probe.y, -edge, edge))
 			var truth: float = ShoreBand.true_distance(
 				heights, level, contour, probe.x, probe.y)
 			if absf(truth) > 4.0:
@@ -580,8 +585,12 @@ func test_band_mesh_within_5cm_of_collision() -> void:
 		else:
 			# Крутые: труба шире с релаксом (граница соблюдается),
 			# при полном релаксе — не ниже чанков обеих проекций.
+			# Расширение карты, сборка 1: на крыльевых обрывах перепад
+			# клетки до ~20 м — при релаксе труба к коллизии расширяется
+			# до перепада клетки (RELAX_CLAMP — минимум), как в _band_vertex.
 			var half_pipe: float = lerpf(ShoreBand.COLLISION_CLAMP,
-				ShoreBand.RELAX_CLAMP, relax)
+				maxf(ShoreBand.RELAX_CLAMP, ShoreBand.cell_drop(heights,
+					floori(v.x), floori(v.z))), relax)
 			worst_pipe = maxf(worst_pipe, diff - half_pipe)
 			if relax >= 0.999:
 				full_relaxed += 1

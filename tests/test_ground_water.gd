@@ -171,7 +171,8 @@ func test_details_deterministic_and_sane() -> void:
 		for xf_variant: Variant in list:
 			var pos: Vector3 = (xf_variant as Transform3D).origin
 			assert_gt(pos.y, 0.0, "вид %s: над водой (y=%.2f)" % [type, pos.y])
-			assert_true(absf(pos.x) <= 128.0 and absf(pos.z) <= 128.0,
+			assert_true(absf(pos.x) <= float(IslandGen.HALF)
+				and absf(pos.z) <= float(IslandGen.HALF),
 				"вид %s: в пределах острова" % type)
 			var plaza: float = ForestGround._plaza_weight(pos.x, pos.z)
 			assert_lt(plaza, 0.5, "вид %s: не на Площади (%.1f, %.1f)"
@@ -180,8 +181,12 @@ func test_details_deterministic_and_sane() -> void:
 		var size: Vector3 = collider["size"]
 		assert_true(size.x > 0.5 and size.y > 0.2,
 			"бокс коллизии крупного адекватен: %s" % str(size))
-	assert_between(total, 300, 4000,
-		"экземпляров наполнения разумно (300–4000): %d" % total)
+	# Расширение карты (сборка 1, каркас 512): суша выросла вчетверо
+	# (крылья + перешейки) — общее число экземпляров выросло с ~4.5 тыс.
+	# до ~18 тыс. при прежней плотности; граница «разумно» поднята
+	# осознанно, порядок величины контролируется.
+	assert_between(total, 300, 20000,
+		"экземпляров наполнения разумно (300–20000): %d" % total)
 	print("П12 E: наполнение — %d экземпляров, коллизий %d"
 		% [total, colliders.size()])
 

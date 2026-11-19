@@ -214,8 +214,10 @@ func test_ring_uses_height_texture_and_fade() -> void:
 		1.0, 3.0, "полоса гашения смещения у кромки")
 	assert_between(_extract_const(GROUND_SHADER.code, "RING_LIFT_C"),
 		0.002, 0.01, "подъём кольца — миллиметры против z-fighting")
-	# Хеш высот не меняется: кольцо — рантайм-оверлей, генератор не тронут.
-	assert_eq(IslandGen.island_hash(IslandGen.generate()), 941246210,
+	# Кольцо — рантайм-оверлей, генератор не тронут: generate() даёт
+	# канонический хеш (расширение карты, сборка 1, каркас 512 —
+	# карта 513², хеш обновлён сознательно).
+	assert_eq(IslandGen.island_hash(IslandGen.generate()), 4250703699,
 		"хеш острова не изменился")
 
 

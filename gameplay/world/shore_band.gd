@@ -55,6 +55,9 @@ const RELAX_TENSION: float = 0.3
 ## Полуширина трубы к коллизии при полном релаксе, м: шире худшего
 ## измеренного расхождения коллизии и чанков в полосе (4.12 м, западный
 ## обрыв) — труба неактивна, полоса следует огибающей чанков.
+## Расширение карты (сборка 1, каркас 512): обрывы крыльев без эрозии
+## дают перепады клетки до ~20 м — труба при полном релаксе расширяется
+## до перепада клетки (в _band_vertex), константа осталась минимумом.
 const RELAX_CLAMP: float = 6.0
 ## Мягкость сглаженного max и положительной части (C¹, без изломов),
 ## м: добавка к высоте не больше половины этой величины.
@@ -306,9 +309,12 @@ static func collision_height(
 
 
 ## Перепад высот клетки квада 1×1 м (max − min по 4 углам) — её крутизна.
+## Аргументы клампятся к карте: звётся и по мировым координатам полосы.
 static func cell_drop(
 	heights: PackedFloat32Array, fx: int, fz: int,
 ) -> float:
+	fx = clampi(fx, -IslandGen.HALF, IslandGen.HALF - 1)
+	fz = clampi(fz, -IslandGen.HALF, IslandGen.HALF - 1)
 	var h00: float = heights[_node(fx, fz)]
 	var h10: float = heights[_node(fx + 1, fz)]
 	var h01: float = heights[_node(fx, fz + 1)]
@@ -662,7 +668,15 @@ static func _band_vertex(
 	var base: float = lerpf(tri, env, relax) + BAND_LIFT
 	var h: float = base + soft_pos(cubic - base) * blend
 	var col: float = collision_height(heights, wx, wz)
-	var half_pipe: float = lerpf(COLLISION_CLAMP, RELAX_CLAMP, relax)
+	# Расширение карты (сборка 1): на крыльевых обрывах без эрозии
+	# перепад клетки до ~20 м — при полном релаксе труба к коллизии
+	# расширяется до перепада клетки (все три поверхности клетки —
+	# диагональная, билинейная и коллизия — внутри её диапазона высот,
+	# так что полоса не подтапливается ниже огибающей); RELAX_CLAMP —
+	# минимум для бывших прежде перепадов.
+	var half_pipe: float = lerpf(COLLISION_CLAMP,
+		maxf(RELAX_CLAMP, cell_drop(heights, floori(wx), floori(wz))),
+		relax)
 	h = clampf(h, col - half_pipe, col + half_pipe)
 	verts.append(Vector3(wx, h, wz))
 	grid[key] = verts.size() - 1

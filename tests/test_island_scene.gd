@@ -29,7 +29,8 @@ func test_baked_art_matches_generator() -> void:
 	var data: Dictionary = _island_data()
 	var heights: PackedFloat32Array = view.art.heights
 	assert_eq(
-		heights.size(), IslandGen.POINTS * IslandGen.POINTS, "карта высот 257 × 257",
+		heights.size(), IslandGen.POINTS * IslandGen.POINTS,
+		"карта высот 513 × 513 (расширение карты, сборка 1)",
 	)
 	assert_eq(heights, data["heights"], "высоты совпадают с генератором")
 	assert_eq(
@@ -61,9 +62,12 @@ func test_scene_contents() -> void:
 			markers = (child as HangArea).point_positions().size()
 	assert_eq(water, 2, "море и озеро")
 	assert_gt(markers, 0, "в расщелине есть HangPoint")
-	assert_eq(island.zones.size(), 6, "шесть зон")
+	# Расширение карты (сборка 1): зон 10 — 6 старых координатно на месте
+	# + 4 крыла (cliffs/thicket/shore/meadows); счёт — из генератора.
+	assert_eq(island.zones.size(), IslandGen.ZONES.size(),
+		"все зоны генератора в сцене (%d)" % IslandGen.ZONES.size())
 	assert_eq(
-		island.spawn_zones.size(), 6,
+		island.spawn_zones.size(), IslandGen.ZONES.size(),
 		"точки появления всех зон (--dev-spawn)",
 	)
 

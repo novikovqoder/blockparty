@@ -188,10 +188,11 @@ func test_surface_kind_matches_ground_weights() -> void:
 	noise.seed = ForestGround.MOSS_SEED
 	noise.frequency = ForestGround.MOSS_FREQUENCY
 	var seen := {"stone": 0, "grass": 0, "mud": 0, "puddle": 0, "dirt": 0}
+	var half_map: float = float(ForestGround.MAP_M) * 0.5
 	for z: int in range(0, ForestGround.MAP_M, 3):
 		for x: int in range(0, ForestGround.MAP_M, 3):
-			var wx := float(x) - 128.0
-			var wz := float(z) - 128.0
+			var wx := float(x) - half_map
+			var wz := float(z) - half_map
 			var w_rock: float = smoothstep(
 				ForestGround.ROCK_SLOPE_SOFT, ForestGround.ROCK_SLOPE_FULL,
 				ForestGround._slope(ART, x, z))
@@ -283,9 +284,10 @@ func _fx_at(pos: Vector3) -> FootFx:
 
 ## Точка первого встреченного покрытия (карта острова, шаг 3 м).
 func _find_kind(kind: int) -> Vector3:
+	var half_map: float = float(ForestGround.MAP_M) * 0.5
 	for z: int in range(0, ForestGround.MAP_M, 3):
 		for x: int in range(0, ForestGround.MAP_M, 3):
-			var pos := Vector3(float(x) - 128.0, 0.0, float(z) - 128.0)
+			var pos := Vector3(float(x) - half_map, 0.0, float(z) - half_map)
 			if ForestGround.surface_kind(ART, pos) == kind:
 				return pos
 	fail_test("покрытие %d не найдено на острове" % kind)

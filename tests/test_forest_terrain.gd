@@ -11,8 +11,11 @@ const ISLAND: PackedScene = preload("res://gameplay/world/island.tscn")
 
 
 ## Пиксель карты по мировым координатам (карта — весь остров, пиксель = 1 м).
+## Расширение карты (сборка 1): смещение — MAP_M/2 (было 128 при карте 256).
 static func _pixel(image: Image, wx: float, wz: float) -> Color:
-	return image.get_pixel(int(wx) + 128, int(wz) + 128)
+	return image.get_pixel(
+		int(wx) + ForestGround.MAP_M / 2,
+		int(wz) + ForestGround.MAP_M / 2)
 
 
 func test_weights_paint() -> void:
@@ -28,19 +31,24 @@ func test_weights_paint() -> void:
 		"тропа от Площади вглубь Леса")
 	# Самая низкая точка сектора — гарантированно сырая (вдали от краёв,
 	# чтобы вес не гасилось смягчением). Индекс карты: пиксель (x, z)
-	# сектора — это строка z, столбец x карты острова (мир = пиксель − 128).
+	# сектора — это строка z, столбец x карты острова (мир = пиксель − MAP_M/2).
+	# Квадрант Леса (x < 0 ∧ z < 0) после расширения карты включает и крыло
+	# Чащи с перешейком — поиск по всему квадранту, как раньше по сектору.
 	var lowest := Vector2i(-70, -60)
 	for z: int in ForestGround.MAP_M:
 		for x: int in ForestGround.MAP_M:
 			if x < 16 and z < 16:
 				continue  # полоса края: оверлеи там гасятся
-			if x >= 128 or z >= 128:
-				continue  # ищем по сектору Леса, как раньше
+			if x >= ForestGround.MAP_M / 2 or z >= ForestGround.MAP_M / 2:
+				continue  # ищем по квадранту Леса (x < 0 ∧ z < 0)
 			var h: float = ART.heights[z * IslandGen.POINTS + x]
 			var h_low: float = ART.heights[
-				(lowest.y + 128) * IslandGen.POINTS + lowest.x + 128]
+				(lowest.y + ForestGround.MAP_M / 2) * IslandGen.POINTS
+				+ lowest.x + ForestGround.MAP_M / 2]
 			if h < h_low:
-				lowest = Vector2i(x - 128, z - 128)
+				lowest = Vector2i(
+					x - ForestGround.MAP_M / 2,
+					z - ForestGround.MAP_M / 2)
 	assert_gt(
 		_pixel(weights, lowest.x, lowest.y)[ForestGround.CH_WET], 0.9,
 		"самая низкая точка сектора — влажная земля")
@@ -153,17 +161,22 @@ func test_relief_normals_bend_on_gully_walls() -> void:
 	var min_up := 1.0
 	for z: int in range(-52, -39):
 		for x: int in range(-54, -42):
-			min_up = minf(min_up, normals.get_pixel(x + 128, z + 128).g * 2.0 - 1.0)
+			min_up = minf(min_up, normals.get_pixel(
+				x + ForestGround.MAP_M / 2,
+				z + ForestGround.MAP_M / 2).g * 2.0 - 1.0)
 	assert_lt(min_up, 0.8, "на склонах оврага нормали наклонены")
 	var flat_min := 1.0
 	for z: int in range(-110, -100):
 		for x: int in range(-90, -80):
-			flat_min = minf(flat_min, normals.get_pixel(x + 128, z + 128).g * 2.0 - 1.0)
+			flat_min = minf(flat_min, normals.get_pixel(
+				x + ForestGround.MAP_M / 2,
+				z + ForestGround.MAP_M / 2).g * 2.0 - 1.0)
 	assert_gt(flat_min, 0.75, "лесные склоны вдали от оврага — мягкие")
 
 
 func test_island_uses_forest_material() -> void:
-	# В сцене: все 64 чанка острова с материалом ForestGround (доработка
+	# В сцене: все чанки острова (16 × 16 после расширения карты) с
+	# материалом ForestGround (доработка
 	# П5.13 — текстурная земля в стиле Леса на весь остров, Terrain3D
 	# больше не используется); коллизия по-прежнему одна на весь остров.
 	var island := ISLAND.instantiate() as Island
@@ -190,7 +203,8 @@ func test_island_uses_forest_material() -> void:
 				others += 1
 	assert_eq(
 		forest, TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE,
-		"все 64 чанка острова с материалом ForestGround")
+		"все чанки острова (%d) с материалом ForestGround"
+			% (TerrainBuilder.CHUNKS_PER_SIDE * TerrainBuilder.CHUNKS_PER_SIDE))
 	assert_eq(band, 1, "береговая полоса П15 — одна на весь остров")
 	assert_eq(others, 0, "чанков с другим материалом нет")
 	var shapes := 0
@@ -201,15 +215,17 @@ func test_island_uses_forest_material() -> void:
 
 
 func test_maps_cover_whole_island() -> void:
-	# Доработка П5.13: карты покраски — весь остров 256 × 256 (пиксель = 1 м),
-	# не только сектор Леса.
+	# Доработка П5.13: карты покраски — весь остров (пиксель = 1 м), не только
+	# сектор Леса. Расширение карты (сборка 1): MAP_M 256 → 512.
 	for image: Image in [
 		ForestGround._weights_image(ART),
 		ForestGround._border_image(ART),
 		ForestGround._relief_image(ART),
 	]:
-		assert_eq(image.get_width(), ForestGround.MAP_M, "карта шириной 256")
-		assert_eq(image.get_height(), ForestGround.MAP_M, "карта высотой 256")
+		assert_eq(image.get_width(), ForestGround.MAP_M,
+			"карта шириной MAP_M (%d)" % ForestGround.MAP_M)
+		assert_eq(image.get_height(), ForestGround.MAP_M,
+			"карта высотой MAP_M (%d)" % ForestGround.MAP_M)
 
 
 func test_outside_tone_paints_zones() -> void:
@@ -225,10 +241,12 @@ func test_outside_tone_paints_zones() -> void:
 	for z: int in ForestGround.MAP_M:
 		if found_beach:
 			break
-		for x: int in range(128, ForestGround.MAP_M):
+		for x: int in range(ForestGround.MAP_M / 2, ForestGround.MAP_M):
 			var h: float = ART.heights[z * IslandGen.POINTS + x]
 			if h > IslandGen.SEA_LEVEL and h < TerrainBuilder.SAND_H:
-				beach = Vector2i(x - 128, z - 128)
+				beach = Vector2i(
+					x - ForestGround.MAP_M / 2,
+					z - ForestGround.MAP_M / 2)
 				found_beach = true
 				break
 	assert_true(found_beach, "надводный пляж вне Леса найден")
@@ -239,7 +257,8 @@ func test_outside_tone_paints_zones() -> void:
 	# луг↔скала, не крайние значения.
 	var meadow := Vector2i(40, -40)
 	for z: int in range(-60, -20):
-		var h: float = ART.heights[(z + 128) * IslandGen.POINTS + 40 + 128]
+		var h: float = ART.heights[
+			(z + IslandGen.HALF) * IslandGen.POINTS + 40 + IslandGen.HALF]
 		var hint: Dictionary = IslandGen.tint_hints().get(
 			Vector2i(40, z), {})
 		if h > TerrainBuilder.SAND_H + 0.5 and h < 8.0 and hint.is_empty():

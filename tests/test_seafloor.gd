@@ -11,7 +11,9 @@ const WATER_BU_CODE: String = WaterArea.WATER_BU.code
 
 const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 ## Границы колец юбки (полустороны, м) и край — из SeafloorSkirt.RINGS.
-const RING_EDGES: Array[float] = [128.0, 136.0, 152.0, 176.0, 256.0, 384.0,
+## Расширение карты (сборка 1): юбка стартует от новой кромки 256,
+## край 640 м прежний.
+const RING_EDGES: Array[float] = [256.0, 264.0, 280.0, 312.0, 384.0, 512.0,
 	640.0]
 
 
@@ -104,9 +106,9 @@ func test_seam_matches_map_border() -> void:
 	# на первых двух метрах (первый квад юбки) наклон ≤0.02 м/м, у самого
 	# шва почти ноль: излома в стыке нет.
 	for pair: Array in [
-		[Vector2(130.0, 40.0), Vector2(128.0, 40.0)],
-		[Vector2(-60.0, -130.0), Vector2(-60.0, -128.0)],
-		[Vector2(128.5, -90.0), Vector2(128.0, -90.0)],
+		[Vector2(258.0, 40.0), Vector2(256.0, 40.0)],
+		[Vector2(-60.0, -258.0), Vector2(-60.0, -256.0)],
+		[Vector2(256.5, -90.0), Vector2(256.0, -90.0)],
 	]:
 		var a: Vector2 = pair[0]
 		var b: Vector2 = pair[1]
@@ -164,8 +166,12 @@ func test_slope_rebuild_and_clamps() -> void:
 	skirt.set_slope(-50.0, 0.0)
 	assert_true(skirt.mesh.get_aabb().position.y < IslandGen.SEA_FLOOR,
 		"при экстремумах юбка остаётся ниже дна карты")
+	# Точка «вдали» — за краем карты (расширение карты, сборка 1:
+	# HALF 128 → 256, прежние 200 м теперь суша крыла): за пределами
+	# shelf глубина — константа при любом склоне.
 	assert_almost_eq(
-		SeafloorSkirt.height_at(200.0, 0.0, skirt._shelf, skirt._far_depth),
+		SeafloorSkirt.height_at(
+			float(IslandGen.HALF) + 10.0, 0.0, skirt._shelf, skirt._far_depth),
 		-skirt._far_depth, 1e-4, "вдали — ровное дно при любом склоне")
 
 

@@ -148,7 +148,8 @@ const float AO_LIGHT_AFFECT_V = 0.5;
 // Roughness SIMPLE (без ORM-канала — по цене прежней земли).
 const float SIMPLE_ROUGH = 0.95;
 
-// Карты покраски острова (256 × 256, пиксель = 1 м, край — clamp).
+// Карты покраски острова (512 × 512 после расширения карты, пиксель =
+// 1 м, край — clamp).
 uniform sampler2D weight_map : filter_linear_mipmap_anisotropic;
 uniform sampler2D border_map : source_color, filter_linear_mipmap_anisotropic;
 // Карта честных нормалей рельефа (П5.9 переделка, П3): сглаженное поле из
@@ -424,9 +425,12 @@ float ring_cell_drop(float a, float b, float c, float d) {
 }
 
 float ring_ground_h(vec2 wxz, float edge_fade) {
-	vec2 p = clamp(wxz, vec2(-126.5), vec2(126.5));
+	// Полуширина карты — из размера height_tex (расширение карты:
+	// прежде были зашиты 126.5/127/126 под карту 257 узлов).
+	float hs = float(textureSize(height_tex, 0).x - 1) * 0.5;
+	vec2 p = clamp(wxz, vec2(-(hs - 1.5)), vec2(hs - 1.5));
 	vec2 base = floor(p);
-	vec2 b1 = clamp(base, vec2(-127.0), vec2(126.0));
+	vec2 b1 = clamp(base, vec2(-(hs - 1.0)), vec2(hs - 2.0));
 	float tx = clamp(p.x - b1.x, 0.0, 1.0);
 	float tz = clamp(p.y - b1.y, 0.0, 1.0);
 	// 16 узлов (b1−1 .. b1+2)²: бикубика и перепады клеток вокруг.

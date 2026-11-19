@@ -30,6 +30,13 @@ var _ground_material: ShaderMaterial = null
 var _chunk_steps: Array[float] = []
 ## Центр последней перестройки (быстрый выход, если игрок не сдвинулся).
 var _lod_center: Vector2 = Vector2(1e9, 1e9)
+## Осталась работа LOD, не влезшая в бюджет кадра (расширение карты,
+## сборка 1: slope_maps 513² ~0.9 с разово, ближний чанк ~44 мс — кольцо
+## вокруг зрителя не всегда собирается за один вызов). Следующий вызов
+## достроит остаток (скан ниже сам собирает ещё не переключённые чанки),
+## даже если зритель стоит: ранний выход по _lod_center недостроенное
+## кольцо больше не глушит.
+var _lod_pending: bool = false
 ## Карты производных рельефа для нормалей ближних чанков (строятся лениво
 ## при первой перестройке — боты и сервер без перестроек за них не платят).
 var _slope_maps: Dictionary = {}
@@ -257,7 +264,7 @@ func update_viewer(viewer_pos: Vector3) -> void:
 	# П18 Сборка 1 п.3: уровни деревьев по дистанции до ближайшего
 	# дерева группы (быстрый выход внутри — при сдвиге зрителя > 1 м).
 	_update_tree_lods(center)
-	if center.distance_to(_lod_center) < 2.0:
+	if center.distance_to(_lod_center) < 2.0 and not _lod_pending:
 		return
 	_lod_center = center
 	var rebuilds: Array[Dictionary] = []
@@ -270,17 +277,25 @@ func update_viewer(viewer_pos: Vector3) -> void:
 			continue
 		rebuilds.append({"index": i, "dist": dist, "near": near})
 	if rebuilds.is_empty():
+		_lod_pending = false
 		return
 	rebuilds.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["dist"]) < float(b["dist"]))
 	# Бюджет кадра: при обычной ходьбе меняется один-два чанка; при первом
 	# вызове или телепорте (много перестроек сразу) — полная перестройка
 	# за один вызов, чтобы вокруг зрителя не оставалось грубых «дыр».
+	# Не влезшее достраивается следующими кадрами (карта 513²: slope_maps
+	# ~0.9 с разово, ближний чанк ~44 мс) — скан выше заново собирает
+	# ещё не переключённые чанки.
 	var budget_ms: int = Time.get_ticks_msec() + (600 if rebuilds.size() > 6 else 40)
-	for rebuild: Dictionary in rebuilds:
+	var overran := false
+	for ridx: int in rebuilds.size():
+		var rebuild: Dictionary = rebuilds[ridx]
 		_rebuild_chunk(int(rebuild["index"]), bool(rebuild["near"]))
-		if Time.get_ticks_msec() > budget_ms and rebuild != rebuilds.back():
+		if Time.get_ticks_msec() > budget_ms and ridx < rebuilds.size() - 1:
+			overran = true
 			break
+	_lod_pending = overran
 
 
 func _rebuild_chunk(index: int, near: bool) -> void:

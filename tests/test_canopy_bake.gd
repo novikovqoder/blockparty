@@ -11,7 +11,9 @@ extends GutTest
 
 ## Хеш данных генератора (test_island_gen/test_ground_water2): перепечка
 ## island_art.res обязана его сохранять — меняются только меши и тоны.
-const ISLAND_HASH: int = 941246210
+## Расширение карты (сборка 1, каркас 512): обновлён сознательно —
+## карта 257² → 513², суша выросла вчетверо (крылья + перешейки).
+const ISLAND_HASH: int = 4250703699
 const ART_PATH: String = "res://gameplay/world/island_art.res"
 
 ## Кэш данных генератора между тестами файла (generate() дорогой, ~10 с).

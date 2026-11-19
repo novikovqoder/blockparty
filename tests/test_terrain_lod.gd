@@ -67,10 +67,12 @@ func _max_edge(mesh: ArrayMesh) -> float:
 
 
 func test_near_chunk_triangle_size() -> void:
-	# Площадь (0, 4) — чанк 4 × 5 (x ∈ [0, 32], z ∈ [32, 64]); холм (−58, 42)
-	# — чанк 2 × 5; Лес (−52, −52) — чанк 2 × 2. Все ближние чанки — квад
+	# Площадь (0, 4) — чанк 8 × 9 (x ∈ [0, 32], z ∈ [32, 64]); холм (−58, 42)
+	# — чанк 6 × 9; Лес (−52, −52) — чанк 6 × 6. Все ближние чанки — квад
 	# 0.5 м, максимальное ребро (гипотенуза) ≤ NEAR_EDGE_MAX.
-	for cell: Vector2i in [Vector2i(4, 5), Vector2i(2, 5), Vector2i(2, 2)]:
+	# (Расширение карты, сборка 1: чанки нумеруются от угла −HALF, при
+	# карте 512 это те же точки мира, что чанки 4×5/2×5/2×2 на карте 256.)
+	for cell: Vector2i in [Vector2i(8, 9), Vector2i(6, 9), Vector2i(6, 6)]:
 		var mesh := _near_mesh(cell.x, cell.y)
 		assert_almost_eq(_max_edge(mesh), 0.7071, 0.02,
 			"чанк (%d, %d): диагональ квада 0.5 м" % [cell.x, cell.y])
@@ -91,7 +93,7 @@ func test_far_chunks_stay_coarse() -> void:
 func test_near_chunk_follows_heightmap() -> void:
 	# Каждая вершина ближнего чанка — на билинейной поверхности карты
 	# высот: геометрия не «выдумана», это та же функция рельефа.
-	var arrays: Array = _near_mesh(4, 5).surface_get_arrays(0)
+	var arrays: Array = _near_mesh(8, 9).surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	assert_eq(verts.size(), NEAR_VERTICES, "сетка 65 × 65 вершин (шаг 0.5 м)")
 	for i: int in range(0, verts.size(), 97):  # выборка ~282 вершин
@@ -102,19 +104,20 @@ func test_near_chunk_follows_heightmap() -> void:
 
 
 func test_no_cracks_between_lod_levels() -> void:
-	# Стык уровней: ближний чанк (4, 5) примыкает западным ребром x = 0
-	# к печёному чанку (3, 5) (x ∈ [−32, 0], z ∈ [32, 64]). Вершины ближнего
+	# Стык уровней: ближний чанк (8, 9) примыкает западным ребром x = 0
+	# к печёному чанку (7, 9) (x ∈ [−32, 0], z ∈ [32, 64]). Вершины ближнего
 	# на ребре делят рёбра печёных квадратов ровно пополам, а высота
 	# середины ребра печёного квада — среднее высот его концов (ребро
 	# линейно) — обязана совпадать с билинейной высотой карты в этой
-	# точке: иначе на стыке щель.
-	var near := _near_mesh(4, 5)
+	# точке: иначе на стыке щель. (Расширение карты, сборка 1: индексы
+	# чанков от угла −HALF — на карте 512 это прежние точки мира.)
+	var near := _near_mesh(8, 9)
 	var near_arrays: Array = near.surface_get_arrays(0)
 	var near_verts: PackedVector3Array = near_arrays[Mesh.ARRAY_VERTEX]
-	var baked: Array = (ART.chunks[5 * TerrainBuilder.CHUNKS_PER_SIDE + 3]
+	var baked: Array = (ART.chunks[9 * TerrainBuilder.CHUNKS_PER_SIDE + 7]
 		as ArrayMesh).surface_get_arrays(0)
 	var baked_verts: PackedVector3Array = baked[Mesh.ARRAY_VERTEX]
-	# Печёный чанк (3, 5): квадраты по строкам z ∈ [32, 64); столбец x = −1
+	# Печёный чанк (7, 9): квадраты по строкам z ∈ [32, 64); столбец x = −1
 	# (последний, 31-й) выходит на ребро x = 0 вершинами v2 (0, z+1) и
 	# v3 (0, z). Середина ребра v2–v3 — среднее высот карты по узлам.
 	for z0: int in range(32, 64):
@@ -148,7 +151,7 @@ func test_normals_smooth_and_from_heightmap() -> void:
 	# поэтому на границе двух ближних чанков нормали совпадают (нет шва
 	# освещения). Гладкость: на пологом участке соседние точки отличаются
 	# слабо — фасетной огранки нет.
-	var arrays: Array = _near_mesh(4, 5).surface_get_arrays(0)
+	var arrays: Array = _near_mesh(8, 9).surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var maps := _maps()
@@ -159,10 +162,10 @@ func test_normals_smooth_and_from_heightmap() -> void:
 			maps, verts[i].x, verts[i].z)
 		assert_almost_eq(normals[i].dot(expected), 1.0, 0.001,
 			"нормаль %d — карта производных высот" % i)
-	# Граница ближних чанков (4, 5) и (5, 5) — ребро x = 32: вершины обоих
+	# Граница ближних чанков (8, 9) и (9, 9) — ребро x = 32: вершины обоих
 	# чанков на одном ребре обязаны иметь равные нормали (общее поле
 	# производных, без огранки по чанкам).
-	var east_arrays: Array = _near_mesh(5, 5).surface_get_arrays(0)
+	var east_arrays: Array = _near_mesh(9, 9).surface_get_arrays(0)
 	var east_verts: PackedVector3Array = east_arrays[Mesh.ARRAY_VERTEX]
 	var east_normals: PackedVector3Array = east_arrays[Mesh.ARRAY_NORMAL]
 	var east_by_z: Dictionary = {}
@@ -207,7 +210,11 @@ func test_viewer_lod_switch() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	var view := island.get_node("IslandView") as IslandView
-	island.update_viewer(Vector3(0.0, 2.0, 4.0))
+	# Кольцо ближних чанков собирается порциями бюджета кадра (карта 513²:
+	# slope_maps ~0.9 с разово, чанк ~44 мс) — следующие вызовы достраивают
+	# остаток стоячего зрителя (_lod_pending), как кадры игры.
+	for i: int in 10:
+		island.update_viewer(Vector3(0.0, 2.0, 4.0))
 	var terrain := view.get_node("Terrain")
 	var near_chunks := 0
 	var far_chunks := 0
@@ -240,12 +247,16 @@ func test_viewer_lod_switch() -> void:
 				.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == NEAR_VERTICES:
 			still_near += 1
 	assert_gt(still_near, 0, "гистерезис держит ближний уровень у границы")
-	# Зритель ушёл в угол (120, 120): чанки вокруг спавна обязаны вернуться
-	# к печёным (проверяем чанк площади — центр (16, 16), индекс cz·8+cx),
-	# а вокруг новой позиции появляются ближние.
-	island.update_viewer(Vector3(120.0, 2.0, 120.0))
-	# Индекс чанка (4, 4) — 4·8+4 = 36; дети Terrain: CollisionShape3D + 64.
-	var spawn_index: int = 1 + 4 * TerrainBuilder.CHUNKS_PER_SIDE + 4
+	# Зритель ушёл в угол карты (240, 240 — угол крыла Берега на карте
+	# 512, на 170 м от спавна): чанки вокруг спавна обязаны вернуться
+	# к печёным (проверяем чанк площади — центр (16, 16), индекс
+	# cz·CHUNKS_PER_SIDE+cx), а вокруг новой позиции появляются ближние.
+	# Здесь тоже додаём кольцо порциями бюджета.
+	for i: int in 10:
+		island.update_viewer(Vector3(240.0, 2.0, 240.0))
+	# Индекс чанка (8, 8) — 8·16+8 = 136; дети Terrain:
+	# CollisionShape3D + 256.
+	var spawn_index: int = 1 + 8 * TerrainBuilder.CHUNKS_PER_SIDE + 8
 	var spawn_mesh: Mesh = (terrain.get_child(spawn_index) as MeshInstance3D).mesh
 	assert_eq(spawn_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size(),
 		FAR_VERTICES, "чанк площади после отъезда зрителя снова печёный")
@@ -328,8 +339,8 @@ func test_smooth_pass_calms_ripple_keeps_forms() -> void:
 
 func test_near_chunk_deterministic() -> void:
 	# Детерминизм: два построения ближнего чанка дают равные вершины.
-	var first: PackedVector3Array = _near_mesh(4, 5).surface_get_arrays(0)[
+	var first: PackedVector3Array = _near_mesh(8, 9).surface_get_arrays(0)[
 		Mesh.ARRAY_VERTEX]
-	var second: PackedVector3Array = _near_mesh(4, 5).surface_get_arrays(0)[
+	var second: PackedVector3Array = _near_mesh(8, 9).surface_get_arrays(0)[
 		Mesh.ARRAY_VERTEX]
 	assert_eq(first, second, "повторная сборка ближнего чанка равна")
