@@ -21,7 +21,12 @@ const DEV_PORT: int = 7777
 ## процессор на 100% и нагрузочный прогон 12 экземпляров душит сам себя.
 const HEADLESS_BOT_MAX_FPS: int = 60
 ## Зоны появления для --dev-spawn (раздел 4 SPEC; Площадь — по умолчанию).
-const SPAWN_ZONES: PackedStringArray = ["plaza", "forest", "ruins", "hills", "crevasse", "lake"]
+## Крылья новых земель (cliffs, thicket, shore, meadows) — расширение
+## карты, сборка 1.
+const SPAWN_ZONES: PackedStringArray = [
+	"plaza", "forest", "ruins", "hills", "crevasse", "lake",
+	"cliffs", "thicket", "shore", "meadows",
+]
 
 var host_mode: bool = false      # --dev-host: запуститься хостом через ENet
 var join_address: String = ""    # --dev-join=IP: подключиться клиентом

@@ -16,8 +16,10 @@ const PAL: Palette = preload("res://assets/palette.tres")
 
 ## Seed генерации (фиксирован; смена меняет весь остров и хеш в тесте).
 const SEED_VALUE: int = 20261002
-## Половина размера карты в точках (x, z ∈ [−128, 128], 257 × 257).
-const HALF: int = 128
+## Половина размера карты в точках (x, z ∈ [−256, 256], 513 × 513).
+## Расширение карты (сборка 1): 256 → 512 м; старый круг r 112 остаётся
+## координатно на месте, вокруг него — четыре крыла новых земель.
+const HALF: int = 256
 const POINTS: int = HALF * 2 + 1
 ## Уровень воды (море и озеро), м.
 const SEA_LEVEL: float = -0.15
@@ -26,8 +28,59 @@ const SEA_FLOOR: float = -6.0
 ## Порог «море» в данных высот: ниже — вода, выравнивание склонов не трогает.
 const SEA_H: float = 0.3
 ## Радиусы маски острова: внутри — суша, дальше плавный спад в море.
+## Это маска СТАРОГО круга — центр прежнего острова; крылья (ниже)
+## добавляют сушу за его пределами.
 const ISLAND_R_IN: float = 58.0
 const ISLAND_R_OUT: float = 112.0
+
+# --- Крылья новых земель (расширение карты, сборка 1: каркас 512) ---
+# Композитная маска суши: старый круг ISLAND_R_IN/OUT + четыре крыла
+# (круги с рваной шумом кромкой) + перешейки-капсулы, сращивающие крылья
+# со старым островом. Крылья в этой сборке ГОЛЫЕ: растительности и
+# наполнения на них нет (пропуски в раскладках ниже), биомы — сборки 2–5.
+# Рельеф крыла задаётся правилом в _apply_zones по имени: утёсы — плато
+# с моренным уступом к открытому морю, чаща — волнистая равнина леса,
+# берег — пологое побережье, луга — открытые холмы.
+
+## Шум рваной кромки крыльев и перешейков (радиус «дышит» ±WING_EDGE_AMP).
+const WING_EDGE_SEED: int = 20261119
+const WING_EDGE_AMP: float = 2.2
+## Полоса спада кромки в море, м (от полного веса до нуля).
+const WING_EDGE_BAND: float = 4.0
+## Пол суши крыла/перешейка в land_t: выше порога моря 0.17 — внутри
+## крыла суше гарантирована (без «случайных прудов» от шума e), кромка
+## держит высоту берега до самого среза в море.
+const WING_LAND_FLOOR: float = 0.30
+
+## Крылья: имя (как в ZONES), центр, радиус суши, м. Направление на
+## старый остров считается от центра к (0, 0) — с той стороны крыло
+## раскрывается навстречу перешейку (без морского уступа).
+const WINGS: Array[Dictionary] = [
+	{"name": "cliffs", "center": Vector2(-170, 30), "land_r": 70.0},
+	{"name": "thicket", "center": Vector2(-130, -130), "land_r": 75.0},
+	{"name": "shore", "center": Vector2(170, -20), "land_r": 65.0},
+	{"name": "meadows", "center": Vector2(-10, -160), "land_r": 75.0},
+]
+
+## Перешейки-капсулы: отрезок a→b (a — в теле старого острова, b — в
+## крыле), полуширина. Суша капсулы — тот же пол WING_LAND_FLOOR:
+## перешеек непрерывен (мост через рваное побережье старого круга).
+const ISTHMUSES: Array[Dictionary] = [
+	# Холмы → Утёсы (запад).
+	{"a": Vector2(-80, 36), "b": Vector2(-120, 35), "half_w": 14.0},
+	# Лес → Чаща (юго-запад).
+	{"a": Vector2(-66, -62), "b": Vector2(-108, -108), "half_w": 15.0},
+	# Руины → Берег (восток).
+	{"a": Vector2(76, -26), "b": Vector2(140, -26), "half_w": 13.0},
+	# Каньон → Берег (восток, вторая связка).
+	{"a": Vector2(82, 30), "b": Vector2(135, 10), "half_w": 12.0},
+	# Север Леса/Руин → Луга.
+	{"a": Vector2(-12, -78), "b": Vector2(-11, -128), "half_w": 15.0},
+]
+
+## Высота перешейка, м: пол высоты (не ниже — вокруг море), существующий
+## рельеф не режется, насыпь ложится поверх побережья.
+const ISTMUS_H: float = 4.0
 ## Предел шага рельефа при выравнивании (м перепада на 1 м клетки): 0.9 < 45°
 ## — склон, по которому идёт персонаж; круче — стена.
 const MAX_STEP: float = 0.9
@@ -99,7 +152,8 @@ const LAKE_BASIN_R: float = 16.0
 const LAKE_BEACH_R: float = 21.0
 
 ## Зоны (раздел 6): имя для --dev-spawn и F3, круг для названия места.
-## Порядок — как в палитрах зон (Palette.zone_*).
+## Порядок — как в палитрах зон (Palette.zone_*); новые крылья — в конец,
+## индексы старых зон не сдвигаются (расширение карты, сборка 1).
 const ZONES: Array[Dictionary] = [
 	{"name": "plaza", "center": Vector2(0, 4), "radius": 20.0},
 	{"name": "forest", "center": Vector2(-52, -52), "radius": 44.0},
@@ -107,6 +161,10 @@ const ZONES: Array[Dictionary] = [
 	{"name": "hills", "center": Vector2(-58, 42), "radius": 42.0},
 	{"name": "crevasse", "center": Vector2(62, 57), "radius": 42.0},
 	{"name": "lake", "center": Vector2(6, 82), "radius": 26.0},
+	{"name": "cliffs", "center": Vector2(-170, 30), "radius": 70.0},
+	{"name": "thicket", "center": Vector2(-130, -130), "radius": 75.0},
+	{"name": "shore", "center": Vector2(170, -20), "radius": 65.0},
+	{"name": "meadows", "center": Vector2(-10, -160), "radius": 75.0},
 ]
 
 ## Смотровые площадки (раздел 9.3): площадка 3 × 3 точки на 3.0 м выше
@@ -456,8 +514,78 @@ static func _noise(seed_value: int, frequency: float, octaves: int) -> FastNoise
 	return noise
 
 
-## Шум + круговая маска → базовая высота (до зон). land_t < 0.17 — море с
-## плавным углублением к краю карты, у кромки суши — песчаный пляж.
+## Шум рваной кромки (общий для крыльев и перешейков): одно поле на
+## клетку, детерминировано фиксированным seed.
+static var _wing_edge_noise: FastNoiseLite
+
+
+static func _edge_noise(x: int, z: int) -> float:
+	if _wing_edge_noise == null:
+		_wing_edge_noise = FastNoiseLite.new()
+		_wing_edge_noise.seed = WING_EDGE_SEED
+		_wing_edge_noise.frequency = 0.045
+	return _wing_edge_noise.get_noise_2d(x, z)
+
+
+## Вес крыла в точке: 1 в ядре, спад в море за полосу WING_EDGE_BAND от
+## рваной шумом кромки. Возвращает и дистанцию до центра (d) — правила
+## рельефа крыльев в _apply_zones меряют её от той же кромки.
+static func _wing_weight(wing: Dictionary, x: int, z: int) -> float:
+	var center: Vector2 = wing["center"]
+	var d: float = Vector2(x, z).distance_to(center) \
+		- _edge_noise(x, z) * WING_EDGE_AMP
+	return 1.0 - smoothstep(
+		float(wing["land_r"]) - WING_EDGE_BAND * 0.5,
+		float(wing["land_r"]) + WING_EDGE_BAND * 0.5, d)
+
+
+## Вес перешейка-капсулы в точке (расстояние до отрезка, спад у борта).
+static func _isthmus_weight(isthmus: Dictionary, x: int, z: int) -> float:
+	var closest := Geometry2D.get_closest_point_to_segment(
+		Vector2(x, z), isthmus["a"], isthmus["b"])
+	var d: float = closest.distance_to(Vector2(x, z)) \
+		- _edge_noise(x + 977, z - 641) * WING_EDGE_AMP
+	var half_w: float = isthmus["half_w"]
+	return 1.0 - smoothstep(half_w - 2.0, half_w + 2.0, d)
+
+
+## Суммарный вес новых земель (крылья + перешейки) в точке.
+static func _new_land_weight(x: int, z: int) -> float:
+	var weight: float = 0.0
+	for wing: Dictionary in WINGS:
+		weight = maxf(weight, _wing_weight(wing, x, z))
+	for isthmus: Dictionary in ISTHMUSES:
+		weight = maxf(weight, _isthmus_weight(isthmus, x, z))
+	return weight
+
+
+## Карта весов новых земель (POINTS², строится один раз — геометрия
+## константна): горячие проходы (_base_height, _apply_zones, раскладки)
+## читают её одним индексом, а не пересчитывают 9 шейпов на клетку.
+static var _new_land_cache: PackedFloat32Array
+
+
+static func new_land_weight(x: int, z: int) -> float:
+	if _new_land_cache.is_empty():
+		_new_land_cache.resize(POINTS * POINTS)
+		for cz: int in range(-HALF, HALF + 1):
+			for cx: int in range(-HALF, HALF + 1):
+				_new_land_cache[_idx(cx, cz)] = _new_land_weight(cx, cz)
+	return _new_land_cache[_idx(x, z)]
+
+
+## Клетка принадлежит новым землям (крыло или перешеек, вес > 0):
+## раскладки предметов старого острова на них не заходят — крылья в
+## сборке 1 голые (биомы — сборки 2–5).
+static func _in_new_land(x: int, z: int) -> bool:
+	return new_land_weight(x, z) > 0.0
+
+
+## Шум + композитная маска → базовая высота (до зон). Старый круг даёт
+## ту же формулу, что раньше; крылья и перешейки добавляют пол суши
+## WING_LAND_FLOOR (высоты внутри крыла — от шума e, как у старого
+## круга, форму зонам). land_t < 0.17 — море с плавным углублением
+## к краю карты, у кромки суши — песчаный пляж.
 static func _base_height(
 	x: int, z: int, shape: FastNoiseLite, detail: FastNoiseLite
 ) -> float:
@@ -465,6 +593,7 @@ static func _base_height(
 	var r := Vector2(x, z).length()
 	var mask: float = 1.0 - smoothstep(ISLAND_R_IN, ISLAND_R_OUT, r)
 	var land_t: float = (e * 0.5 + 0.5) * mask
+	land_t = maxf(land_t, WING_LAND_FLOOR * new_land_weight(x, z))
 	if land_t < 0.17:
 		# Море: от кромки (чуть ниже воды) до дна у края карты.
 		return lerpf(SEA_H, SEA_FLOOR, pow(1.0 - land_t / 0.17, 1.2))
@@ -473,9 +602,61 @@ static func _base_height(
 	return lerpf(LAND_MIN, LAND_MAX, pow(t, 1.25))
 
 
+## Рельеф крыла (расширение карты, сборка 1): правила по имени зоны крыла.
+## Утёсы — плато 10–14 м, к открытому морю (сторона от старого острова)
+## уступ до CLIFF_RIM_H; чаща — волнистая равнина 2–6 м (как Лес);
+## берег — пологое побережье 0.7–3 м; луга — открытые холмы 1.5–5.5 м.
+## Перешеек — только пол высоты ISTMUS_H: насыпь над побережьем, живой
+## рельеф не режется. is_land отсекает морские клетки кромки — берег
+## крыла обрывается в море сразу за кромкой (уступ, а не лестница).
+const CLIFF_PLATEAU_MIN: float = 10.0
+const CLIFF_PLATEAU_MAX: float = 14.0
+const CLIFF_RIM_H: float = 26.0
+
+
+static func _wing_relief(x: int, z: int, h: float, weight: float) -> float:
+	var best: Dictionary = {}
+	var best_w: float = 0.0
+	for wing: Dictionary in WINGS:
+		var w: float = _wing_weight(wing, x, z)
+		if w > best_w:
+			best_w = w
+			best = wing
+	var result: float = h
+	if not best.is_empty() and best_w > 0.0:
+		var center: Vector2 = best["center"]
+		var offset := Vector2(x, z) - center
+		var d: float = offset.length()
+		match String(best["name"]):
+			"thicket":
+				result = lerpf(h, clampf(h, 2.0, 6.0), best_w)
+			"meadows":
+				result = lerpf(h, clampf(h, 1.5, 5.5), best_w)
+			"shore":
+				result = lerpf(h, clampf(h, 0.7, 3.0), best_w)
+			"cliffs":
+				# Плато, к морю (от старого острова) — уступ CLIFF_RIM_H.
+				var plateau: float = clampf(h, CLIFF_PLATEAU_MIN, CLIFF_PLATEAU_MAX)
+				var to_old := -center.normalized()
+				var sea_face: float = 1.0 - smoothstep(
+					0.05, 0.45, offset.dot(to_old) / maxf(d, 0.001))
+				var edge: float = smoothstep(
+					float(best["land_r"]) * 0.55,
+					float(best["land_r"]) * 0.95, d)
+				result = lerpf(h, lerpf(plateau, CLIFF_RIM_H, edge * sea_face), best_w)
+	# Перешеек: пол высоты поверх (суша капсулы уже гарантирована маской).
+	var ist_w: float = 0.0
+	for isthmus: Dictionary in ISTHMUSES:
+		ist_w = maxf(ist_w, _isthmus_weight(isthmus, x, z))
+	if ist_w > 0.0:
+		result = maxf(result, ISTMUS_H * ist_w)
+	return result
+
+
 ## Зоны меняют высоты: площадь и руины — плоские террасы (там всегда суша),
 ## холмы усилены к центру (не выше LAND_MAX), лес пологий, озеро вырезано
-## с пляжем. Расщелина и смотровые прорезаются после выравнивания склонов —
+## с пляжем. Крылья новых земель — своими правилами (_wing_relief).
+## Расщелина и смотровые прорезаются после выравнивания склонов —
 ## их обрывы запланированы, весь остальной остров проходим пешком.
 static func _apply_zones(heights: PackedFloat32Array) -> void:
 	var pads: Array[Vector2] = village_pad_centers()
@@ -483,6 +664,10 @@ static func _apply_zones(heights: PackedFloat32Array) -> void:
 		for x: int in range(-HALF, HALF + 1):
 			var h: float = heights[_idx(x, z)]
 			var is_land: bool = h > SEA_H
+			if is_land:
+				var new_w: float = new_land_weight(x, z)
+				if new_w > 0.0:
+					h = _wing_relief(x, z, h, new_w)
 			# Холмы: усиление высоты к центру зоны (до +13 м).
 			var d_hills: float = Vector2(x + 58.0, z - 42.0).length()
 			if is_land and d_hills < 42.0:
@@ -726,6 +911,11 @@ static func _erode(heights: PackedFloat32Array) -> void:
 ## с пляжем (их высоты заданы _apply_zones и после эрозии не
 ## переустанавливаются).
 static func _erodible(x: int, z: int, h: float) -> bool:
+	# Крылья и перешейки (сборка 1): рельеф задан правилами _wing_relief,
+	# эрозия их не трогает — уступы утёсов и насыпи перешейков остаются
+	# целыми, биомы и собственная эрозия — сборки 2–5.
+	if _in_new_land(x, z):
+		return false
 	if x < 0 and z < 0:
 		return false
 	if h <= SEA_H + 0.1:
@@ -996,6 +1186,9 @@ static func _points_of_interest(
 	var stone_cells: Array[Vector2i] = [
 		Vector2i(0, 12), Vector2i(-52, -38), Vector2i(58, -32),
 		Vector2i(-46, 32), Vector2i(40, 46), Vector2i(4, 66),
+		# Крылья новых земель (сборка 1): по камню духа на крыло.
+		Vector2i(-166, 26), Vector2i(-126, -126), Vector2i(166, -24),
+		Vector2i(-6, -156),
 	]
 	for cell: Vector2i in stone_cells:
 		_ensure_land(heights, cell, 1.2)
@@ -1010,6 +1203,11 @@ static func _points_of_interest(
 		"hills": Vector2i(-45, 33),
 		"crevasse": Vector2i(41, 46),
 		"lake": Vector2i(4, 64),
+		# Крылья новых земель: спавн у камня духа своего крыла.
+		"cliffs": Vector2i(-168, 34),
+		"thicket": Vector2i(-130, -122),
+		"shore": Vector2i(170, -16),
+		"meadows": Vector2i(-10, -152),
 	}
 	for zone: String in spawn_cells:
 		var cell: Vector2i = spawn_cells[zone]
@@ -1055,6 +1253,10 @@ static func _trees_and_rocks(
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
 			var cell := Vector2i(x, z)
+			# Крылья и перешейки новых земель голые (сборка 1): раскладка
+			# старого острова на них не заходит — биомы в сборках 2–5.
+			if _in_new_land(x, z):
+				continue
 			if reserved.has(cell):
 				continue
 			var h: float = heights[_idx(x, z)]
@@ -1123,6 +1325,8 @@ static func _trees_and_rocks(
 	# низинам леса, где ForestGround красит влажную землю.
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
+			if _in_new_land(x, z):
+				continue
 			var cell := Vector2i(x, z)
 			var h: float = heights[_idx(x, z)]
 			var on_gully: bool = gully_across(x, z) <= GULLY_HALF_W \
@@ -1137,6 +1341,8 @@ static func _trees_and_rocks(
 	# Трава и цветы на лугах (MultiMesh, раздел 16: трава исчезает дальше 40 м).
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
+			if _in_new_land(x, z):
+				continue
 			var cell := Vector2i(x, z)
 			if reserved.has(cell) or trees.has(cell):
 				continue
@@ -1799,6 +2005,9 @@ static func _zone_fill(
 	for z: int in range(-HALF, HALF + 1):
 		for x: int in range(-HALF, HALF + 1):
 			var cell := Vector2i(x, z)
+			# Наполнение тоже не заходит на новые земли (сборка 1).
+			if _in_new_land(x, z):
+				continue
 			if reserved.has(cell):
 				continue
 			var h: float = heights[_idx(x, z)]

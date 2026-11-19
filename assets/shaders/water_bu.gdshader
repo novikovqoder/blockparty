@@ -603,8 +603,11 @@ void fragment() {
 	float underwater = thickness_signed > 0.0 ? 1.0 : 0.0;
 	float n_coarse = snoise(world_pos.xz * 1.667
 		- vec2(TIME * 0.05, TIME * 0.06));
+	// UV карты SDF: узлы по 1 м, uv = (world + HALF)/(2·HALF); размер —
+	// из самой текстуры (расширение карты: 257 → 513 узлов).
+	float sdf_span = float(textureSize(shore_sdf, 0).x - 1);
 	float sdf = texture(shore_sdf,
-		(world_pos.xz + vec2(128.0)) / 256.0).r;
+		(world_pos.xz + vec2(sdf_span * 0.5)) / sdf_span).r;
 	float runup = runup_amp * (0.5 - 0.5
 		* cos(TIME * TAU / RUNUP_PERIOD_SEC));
 	float shore_line = -sdf - (runup + n_coarse * 0.20);

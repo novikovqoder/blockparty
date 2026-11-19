@@ -155,6 +155,14 @@ uniform sampler2D border_map : source_color, filter_linear_mipmap_anisotropic;
 // карты высот, кодировка n·0.5+0.5 (данные, не цвет).
 uniform sampler2D relief_normal : filter_linear_mipmap_anisotropic;
 
+// UV карт покраски (weight/border/relief): пиксель = 1 м, карта покрывает
+// мир [−MAP_M/2 .. MAP_M/2). Размер берётся из самой текстуры — расширение
+// карты (512) не требует новых констант (прежде было (m + 128)/256).
+vec2 paint_uv(vec2 m) {
+	float span = float(textureSize(weight_map, 0).x);
+	return (m + vec2(span * 0.5)) / span;
+}
+
 varying vec3 world_pos;
 // Вес лужи (weight_map.g ≥ PUDDLE_START): нужен и в vertex (для early
 // гашения на SIMPLE), и в fragment (SPECULAR лужи).
@@ -168,6 +176,12 @@ varying float puddle_v;
 uniform bool detail_ring = false;
 uniform sampler2D height_tex : filter_linear_mipmap_anisotropic;
 uniform float ring_radius = 16.0;
+// UV карты высот: узлы по 1 м, uv = (world + HALF)/(2·HALF); размер — из
+// самой текстуры (расширение карты: 257 → 513 узлов).
+vec2 height_uv(vec2 m) {
+	float span = float(textureSize(height_tex, 0).x - 1);
+	return (m + vec2(span * 0.5)) / span;
+}
 // Прижим бикубики к коллизии, м (тот же лимит, что ShoreBand.TENSION_LIMIT).
 const float TENSION_LIMIT = 0.03;
 // П15-ДОП2, п. 4: релакс на крутых клетках берега — те же константы,
@@ -332,7 +346,7 @@ vec3 layer_perturb(
 // не выделена), высота слоя центрируется средним (orm_mean_*) — средняя
 // высота кольца ≈ 0, ступни не проваливаются.
 float ring_displacement(vec2 m) {
-	vec4 w = textureLod(weight_map, (m + vec2(128.0)) / 256.0, 0.0);
+	vec4 w = textureLod(weight_map, paint_uv(m), 0.0);
 	float w_base = clamp(1.0 - (w.r + w.g + w.b + w.a), 0.0, 1.0);
 	float d = w_base * (textureLod(litter_orm,
 		tile_break(m, tile_m_litter) / tile_m_litter, 0.0).b
@@ -395,7 +409,7 @@ vec2 pom_march(
 // утопания и без ступеней коллизии. Формулы и константы — те же, что
 // у ShoreBand (синхронизируется тестом).
 float ring_node_h(vec2 node) {
-	return textureLod(height_tex, (node + vec2(128.0)) / 256.0, 0.0).r;
+	return textureLod(height_tex, height_uv(node), 0.0).r;
 }
 
 float ring_catmull(float p0, float p1, float p2, float p3, float t) {
@@ -487,7 +501,7 @@ void vertex() {
 		VERTEX.y += target_y - MODEL_MATRIX[3][1];
 	}
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 256.0;
+	vec2 sector_uv = paint_uv(world_pos.xz);
 	// Вес лужи для спекуляра (П14 2.1): во fragment он считается так же
 	// (smoothstep от w.g ≥ PUDDLE_START), на SIMPLE луж нет.
 	float wet = textureLod(weight_map, sector_uv, 0.0).g;
@@ -497,7 +511,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 sector_uv = (world_pos.xz + vec2(128.0)) / 256.0;
+	vec2 sector_uv = paint_uv(world_pos.xz);
 	vec4 w = texture(weight_map, sector_uv);
 	vec4 border = texture(border_map, sector_uv);
 

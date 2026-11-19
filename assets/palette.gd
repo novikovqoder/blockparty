@@ -1,11 +1,12 @@
-# Палитры low-poly мира (раздел 16 SPEC): у каждой из шести зон своя гамма
+# Палитры low-poly мира (раздел 16 SPEC): у каждой из десяти зон своя гамма
 # из 5–7 цветов (ground — тон рельефа, stone — камень зоны, leaf — листва,
 # fog — оттенок тумана), цвета рельефа и предметов смешиваются по границам
 # зон (веса в terrain.gd). Базовые материалы рельефа (песок у воды, трава,
 # камень на склонах, снег на вершинах) — общие, зонный тон подмешивается.
 # Персонажи-«мармеладки»: цвет игрока — один из 6 ярких вариантов по хэшу id.
 # Экземпляр: assets/palette.tres; доступ — `const PAL: Palette = preload(...)`.
-# Порядок зон — IslandGen.ZONES: plaza, forest, ruins, hills, crevasse, lake.
+# Порядок зон — IslandGen.ZONES: plaza, forest, ruins, hills, crevasse, lake,
+# cliffs, thicket, shore, meadows (крылья — расширение карты, сборка 1).
 class_name Palette
 extends Resource
 
@@ -20,24 +21,30 @@ extends Resource
 
 @export_group("Палитры зон (раздел 16)")
 ## Тон травы/земли зоны — подмешивается к рельефу внутри круга зоны.
+## Порядок — IslandGen.ZONES; новые крылья (расширение карты, сборка 1)
+## дописаны в конец: cliffs, thicket, shore, meadows.
 @export var zone_ground: PackedColorArray = [
 	Color("cdbd72"), Color("5f9e58"), Color("9aa88b"), Color("a9d389"),
 	Color("8d8aa0"), Color("e7d5a2"),
+	Color("a79d8c"), Color("4f7f4a"), Color("d9c9a0"), Color("b9d97e"),
 ]
 ## Камень зоны: обрывы, стены расщелины, скальные уступы, валуны.
 @export var zone_stone: PackedColorArray = [
 	Color("c78f6b"), Color("7d8a70"), Color("9aa7b8"), Color("d9cbb0"),
 	Color("7b7994"), Color("a8cfc7"),
+	Color("8f99a6"), Color("6f7a68"), Color("b8ad98"), Color("a8a894"),
 ]
 ## Листва зоны: кроны деревьев и кустов.
 @export var zone_leaf: PackedColorArray = [
 	Color("aab45e"), Color("3f7d46"), Color("6f9d6a"), Color("7cc26b"),
 	Color("6e7f8d"), Color("77c48f"),
+	Color("4a6b52"), Color("356b3f"), Color("8fa06b"), Color("8cc86b"),
 ]
 ## Оттенок тумана в зоне (DayCycle мягко сводит к нему цвет тумана).
 @export var zone_fog: PackedColorArray = [
 	Color("e9dcbf"), Color("cfe3c2"), Color("ccd5de"), Color("e3e9d2"),
 	Color("cfc9dd"), Color("d3ecec"),
+	Color("c7d3de"), Color("bcd4b6"), Color("dce6d6"), Color("e2ecc9"),
 ]
 
 @export_group("Предметы (раздел 6)")
@@ -73,4 +80,8 @@ static func zone_index(zone_name: String) -> int:
 		"hills": return 3
 		"crevasse": return 4
 		"lake": return 5
+		"cliffs": return 6
+		"thicket": return 7
+		"shore": return 8
+		"meadows": return 9
 	return -1

@@ -3,12 +3,12 @@
 # и грунт (CC0-замены текстур демо, тон сведён к демо) смешиваются
 # симплекс-шумом, меш, коллизия и запечённый island_art.res не меняются
 # (хеш острова тот же; Terrain3D больше не используется). ForestGround
-# печёт из карты высот три карты 256 × 256 (1 пиксель = 1 м, весь остров):
+# печёт из карты высот три карты MAP_M × MAP_M (1 пиксель = 1 м, весь остров):
 # веса оверлеев (уклон → камень, низины → влажная земля, пятна мха —
 # фиксированный шум FastNoiseLite, тропа и полоса Площади — утоптанный
 # гравий), тон (RGB — цвет «материала» точки по TerrainBuilder.point_color:
 # пляж, снег, террасы, зональные луга; A — вес тона) и нормали рельефа.
-# В секторе Леса [−128..0)² формулы те же, что в принятом П5.9/П5.13 —
+# В секторе Леса (квадрант x < 0 ∧ z < 0) формулы те же, что в принятом П5.9/П5.13 —
 # вид Леса не меняется. Вне Леса вес тона — max(краевой вес границы Леса,
 # вес материала: пляж/снег/террасы 1, луг 0.35 → скала 0.9; терраса
 # Площади — исключение, PLAZA_TONE, фикс П12), поэтому
@@ -17,8 +17,9 @@
 class_name ForestGround
 extends RefCounted
 
-## Сторона карты покраски, м (= стороне всего острова).
-const MAP_M: int = 256
+## Сторона карты покраски, м (= стороне всего острова; расширение карты,
+## сборка 1: 256 → 512 — размер derives от IslandGen.HALF).
+const MAP_M: int = IslandGen.HALF * 2
 
 ## Камень на крутых склонах: тангенс уклона (dh на 1 м).
 const ROCK_SLOPE_SOFT: float = 0.45
@@ -43,7 +44,7 @@ const PLAZA_R_SOFT: float = 24.0
 ## Мягкий край (SPEC 2.5: «на границе Леса — мягкий переход без шва»):
 ## у границы сектора Леса (с обеих сторон — внутри и снаружи) вес края 1 —
 ## текстура полностью тонирована точным цветом point_color, вглубь гаснет
-## за EDGE_SOFT метров. Морские края (x/z = −128) не смягчаем — соседа нет.
+## за EDGE_SOFT метров. Морские края карты (x/z = −MAP_M/2) не смягчаем — соседа нет.
 const EDGE_FULL: float = 2.0
 const EDGE_SOFT: float = 12.0
 
@@ -260,9 +261,9 @@ static func _weights_image(art: IslandArt) -> Image:
 	noise.frequency = MOSS_FREQUENCY
 	for z: int in MAP_M:
 		for x: int in MAP_M:
-			var wx: float = float(x) - 128.0
-			var wz: float = float(z) - 128.0
-			# Пиксель (x, z) — мир (x−128, z−128); индекс карты: (z)*POINTS + x.
+			var wx: float = float(x) - float(MAP_M) * 0.5
+			var wz: float = float(z) - float(MAP_M) * 0.5
+			# Пиксель (x, z) — мир (x − MAP_M/2, z − MAP_M/2); индекс карты: (z)*POINTS + x.
 			var h: float = art.heights[z * IslandGen.POINTS + x]
 			var w_rock: float = smoothstep(
 				ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z))
@@ -306,8 +307,8 @@ static func _border_image(art: IslandArt) -> Image:
 	var tint: Dictionary = IslandGen.tint_hints()
 	for z: int in MAP_M:
 		for x: int in MAP_M:
-			var wx: float = float(x) - 128.0
-			var wz: float = float(z) - 128.0
+			var wx: float = float(x) - float(MAP_M) * 0.5
+			var wz: float = float(z) - float(MAP_M) * 0.5
 			var low_poly: Color = TerrainBuilder.point_color(
 				art.heights, tint, int(wx), int(wz))
 			# Вымощенная Площадь не гасится краем Леса — она сама себе сосед:
@@ -337,10 +338,12 @@ static func _border_image(art: IslandArt) -> Image:
 static func _material_tone_weight(
 	art: IslandArt, tint: Dictionary, x: int, z: int,
 ) -> float:
-	if not tint.get(Vector2i(x - 128, z - 128), {}).is_empty():
+	if not tint.get(Vector2i(x - MAP_M / 2, z - MAP_M / 2), {}).is_empty():
 		return lerpf(
 			1.0, PLAZA_TONE,
-			_plaza_weight(float(x) - 128.0, float(z) - 128.0))
+			_plaza_weight(
+				float(x) - float(MAP_M) * 0.5,
+				float(z) - float(MAP_M) * 0.5))
 	var h: float = art.heights[z * IslandGen.POINTS + x]
 	if h < TerrainBuilder.SAND_H or h >= TerrainBuilder.SNOW_H:
 		return 1.0
@@ -394,7 +397,7 @@ static func _relief_texture(art: IslandArt) -> ImageTexture:
 
 
 ## Максимальный тангенс уклона в точке по соседям карты высот (кламп на краях).
-## x, z — пиксельные координаты карты 0..255 (мир − 128).
+## x, z — пиксельные координаты карты 0..MAP_M−1 (мир − MAP_M/2).
 static func _slope(art: IslandArt, x: int, z: int) -> float:
 	var here: float = art.heights[z * IslandGen.POINTS + x]
 	var worst := 0.0

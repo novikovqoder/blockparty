@@ -16,6 +16,10 @@ ZONE_RUINS,Руины,Ruins
 ZONE_HILLS,Холмы,Hills
 ZONE_CREVASSE,Расщелина,Crevasse
 ZONE_LAKE,Озеро,Lake
+ZONE_CLIFFS,Утёсы,Cliffs
+ZONE_THICKET,Чаща,Thicket
+ZONE_SHORE,Каменистый берег,Rocky Shore
+ZONE_MEADOWS,Луга,Meadows
 ESC_TITLE,Пауза,Paused
 ESC_RESUME,Продолжить,Resume
 ESC_INVITE_FRIEND,Пригласить друга,Invite a friend

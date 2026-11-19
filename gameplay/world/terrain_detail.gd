@@ -92,9 +92,9 @@ static func build_mesh(step: float, radius: float) -> ArrayMesh:
 	return mesh
 
 
-## Карта высот острова одной RFloat-текстурой (257 × 257, как
+## Карта высот острова одной RFloat-текстурой (POINTS × POINTS, как
 ## HeightMapShape3D): vertex() кольца ставит вершинам высоту чанков,
-## uv = (world.xz + 128) / 256 — та же схема, что карты покраски.
+## uv = (world.xz + HALF) / (2·HALF) — та же схема, что карты покраски.
 ## art.heights уже PackedFloat32Array — байты пикселей RF те же.
 static func height_texture(art: IslandArt) -> ImageTexture:
 	var image := Image.create_from_data(
@@ -149,8 +149,8 @@ static func displacement_at(
 	art: IslandArt, weights: Image, orm_images: Array, means: PackedFloat32Array,
 	wx: float, wz: float,
 ) -> float:
-	var px: int = clampi(roundi(wx) + 128, 0, 255)
-	var pz: int = clampi(roundi(wz) + 128, 0, 255)
+	var px: int = clampi(roundi(wx) + ForestGround.MAP_M / 2, 0, ForestGround.MAP_M - 1)
+	var pz: int = clampi(roundi(wz) + ForestGround.MAP_M / 2, 0, ForestGround.MAP_M - 1)
 	var w := weights.get_pixel(px, pz)
 	var w_base: float = clampf(1.0 - (w.r + w.g + w.b + w.a), 0.0, 1.0)
 	var tiles: Array[float] = [

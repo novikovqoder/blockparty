@@ -13,8 +13,10 @@ extends Node3D
 @export var zones: Array[Dictionary] = []
 ## Точка появления по имени зоны (--dev-spawn, Session.spawn_zone).
 @export var spawn_zones: Dictionary = {}
-## Граница мира, м (невидимые ограждения по периметру).
-@export var world_bounds: float = 127.5
+## Граница мира, м (невидимые ограждения по периметру). Расширение карты:
+## HALF 128 → 256, island.tscn перезапишет значением из данных генератора,
+## здесь — согласованное поле по умолчанию.
+@export var world_bounds: float = 255.5
 
 
 ## Адаптивная тесселяция рельефа вокруг зрителя (доработка-2 П5.13, П1):

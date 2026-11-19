@@ -25,8 +25,8 @@ func _initialize() -> void:
 		Vector2(-16, -10), Vector2(-34, -26), Vector2(-50, -48),
 		Vector2(58, -48),
 	]:
-		var px := int(p.x) + 128
-		var pz := int(p.y) + 128
+		var px := int(p.x) + IslandGen.POINTS / 2
+		var pz := int(p.y) + IslandGen.POINTS / 2
 		var h: float = art.heights[pz * IslandGen.POINTS + px]
 		var w: Color = weights.get_pixel(px, pz)
 		var b: Color = border.get_pixel(px, pz)
@@ -67,8 +67,8 @@ func _initialize() -> void:
 	print("")
 	print("=== Softmax шейдера в пробных точках (по средним B карт) ===")
 	for p: Vector2 in [Vector2(0, 4), Vector2(8, 4), Vector2(21, 4)]:
-		var px := int(p.x) + 128
-		var pz := int(p.y) + 128
+		var px := int(p.x) + IslandGen.POINTS / 2
+		var pz := int(p.y) + IslandGen.POINTS / 2
 		var w: Color = weights.get_pixel(px, pz)
 		var total: float = clampf(w.r + w.g + w.b + w.a, 0.0, 1.0)
 		var w_base: float = 1.0 - total
