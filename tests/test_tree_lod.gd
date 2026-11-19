@@ -27,6 +27,72 @@ func _reveal(mats: Array[Array], level: int) -> float:
 	return 1.0 if value == null else float(value)
 
 
+## Группа с деревьями в двух углах карты: старый Лес (−52,−52) и Чаща
+## (−130,−130) — расширение карты, сборка 1 п.4 (секторная разбивка).
+func _two_forest_group() -> PropGroup:
+	var group := PropGroup.new()
+	var set: Dictionary = EzTreeMeshes.build_set(&"etree_bush", 0)
+	group.mesh = set["mesh"]
+	group.lods = set["lods"]
+	group.transforms = [
+		Transform3D(Basis(), Vector3(-52.0, 0.0, -52.0)),
+		Transform3D(Basis(), Vector3(-56.0, 0.0, -50.0)),
+		Transform3D(Basis(), Vector3(-130.0, 0.0, -130.0)),
+		Transform3D(Basis(), Vector3(-134.0, 0.0, -132.0)),
+	]
+	group.colors = [
+		Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE,
+	]
+	return group
+
+
+func test_two_forests_split_into_independent_sectors() -> void:
+	# Секторная разбивка (TREE_SECTOR_M): группа с деревьями в двух лесах
+	# даёт два сектора; зритель в Чаще — её сектор в гибриде (ближний
+	# уровень), сектор Леса — дальний; canopy-материалы секторов разные
+	# (reveal перетекания у каждого свой). Зритель у Леса — наоборот.
+	var view := IslandView.new()
+	view._build_tree_lods("etree_bush:0", "etree_bush", _two_forest_group())
+	assert_eq(view._tree_lods.size(), 2, "два леса — два сектора")
+	# Порядок секторов — по вставке (первое дерево группы): Лес, затем Чаща.
+	var forest: Dictionary = view._tree_lods[0]
+	var thicket: Dictionary = view._tree_lods[1]
+
+	view._update_tree_lods(Vector2(-132.0, -130.0))
+	assert_eq(thicket["level"], 0, "зритель в Чаще — её сектор в гибриде")
+	assert_eq(forest["level"], 1,
+		"111 м до Леса — LOD1 у сектора Леса, не гибрид всей группы")
+
+	view._update_tree_lods(Vector2(-52.0, -52.0))
+	assert_eq(forest["level"], 0, "зритель у Леса — сектор Леса в гибриде")
+	assert_eq(thicket["level"], 1,
+		"сектор Чащи в 111 м остался дальним (LOD1)")
+
+	# Материалы листвы секторов независимы: перетекание одного сектора
+	# не вырезает листву другого (сектор 0 — эталон группы, сектор 1 —
+	# копии canopy-материалов).
+	var thicket_mats: Array[Array] = thicket["mats"]
+	var forest_mats: Array[Array] = forest["mats"]
+	assert_ne(thicket_mats[0][0], forest_mats[0][0],
+		"canopy-материалы секторов — разные объекты")
+	assert_ne(thicket_mats[1][0], forest_mats[1][0],
+		"уровень 1 секторов тоже независим")
+	view.free()
+
+
+func test_single_sector_keeps_one_group_and_names() -> void:
+	# Группа в одной клетке сектора — как до разбивки: один state, три
+	# ноды с прежними именами (без суффикса сектора).
+	var view := IslandView.new()
+	view._build_tree_lods("etree_bush:0", "etree_bush", _sample_group())
+	assert_eq(view._tree_lods.size(), 1, "одна клетка — один сектор")
+	var nodes: Array[MultiMeshInstance3D] = view._tree_lods[0]["nodes"]
+	assert_eq(nodes.size(), 3, "три уровня")
+	assert_eq(nodes[0].name, "Props_etree_bush_0_lod0",
+		"имя ноды прежнее, без суффикса сектора")
+	view.free()
+
+
 func test_near_level_is_hybrid_leaves_lod0_branches_lod1() -> void:
 	# Состав гибрида: вершины листвы — ровно LOD0 GLB («листва НЕ
 	# трогается», leafStride 1), вершины веток — LOD1 GLB демо

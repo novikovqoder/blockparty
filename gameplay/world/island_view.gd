@@ -131,6 +131,12 @@ const TREE_LOD_BLEND_SEC: float = 0.4
 ## Пересчёт дистанций уровней деревьев — при сдвиге зрителя дальше, м
 ## (перетекание тикает в _process независимо, каждый кадр).
 const TREE_LOD_VIEWER_STEP_M: float = 1.0
+## Сектор деревьев, м (расширение карты, сборка 1 п.4): группа «тип:вариант»
+## режется на пространственные секторы, уровень LOD — по сектору. Клетка
+## 128 при границах LOD 70/150: лес зоны (r 44–75) — 1–4 сектора, дальний
+## лес не тянет ближний уровень на весь остров. Заодно пересчёт после
+## сдвига зрителя меряется по деревьям сектора, а не всей группы.
+const TREE_SECTOR_M: float = 128.0
 
 
 func _ready() -> void:
@@ -366,13 +372,52 @@ func _build_props() -> void:
 ## от пресетного до полного отсечения и встречно; ветки уровней
 ## одинаковы — шва нет); 1↔2 — мгновенная смена (дальние уровни за
 ## туманом неразличимы). Гистерезис TREE_LOD_HYSTERESIS против дребезга.
+## Расширение карты, сборка 1 п.4: группа «тип:вариант» больше не накрывает
+## весь остров одна — деревья группы режутся на пространственные секторы
+## TREE_SECTOR_M, уровень LOD выбирается по сектору. С одним лесом это
+## работало и так; с двумя-тремя (старый Лес + крылья сборок 2–5) группа
+## на весь остров зажигала ближний уровень у всех своих деревьев — рядом
+## с Чащей гибрид вспыхивал и у дальнего Леса.
 func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
+	# Разбивка экземпляров по секторам (детерминирована позициями деревьев).
+	# PackedInt32Array в Dictionary при append по извлечённой ссылке не
+	# пишется назад (copy-on-write) — собираем локально, кладём целиком.
+	var sectors: Dictionary = {}
+	for i: int in group.transforms.size():
+		var origin: Vector3 = group.transforms[i].origin
+		var cell := Vector2i(
+			int(floorf(origin.x / TREE_SECTOR_M)),
+			int(floorf(origin.z / TREE_SECTOR_M)))
+		var list: PackedInt32Array = sectors.get(cell, PackedInt32Array())
+		list.append(i)
+		sectors[cell] = list
+	var sector_index := 0
+	for _cell: Vector2i in sectors:
+		_build_tree_lod_sector(
+			key, type, group, sectors[_cell], sector_index)
+		sector_index += 1
+
+
+## Ноды-уровни одного сектора группы. sector_index == 0 — сектор один или
+## первый: меши группы как есть (имена нод прежние). Дальние секторы
+## получают копии уровней 0/1 с собственными canopy-материалами — reveal
+## перетекания у каждого сектора свой (материалы запечены в общий меш
+## группы, перетекание одного сектора крутило бы порог выреза и у деревьев
+## другого леса); LOD2 остаётся общим — переходы с ним мгновенные, reveal
+## всегда пресетный.
+func _build_tree_lod_sector(
+	key: String, type: String, group: PropGroup,
+	indices: PackedInt32Array, sector_index: int,
+) -> void:
 	var meshes: Array[Mesh] = [group.mesh, group.lods[0], group.lods[1]]
+	if sector_index > 0:
+		meshes[0] = _independent_lod_mesh(meshes[0])
+		meshes[1] = _independent_lod_mesh(meshes[1])
 	var state: Dictionary = {
 		"type": type,
 		"nodes": [] as Array[MultiMeshInstance3D],
 		"mats": [] as Array[Array],
-		# Позиции XZ деревьев группы — дистанция уровня меряется до
+		# Позиции XZ деревьев сектора — дистанция уровня меряется до
 		# ближайшего дерева, не до AABB всей группы.
 		"points": PackedVector2Array(),
 		"level": -1,
@@ -380,16 +425,21 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 		"blend_t": 1.0,
 	}
 	var points := PackedVector2Array()
-	points.resize(group.transforms.size())
-	for i: int in group.transforms.size():
-		points[i] = Vector2(
-			group.transforms[i].origin.x, group.transforms[i].origin.z)
+	points.resize(indices.size())
+	for i: int in indices.size():
+		var origin: Vector3 = group.transforms[indices[i]].origin
+		points[i] = Vector2(origin.x, origin.z)
 	state["points"] = points
 	for index: int in meshes.size():
 		var instance := MultiMeshInstance3D.new()
-		instance.name = "Props_%s_%s_lod%d" % [
-			type, key.get_slice(":", 1), index]
-		instance.multimesh = group.to_multimesh(meshes[index])
+		instance.name = "Props_%s_%s%s_lod%d" % [
+			type, key.get_slice(":", 1),
+			"_s%d" % sector_index if sector_index > 0 else "", index]
+		if indices.size() == group.transforms.size():
+			instance.multimesh = group.to_multimesh(meshes[index])
+		else:
+			instance.multimesh = group.to_multimesh_subset(
+				meshes[index], indices)
 		# П18 Сборка 1 п.4: тень — только у ближнего уровня-гибрида
 		# (виден до 70 м — тени деревьев до ~70 м и обрываются за ним,
 		# у гибрида и LOD1 ветки одинаковы, тень непрерывна); дальние
@@ -411,6 +461,21 @@ func _build_tree_lods(key: String, type: String, group: PropGroup) -> void:
 			(state["nodes"] as Array[MultiMeshInstance3D])[index].visible = \
 				index == 0
 	_tree_lods.append(state)
+
+
+## Копия уровня дерева с собственными canopy-материалами (секторная
+## разбивка деревьев): кора и прочие поверхности остаются общими с
+## эталоном группы, дублируется только листва — reveal у сектора свой.
+static func _independent_lod_mesh(mesh: Mesh) -> Mesh:
+	var copy := mesh.duplicate() as ArrayMesh
+	for surface: int in copy.get_surface_count():
+		var material := copy.surface_get_material(surface)
+		if material is ShaderMaterial \
+				and (material as ShaderMaterial).shader \
+				== EzTreeMeshes.CANOPY_SHADER:
+			copy.surface_set_material(
+				surface, (material as ShaderMaterial).duplicate())
+	return copy
 
 
 ## Материалы canopy-шейдера поверхностей меша (для reveal-перетекания;
@@ -546,12 +611,14 @@ func _process(delta: float) -> void:
 
 ## П17 п.1: собрать материалы листвы из поверхностей уровня дерева
 ## (материалы запечены в меши island_art.res) — для A2C на ULTRA.
+## LOD2 у секторной группы общий у всех секторов — без повтора.
 func _collect_canopy_materials(mesh: Mesh) -> void:
 	for surface: int in mesh.get_surface_count():
 		var material := mesh.surface_get_material(surface)
 		if material is ShaderMaterial \
 				and (material as ShaderMaterial).shader == EzTreeMeshes.CANOPY_SHADER:
-			_canopy_materials.append(material)
+			if not _canopy_materials.has(material):
+				_canopy_materials.append(material)
 
 
 ## Коллизии предметов: бокс с нижней гранью в точке предмета. extra —

@@ -31,3 +31,20 @@ func to_multimesh(mesh_override: Mesh = null) -> MultiMesh:
 		mm.set_instance_transform(i, transforms[i])
 		mm.set_instance_color(i, colors[i])
 	return mm
+
+
+## MultiMesh подмножества экземпляров (секторная разбивка деревьев,
+## расширение карты, сборка 1 п.4): indices — экземпляры одного
+## пространственного сектора группы; меши и порядок — как у to_multimesh.
+func to_multimesh_subset(
+	mesh_override: Mesh, indices: PackedInt32Array
+) -> MultiMesh:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh_override
+	mm.instance_count = indices.size()
+	for i: int in indices.size():
+		mm.set_instance_transform(i, transforms[indices[i]])
+		mm.set_instance_color(i, colors[indices[i]])
+	return mm
