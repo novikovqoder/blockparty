@@ -40,11 +40,17 @@ func test_ground_licenses_cover_all_layers() -> void:
 func test_ground_all_layer_textures_set() -> void:
 	# SPEC П12 приёмка: шейдер земли получает все карты слоёв — у каждого
 	# uniform-сэмплера материала стоит Texture2D (нет пустых сэмплеров).
+	# Расширение карты (сборка 4): седьмой слой песка coast_sand_01 (3 карты)
+	# и его карта веса sand_map = 7 слоёв × 3 + 5 служебных (weight, sand,
+	# border, relief, height) = 26 сэмплеров. Выборки условны по весам
+	# (LAYER_EPS: песок сэмплится только в полосе берега), цена — одна
+	# лишняя выборка мелкой sand_map вне берега; граница 24 → 28 поднята
+	# осознанно под состав слоя, а не под дрейф числа.
 	var material := ForestGround.make_material(ART, GraphicsQuality.Tier.HIGH)
 	var regex := RegEx.new()
 	regex.compile("uniform sampler2D\\s+(\\w+)")
 	var matches := regex.search_all(GROUND_SHADER.code)
-	assert_between(matches.size(), 12, 24,
+	assert_between(matches.size(), 12, 28,
 		"карт слоёв найдено разумно: %d" % matches.size())
 	for match: RegExMatch in matches:
 		var name := match.get_string(1)
