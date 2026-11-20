@@ -40,6 +40,10 @@ const COPY: Array = [
 		"ambientcg.com/Moss001/Moss001_1K-JPG_Color.jpg"],
 	["ambientcg/Moss/Moss001/Moss001_1K-JPG_NormalGL.jpg",
 		"ambientcg.com/Moss001/Moss001_1K-JPG_NormalGL.jpg"],
+	["polyhaven/textures/coast_sand_01/coast_sand_01_diffuse_2k.jpg",
+		"polyhaven.com/coast_sand_01/coast_sand_01_diffuse_2k.jpg"],
+	["polyhaven/textures/coast_sand_01/coast_sand_01_nor_gl_2k.jpg",
+		"polyhaven.com/coast_sand_01/coast_sand_01_nor_gl_2k.jpg"],
 ]
 
 ## ORM-наборы: ao/rough/disp (R/G/B) → результат в проекте.
@@ -79,6 +83,12 @@ const ORM: Array = [
 		"rough": "ambientcg/Moss/Moss001/Moss001_1K-JPG_Roughness.jpg",
 		"disp": "ambientcg/Moss/Moss001/Moss001_1K-JPG_Displacement.jpg",
 		"out": "ambientcg.com/Moss001/Moss001_1K-JPG_ORM.jpg",
+	},
+	{
+		"ao": "polyhaven/textures/coast_sand_01/coast_sand_01_ao_2k.jpg",
+		"rough": "polyhaven/textures/coast_sand_01/coast_sand_01_rough_2k.jpg",
+		"disp": "polyhaven/textures/coast_sand_01/coast_sand_01_displacement_2k.jpg",
+		"out": "polyhaven.com/coast_sand_01/coast_sand_01_orm_2k.jpg",
 	},
 ]
 
