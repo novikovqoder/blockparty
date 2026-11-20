@@ -19,6 +19,12 @@ const FOOT_WALL_H: float = 2.0
 const FOOT_SLAB_H: float = 0.9
 ## Прохладный тинт сканов (тот же, что у наполнения, SPEC 3.7).
 const TINT_COOL: Color = Color(0.93, 0.95, 1.03)
+## Санитарный коридор высоты грунта под основанием: обрыв крыла зубчатый
+## (перепад одной клетки до ~20 м), первая точка ниже порога может
+## оказаться уже глубоко под водой — центр скалы не тонет глубже и
+## не повисает выше (итоговый y = clamp + dy держится у воды).
+const FOOT_G_MIN: float = -1.2
+const FOOT_G_MAX: float = 2.0
 
 ## Скалы крыла: anchor — точка на плато/гребне, dir — к морю (шаги
 ## STEP_M дают подножие — центр скалы); yaw — лицо к морю; scale
@@ -103,8 +109,11 @@ static func build(art: IslandArt) -> Dictionary:
 			continue
 		var scale: float = site["scale"]
 		var pos := Vector3(
-			foot.x, IslandGen.ground_height(art.heights, foot.x, foot.y)
-			+ float(site["dy"]), foot.y)
+			foot.x,
+			clampf(
+				IslandGen.ground_height(art.heights, foot.x, foot.y),
+				FOOT_G_MIN, FOOT_G_MAX) + float(site["dy"]),
+			foot.y)
 		var xf := Transform3D(
 			Basis(Vector3.UP, float(site["yaw"])) * Basis().scaled(
 				Vector3.ONE * scale), pos)
@@ -153,8 +162,9 @@ static func _to_instance(site: Dictionary, xf: Transform3D) -> MultiMeshInstance
 
 
 ## Подножие: шаги STEP_M от якоря в сторону моря до первого спуска ниже
-## foot_h — последняя точка выше порога. Vector2.INF — за MAX_STEPS
-## подножие не встретилось (стену не ставить; тест ловит).
+## foot_h — сама эта точка (низ обрыва; зубчатость кромки гасит кламп
+## FOOT_G_* в build). Vector2.INF — за MAX_STEPS подножие не встретилось
+## (стену не ставить; тест ловит).
 static func _foot_point(
 	art: IslandArt, anchor: Vector2, dir: Vector2, foot_h: float,
 ) -> Vector2:
@@ -162,6 +172,6 @@ static func _foot_point(
 	for i: int in MAX_STEPS:
 		var next := pos + dir * STEP_M
 		if IslandGen.ground_height(art.heights, next.x, next.y) < foot_h:
-			return pos
+			return next
 		pos = next
 	return Vector2.INF

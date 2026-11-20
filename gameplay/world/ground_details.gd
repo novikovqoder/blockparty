@@ -279,15 +279,18 @@ static func _place_kind(
 ) -> void:
 	var kind: Dictionary = group["kind"]
 	# Расширение карты, сборка 2 — гейтинг крыльев: скальные виды (поле
-	# "zone") живут только на своём крыле; прежние виды с крыльев убраны
-	# (крылья ждут своих сборок 3–5), кроме папоротника на плато Утёсов.
+	# "zone") живут только на своём крыле; прежние виды убраны со всех
+	# новых земель — крылья И перешейки (вес крыла в полосе спада уже
+	# < 0.5, имени нет, а земля новая; крылья ждут своих сборок 3–5),
+	# кроме папоротника на плато Утёсов.
 	var kind_zone: String = kind.get("zone", "")
 	var wing: String = cell["wing"]
 	if kind_zone != "":
 		if kind_zone != wing:
 			return
 	else:
-		if wing != "" and (String(kind["type"]) != "gd_fern" or wing != "cliffs"):
+		if cell["new_land"] \
+				and (String(kind["type"]) != "gd_fern" or wing != "cliffs"):
 			return
 		if cell["h_capped"]:
 			return  # прежний высотный предел 15 м — только для прежних видов
@@ -475,14 +478,15 @@ static func _cell_state(
 		blocked = true  # каньон расщелины и подходы к мосткам
 	if x >= 2 and x <= 9 and z >= 56 and z <= 75:
 		blocked = true  # полоса причала Озера (подход по берегу)
-	# Расширение карты, сборка 2: террасы смотровых Утёсов — твёрдому
-	# наполнению нельзя (базис 15 × 15 и площадка должны остаться чистыми,
-	# лестница и подход не загораживаются).
+	# Расширение карты, сборка 2: террасы смотровых Утёсов и пешеходный
+	# подход к ним (базис 15 × 15, лестница и тропу с плато не загораживать
+	# твёрдыми камнями — раскладка детерминирована, без запаса камень
+	# вставал поперёк подхода, test_slope_walking).
 	for entry: Dictionary in IslandGen.LOOKOUTS:
 		if int(entry["zone"]) != 6:
 			continue
 		var cell: Vector2i = entry["cell"]
-		if pos.distance_to(Vector2(float(cell.x), float(cell.y))) < 9.0:
+		if pos.distance_to(Vector2(float(cell.x), float(cell.y))) < 17.0:
 			solid_blocked = true
 	var forest := x < 0 and z < 0
 	var density := FOREST_DENSITY if forest else 1.0
@@ -501,6 +505,7 @@ static func _cell_state(
 		"forest": forest,
 		"density": density,
 		"wing": IslandGen.wing_name_at(x, z),
+		"new_land": IslandGen._in_new_land(x, z),
 		"h_capped": h_capped,
 		"slope": ForestGround._slope(art, x + IslandGen.HALF, z + IslandGen.HALF),
 		"path": maxf(

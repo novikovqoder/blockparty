@@ -511,8 +511,9 @@ static func surface_kind(art: IslandArt, world_pos: Vector3) -> int:
 	if smoothstep(ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z)) >= 0.5:
 		return Surface.STONE
 	# Плато Утёсов (расширение карты, сборка 2): камень и под ногами —
-	# покрытие сходится с покраской, шаг без частиц.
-	if _cliff_plateau_rock(x, z, h) >= 0.5:
+	# покрытие сходится с покраской, шаг без частиц. Как и в покраске,
+	# вес берётся по мировым координатам (x/z здесь — индексы узлов).
+	if _cliff_plateau_rock(roundi(wx), roundi(wz), h) >= 0.5:
 		return Surface.STONE
 	var w_wet: float = 1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)
 	if maxf(_path_weight(wx, wz), _plaza_weight(wx, wz)) >= 0.5:

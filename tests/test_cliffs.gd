@@ -185,7 +185,7 @@ func test_cliff_scatter_clear_of_cliffs_lookouts() -> void:
 		ART, GraphicsQuality.Tier.HIGH)["transforms"]
 	var solid_types: PackedStringArray = []
 	for kind: Dictionary in GroundDetails.KINDS:
-		if kind["solid"] and String(kind["zone"]) == "cliffs":
+		if kind["solid"] and String(kind.get("zone", "")) == "cliffs":
 			solid_types.append(String(kind["type"]))
 	assert_gt(solid_types.size(), 0, "твёрдые скальные виды есть")
 	for entry: Dictionary in IslandGen.LOOKOUTS:
