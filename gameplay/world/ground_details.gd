@@ -192,6 +192,88 @@ const KINDS: Array[Dictionary] = [
 		"solid": false, "light": true, "slope": 0.75, "sink": 0.04,
 		"p": 0.003, "zone": "cliffs",
 	},
+	# --- Чаща (расширение карты, сборка 3): подлесок, валежник и сухостой
+	# юго-западного крыла — те же правила, что у скальных видов Утёсов
+	# (поле "zone" держит вид на своём крыле). Крыло лежит в квадранте
+	# x < 0 ∧ z < 0 — лесная плотность FOREST_DENSITY применяется к видам
+	# сама, чаща гуще Леса. ---
+	{
+		"type": "gd_shrub2",
+		"mesh": preload("res://assets/third_party/polyhaven.com/shrub_02/shrub_02_lo.res"),
+		"scale": Vector2(0.4, 0.7), "range": 60.0, "shadow": false,
+		"solid": false, "light": false, "slope": 0.6, "sink": 0.06,
+		"p": 0.0045, "zone": "thicket",
+	},
+	{
+		"type": "gd_shrub3",
+		"mesh": preload("res://assets/third_party/polyhaven.com/shrub_03/shrub_03_lo.res"),
+		"scale": Vector2(0.8, 1.6), "range": 50.0, "shadow": false,
+		"solid": false, "light": false, "slope": 0.6, "sink": 0.04,
+		"p": 0.003, "zone": "thicket",
+	},
+	{
+		"type": "gd_shrub4",
+		"mesh": preload("res://assets/third_party/polyhaven.com/shrub_04/shrub_04_lo.res"),
+		"scale": Vector2(1.0, 2.0), "range": 40.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.03,
+		"p": 0.0035, "zone": "thicket",
+	},
+	{
+		"type": "gd_rooibos",
+		"mesh": preload("res://assets/third_party/polyhaven.com/wild_rooibos_bush/wild_rooibos_bush_lo.res"),
+		"scale": Vector2(0.6, 1.1), "range": 50.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.04,
+		"p": 0.003, "zone": "thicket",
+	},
+	{
+		"type": "gd_dlog1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res"),
+		"scale": Vector2(0.8, 1.4), "range": 90.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.5, "sink": 0.12,
+		"p": 0.0016, "zone": "thicket",
+	},
+	{
+		"type": "gd_dlog2",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_tree_trunk_02/dead_tree_trunk_02_lo.res"),
+		"scale": Vector2(0.7, 1.2), "range": 90.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.5, "sink": 0.15,
+		"p": 0.0012, "zone": "thicket",
+	},
+	{
+		"type": "gd_snag",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_trunk/dead_quiver_trunk_lo.res"),
+		"scale": Vector2(1.0, 1.9), "range": 80.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.55, "sink": 0.1,
+		"p": 0.0014, "zone": "thicket",
+	},
+	{
+		"type": "gd_dbranch1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_branch_01/dead_quiver_branch_01_lo.res"),
+		"scale": Vector2(1.2, 2.4), "range": 40.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.65, "sink": 0.03,
+		"p": 0.004, "zone": "thicket",
+	},
+	{
+		"type": "gd_dbranch2",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_branch_02/dead_quiver_branch_02_lo.res"),
+		"scale": Vector2(1.2, 2.4), "range": 40.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.65, "sink": 0.03,
+		"p": 0.004, "zone": "thicket",
+	},
+	{
+		"type": "gd_roots2",
+		"mesh": preload("res://assets/third_party/polyhaven.com/root_cluster_02/root_cluster_02_lo.res"),
+		"scale": Vector2(0.5, 0.9), "range": 80.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.5, "sink": 0.1,
+		"p": 0.0022, "zone": "thicket",
+	},
+	{
+		"type": "gd_moss1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/moss_01/moss_01_lo.res"),
+		"scale": Vector2(1.2, 3.0), "range": 30.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.5, "sink": 0.01,
+		"p": 0.006, "zone": "thicket",
+	},
 ]
 
 
@@ -286,11 +368,21 @@ static func _place_kind(
 	var kind_zone: String = kind.get("zone", "")
 	var wing: String = cell["wing"]
 	if kind_zone != "":
-		if kind_zone != wing:
+		# Чаща (сборка 3): биом — ядро крыла И перешеек от Леса
+		# (in_thicket): подлесок сопровождает деревья по всему переходу.
+		# Утёсы — строго своё крыло, как в сборке 2.
+		if kind_zone == "thicket":
+			# С запасом клетки (in_thicket_plant): джиттер ±0.3 уводит
+			# floori координат меша в соседа — кромка биома чиста.
+			if not IslandGen.in_thicket_plant(x, z):
+				return
+		elif kind_zone != wing:
 			return
 	else:
-		if cell["new_land"] \
-				and (String(kind["type"]) != "gd_fern" or wing != "cliffs"):
+		# Папоротник — исключение среди прежних видов: живёт на плато
+		# Утёсов и в гуще Чащи (расширение карты, сборка 3).
+		if cell["new_land"] and (String(kind["type"]) != "gd_fern"
+				or (wing != "cliffs" and wing != "thicket")):
 			return
 		if cell["h_capped"]:
 			return  # прежний высотный предел 15 м — только для прежних видов

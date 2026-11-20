@@ -436,7 +436,9 @@ static func _cliff_plateau_rock(x: int, z: int, h: float) -> float:
 
 
 ## Вес тропы: расстояние до полилинии, полный внутри PATH_HALF_FULL,
-## плавный ноль к PATH_HALF_SOFT.
+## плавный ноль к PATH_HALF_SOFT. Сюда же общим максимумом входят тропы
+## Чащи (расширение карты, сборка 3) — покраска, покрытие под ногами и
+## гашение наполнения читают их тем же каналом утоптанной земли.
 static func _path_weight(wx: float, wz: float) -> float:
 	var best := 1e9
 	for i: int in PATH_POINTS.size() - 1:
@@ -446,7 +448,8 @@ static func _path_weight(wx: float, wz: float) -> float:
 				Vector2(wx, wz), PATH_POINTS[i], PATH_POINTS[i + 1],
 			).distance_to(Vector2(wx, wz)),
 		)
-	return 1.0 - smoothstep(PATH_HALF_FULL, PATH_HALF_SOFT, best)
+	var w: float = 1.0 - smoothstep(PATH_HALF_FULL, PATH_HALF_SOFT, best)
+	return maxf(w, IslandGen.thicket_path_weight(wx, wz))
 
 
 ## Вес гравийной полосы Площади (круг зоны plaza, как в IslandGen).
@@ -478,10 +481,16 @@ static func _forest_edge_dist(wx: float, wz: float) -> float:
 
 
 ## Мох: пятна фиксированного шума, гуще во влажных местах, не на камне.
+## На крыле Чащи (расширение карты, сборка 3) пятна гуще — сырая тёмная
+## гуща; x, z — пиксельные координаты карты (мир − MAP_M/2).
+const THICKET_MOSS_BOOST: float = 0.8
+
 static func _moss_weight(
 	noise: FastNoiseLite, x: int, z: int, w_rock: float, w_wet: float) -> float:
 	var patch: float = smoothstep(0.05, 0.75, (noise.get_noise_2d(x, z) + 1.0) * 0.5)
-	return patch * (1.0 - w_rock) * (0.45 + 0.55 * w_wet)
+	var boost := 1.0 + THICKET_MOSS_BOOST * IslandGen.wing_weight_of(
+		"thicket", x - MAP_M / 2, z - MAP_M / 2)
+	return patch * boost * (1.0 - w_rock) * (0.45 + 0.55 * w_wet)
 
 
 # --- Покрытие под ногами (переделка П9: частицы шагов) ---

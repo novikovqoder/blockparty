@@ -144,6 +144,42 @@ const GULLY_TAPER: float = 2.5
 const GIANT_CELL: Vector2i = Vector2i(-41, -66)
 const GIANT_CLEAR_R: int = 7
 
+# --- Чаща, юго-западное крыло (расширение карты, сборка 3) ---
+## Свой поток rng чащи: раскладка старого острова не сдвигается, хеш
+## меняется только добавленными предметами (как FILLER_SEED у наполнения).
+const THICKET_SEED: int = 20261120
+## Поляна-«комната» в гуще (место встречи) с дубом-исполином — по образцу
+## поляны гиганта Леса: центр и радиус голой земли вокруг ствола.
+const THICKET_GIANT_CELL: Vector2i = Vector2i(-158, -150)
+const THICKET_GIANT_CLEAR_R: int = 8
+## Радиус биома Чащи от центра крыла: ядро крыла (r 75) + перешеек от
+## Леса — дальше чужие земли не трогаем (расстояние до ближайшего чужого
+## перешейка — Луга, точка (-11, -128) — ≈ 119 м).
+const THICKET_REACH_R: float = 100.0
+## Тропы Чащи: утоптанные проходы сквозь гущу (та же схема, что тропа
+## Леса PATH_POINTS — красит землю ForestGround, деревья на них не встают).
+## Главная — от перешейка через камень духа к поляне гиганта; вторая —
+## к южной гуще.
+const THICKET_PATH_MAIN: PackedVector2Array = [
+	Vector2(-100.0, -100.0), Vector2(-114.0, -114.0),
+	Vector2(-126.0, -126.0), Vector2(-146.0, -142.0),
+]
+const THICKET_PATH_SOUTH: PackedVector2Array = [
+	Vector2(-126.0, -126.0), Vector2(-132.0, -146.0),
+	Vector2(-138.0, -162.0),
+]
+const THICKET_PATH_HALF_FULL: float = 1.5
+const THICKET_PATH_HALF_SOFT: float = 3.2
+## Плотность чащи (гуще Леса: деревья 0.07/кусты 0.022 у Леса): полог
+## плотнее, подлесок гуще, сухостой и валежник заметнее Леса.
+const THICKET_TREE_P: float = 0.10
+const THICKET_BUSH_P: float = 0.05
+const THICKET_LOG_P: float = 0.008
+const THICKET_MROCK_P: float = 0.005
+## Разрежение перехода: на перешейке (вне ядра крыла) деревья реже —
+## чаща сгущается к центру, вход читается просветом.
+const THICKET_ISTHMUS_FACTOR: float = 0.65
+
 ## Чаша озера (доработка П5.13, вынесены для самопроверки воды): d меньше
 ## LAKE_BASIN_R — дно −1.2, до LAKE_BEACH_R — пологий пляж. Плоскость воды
 ## обязана накрывать чашу — берег выше уровня прячет излишек под рельефом.
@@ -293,6 +329,10 @@ static func generate() -> Dictionary:
 	var village: Dictionary = _village()
 	_zone_fill(heights, props, reserved, village, ruins, pier, fire,
 		stones, spawns)
+	# Чаша (расширение карты, сборка 3): свой поток rng — прежние
+	# раскладки не сдвигаются; поляна резервируется до посадки гущи.
+	_thicket_landmarks(heights, props, reserved)
+	_thicket_forest(heights, props, reserved)
 	var lookouts: Array = []
 	for entry: Dictionary in LOOKOUTS:
 		var cell: Vector2i = entry["cell"]
@@ -1149,6 +1189,183 @@ static func _ramp_banks(
 					continue
 				var i: int = _idx(cell.x, cell.y)
 				heights[i] = maxf(heights[i], target)
+
+
+## Ориентиры Чащи (расширение карты, сборка 3): поляна-«комната» в гуще
+## с дубом-исполином — место встречи по образцу поляны гиганта Леса.
+## Клетки поляны резервируются до посадки гущи; rng — поток чащи
+## (правки гущи не двигают поляну, и наоборот).
+static func _thicket_landmarks(
+		heights: PackedFloat32Array, props: Array, reserved: Dictionary) -> void:
+	# Запас +1 клетка к радиусу чистки: джиттер посадки (±0.3 по осям)
+	# заносит дерево с внешней диагональной клетки внутрь круга.
+	for dz: int in range(-THICKET_GIANT_CLEAR_R - 1, THICKET_GIANT_CLEAR_R + 2):
+		for dx: int in range(-THICKET_GIANT_CLEAR_R - 1, THICKET_GIANT_CLEAR_R + 2):
+			if Vector2(float(dx), float(dz)).length() \
+					<= float(THICKET_GIANT_CLEAR_R) + 1.0:
+				reserved[THICKET_GIANT_CELL + Vector2i(dx, dz)] = true
+	var rng := RandomNumberGenerator.new()
+	rng.seed = THICKET_SEED + 1
+	# Гигант (~30 м, oak_large_v1 — тот же вид, что исполин Леса): якорь
+	# гущи из любой точки крыла; посадка по рельефу с утоплением комля.
+	var giant_h: float = ground_height(
+		heights, THICKET_GIANT_CELL.x + 0.5, THICKET_GIANT_CELL.y + 0.5) - 0.15
+	_add_prop(props, rng, &"etree_giant",
+		Vector3(THICKET_GIANT_CELL.x + 0.5, giant_h, THICKET_GIANT_CELL.y + 0.5),
+		rng.randf_range(-0.1, 0.1), Vector3.ONE * rng.randf_range(0.95, 1.05),
+		"leaf", 1)
+
+
+## Гуща Чащи (расширение карты, сборка 3): второй лес на юго-западном
+## крыле — темнее и гуще Леса. Деревья тех же пород (шум _forest_kind по
+## координатам — рощи дуба/ясеня/осины продолжаются и здесь), тон kind
+## "leaf" тянет листву к тёмно-зелёному зоны 7. Подлесок — кусты вдвое
+## гуще лесных, валежник и камни во мху; печёные кочки травы — теми же
+## пятнами _grass_patch, что в Лесу (без цветов — чаща сумрачная).
+## Тропы держат просветы: на полосе тропы дерево не встает вовсе, кусты
+## и кочки гасятся весом тропы (утоптанная земля читается и в покраске
+## ForestGround — общий вес с тропой Леса).
+static func _thicket_forest(
+		heights: PackedFloat32Array, props: Array, reserved: Dictionary,
+) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = THICKET_SEED
+	var center := _wing_center("thicket")
+	var trees: Dictionary = {}
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			if not in_thicket(x, z):
+				continue
+			var cell := Vector2i(x, z)
+			if reserved.has(cell):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= 0.9 or h > 8.0:
+				continue
+			# Переход: разрежение у кромки новых земель (спад веса суши)
+			# и на перешейке (вне ядра крыла гуща читается просветом).
+			var ramp: float = smoothstep(0.15, 0.7, new_land_weight(x, z))
+			var isthmus: float = THICKET_ISTHMUS_FACTOR \
+				if wing_name_at(x, z) != "thicket" else 1.0
+			var factor: float = ramp * isthmus
+			var path: float = thicket_path_weight(float(x), float(z))
+			if factor <= 0.0:
+				continue
+			if path < 0.15 and rng.randf() < THICKET_TREE_P * factor \
+					and _no_trees_near(trees, x, z, 2):
+				# Порог высоты чащи 8 м (равнина крыла 2–6): деревья не
+				# лезут на редкие шумовые бугры кромки.
+				trees[cell] = true
+				_prop(props, rng, cell, h, _forest_kind(x, z), "leaf",
+					_forest_variants(_forest_kind(x, z)), heights)
+			elif path < 0.15 and rng.randf() < THICKET_BUSH_P * factor:
+				_prop(props, rng, cell, h, "etree_bush", "leaf", 5, heights)
+			elif rng.randf() < THICKET_LOG_P * (1.0 - path):
+				_prop(props, rng, cell, h, "dead_log", "plain", 1, heights)
+			elif rng.randf() < THICKET_MROCK_P:
+				_prop(props, rng, cell, h, "mrock", "plain", 3, heights)
+	# Печёные кочки травы по пятнам _grass_patch (как в Лесу: кочки
+	# пятнами, между ними проплешины; на тропе и под деревьями пусто).
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			if not in_thicket(x, z):
+				continue
+			var cell := Vector2i(x, z)
+			if reserved.has(cell) or trees.has(cell):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= 0.9 or h > 8.0:
+				continue
+			if thicket_path_weight(float(x), float(z)) >= 0.2:
+				continue
+			if not _is_grassy_forest(heights, x, z):
+				continue
+			var patch: float = _grass_patch(x, z)
+			if patch > 0.05 and rng.randf() < 0.70 * patch:
+				var tufts: int = 3
+				if rng.randf() < 0.75:
+					tufts += 1
+				if rng.randf() < 0.5:
+					tufts += 1
+				if rng.randf() < 0.35:
+					tufts += 1
+				for i: int in tufts:
+					var tuft_scale: float = rng.randf_range(0.85, 1.25)
+					_add_prop(
+						props, rng, &"rgrass",
+						Vector3(
+							x + rng.randf_range(-0.45, 0.45), h,
+							z + rng.randf_range(-0.45, 0.45)),
+						rng.randf_range(0.0, TAU),
+						Vector3(
+							tuft_scale,
+							tuft_scale * rng.randf_range(0.9, 1.15),
+							tuft_scale),
+						"plain", 3)
+
+
+## Крыло по имени (порядок WINGS не фиксируется — поиском); пустой словарь
+## для отсутствующего имени обрабатывается весом 0.
+static func _wing_of(name: String) -> Dictionary:
+	for wing: Dictionary in WINGS:
+		if wing["name"] == name:
+			return wing
+	return {}
+
+
+## Вес крыла по имени (0 — крыла нет): покраска/атмосфера крыльев без
+## собственной петли по WINGS (как _cliff_plateau_rock у утёсов).
+static func wing_weight_of(name: String, x: int, z: int) -> float:
+	var wing := _wing_of(name)
+	if wing.is_empty():
+		return 0.0
+	return _wing_weight(wing, x, z)
+
+
+## Центр крыла по имени (порядок WINGS не фиксируется — поиском).
+static func _wing_center(name: String) -> Vector2:
+	var wing := _wing_of(name)
+	return wing["center"] if not wing.is_empty() else Vector2.ZERO
+
+
+## Клетка принадлежит биому Чащи: новые земли (крыло + перешеек от Леса)
+## в радиусе THICKET_REACH_R от центра крыла. Чужие крылья отсечены
+## (wing_name_at в их ядре вернёт своё имя), чужие перешейки — радиусом.
+static func in_thicket(x: int, z: int) -> bool:
+	if not _in_new_land(x, z):
+		return false
+	var wing := wing_name_at(x, z)
+	if wing != "" and wing != "thicket":
+		return false
+	return Vector2(float(x), float(z)).distance_to(
+		_wing_center("thicket")) < THICKET_REACH_R
+
+
+## Клетка допускает посадку подлеска Чащи с джиттером ±0.3: у
+## отрицательных координат floori(origin) уходит в соседнюю клетку
+## (x−0.3 → x−1), и клетка кромки (вес новых земель ровно 0) не должна
+## попасть под меш вида — проверяем клетку и трёх соседей по −1.
+static func in_thicket_plant(x: int, z: int) -> bool:
+	return in_thicket(x, z) and in_thicket(x - 1, z) \
+		and in_thicket(x, z - 1) and in_thicket(x - 1, z - 1)
+
+
+## Вес троп Чащи: расстояние до полилиний THICKET_PATHS, полный внутри
+## THICKET_PATH_HALF_FULL, плавный ноль к THICKET_PATH_HALF_SOFT. Входит
+## общим максимумом в ForestGround._path_weight — покраска, покрытие
+## и наполнение читают тропы чащи как тропы Леса.
+static func thicket_path_weight(wx: float, wz: float) -> float:
+	var best := 1e9
+	for line: PackedVector2Array in [THICKET_PATH_MAIN, THICKET_PATH_SOUTH]:
+		for i: int in line.size() - 1:
+			best = minf(
+				best,
+				Geometry2D.get_closest_point_to_segment(
+					Vector2(wx, wz), line[i], line[i + 1],
+				).distance_to(Vector2(wx, wz)),
+			)
+	return 1.0 - smoothstep(
+		THICKET_PATH_HALF_FULL, THICKET_PATH_HALF_SOFT, best)
 
 
 ## Пологие подходы к мостам: полоса рельефа шириной в настил поднимается
