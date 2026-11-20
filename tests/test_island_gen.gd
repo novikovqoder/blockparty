@@ -230,8 +230,9 @@ func test_crevasse_hang_points_on_rim() -> void:
 
 func test_forest_landmarks_giant_tree_and_gully_bridge() -> void:
 	# П5.7, блок 2: ориентиры Леса — поляна с огромным деревом и овраг
-	# с мостиком из брёвен на тропе. Гигант — ровно один, в центре своей
-	# поляны; мостик — один, над дном русла; русло реально прорезано
+	# с мостиком из брёвен на тропе. Исполины — по одному на поляну
+	# (Лес и, со сборки 3, Чаща), каждый в центре своей; мостик — один,
+	# над дном русла; русло реально прорезано
 	# (кромка выше дна больше чем на метр — внутрь не спрыгнуть по BFS
 	# вверх), папоротники растут по дну и влажным низинам леса.
 	var data: Dictionary = _island_data()
@@ -244,10 +245,28 @@ func test_forest_landmarks_giant_tree_and_gully_bridge() -> void:
 			"etree_giant":
 				giants += 1
 				var pos: Vector3 = prop["pos"]
-				assert_almost_eq(
-					pos.x, IslandGen.GIANT_CELL.x + 0.5, 0.1, "гигант в центре поляны")
-				assert_almost_eq(
-					pos.z, IslandGen.GIANT_CELL.y + 0.5, 0.1, "гигант в центре поляны")
+				# Сборка 3 (Чаща): исполина два — лесная поляна и поляна
+				# Чащи (её чистота — в test_thicket.giant_clearing);
+				# каждый стоит в центре своей поляны, третьих нет.
+				var forest_d: float = Vector2(pos.x, pos.z).distance_to(
+					Vector2(IslandGen.GIANT_CELL.x, IslandGen.GIANT_CELL.y))
+				var thicket_d: float = Vector2(pos.x, pos.z).distance_to(
+					Vector2(IslandGen.THICKET_GIANT_CELL.x,
+						IslandGen.THICKET_GIANT_CELL.y))
+				assert_lt(minf(forest_d, thicket_d), 50.0,
+					"исполин у известной поляны")
+				if thicket_d < forest_d:
+					assert_almost_eq(pos.x,
+						IslandGen.THICKET_GIANT_CELL.x + 0.5, 0.1,
+						"гигант Чащи в центре своей поляны")
+					assert_almost_eq(pos.z,
+						IslandGen.THICKET_GIANT_CELL.y + 0.5, 0.1,
+						"гигант Чащи в центре своей поляны")
+				else:
+					assert_almost_eq(
+						pos.x, IslandGen.GIANT_CELL.x + 0.5, 0.1, "гигант в центре поляны")
+					assert_almost_eq(
+						pos.z, IslandGen.GIANT_CELL.y + 0.5, 0.1, "гигант в центре поляны")
 			"log_bridge":
 				bridges += 1
 				var bridge_pos: Vector3 = prop["pos"]
@@ -257,7 +276,7 @@ func test_forest_landmarks_giant_tree_and_gully_bridge() -> void:
 					bridge_pos.z, IslandGen.GULLY_MID.y, 0.1, "мостик на тропе, в середине русла")
 			"fern":
 				ferns += 1
-	assert_eq(giants, 1, "огромное дерево на поляне — одно")
+	assert_eq(giants, 2, "исполина два — поляны Леса и Чащи (сборка 3)")
 	assert_eq(bridges, 1, "мостик из брёвен через овраг — один")
 	assert_gt(ferns, 30, "папоротники по дну оврага и низинам леса")
 	# Русло прорезано: дно в середине ниже кромки на метр и больше.
