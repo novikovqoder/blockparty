@@ -8,6 +8,9 @@
 # фиксированный шум FastNoiseLite, тропа и полоса Площади — утоптанный
 # гравий), тон (RGB — цвет «материала» точки по TerrainBuilder.point_color:
 # пляж, снег, террасы, зональные луга; A — вес тона) и нормали рельефа.
+# Расширение карты, сборка 4: четвёртая карта — песок Каменистого берега
+# (вес крыла shore × высотный переход с рваной шумом кромкой); слой
+# coast_sand_01 в шейдере замещает базу, мох на песке не растёт.
 # В секторе Леса (квадрант x < 0 ∧ z < 0) формулы те же, что в принятом П5.9/П5.13 —
 # вид Леса не меняется. Вне Леса вес тона — max(краевой вес границы Леса,
 # вес материала: пляж/снег/террасы 1, луг 0.35 → скала 0.9; терраса
@@ -74,6 +77,19 @@ const ROCK_TONE_TO: float = TerrainBuilder.STONE_SLOPE + 0.2
 const MOSS_SEED: int = 5707
 const MOSS_FREQUENCY: float = 0.045
 
+# --- Песок Каменистого берега (расширение карты, сборка 4) ---
+## Рельеф крыла — ровное плато ~3 м с резкой кромкой к морю (замер
+## art.heights: 95% клеток 2.9–3.5): песок накрывает плато целиком
+## (FULL 2.9 — всё ниже плато чистый песок), переход «песок → трава»
+## рвёт шум в полосе FADE — на насыпях перешейков (4 м) трава, вход
+## на крыло читается. Высоты не меняются — пороги только краски.
+const SHORE_SAND_H_FULL: float = 2.9
+const SHORE_SAND_H_FADE: float = 3.9
+## Разброс порога шумом, м (пятно перехода ~2 м в плане).
+const SHORE_SAND_NOISE_AMP: float = 0.55
+const SHORE_SAND_SEED: int = 5711
+const SHORE_SAND_FREQUENCY: float = 0.16
+
 ## Каналы карты весов (RGBA8): r камень, g влага, b мох, a тропа/гравий.
 const CH_ROCK: int = 0
 const CH_WET: int = 1
@@ -124,6 +140,14 @@ const GRAVEL_NORMAL: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/rocky_trail/rocky_trail_nor_gl_2k.jpg")
 const GRAVEL_ORM: Texture2D = preload(
 	"res://assets/third_party/polyhaven.com/rocky_trail/rocky_trail_orm_2k.jpg")
+# Песок Каменистого берега (расширение карты, сборка 4) — первая песчаная
+# текстура проекта: слой замещает базу (подстилку/траву) по карте sand_map.
+const SAND_TEX: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/coast_sand_01/coast_sand_01_diffuse_2k.jpg")
+const SAND_NORMAL: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/coast_sand_01/coast_sand_01_nor_gl_2k.jpg")
+const SAND_ORM: Texture2D = preload(
+	"res://assets/third_party/polyhaven.com/coast_sand_01/coast_sand_01_orm_2k.jpg")
 
 # --- П14 1.1: реальный размер тайла слоя — по полю real-world size
 # страницы набора (Poly Haven); где метаданных нет — правило ТЗ 2–3 м.
@@ -135,6 +159,7 @@ const TILE_M_ROCK: float = 2.7      # rock_face_03 — «2.7m wide»
 const TILE_M_MUD: float = 2.3       # mud_forest — «2.3m wide»
 const TILE_M_MOSS: float = 2.0      # Moss001 ambientCG — нет данных, ТЗ 2–3 м
 const TILE_M_GRAVEL: float = 2.0    # rocky_trail — «2m wide»
+const TILE_M_SAND: float = 2.4      # coast_sand_01 — «2.4m wide»
 
 # --- П14 1.2: второй крупный масштаб того же слоя против сетки повторов
 # (SPEC П14 1.2): с расстояния MACRO_NEAR до MACRO_FAR мелкая фактура
@@ -161,6 +186,8 @@ const TINT_MUD: Color = Color(0.76, 0.70, 0.64)
 const TINT_MOSS: Color = Color(0.78, 0.88, 0.74)
 ## Гравий тропы и Площади: серо-тёплый.
 const TINT_GRAVEL: Color = Color(0.84, 0.80, 0.74)
+## Песок Каменистого берега: тёплый нейтрал (цвет — фотоскан).
+const TINT_SAND: Color = Color(0.92, 0.88, 0.82)
 ## Доля плоского тинта в цвете слоя (0 — чистая карта, 1 — плоский цвет).
 const TINT_MIX: float = 0.10
 
@@ -254,6 +281,14 @@ static func make_material(art: IslandArt, quality: int) -> ShaderMaterial:
 	material.set_shader_parameter("gravel_tex", GRAVEL_TEX)
 	material.set_shader_parameter("gravel_normal", GRAVEL_NORMAL)
 	material.set_shader_parameter("gravel_orm", GRAVEL_ORM)
+	# Песок Каменистого берега (расширение карты, сборка 4): седьмой слой,
+	# замещает базу (подстилку/траву) по карте sand_map.
+	material.set_shader_parameter("sand_tex", SAND_TEX)
+	material.set_shader_parameter("sand_normal", SAND_NORMAL)
+	material.set_shader_parameter("sand_orm", SAND_ORM)
+	material.set_shader_parameter("tile_m_sand", TILE_M_SAND)
+	material.set_shader_parameter("sand_tint", TINT_SAND)
+	material.set_shader_parameter("sand_map", _sand_texture(art))
 	material.set_shader_parameter("weight_map", _weights_texture(art))
 	material.set_shader_parameter("border_map", _border_texture(art))
 	material.set_shader_parameter("relief_normal", _relief_texture(art))
@@ -273,6 +308,9 @@ static func _weights_image(art: IslandArt) -> Image:
 			var wz: float = float(z) - float(MAP_M) * 0.5
 			# Пиксель (x, z) — мир (x − MAP_M/2, z − MAP_M/2); индекс карты: (z)*POINTS + x.
 			var h: float = art.heights[z * IslandGen.POINTS + x]
+			# Песок берега (сборка 4): мох на песке не растёт — вес мха
+			# гасится весом песка (тот же член, что и в surface_kind).
+			var w_sand: float = sand_weight(wx, wz, h)
 			var w_rock: float = smoothstep(
 				ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z))
 			# Расширение карты, сборка 2: плато Утёсов — скальная подстилка
@@ -288,7 +326,8 @@ static func _weights_image(art: IslandArt) -> Image:
 			# Низины Леса и остальных зон не тронуты.
 			var w_wet: float = (1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)) \
 				* (1.0 - w_plaza)
-			var w_moss: float = _moss_weight(noise, x, z, w_rock, w_wet)
+			var w_moss: float = _moss_weight(
+				noise, x, z, w_rock, w_wet) * (1.0 - w_sand)
 			# П5.9 переделка, П3: в русле оврага тропа гасится — утоптанная
 			# земля по дну читалась коричневой лентой поперёк склонов. Дно
 			# красят свои веса (камень стенок, влага низины), подходы
@@ -305,6 +344,55 @@ static func _weights_image(art: IslandArt) -> Image:
 			image.set_pixel(x, z, Color(
 				w_rock * fade, w_wet * fade, w_moss * fade, w_path * fade))
 	return image
+
+
+## Вес песка Каменистого берега (расширение карты, сборка 4): вес крыла
+## «shore» × высотный переход FULL→FADE, кромку рвёт фиксированный шум
+## («песок → трава» пятнами, как пятна мха). Чистая функция мировых
+## координат и высоты: покраска (карта песка, гашение мха) и покрытие
+## под ногами считают одно и то же. Перешеек к Руинам/Каньону — насыпь
+## 4 м, песок перекрывается высотным порогом сам собой.
+static func sand_weight(wx: float, wz: float, h: float) -> float:
+	var wing: float = IslandGen.wing_weight_of("shore", roundi(wx), roundi(wz))
+	if wing <= 0.0:
+		return 0.0
+	var jitter: float = _sand_noise().get_noise_2d(wx, wz) \
+		* SHORE_SAND_NOISE_AMP
+	return wing * (1.0 - smoothstep(
+		SHORE_SAND_H_FULL + jitter, SHORE_SAND_H_FADE + jitter, h))
+
+
+## Шум кромки песка (ленивый синглтон: вес зовётся на всю карту).
+static var _sand_noise_inst: FastNoiseLite
+
+
+static func _sand_noise() -> FastNoiseLite:
+	if _sand_noise_inst == null:
+		_sand_noise_inst = FastNoiseLite.new()
+		_sand_noise_inst.seed = SHORE_SAND_SEED
+		_sand_noise_inst.frequency = SHORE_SAND_FREQUENCY
+	return _sand_noise_inst
+
+
+## Карта песка (канал R, 1 пиксель = 1 м): слой шейдера замещает базу.
+## Отдельная карта — в RGBA весов оверлеев каналы заняты; проход дешёвый
+## (высота + вес крыла + шум, без уклона).
+static func _sand_image(art: IslandArt) -> Image:
+	var image := Image.create_empty(MAP_M, MAP_M, false, Image.FORMAT_R8)
+	for z: int in MAP_M:
+		for x: int in MAP_M:
+			image.set_pixel(x, z, Color(sand_weight(
+				float(x) - float(MAP_M) * 0.5,
+				float(z) - float(MAP_M) * 0.5,
+				art.heights[z * IslandGen.POINTS + x]), 0.0, 0.0))
+	return image
+
+
+static func _sand_texture(art: IslandArt) -> ImageTexture:
+	var image := _sand_image(art)
+	# Мип-мапы — как у карт весов и тона (дальние склоны не рябят).
+	image.generate_mipmaps()
+	return ImageTexture.create_from_image(image)
 
 
 ## Карта тона: RGB — цвет «материала» точки (та же функция, что красит
@@ -347,20 +435,26 @@ static func _border_image(art: IslandArt) -> Image:
 ## целиком. На гравийной зоне Площади тон снижен до PLAZA_TONE (гравий
 ## читается, цвет сведён с плитами зоны), прочие террасы — как прежде,
 ## плоский камень своей зоны.
+## Песок берега (сборка 4) — тот же принцип: плоский пляжный цвет (тон 1
+## ниже SAND_H) закрывал бы текстуру песка целиком; на крыле берега тон
+## снижается к SHORE_SAND_TONE по весу песка.
+const SHORE_SAND_TONE: float = 0.45
+
+
 static func _material_tone_weight(
 	art: IslandArt, tint: Dictionary, x: int, z: int,
 ) -> float:
+	var wx: float = float(x) - float(MAP_M) * 0.5
+	var wz: float = float(z) - float(MAP_M) * 0.5
 	if not tint.get(Vector2i(x - MAP_M / 2, z - MAP_M / 2), {}).is_empty():
-		return lerpf(
-			1.0, PLAZA_TONE,
-			_plaza_weight(
-				float(x) - float(MAP_M) * 0.5,
-				float(z) - float(MAP_M) * 0.5))
+		return lerpf(1.0, PLAZA_TONE, _plaza_weight(wx, wz))
 	var h: float = art.heights[z * IslandGen.POINTS + x]
+	var w_sand: float = sand_weight(wx, wz, h)
 	if h < TerrainBuilder.SAND_H or h >= TerrainBuilder.SNOW_H:
-		return 1.0
-	return lerpf(MEADOW_TONE, ROCK_TONE,
-		smoothstep(ROCK_TONE_FROM, ROCK_TONE_TO, _slope(art, x, z)))
+		return lerpf(1.0, SHORE_SAND_TONE, w_sand)
+	return lerpf(lerpf(MEADOW_TONE, ROCK_TONE,
+			smoothstep(ROCK_TONE_FROM, ROCK_TONE_TO, _slope(art, x, z))),
+		SHORE_SAND_TONE, w_sand)
 
 
 static func _weights_texture(art: IslandArt) -> ImageTexture:
@@ -534,7 +628,10 @@ static func surface_kind(art: IslandArt, world_pos: Vector3) -> int:
 	var noise := FastNoiseLite.new()
 	noise.seed = MOSS_SEED
 	noise.frequency = MOSS_FREQUENCY
-	if _moss_weight(noise, x, z, 0.0, w_wet) >= 0.35:
+	# Мох на песке берега не растёт (сборка 4): вес мха гасится весом
+	# песка — та же формула, что в карте весов (_weights_image).
+	if _moss_weight(noise, x, z, 0.0, w_wet) \
+			* (1.0 - sand_weight(wx, wz, h)) >= 0.35:
 		return Surface.GRASS
 	return Surface.DIRT
 

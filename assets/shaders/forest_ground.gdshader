@@ -55,6 +55,8 @@ uniform vec3 rock_tint : source_color = vec3(0.82, 0.83, 0.85);
 uniform vec3 mud_tint : source_color = vec3(0.76, 0.70, 0.64);
 uniform vec3 moss_tint : source_color = vec3(0.78, 0.88, 0.74);
 uniform vec3 gravel_tint : source_color = vec3(0.84, 0.80, 0.74);
+// Песок Каменистого берега (расширение карты, сборка 4): тёплый нейтрал.
+uniform vec3 sand_tint : source_color = vec3(0.92, 0.88, 0.82);
 // Доля плоского тинта в цвете слоя: 0 — чистая карта, 1 — плоский цвет.
 uniform float tint_mix = 0.10;
 
@@ -78,6 +80,12 @@ uniform sampler2D moss_orm : filter_linear_mipmap_anisotropic;
 uniform sampler2D gravel_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform sampler2D gravel_normal : filter_linear_mipmap_anisotropic;
 uniform sampler2D gravel_orm : filter_linear_mipmap_anisotropic;
+// Песок Каменистого берега (расширение карты, сборка 4): coast_sand_01;
+// вес — отдельная карта sand_map (весов RGBA уже не хватает), песок
+// замещает базу (подстилку/траву), оверлеи поверх работают как прежде.
+uniform sampler2D sand_tex : source_color, filter_linear_mipmap_anisotropic;
+uniform sampler2D sand_normal : filter_linear_mipmap_anisotropic;
+uniform sampler2D sand_orm : filter_linear_mipmap_anisotropic;
 
 // Пятнистость базы — параметры демо ez-tree (GrassOptions: scale 100,
 // patchiness 0.7): n = 0.5 + 0.5 * simplex2d(world.xz / noise_scale),
@@ -94,6 +102,7 @@ uniform float tile_m_rock = 2.7;
 uniform float tile_m_mud = 2.3;
 uniform float tile_m_moss = 2.0;
 uniform float tile_m_gravel = 2.0;
+uniform float tile_m_sand = 2.4;
 // Второй крупный масштаб того же слоя (П14 1.2): от macro_near до
 // macro_far albedo верхней плоскости подмешивается к тому же слою
 // в macro_scale раз крупнее — вблизи зернистость скана, вдали нет
@@ -149,8 +158,10 @@ const float AO_LIGHT_AFFECT_V = 0.5;
 const float SIMPLE_ROUGH = 0.95;
 
 // Карты покраски острова (512 × 512 после расширения карты, пиксель =
-// 1 м, край — clamp).
+// 1 м, край — clamp). sand_map (канал R) — вес песка берега: карта весов
+// RGBA занята оверлеями, песок замещает базу и живёт отдельно.
 uniform sampler2D weight_map : filter_linear_mipmap_anisotropic;
+uniform sampler2D sand_map : filter_linear_mipmap_anisotropic;
 uniform sampler2D border_map : source_color, filter_linear_mipmap_anisotropic;
 // Карта честных нормалей рельефа (П5.9 переделка, П3): сглаженное поле из
 // карты высот, кодировка n·0.5+0.5 (данные, не цвет).
@@ -208,6 +219,7 @@ const float AMP_ROCK_C = 0.15;
 const float AMP_MUD_C = 0.09;
 const float AMP_MOSS_C = 0.03;
 const float AMP_GRAVEL_C = 0.05;
+const float AMP_SAND_C = 0.03;
 // Подъём кольца над чанками (мм) и полоса гашения смещения у кромки, м.
 const float RING_LIFT_C = 0.004;
 const float RING_EDGE_FADE = 1.5;
@@ -348,10 +360,17 @@ vec3 layer_perturb(
 // высота кольца ≈ 0, ступни не проваливаются.
 float ring_displacement(vec2 m) {
 	vec4 w = textureLod(weight_map, paint_uv(m), 0.0);
+	// Песок берега (сборка 4): базовое смещение сэмплирует свою карту
+	// высот, когда песок замещает подстилку (центрирование и амплитуда —
+	// базовые: рельеф песка мелкий, как подстилка).
+	float w_sand_r = textureLod(sand_map, paint_uv(m), 0.0).r;
+	float base_b = w_sand_r > 0.5
+		? textureLod(sand_orm,
+			tile_break(m, tile_m_sand) / tile_m_sand, 0.0).b
+		: textureLod(litter_orm,
+			tile_break(m, tile_m_litter) / tile_m_litter, 0.0).b;
 	float w_base = clamp(1.0 - (w.r + w.g + w.b + w.a), 0.0, 1.0);
-	float d = w_base * (textureLod(litter_orm,
-		tile_break(m, tile_m_litter) / tile_m_litter, 0.0).b
-		- orm_mean_a.x) * AMP_LITTER_C;
+	float d = w_base * (base_b - orm_mean_a.x) * AMP_LITTER_C;
 	if (w.r > LAYER_EPS) {
 		d += w.r * (textureLod(rock_orm,
 			tile_break(m, tile_m_rock) / tile_m_rock, 0.0).b
@@ -549,7 +568,13 @@ void fragment() {
 				1.0 - (w.r + w.g + w.b + w.a), 0.0, 1.0);
 			float max_w = max(max(w.r, w.g), max(w.b, w.a));
 			float master = min(parallax_scale / 0.06, 1.0) * p_amt;
-			if (w.r > w_base0 && w.r == max_w) {
+			// Песок берега замещает базу (сборка 4): когда он главный в
+			// точке, марш идёт по его карте высот.
+			float w_sand_p = texture(sand_map, sector_uv).r;
+			if (w_sand_p > 0.5 && w_sand_p > max_w) {
+				parallax_off = pom_march(sand_orm, tile_m_sand,
+					AMP_SAND_C, world_pos.xz, dir_m, master);
+			} else if (w.r > w_base0 && w.r == max_w) {
 				parallax_off = pom_march(rock_orm, tile_m_rock,
 					AMP_ROCK_C, world_pos.xz, dir_m, master);
 			} else if (w.g > w_base0 && w.g == max_w) {
@@ -579,9 +604,28 @@ void fragment() {
 	float macro_w = smoothstep(macro_near, macro_far, dist_v) * tri_w.y;
 
 	// Пятнистость базы (схема демо ground.js): вес подстилки s.
+	// sx/sz — знаки рельефа для возмущений нормалей всех слоёв (включая
+	// песок, который сэмплится ниже).
+	float sx = sign(relief_world.x);
+	float sz = sign(relief_world.z);
 	float n = 0.5 + 0.5 * simplex2d(world_pos.xz / noise_scale);
 	float s = smoothstep(patchiness - 0.1, patchiness + 0.1, n);
 	bool with_grass = quality != QUALITY_SIMPLE;
+	// Песок берега (сборка 4): замещает базу по весу sand_map (на SIMPLE
+	// тоже сэмплится — дешёвая карта, слой без веток качества).
+	float w_sand = texture(sand_map, sector_uv).r;
+	vec3 sand_col = vec3(0.0);
+	vec3 sand_orm_v = vec3(0.5, 0.85, 0.5);
+	vec3 perturb_sand = vec3(0.0);
+	if (w_sand > LAYER_EPS) {
+		sand_col = mix(
+			layer_color(sand_tex, tri_w, tile_m_sand, macro_w, top_m, x_m, z_m),
+			sand_tint, tint_mix);
+		sand_orm_v = texture(
+			sand_orm, tile_break(top_m, tile_m_sand) / tile_m_sand).rgb;
+		perturb_sand = layer_perturb(
+			sand_normal, tri_w, sx, sz, tile_m_sand, top_m, x_m, z_m);
+	}
 
 	// --- База: подстилка (+ трава вне SIMPLE), ORM — верхняя плоскость ---
 	vec3 litter_col = mix(
@@ -600,6 +644,9 @@ void fragment() {
 	}
 	vec3 base_orm_v = mix(grass_orm_v, litter_orm_v, with_grass ? s : 1.0);
 	vec3 base_col = mix(grass_col, litter_col, with_grass ? s : 1.0);
+	// Песок замещает базу целиком у кромки и плавно в подстилку выше.
+	base_orm_v = mix(base_orm_v, sand_orm_v, w_sand);
+	base_col = mix(base_col, sand_col, w_sand);
 
 	// --- Весы слоёв и height-blend (SPEC 2.2) ---
 	// Участники: база (остаточный вес), скала w.r, грязь w.g, мох w.b,
@@ -635,9 +682,6 @@ void fragment() {
 	float rough_mud = 1.0;
 	float rough_moss = 1.0;
 	float rough_gravel = 1.0;
-
-	float sx = sign(relief_world.x);
-	float sz = sign(relief_world.z);
 
 	if (w_rock > LAYER_EPS) {
 		col_rock = mix(
@@ -770,7 +814,9 @@ void fragment() {
 		perturb_grass = layer_perturb(
 			grass_normal, tri_w, sx, sz, tile_m_grass, top_m, x_m, z_m);
 	}
-	vec3 perturb = m_base * mix(perturb_grass, perturb_base, with_grass ? s : 1.0)
+	vec3 perturb = m_base * mix(
+			mix(perturb_grass, perturb_base, with_grass ? s : 1.0),
+			perturb_sand, w_sand)
 		+ m_rock * perturb_rock
 		+ m_mud * perturb_mud
 		+ m_moss * perturb_moss

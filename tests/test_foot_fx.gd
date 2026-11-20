@@ -226,7 +226,10 @@ func test_surface_kind_matches_ground_weights() -> void:
 				assert_eq(kind, ForestGround.Surface.MUD,
 					"влажная низина (%d, %d) — грязь" % [x, z])
 				seen["mud"] += 1
-			elif ForestGround._moss_weight(noise, x, z, 0.0, w_wet) >= 0.35:
+			# Расширение карты, сборка 4: мох гасится весом песка берега —
+			# тест считает тот же вес, что surface_kind и _weights_image.
+			elif (ForestGround._moss_weight(noise, x, z, 0.0, w_wet)
+					* (1.0 - ForestGround.sand_weight(wx, wz, h))) >= 0.35:
 				assert_eq(kind, ForestGround.Surface.GRASS,
 					"мох (%d, %d) — трава" % [x, z])
 				seen["grass"] += 1

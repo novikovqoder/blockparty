@@ -29,7 +29,15 @@ const RUINS_YARD_DENSITY: float = 2.0
 ## Радиус «у руин» вокруг каждого инстанса ruin_*, м.
 const RUINS_NEAR_R: float = 10.0
 ## Ниже этой отметки (пляж и кромка воды) наполнения нет: песок чистый.
+## Расширение карты, сборка 4: виды Берега (zone "shore") — исключение:
+## галька и ракушки живут на песке до самой кромки, нижний предел —
+## SHORE_KIND_H_MIN над уровнем воды.
 const BEACH_H: float = 1.4
+const SHORE_KIND_H_MIN: float = 0.35
+## Кострище дикого пляжа (сборка 4): единственная постановка у камня
+## духа Берега (клетка — рядом со спавном (170, −16) и камнем (166, −24),
+## не перекрывает подход).
+const SHORE_FIREPIT_CELL: Vector2i = Vector2i(172, -22)
 ## Отступ лёгкой мелочи от стен руин, м.
 const RUINS_CLEAR: float = 2.2
 ## Папоротники Леса гуще у стволов (П18 Сборка 2: динамическое поле П17
@@ -244,7 +252,7 @@ const KINDS: Array[Dictionary] = [
 		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_trunk/dead_quiver_trunk_lo.res"),
 		"scale": Vector2(1.0, 1.9), "range": 80.0, "shadow": true,
 		"solid": false, "light": false, "slope": 0.55, "sink": 0.1,
-		"p": 0.0014, "zone": "thicket",
+		"p": 0.0014, "zones": ["thicket", "shore"],
 	},
 	{
 		"type": "gd_dbranch1",
@@ -274,6 +282,39 @@ const KINDS: Array[Dictionary] = [
 		"solid": false, "light": true, "slope": 0.5, "sink": 0.01,
 		"p": 0.006, "zone": "thicket",
 	},
+	# --- Берег (расширение карты, сборка 4): песчаное побережье востока.
+	# Галька-россыпь и ракушки живут по всему песку до самой кромки воды
+	# (пляжный запрет BEACH_H для них отменён — _place_kind), глыбы реже;
+	# сухостой — общий вид с Чащей (zones обе). Кострище — единственная
+	# постановка (_place_firepit), вероятность 0. ---
+	{
+		"type": "gd_sandrock",
+		"mesh": preload("res://assets/third_party/polyhaven.com/sand_rocks_small_01/sand_rocks_small_01_lo.res"),
+		"scale": Vector2(0.35, 0.7), "range": 50.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.5, "sink": 0.05,
+		"p": 0.0035, "zone": "shore",
+	},
+	{
+		"type": "gd_shell",
+		"mesh": preload("res://assets/third_party/polyhaven.com/lambis_shell/lambis_shell_lo.res"),
+		"scale": Vector2(0.8, 1.7), "range": 25.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.0022, "zone": "shore",
+	},
+	{
+		"type": "gd_coastrock",
+		"mesh": preload("res://assets/third_party/polyhaven.com/coast_rocks_03/coast_rocks_03_lo.res"),
+		"scale": Vector2(0.1, 0.18), "range": 110.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.55, "sink": 0.35,
+		"p": 0.0012, "zone": "shore",
+	},
+	{
+		"type": "gd_firepit",
+		"mesh": preload("res://assets/third_party/polyhaven.com/stone_fire_pit/stone_fire_pit_lo.res"),
+		"scale": Vector2(1.0, 1.0), "range": 130.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.5, "sink": 0.06,
+		"p": 0.0, "zone": "shore",
+	},
 ]
 
 
@@ -295,11 +336,17 @@ static func build(art: IslandArt, tier: int) -> Dictionary:
 	for z: int in range(-IslandGen.HALF, IslandGen.HALF + 1):
 		for x: int in range(-IslandGen.HALF, IslandGen.HALF + 1):
 			var cell := _cell_state(art, x, z, ruins)
-			if cell["blocked"]:
+			# Пляжные клетки идут дальше (сборка 4): виды Берега живут
+			# на песке — окончательное решение за _place_kind; всё
+			# прочее (вода, Площадь, каньон...) отсекается здесь.
+			if cell["blocked"] and not cell["beach"]:
 				continue
 			for kind: Dictionary in KINDS:
 				_place_kind(groups[kind["type"]], rng, art, x, z, cell, ruins,
 					trunks)
+	# Кострище дикого пляжа: единственная постановка (после клеточного
+	# цикла — раскладка видов его не сдвигает).
+	_place_firepit(groups["gd_firepit"], art)
 	var instances: Array[MultiMeshInstance3D] = []
 	var ranges: Dictionary = {}
 	var colliders: Array[Dictionary] = []
@@ -364,19 +411,25 @@ static func _place_kind(
 	# "zone") живут только на своём крыле; прежние виды убраны со всех
 	# новых земель — крылья И перешейки (вес крыла в полосе спада уже
 	# < 0.5, имени нет, а земля новая; крылья ждут своих сборок 3–5),
-	# кроме папоротника на плато Утёсов.
+	# кроме папоротника на плато Утёсов. Сборка 4: поле "zones" — список
+	# крыльев (сухостой живёт и в Чаще, и на Берегу); "zone" — то же самое
+	# с одним элементом.
+	var zones: Array = kind.get("zones", [])
 	var kind_zone: String = kind.get("zone", "")
-	var wing: String = cell["wing"]
 	if kind_zone != "":
-		# Чаща (сборка 3): биом — ядро крыла И перешеек от Леса
-		# (in_thicket): подлесок сопровождает деревья по всему переходу.
-		# Утёсы — строго своё крыло, как в сборке 2.
-		if kind_zone == "thicket":
-			# С запасом клетки (in_thicket_plant): джиттер ±0.3 уводит
-			# floori координат меша в соседа — кромка биома чиста.
-			if not IslandGen.in_thicket_plant(x, z):
-				return
-		elif kind_zone != wing:
+		zones = [kind_zone]
+	var wing: String = cell["wing"]
+	if not zones.is_empty():
+		var fits := false
+		for zone_name: String in zones:
+			if zone_name == "thicket":
+				# Чаща (сборка 3): биом — ядро крыла И перешеек от Леса,
+				# с запасом клетки (in_thicket_plant): джиттер ±0.3 уводит
+				# floori координат меша в соседа — кромка биома чиста.
+				fits = fits or IslandGen.in_thicket_plant(x, z)
+			else:
+				fits = fits or zone_name == wing
+		if not fits:
 			return
 	else:
 		# Папоротник — исключение среди прежних видов: живёт на плато
@@ -386,6 +439,11 @@ static func _place_kind(
 			return
 		if cell["h_capped"]:
 			return  # прежний высотный предел 15 м — только для прежних видов
+	# Виды Берега (сборка 4) — исключение из пляжного запрета BEACH_H:
+	# песок и есть их место; ниже SHORE_KIND_H_MIN (вода) — как всем.
+	if cell["blocked"] and not (zones.has("shore") and cell["beach"]
+			and float(cell["h"]) > SHORE_KIND_H_MIN):
+		return
 	if cell["solid_blocked"] and kind["solid"]:
 		return
 	if cell["slope"] > kind["slope"]:
@@ -424,6 +482,22 @@ static func _place_kind(
 	group["colors"].append(Color(
 		TINT_COOL.r * brightness, TINT_COOL.g * brightness,
 		TINT_COOL.b * brightness, 1.0))
+
+
+## Кострище дикого пляжа (расширение карты, сборка 4): единственная
+## постановка у камня духа Берега — контраст «дикого пляжа» к парку у
+## Площади. Ставится по печёным высотам (детерминировано), тон — как у
+## прочих сканов наполнения.
+static func _place_firepit(group: Dictionary, art: IslandArt) -> void:
+	var scale: float = 1.1
+	var pos := Vector3(
+		SHORE_FIREPIT_CELL.x + 0.5, 0.0, SHORE_FIREPIT_CELL.y + 0.5)
+	pos.y = IslandGen.ground_height(art.heights, pos.x, pos.z) \
+		- float(group["kind"]["sink"]) * scale
+	group["transforms"].append(Transform3D(
+		Basis(Vector3.UP, 0.4) * Basis().scaled(Vector3.ONE * scale), pos))
+	group["colors"].append(Color(
+		TINT_COOL.r, TINT_COOL.g, TINT_COOL.b, 1.0))
 
 
 ## Узел вида: MultiMesh с трансформами и instance-тинами, материал
@@ -592,6 +666,11 @@ static func _cell_state(
 		solid_blocked = true
 	return {
 		"blocked": blocked,
+		# Пляжная (не водная) блокировка снимается для видов Берега —
+		# галька и ракушки живут на песке до кромки (сборка 4). Вода —
+		# не пляж: морские клетки скипаются в build() как раньше.
+		"beach": h <= BEACH_H and h > SHORE_KIND_H_MIN,
+		"h": h,
 		"solid_blocked": solid_blocked,
 		"yard": yard,
 		"forest": forest,

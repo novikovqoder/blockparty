@@ -7,6 +7,8 @@
 # меняются). Лицо стен смотрит в локальном −Z: yaw разворачивает его
 # к морю — запад PI/2, север PI, юг 0. Тинт и упрощённая коллизия
 # боксом по AABB (SPEC 3.1) — общие с GroundDetails.
+# Сборка 4: тот же слой несёт пару прибрежных глыб восточного Берега
+# (lm_shore_*) — подножие-плита у уреза воды, лицо на восток.
 class_name CliffLandmarks
 extends RefCounted
 
@@ -88,6 +90,23 @@ const SITES: Array[Dictionary] = [
 		"anchor": Vector2(-150.0, 88.0), "dir": Vector2(0.0, 1.0),
 		"yaw": PI, "scale": 1.0, "dy": 0.3, "range": 260.0,
 		"bright": 1.02,
+	},
+	# Расширение карты, сборка 4: восточный Берег — пара прибрежных глыб
+	# у кромки воды (лицо на восток, к открытому морю); подножие — плита,
+	# якорь на берегу, шаги к морю находят урез.
+	{
+		"name": "lm_shore_north", "foot_h": FOOT_SLAB_H,
+		"mesh": preload("res://assets/third_party/polyhaven.com/coast_rocks_03/coast_rocks_03_lo.res"),
+		"anchor": Vector2(226.0, 16.0), "dir": Vector2(1.0, 0.0),
+		"yaw": -PI / 2.0, "scale": 0.45, "dy": 0.3, "range": 280.0,
+		"bright": 1.0,
+	},
+	{
+		"name": "lm_shore_south", "foot_h": FOOT_SLAB_H,
+		"mesh": preload("res://assets/third_party/polyhaven.com/coast_rocks_01/coast_rocks_01_lo.res"),
+		"anchor": Vector2(224.0, -52.0), "dir": Vector2(0.96, -0.28),
+		"yaw": -PI / 2.0, "scale": 0.32, "dy": 0.3, "range": 280.0,
+		"bright": 0.98,
 	},
 ]
 
