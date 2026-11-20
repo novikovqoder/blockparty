@@ -167,16 +167,28 @@ const ZONES: Array[Dictionary] = [
 	{"name": "meadows", "center": Vector2(-10, -160), "radius": 75.0},
 ]
 
-## Смотровые площадки (раздел 9.3): площадка 3 × 3 точки на 3.0 м выше
-## базиса — без подсадки не забраться, с подсадкой — можно.
-const LOOKOUTS: Array[Vector2i] = [
-	Vector2i(-72, 34),
-	Vector2i(-52, 28),
-	Vector2i(-66, 56),
-	Vector2i(-44, 48),
+## Смотровые площадки (раздел 9.3): базис-поляна 15 × 15 точек, площадка
+## 3 × 3 точки на 3.0 м выше базиса — без подсадки не забраться, с
+## подсадкой — можно. cell — центр; base/top — высоты базиса и площадки;
+## zone — палитра камня площадки (3 Холмы, 6 Утёсы); ladder_yaw — поворот
+## узла LookoutLadder (лестница свисает по локальной +Z: Холмы — на юг).
+## Расширение карты, сборка 2: две площадки на гребне морской кромки
+## Утёсов — базис врезан в гребень (~22 м), площадка над ним, вид на
+## открытое море; лестницы свисают в сторону плато (подход пешеходом).
+const LOOKOUTS: Array[Dictionary] = [
+	{"cell": Vector2i(-72, 34), "base": 7.0, "top": 10.0, "zone": 3,
+		"ladder_yaw": 0.0},
+	{"cell": Vector2i(-52, 28), "base": 7.0, "top": 10.0, "zone": 3,
+		"ladder_yaw": 0.0},
+	{"cell": Vector2i(-66, 56), "base": 7.0, "top": 10.0, "zone": 3,
+		"ladder_yaw": 0.0},
+	{"cell": Vector2i(-44, 48), "base": 7.0, "top": 10.0, "zone": 3,
+		"ladder_yaw": 0.0},
+	{"cell": Vector2i(-230, 30), "base": 22.0, "top": 25.0, "zone": 6,
+		"ladder_yaw": PI / 2.0},
+	{"cell": Vector2i(-180, 90), "base": 22.0, "top": 25.0, "zone": 6,
+		"ladder_yaw": PI},
 ]
-const LOOKOUT_BASE_H: float = 7.0
-const LOOKOUT_TOP_H: float = 10.0
 
 ## Типы предметов с коллизией (рецепт формы — в prop_meshes.gd).
 ## ruin_gate — только декоративная рама: механика плит удалена с наследием
@@ -282,9 +294,11 @@ static func generate() -> Dictionary:
 	_zone_fill(heights, props, reserved, village, ruins, pier, fire,
 		stones, spawns)
 	var lookouts: Array = []
-	for center: Vector2i in LOOKOUTS:
+	for entry: Dictionary in LOOKOUTS:
+		var cell: Vector2i = entry["cell"]
 		lookouts.append({
-			"center": Vector3(float(center.x), LOOKOUT_TOP_H, float(center.y)),
+			"center": Vector3(float(cell.x), entry["top"], float(cell.y)),
+			"base": entry["base"], "yaw": entry["ladder_yaw"],
 		})
 	data["stones"] = stones
 	data["spawn_zones"] = spawns
@@ -581,6 +595,20 @@ static func _in_new_land(x: int, z: int) -> bool:
 	return new_land_weight(x, z) > 0.0
 
 
+## Имя крыла новых земель в точке (пустая строка — старый остров или
+## перешеек): биомы сборок 2–5 держат свои виды наполнения только на
+## своём крыле (расширение карты, сборка 2: утёсы).
+static func wing_name_at(x: int, z: int) -> String:
+	var best: float = 0.0
+	var best_name: String = ""
+	for wing: Dictionary in WINGS:
+		var weight: float = _wing_weight(wing, x, z)
+		if weight > best:
+			best = weight
+			best_name = wing["name"]
+	return best_name if best >= 0.5 else ""
+
+
 ## Шум + композитная маска → базовая высота (до зон). Старый круг даёт
 ## ту же формулу, что раньше; крылья и перешейки добавляют пол суши
 ## WING_LAND_FLOOR (высоты внутри крыла — от шума e, как у старого
@@ -784,7 +812,8 @@ static func _protected_cells() -> Dictionary:
 		for x: int in range(int(GULLY_MID.x - gully_reach), int(GULLY_MID.x + gully_reach) + 1):
 			if gully_across(x, z) <= GULLY_HALF_W:
 				cells[Vector2i(x, z)] = true
-	for center: Vector2i in LOOKOUTS:
+	for entry: Dictionary in LOOKOUTS:
+		var center: Vector2i = entry["cell"]
 		for dx: int in range(-2, 3):
 			for dz: int in range(-2, 3):
 				cells[center + Vector2i(dx, dz)] = true
@@ -1000,10 +1029,12 @@ static func _carve_crevasse(heights: PackedFloat32Array) -> void:
 				heights[_idx(x, z)] = lerpf(CREVASSE_RIM_H, h, t)
 
 
-## Смотровые: базис-поляна 7 м, площадка 3 × 3 точки на 10 м — уступ ровно
-## 3.0 м. Подход к базису выравнивает второй проход _limit_slopes.
+## Смотровые: базис-поляна и площадка 3 × 3 точки на 3.0 м выше — высоты
+## у каждой площадки свои (LOOKOUTS). Подход к базису выравнивает второй
+## проход _limit_slopes.
 static func _lookouts(heights: PackedFloat32Array) -> void:
-	for center: Vector2i in LOOKOUTS:
+	for entry: Dictionary in LOOKOUTS:
+		var center: Vector2i = entry["cell"]
 		for dx: int in range(-7, 8):
 			for dz: int in range(-7, 8):
 				var x: int = center.x + dx
@@ -1011,7 +1042,7 @@ static func _lookouts(heights: PackedFloat32Array) -> void:
 				if absi(x) > HALF or absi(z) > HALF:
 					continue
 				var platform: bool = absi(dx) <= 1 and absi(dz) <= 1
-				heights[_idx(x, z)] = LOOKOUT_TOP_H if platform else LOOKOUT_BASE_H
+				heights[_idx(x, z)] = entry["top"] if platform else entry["base"]
 
 
 static func _dist_to_crevasse(x: int, z: int) -> float:
@@ -1166,11 +1197,13 @@ static func tint_hints() -> Dictionary:
 	for x: int in range(CREVASSE_X0, CREVASSE_X1 + 1):
 		for z: int in range(CREVASSE_Z0, CREVASSE_Z1 + 1):
 			tint[Vector2i(x, z)] = {"zone": 4}
-	# Смотровые: площадки — бежевый камень зоны холмов.
-	for center: Vector2i in LOOKOUTS:
+	# Смотровые: площадки — камень своей зоны (Холмы бежевый, Утёсы —
+	# холодный серый крыла).
+	for entry: Dictionary in LOOKOUTS:
+		var center: Vector2i = entry["cell"]
 		for dx: int in range(-1, 2):
 			for dz: int in range(-1, 2):
-				tint[center + Vector2i(dx, dz)] = {"zone": 3}
+				tint[center + Vector2i(dx, dz)] = {"zone": entry["zone"]}
 	return tint
 
 
@@ -1681,16 +1714,17 @@ static func _crevasse_walls(props: Array, rng: RandomNumberGenerator) -> void:
 ## грань рельефа проходит на 1.5 м от центра площадки 2 × 2 м. Кольцо
 ## замкнуто — доработка-2 П5.13 (П2) убрала обходные тропы со ступенями:
 ## смотровые уступы пешеходом не проходимы, только механики (верёвочная
-## лестница с юга по LOOKOUT_TOP_H + LookoutLadder, подсадка с головы).
+## лестница до top по LOOKOUTS + LookoutLadder, подсадка с головы).
 static func _lookout_walls(props: Array, rng: RandomNumberGenerator) -> void:
-	var wall_h: float = LOOKOUT_TOP_H - LOOKOUT_BASE_H + 0.4
-	for center: Vector2i in LOOKOUTS:
+	for entry: Dictionary in LOOKOUTS:
+		var center: Vector2i = entry["cell"]
+		var wall_h: float = float(entry["top"]) - float(entry["base"]) + 0.4
 		for side: int in range(4):
 			var along_x: bool = side % 2 == 0
 			var sign: float = 1.0 if side < 2 else -1.0
 			var pos := Vector3(
 				float(center.x) + (0.0 if along_x else sign * 1.5),
-				LOOKOUT_BASE_H - 0.3,
+				float(entry["base"]) - 0.3,
 				float(center.y) + (sign * 1.5 if along_x else 0.0),
 			)
 			_add_prop(props, rng, &"rock_wall", pos,
@@ -1700,7 +1734,7 @@ static func _lookout_walls(props: Array, rng: RandomNumberGenerator) -> void:
 		# Камешки на площадке.
 		for i: int in range(3):
 			_prop(props, rng, center + Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1)),
-				LOOKOUT_TOP_H, "pebble", "stone")
+				float(entry["top"]), "pebble", "stone")
 
 
 ## Мостки: две переправы из досок на кромке (walk — поверхность BFS) и
@@ -2084,8 +2118,11 @@ static func reserved_anchor_spots(
 	spots.append(ruins["gate_center"])
 	spots.append_array(ruins["plates"])
 	spots.append(pier["deck_end"])
-	for center: Vector2i in LOOKOUTS:
-		spots.append(Vector3(float(center.x), LOOKOUT_TOP_H, float(center.y)))
+	for entry: Dictionary in LOOKOUTS:
+		spots.append(Vector3(
+			float((entry["cell"] as Vector2i).x),
+			float(entry["top"]),
+			float((entry["cell"] as Vector2i).y)))
 	for point: Vector3 in _hang()["points"]:
 		spots.append(point)
 	return spots

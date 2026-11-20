@@ -5,7 +5,7 @@
 # Лестница — наклонная стремянка из досек на двух тросах: перепад ступени
 # меньше автоподъёма игрока, подниматься можно шагом (как тропа из plank_deck).
 # До сброса не видна и без коллизий. Дети island.tscn; порядок имён
-# LookoutLadder1..4 — как LOOKOUTS у IslandGen.
+# LookoutLadder1..N — как LOOKOUTS у IslandGen.
 class_name LookoutLadder
 extends Interactable
 

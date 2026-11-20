@@ -97,6 +97,9 @@ var _clutter_tier: int = 0
 ## П16 п. 5: трансформы наполнения по видам (из GroundDetails.build) —
 ## по ним ставятся окклюдеры крупных валунов и пней.
 var _detail_transforms: Dictionary = {}
+## Трансформы скал-ориентиров Утёсов (расширение карты, сборка 2):
+## окклюдеры стен обрыва считаются по ним (см. _build_occluders).
+var _landmark_transforms: Dictionary = {}
 ## П15-ДОП2, п. 1: юбка морского дна за краем карты (глубина растёт
 ## плавно до горизонта); ползунки F3 меняют склон.
 var _seafloor: SeafloorSkirt = null
@@ -702,6 +705,19 @@ func _build_details() -> void:
 		_register(type, instance)
 	_detail_colliders = built["colliders"]
 	_detail_transforms = built["transforms"]
+	# Расширение карты, сборка 2: скалы-ориентиры крыла Утёсов (стены
+	# и контрфорсы по подножию обрыва, плиты у уреза воды) — тем же
+	# форматом, что наполнение: дальности в общих таблицах (set_quality),
+	# коллайдеры — в общий список боксов.
+	var landmarks: Dictionary = CliffLandmarks.build(art)
+	for node: Variant in landmarks["instances"]:
+		var landmark := node as MultiMeshInstance3D
+		add_child(landmark)
+		var lm_type := String(landmark.name)
+		_base_ranges[lm_type] = landmarks["ranges"][lm_type]
+		_register(lm_type, landmark)
+	_detail_colliders.append_array(landmarks["colliders"])
+	_landmark_transforms = landmarks["transforms"]
 	# П14 3.3: слой мелочи вокруг игрока (HIGH/ULTRA): ноды строятся здесь,
 	# буферы заполняет первый update_viewer (когда известна позиция
 	# зрителя); плотность и тени — по уровню входа, как у травы-буста.
@@ -747,6 +763,15 @@ func _build_occluders() -> void:
 		for xf: Transform3D in _detail_transforms[type]:
 			if detail_occluder(type, xf.basis.x.length()):
 				_add_occluder_box(root, mesh, xf)
+	# Скалы-ориентиры Утёсов (расширение карты, сборка 2): стены обрыва
+	# 40–100 м — ценные окклюдеры; плиты у воды ниже OCCLUDER_MIN_M,
+	# occluder_size их отсеет сам.
+	for type: String in _landmark_transforms:
+		var lm_mesh: Mesh = CliffLandmarks.site_mesh(StringName(type))
+		if lm_mesh == null:
+			continue
+		for xf: Transform3D in _landmark_transforms[type]:
+			_add_occluder_box(root, lm_mesh, xf)
 	add_child(root)
 
 

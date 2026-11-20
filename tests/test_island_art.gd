@@ -350,7 +350,7 @@ func test_trees_planted_on_ground() -> void:
 func test_island_has_no_pines() -> void:
 	# П18-фикс 3 «ели убрать»: высокие деревья острова — только
 	# лиственные. Имена типов генератора не переименовывались (строка
-	# типа в данных расстановки и хеше острова 4250703699) — «ель»
+	# типа в данных расстановки и хеше острова 1329122158) — «ель»
 	# проверяется по ВИДУ: ни одна группа деревьев арта не несёт
 	# хвойную листву, pine-моделей и текстуры в проекте нет вовсе
 	# (хвойный куст Bush 3 заменён вариантом Bush 1).
@@ -427,8 +427,10 @@ func test_crevasse_walls_and_bridges_are_props() -> void:
 					walls += 1
 				else:
 					var near_lookout := false
-					for lookout: Vector2i in IslandGen.LOOKOUTS:
-						if Vector2(pos.x, pos.z).distance_to(lookout) <= 4.0:
+					for entry: Dictionary in IslandGen.LOOKOUTS:
+						var cell: Vector2i = entry["cell"]
+						if Vector2(pos.x, pos.z).distance_to(
+								Vector2(float(cell.x), float(cell.y))) <= 4.0:
 							near_lookout = true
 					if near_lookout:
 						lookout_walls += 1
@@ -438,8 +440,10 @@ func test_crevasse_walls_and_bridges_are_props() -> void:
 					and pos.z <= IslandGen.CREVASSE_Z1 + 3.0:
 					decks += 1
 				else:
-					for lookout: Vector2i in IslandGen.LOOKOUTS:
-						if Vector2(pos.x, pos.z).distance_to(lookout) <= 4.0:
+					for entry: Dictionary in IslandGen.LOOKOUTS:
+						var cell: Vector2i = entry["cell"]
+						if Vector2(pos.x, pos.z).distance_to(
+								Vector2(float(cell.x), float(cell.y))) <= 4.0:
 							trail_steps += 1
 			"pier_post":
 				if pos.z >= IslandGen.CREVASSE_Z0 and pos.z <= IslandGen.CREVASSE_Z1:

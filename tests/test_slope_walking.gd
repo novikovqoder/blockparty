@@ -351,8 +351,9 @@ func _hill_targets() -> Array[Vector3]:
 			if here < 6.0:
 				continue
 			var near_lookout := false
-			for center: Vector2i in IslandGen.LOOKOUTS:
-				if Vector2(float(center.x) - float(x), float(center.y) - float(z)).length() < 5.0:
+			for entry: Dictionary in IslandGen.LOOKOUTS:
+				var cell: Vector2i = entry["cell"]
+				if Vector2(float(cell.x) - float(x), float(cell.y) - float(z)).length() < 5.0:
 					near_lookout = true
 					break
 			if near_lookout:
@@ -374,8 +375,9 @@ func _hill_targets() -> Array[Vector3]:
 					break
 			if separated:
 				found.append(Vector3(float(x), here, float(z)))
-	for center: Vector2i in IslandGen.LOOKOUTS:
-		found.append(Vector3(float(center.x), 0.0, float(center.y) + 4.5))
+	for entry: Dictionary in IslandGen.LOOKOUTS:
+		var cell: Vector2i = entry["cell"]
+		found.append(Vector3(float(cell.x), 0.0, float(cell.y) + 4.5))
 	return found
 
 
@@ -475,20 +477,23 @@ func test_lookout_ledges_not_climbable_on_foot() -> void:
 	var island := ISLAND.instantiate() as Island
 	add_child_autofree(island)
 	var walker := _walker()
-	for center: Vector2i in IslandGen.LOOKOUTS:
+	for entry: Dictionary in IslandGen.LOOKOUTS:
+		var center: Vector2i = entry["cell"]
+		var base_h: float = entry["base"]
+		var top_h: float = entry["top"]
 		var start := Vector3(
-			float(center.x), IslandGen.LOOKOUT_BASE_H + 0.4, float(center.y) + 5.5)
+			float(center.x), base_h + 0.4, float(center.y) + 5.5)
 		var player := _spawn(island, start)
 		await _settle(30)
 		walker.setup(player)
 		player._bot = walker
 		var leg: Dictionary = await _walk_leg(player, walker,
-			Vector3(float(center.x), IslandGen.LOOKOUT_TOP_H, float(center.y)), 10.0)
+			Vector3(float(center.x), top_h, float(center.y)), 10.0)
 		assert_false(bool(leg["reached"]),
 			"смотровая %s: на площадку без подсадки не попасть" % center)
-		assert_lt(float(leg["max_height"]), IslandGen.LOOKOUT_TOP_H - 0.6,
+		assert_lt(float(leg["max_height"]), top_h - 0.6,
 			"смотровая %s: максимальная высота %.2f (площадка %.1f недостижима)"
-			% [center, float(leg["max_height"]), IslandGen.LOOKOUT_TOP_H])
+			% [center, float(leg["max_height"]), top_h])
 		_release(player, walker)
 
 

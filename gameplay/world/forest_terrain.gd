@@ -25,6 +25,14 @@ const MAP_M: int = IslandGen.HALF * 2
 const ROCK_SLOPE_SOFT: float = 0.45
 const ROCK_SLOPE_FULL: float = 0.75
 
+## Расширение карты, сборка 2: плато Утёсов — скальная подстилка без
+## крутого уклона (кромку и обрыв красит склон): доля камня по весу
+## крыла утёсов, от кромки пляжа вверх (CLIFF_ROCK_H_*), мягкая —
+## не в полный контраст склона.
+const CLIFF_PLATEAU_ROCK: float = 0.65
+const CLIFF_ROCK_H_SOFT: float = 2.5
+const CLIFF_ROCK_H_FULL: float = 4.5
+
 ## Влажная земля низин: ниже полной отметки — сыро, выше мягкой — сухо.
 const WET_H_FULL: float = 0.8
 const WET_H_SOFT: float = 3.2
@@ -267,6 +275,10 @@ static func _weights_image(art: IslandArt) -> Image:
 			var h: float = art.heights[z * IslandGen.POINTS + x]
 			var w_rock: float = smoothstep(
 				ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z))
+			# Расширение карты, сборка 2: плато Утёсов — скальная подстилка
+			# (крутую кромку красит склон выше, это плоская часть крыла).
+			w_rock = maxf(w_rock, _cliff_plateau_rock(
+				roundi(wx), roundi(wz), h))
 			# Тропа и гравий Площади — один слот утоптанной земли.
 			var w_plaza: float = _plaza_weight(wx, wz)
 			var w_path: float = maxf(_path_weight(wx, wz), w_plaza)
@@ -409,6 +421,20 @@ static func _slope(art: IslandArt, x: int, z: int) -> float:
 	return worst
 
 
+## Вес скальной подстилки плато Утёсов (расширение карты, сборка 2):
+## вес крыла «cliffs» (ядро 1, спад к морю) × маска высоты — пляж
+## у подножия остаётся песком. Крыло ищется по имени: порядок WINGS
+## не фиксируется.
+static func _cliff_plateau_rock(x: int, z: int, h: float) -> float:
+	for wing: Dictionary in IslandGen.WINGS:
+		if wing["name"] != "cliffs":
+			continue
+		return IslandGen._wing_weight(wing, x, z) \
+			* smoothstep(CLIFF_ROCK_H_SOFT, CLIFF_ROCK_H_FULL, h) \
+			* CLIFF_PLATEAU_ROCK
+	return 0.0
+
+
 ## Вес тропы: расстояние до полилинии, полный внутри PATH_HALF_FULL,
 ## плавный ноль к PATH_HALF_SOFT.
 static func _path_weight(wx: float, wz: float) -> float:
@@ -481,9 +507,13 @@ static func surface_kind(art: IslandArt, world_pos: Vector3) -> int:
 	var z := clampi(roundi(world_pos.z) + MAP_M / 2, 0, MAP_M - 1)
 	var wx := float(x) - float(MAP_M / 2)
 	var wz := float(z) - float(MAP_M / 2)
+	var h: float = art.heights[z * IslandGen.POINTS + x]
 	if smoothstep(ROCK_SLOPE_SOFT, ROCK_SLOPE_FULL, _slope(art, x, z)) >= 0.5:
 		return Surface.STONE
-	var h: float = art.heights[z * IslandGen.POINTS + x]
+	# Плато Утёсов (расширение карты, сборка 2): камень и под ногами —
+	# покрытие сходится с покраской, шаг без частиц.
+	if _cliff_plateau_rock(x, z, h) >= 0.5:
+		return Surface.STONE
 	var w_wet: float = 1.0 - smoothstep(WET_H_FULL, WET_H_SOFT, h)
 	if maxf(_path_weight(wx, wz), _plaza_weight(wx, wz)) >= 0.5:
 		return Surface.DIRT

@@ -105,8 +105,9 @@ func test_generation_is_deterministic() -> void:
 	# Расширение карты (сборка 1, каркас 512): карта 257² → 513² — суша
 	# выросла вчетверо (4 крыла + перешейки), высоты старого пятна
 	# сдвинулись на дециметры глобальной эрозией, добавлены крыльевые
-	# камни духа и спавны; хеш обновлён сознательно.
-	assert_eq(first_hash, 4250703699, "хеш острова совпадает с сгенерированной сценой")
+	# камни духа и спавны; хеш обновлён сознательно. Сборка 2 (Утёсы):
+	# две смотровые на гребне крыла — снова сознательно (1329122158).
+	assert_eq(first_hash, 1329122158, "хеш острова совпадает с сгенерированной сценой")
 
 
 func test_zone_blend_is_smooth() -> void:
@@ -173,7 +174,8 @@ func test_lookouts_not_reachable_without_help() -> void:
 	# каждой смотровой достижим (к площадке вообще есть подход).
 	var data: Dictionary = _island_data()
 	var reach: Dictionary = IslandGen.walkable_reach(data, true)
-	for lookout: Vector2i in IslandGen.LOOKOUTS:
+	for entry: Dictionary in IslandGen.LOOKOUTS:
+		var lookout: Vector2i = entry["cell"]
 		assert_false(reach.has(lookout), "смотровая %s не достижима по рельефу" % lookout)
 		var base_reachable := false
 		for dx: int in range(-7, 8):
@@ -191,7 +193,8 @@ func test_lookouts_not_reachable_even_with_decks() -> void:
 	# не ведёт на площадки: только механики (лестница после подсадки).
 	var data: Dictionary = _island_data()
 	var reach: Dictionary = IslandGen.walkable_reach(data)
-	for lookout: Vector2i in IslandGen.LOOKOUTS:
+	for entry: Dictionary in IslandGen.LOOKOUTS:
+		var lookout: Vector2i = entry["cell"]
 		assert_false(reach.has(lookout),
 			"смотровая %s не достижима пешеходом и по настилам" % lookout)
 

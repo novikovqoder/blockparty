@@ -126,6 +126,72 @@ const KINDS: Array[Dictionary] = [
 		"solid": false, "light": true, "slope": 0.65, "sink": 0.04,
 		"p": 0.004,
 	},
+	# --- Утёсы (расширение карты, сборка 2): виды с полем "zone" живут
+	# только на своём крыле (wing_name_at) и поднимаются по кромке выше
+	# прежнего предела 15 м — до вершины уступа (см. _place_kind). ---
+	{
+		"type": "gd_mossrocks1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/rock_moss_set_01/rock_moss_set_01_lo.res"),
+		"scale": Vector2(0.55, 0.95), "range": 90.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.5, "sink": 0.1,
+		"p": 0.0022, "zone": "cliffs",
+	},
+	{
+		"type": "gd_mossrocks2",
+		"mesh": preload("res://assets/third_party/polyhaven.com/rock_moss_set_02/rock_moss_set_02_lo.res"),
+		"scale": Vector2(0.55, 0.95), "range": 90.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.5, "sink": 0.1,
+		"p": 0.0022, "zone": "cliffs",
+	},
+	{
+		"type": "gd_cliffrock",
+		"mesh": preload("res://assets/third_party/polyhaven.com/namaqualand_cliff_01/namaqualand_cliff_01_lo.res"),
+		"scale": Vector2(0.6, 1.1), "range": 120.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.8, "sink": 0.25,
+		"p": 0.0011, "zone": "cliffs",
+	},
+	{
+		"type": "gd_rockface1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/rock_face_01/rock_face_01_lo.res"),
+		"scale": Vector2(0.7, 1.2), "range": 100.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.9, "sink": 0.3,
+		"p": 0.0011, "zone": "cliffs",
+	},
+	{
+		"type": "gd_rockface2",
+		"mesh": preload("res://assets/third_party/polyhaven.com/rock_face_02/rock_face_02_lo.res"),
+		"scale": Vector2(0.8, 1.4), "range": 80.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.9, "sink": 0.2,
+		"p": 0.0014, "zone": "cliffs",
+	},
+	{
+		"type": "gd_boulder1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/boulder_01/boulder_01_lo.res"),
+		"scale": Vector2(0.8, 1.5), "range": 100.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.6, "sink": 0.15,
+		"p": 0.0013, "zone": "cliffs",
+	},
+	{
+		"type": "gd_rock7",
+		"mesh": preload("res://assets/third_party/polyhaven.com/rock_07/rock_07_lo.res"),
+		"scale": Vector2(5.0, 9.0), "range": 50.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.7, "sink": 0.05,
+		"p": 0.003, "zone": "cliffs",
+	},
+	{
+		"type": "gd_stone1",
+		"mesh": preload("res://assets/third_party/polyhaven.com/stone_01/stone_01_lo.res"),
+		"scale": Vector2(5.0, 10.0), "range": 50.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.7, "sink": 0.04,
+		"p": 0.003, "zone": "cliffs",
+	},
+	{
+		"type": "gd_rock9",
+		"mesh": preload("res://assets/third_party/polyhaven.com/rock_09/rock_09_lo.res"),
+		"scale": Vector2(5.0, 8.0), "range": 40.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.75, "sink": 0.04,
+		"p": 0.003, "zone": "cliffs",
+	},
 ]
 
 
@@ -212,6 +278,19 @@ static func _place_kind(
 	trunks: Dictionary,
 ) -> void:
 	var kind: Dictionary = group["kind"]
+	# Расширение карты, сборка 2 — гейтинг крыльев: скальные виды (поле
+	# "zone") живут только на своём крыле; прежние виды с крыльев убраны
+	# (крылья ждут своих сборок 3–5), кроме папоротника на плато Утёсов.
+	var kind_zone: String = kind.get("zone", "")
+	var wing: String = cell["wing"]
+	if kind_zone != "":
+		if kind_zone != wing:
+			return
+	else:
+		if wing != "" and (String(kind["type"]) != "gd_fern" or wing != "cliffs"):
+			return
+		if cell["h_capped"]:
+			return  # прежний высотный предел 15 м — только для прежних видов
 	if cell["solid_blocked"] and kind["solid"]:
 		return
 	if cell["slope"] > kind["slope"]:
@@ -382,7 +461,10 @@ static func _cell_state(
 	var blocked := false
 	var solid_blocked := false
 	var h: float = art.heights[IslandGen._idx(x, z)]
-	if h <= BEACH_H or h > 15.0:
+	# Прежний предел 15 м гасит только виды до сборки 2; скальные виды
+	# Утёсов поднимаются по кромке до вершины уступа (гейтинг — _place_kind).
+	var h_capped := h > 15.0
+	if h <= BEACH_H or h > IslandGen.CLIFF_RIM_H + 0.5:
 		blocked = true
 	if ForestGround._plaza_weight(pos.x, pos.y) > 0.05 \
 			or IslandGen.on_village_pad(pos):
@@ -393,6 +475,15 @@ static func _cell_state(
 		blocked = true  # каньон расщелины и подходы к мосткам
 	if x >= 2 and x <= 9 and z >= 56 and z <= 75:
 		blocked = true  # полоса причала Озера (подход по берегу)
+	# Расширение карты, сборка 2: террасы смотровых Утёсов — твёрдому
+	# наполнению нельзя (базис 15 × 15 и площадка должны остаться чистыми,
+	# лестница и подход не загораживаются).
+	for entry: Dictionary in IslandGen.LOOKOUTS:
+		if int(entry["zone"]) != 6:
+			continue
+		var cell: Vector2i = entry["cell"]
+		if pos.distance_to(Vector2(float(cell.x), float(cell.y))) < 9.0:
+			solid_blocked = true
 	var forest := x < 0 and z < 0
 	var density := FOREST_DENSITY if forest else 1.0
 	if _near_ruins(pos, ruins):
@@ -409,6 +500,8 @@ static func _cell_state(
 		"yard": yard,
 		"forest": forest,
 		"density": density,
+		"wing": IslandGen.wing_name_at(x, z),
+		"h_capped": h_capped,
 		"slope": ForestGround._slope(art, x + IslandGen.HALF, z + IslandGen.HALF),
 		"path": maxf(
 			ForestGround._path_weight(pos.x, pos.y),

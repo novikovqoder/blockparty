@@ -120,11 +120,15 @@ func _build_scene(data: Dictionary, art: IslandArt) -> Node:
 
 	# Камни духа (точки возрождения) на площади.
 	# Перед ними — лестницы смотровых (раздел 9.3): узел в центре площадки,
-	# порядок имён LookoutLadder1..4 — как LOOKOUTS у IslandGen.
+	# порядок имён LookoutLadder1..N — как LOOKOUTS у IslandGen. Поворот —
+	# из poi (расширение карты, сборка 2: у площадок Утёсов лестница
+	# свисает в сторону плато, а не в море).
 	for i: int in (data["poi"]["lookouts"] as Array).size():
 		var ladder: Node3D = load(LADDER_SCRIPT).new()
 		ladder.name = "LookoutLadder%d" % (i + 1)
-		ladder.position = (data["poi"]["lookouts"] as Array)[i]["center"]
+		var entry: Dictionary = (data["poi"]["lookouts"] as Array)[i]
+		ladder.position = entry["center"]
+		ladder.rotation.y = float(entry.get("yaw", 0.0))
 		root.add_child(ladder)
 	var stones: Array = data["stones"]
 	for i: int in stones.size():
