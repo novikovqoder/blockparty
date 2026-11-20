@@ -193,10 +193,16 @@ func test_surface_kind_matches_ground_weights() -> void:
 		for x: int in range(0, ForestGround.MAP_M, 3):
 			var wx := float(x) - half_map
 			var wz := float(z) - half_map
+			var h: float = ART.heights[z * IslandGen.POINTS + x]
 			var w_rock: float = smoothstep(
 				ForestGround.ROCK_SLOPE_SOFT, ForestGround.ROCK_SLOPE_FULL,
 				ForestGround._slope(ART, x, z))
-			var h: float = ART.heights[z * IslandGen.POINTS + x]
+			# Расширение карты, сборка 2 (фикс): камень плато Утёсов входит
+			# в вес покраски и surface_kind (max со склоном) и гасит мох —
+			# тест считает тот же вес; как в _weights_image, вес крыла
+			# берётся по мировым координатам (x/z — индексы узлов).
+			w_rock = maxf(w_rock, ForestGround._cliff_plateau_rock(
+				roundi(wx), roundi(wz), h))
 			var w_wet: float = 1.0 - smoothstep(
 				ForestGround.WET_H_FULL, ForestGround.WET_H_SOFT, h)
 			var w_path: float = maxf(
