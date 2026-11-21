@@ -415,8 +415,12 @@ const KINDS: Array[Dictionary] = [
 	{
 		"type": "gd_hollowlog",
 		"mesh": preload("res://assets/third_party/polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res"),
+		# Фикс сборки 5: без коллизии — тонкий валежник низины (толщина
+		# бокса 0.14–0.26 м) переступается авто-шагом 0.3, коллизии —
+		# только у крупных (SPEC 3.1); у чащевого gd_dlog1 (0.23–0.4 м)
+		# коллизия остаётся.
 		"scale": Vector2(0.5, 0.9), "range": 90.0, "shadow": true,
-		"solid": true, "light": false, "slope": 0.5, "sink": 0.12,
+		"solid": false, "light": false, "slope": 0.5, "sink": 0.12,
 		"p": 0.002, "zone": "hollow",
 	},
 ]
