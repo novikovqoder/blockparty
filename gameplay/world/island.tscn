@@ -31,7 +31,7 @@ size = Vector3(515, 40, 2)
 [sub_resource type="BoxShape3D" id="BoxShape3D_okhm0"]
 size = Vector3(515, 40, 2)
 
-[node name="Island" type="Node3D" unique_id=421691590]
+[node name="Island" type="Node3D" unique_id=1435660271]
 script = ExtResource("1_asxk1")
 zones = Array[Dictionary]([{
 "center": Vector2(0, 4),
@@ -92,208 +92,208 @@ spawn_zones = {
 "thicket": Vector3(-129.5, 3.1691923, -121.5)
 }
 
-[node name="IslandView" type="Node3D" parent="." unique_id=1026421592]
+[node name="IslandView" type="Node3D" parent="." unique_id=1912195679]
 script = ExtResource("2_ji4qu")
 art = ExtResource("3_bdvb7")
 
-[node name="SeaWater" type="Area3D" parent="." unique_id=1493156000]
+[node name="SeaWater" type="Area3D" parent="." unique_id=1960961143]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.85, 0)
 script = ExtResource("4_87865")
 surface_size = Vector2(512, 512)
 water_level = -0.15
 surface_gap = 0.0
 
-[node name="@CollisionShape3D@2" type="CollisionShape3D" parent="SeaWater" unique_id=1151792969]
+[node name="@CollisionShape3D@2" type="CollisionShape3D" parent="SeaWater" unique_id=803679739]
 shape = SubResource("BoxShape3D_qlma1")
 
-[node name="LakeWater" type="Area3D" parent="." unique_id=2058926761]
+[node name="LakeWater" type="Area3D" parent="." unique_id=622054441]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -0.85, 82)
 script = ExtResource("4_87865")
 surface_size = Vector2(34, 34)
 water_level = -0.15
 surface_gap = 0.0
 
-[node name="@CollisionShape3D@3" type="CollisionShape3D" parent="LakeWater" unique_id=1439248625]
+[node name="@CollisionShape3D@3" type="CollisionShape3D" parent="LakeWater" unique_id=1287756708]
 shape = SubResource("BoxShape3D_tnphj")
 
-[node name="Crevasse" type="Area3D" parent="." unique_id=1065869560]
+[node name="Crevasse" type="Area3D" parent="." unique_id=484097634]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 62.5, 2.5, 57.5)
 script = ExtResource("5_8sv3s")
 
-[node name="@CollisionShape3D@4" type="CollisionShape3D" parent="Crevasse" unique_id=1293836907]
+[node name="@CollisionShape3D@4" type="CollisionShape3D" parent="Crevasse" unique_id=1144543900]
 shape = SubResource("BoxShape3D_4xjkw")
 
-[node name="HangPoint1" type="Node3D" parent="Crevasse" unique_id=1172397834]
+[node name="HangPoint1" type="Node3D" parent="Crevasse" unique_id=1189245854]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint2" type="Node3D" parent="Crevasse" unique_id=167665066]
+[node name="HangPoint2" type="Node3D" parent="Crevasse" unique_id=1171483395]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint3" type="Node3D" parent="Crevasse" unique_id=971727667]
+[node name="HangPoint3" type="Node3D" parent="Crevasse" unique_id=755412481]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint4" type="Node3D" parent="Crevasse" unique_id=1219691738]
+[node name="HangPoint4" type="Node3D" parent="Crevasse" unique_id=368114821]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint5" type="Node3D" parent="Crevasse" unique_id=1167862085]
+[node name="HangPoint5" type="Node3D" parent="Crevasse" unique_id=312130795]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint6" type="Node3D" parent="Crevasse" unique_id=2028244004]
+[node name="HangPoint6" type="Node3D" parent="Crevasse" unique_id=491621356]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint7" type="Node3D" parent="Crevasse" unique_id=1202971862]
+[node name="HangPoint7" type="Node3D" parent="Crevasse" unique_id=277545183]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint8" type="Node3D" parent="Crevasse" unique_id=1942530002]
+[node name="HangPoint8" type="Node3D" parent="Crevasse" unique_id=1820887316]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint9" type="Node3D" parent="Crevasse" unique_id=1907621587]
+[node name="HangPoint9" type="Node3D" parent="Crevasse" unique_id=1961961578]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint10" type="Node3D" parent="Crevasse" unique_id=292100911]
+[node name="HangPoint10" type="Node3D" parent="Crevasse" unique_id=916684503]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint11" type="Node3D" parent="Crevasse" unique_id=1796284280]
+[node name="HangPoint11" type="Node3D" parent="Crevasse" unique_id=1178044133]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint12" type="Node3D" parent="Crevasse" unique_id=689365234]
+[node name="HangPoint12" type="Node3D" parent="Crevasse" unique_id=1046622246]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint13" type="Node3D" parent="Crevasse" unique_id=588414052]
+[node name="HangPoint13" type="Node3D" parent="Crevasse" unique_id=1829040304]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint14" type="Node3D" parent="Crevasse" unique_id=819011367]
+[node name="HangPoint14" type="Node3D" parent="Crevasse" unique_id=1132028384]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint15" type="Node3D" parent="Crevasse" unique_id=1679426136]
+[node name="HangPoint15" type="Node3D" parent="Crevasse" unique_id=485738677]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint16" type="Node3D" parent="Crevasse" unique_id=1431532004]
+[node name="HangPoint16" type="Node3D" parent="Crevasse" unique_id=262893859]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint17" type="Node3D" parent="Crevasse" unique_id=1211641482]
+[node name="HangPoint17" type="Node3D" parent="Crevasse" unique_id=752141037]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 3.6, -6)
 script = ExtResource("6_3ciof")
 
-[node name="HangPoint18" type="Node3D" parent="Crevasse" unique_id=168472984]
+[node name="HangPoint18" type="Node3D" parent="Crevasse" unique_id=1265975990]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 3.6, 6)
 script = ExtResource("6_3ciof")
 
-[node name="LookoutLadder1" type="Area3D" parent="." unique_id=1514989281]
+[node name="LookoutLadder1" type="Area3D" parent="." unique_id=725287824]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -72, 10, 34)
 script = ExtResource("7_bfahv")
 
-[node name="LookoutLadder2" type="Area3D" parent="." unique_id=1386414916]
+[node name="LookoutLadder2" type="Area3D" parent="." unique_id=108863458]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52, 10, 28)
 script = ExtResource("7_bfahv")
 
-[node name="LookoutLadder3" type="Area3D" parent="." unique_id=885971575]
+[node name="LookoutLadder3" type="Area3D" parent="." unique_id=1795294949]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 10, 56)
 script = ExtResource("7_bfahv")
 
-[node name="LookoutLadder4" type="Area3D" parent="." unique_id=84950475]
+[node name="LookoutLadder4" type="Area3D" parent="." unique_id=591192630]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 10, 48)
 script = ExtResource("7_bfahv")
 
-[node name="LookoutLadder5" type="Area3D" parent="." unique_id=946155911]
+[node name="LookoutLadder5" type="Area3D" parent="." unique_id=63838456]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -230, 25, 30)
 script = ExtResource("7_bfahv")
 
-[node name="LookoutLadder6" type="Area3D" parent="." unique_id=1171762108]
+[node name="LookoutLadder6" type="Area3D" parent="." unique_id=420728316]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -180, 25, 90)
 script = ExtResource("7_bfahv")
 
-[node name="RespawnStone1" type="Node3D" parent="." unique_id=661989493]
+[node name="RespawnStone1" type="Node3D" parent="." unique_id=1724007301]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 2, 12.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone2" type="Node3D" parent="." unique_id=877064672]
+[node name="RespawnStone2" type="Node3D" parent="." unique_id=2049401610]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -51.5, 6, -37.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone3" type="Node3D" parent="." unique_id=1189222958]
+[node name="RespawnStone3" type="Node3D" parent="." unique_id=478689505]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 58.5, 3, -31.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone4" type="Node3D" parent="." unique_id=1395122376]
+[node name="RespawnStone4" type="Node3D" parent="." unique_id=36514027]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45.5, 7, 32.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone5" type="Node3D" parent="." unique_id=2092372557]
+[node name="RespawnStone5" type="Node3D" parent="." unique_id=865386324]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40.5, 8.372255, 46.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone6" type="Node3D" parent="." unique_id=428428221]
+[node name="RespawnStone6" type="Node3D" parent="." unique_id=15502351]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 1.2, 66.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone7" type="Node3D" parent="." unique_id=838319176]
+[node name="RespawnStone7" type="Node3D" parent="." unique_id=348542335]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -165.5, 10, 26.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone8" type="Node3D" parent="." unique_id=1242330901]
+[node name="RespawnStone8" type="Node3D" parent="." unique_id=1007401936]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -125.5, 3.0691924, -125.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone9" type="Node3D" parent="." unique_id=349644336]
+[node name="RespawnStone9" type="Node3D" parent="." unique_id=945347302]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 166.5, 3, -23.5)
 script = ExtResource("8_07pbp")
 
-[node name="RespawnStone10" type="Node3D" parent="." unique_id=1883513079]
+[node name="RespawnStone10" type="Node3D" parent="." unique_id=1124705694]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 3.0691924, -155.5)
 script = ExtResource("8_07pbp")
 
-[node name="Cabin1" type="Node3D" parent="." unique_id=82041619]
+[node name="Cabin1" type="Node3D" parent="." unique_id=1718172648]
 transform = Transform3D(-0.9997721, 0, 0.021350343, 0, 1, 0, -0.021350343, 0, -0.9997721, -16.87498, 2, 1.9420755)
 script = ExtResource("9_eekq2")
 
-[node name="Cabin2" type="Node3D" parent="." unique_id=1939722541]
+[node name="Cabin2" type="Node3D" parent="." unique_id=1909720381]
 transform = Transform3D(0.18531778, 0, 0.98267865, 0, 1, 0, -0.98267865, 0, 0.18531778, 0.78843635, 2, -12.981707)
 script = ExtResource("9_eekq2")
 variant = 1
 terrace = false
 
-[node name="Cabin3" type="Node3D" parent="." unique_id=1389863096]
+[node name="Cabin3" type="Node3D" parent="." unique_id=1653370477]
 transform = Transform3D(0.99647415, 0, 0.083900325, 0, 1, 0, -0.083900325, 0, 0.99647415, 16.998335, 2, 3.7620237)
 script = ExtResource("9_eekq2")
 variant = 2
 
-[node name="Bounds1" type="StaticBody3D" parent="." unique_id=293996519]
+[node name="Bounds1" type="StaticBody3D" parent="." unique_id=409917273]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -256.5, 12, 0)
 
-[node name="@CollisionShape3D@5" type="CollisionShape3D" parent="Bounds1" unique_id=1414943796]
+[node name="@CollisionShape3D@5" type="CollisionShape3D" parent="Bounds1" unique_id=1293255656]
 shape = SubResource("BoxShape3D_dtivm")
 
-[node name="Bounds2" type="StaticBody3D" parent="." unique_id=1658662879]
+[node name="Bounds2" type="StaticBody3D" parent="." unique_id=1966683908]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -256.5, 12, 0)
 
-[node name="@CollisionShape3D@6" type="CollisionShape3D" parent="Bounds2" unique_id=1395877455]
+[node name="@CollisionShape3D@6" type="CollisionShape3D" parent="Bounds2" unique_id=68024394]
 shape = SubResource("BoxShape3D_u1jyd")
 
-[node name="Bounds3" type="StaticBody3D" parent="." unique_id=385148386]
+[node name="Bounds3" type="StaticBody3D" parent="." unique_id=1773481836]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, 256.5)
 
-[node name="@CollisionShape3D@7" type="CollisionShape3D" parent="Bounds3" unique_id=1855769958]
+[node name="@CollisionShape3D@7" type="CollisionShape3D" parent="Bounds3" unique_id=1981985221]
 shape = SubResource("BoxShape3D_jkq02")
 
-[node name="Bounds4" type="StaticBody3D" parent="." unique_id=263460341]
+[node name="Bounds4" type="StaticBody3D" parent="." unique_id=13182599]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, 256.5)
 
-[node name="@CollisionShape3D@8" type="CollisionShape3D" parent="Bounds4" unique_id=2102998071]
+[node name="@CollisionShape3D@8" type="CollisionShape3D" parent="Bounds4" unique_id=1796745656]
 shape = SubResource("BoxShape3D_okhm0")

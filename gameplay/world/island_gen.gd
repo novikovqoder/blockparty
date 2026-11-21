@@ -374,6 +374,9 @@ static func generate() -> Dictionary:
 	# Луга и Мшистая низина (расширение карты, сборка 5): свои потоки rng.
 	_meadows_fill(heights, props, reserved)
 	_hollow_fill(heights, props, reserved)
+	# Спуски «Холмов» (сборка 5, фикс 3): твёрдый разброс не запирает
+	# линии цель→подошва — пост-фильтр, потоки расстановки не сдвигаются.
+	_clear_hill_descents(heights, props)
 	var lookouts: Array = []
 	for entry: Dictionary in LOOKOUTS:
 		var cell: Vector2i = entry["cell"]
@@ -2629,6 +2632,118 @@ static func _zone_fill(
 				elif rng.randf() < 0.0015 \
 						and _clear_of_anchors(Vector3(x, h, z), anchors, 3.0):
 					_prop(props, rng, cell, h, "dead_log", "plain", 2, heights)
+
+
+## Коридоры спусков «Холмов» (расширение карты, сборка 5, фикс 3).
+## Сборка 5 сдвинула общий поток расстановки (правка высот и новые
+## биомы), и валуны с елями встали прямо на линию спуска с вершины
+## к подошве — бот без прыжков запирался между ними (test_slope_walking).
+## Как террасы смотровых Утёсов (сборка 2, ground_details._cell_state),
+## спуски получают запрет твёрдого разброса — не пятном у площадки,
+## а полосой вдоль линии цель→подошва. Цели — зеркало _hill_targets
+## из tests/test_slope_walking.gd (локальные максимумы окна ±5 м от 6 м
+## внутри круга зоны с разводкой 14 м, не у смотровых; плюс
+## кольца-основания четырёх смотровых Холмов, +4.5 м по Z), подошва —
+## 16 м к Площади, как база бота в тесте.
+const HILL_DESCENT_LEG: float = 16.0
+## Полоса чистого прохода: радиус прибытия бота 1.6 м + полу-габарит
+## валуна ~0.7 м + запас на виляние бота по склону.
+const HILL_DESCENT_CLEARANCE: float = 3.0
+## Что полоса убирает: только естественный разброс. Кольца смотровых
+## (rock_wall замкнуты — уступ непроходим пешком), постройки и механики
+## не трогаются.
+const HILL_DESCENT_REMOVABLE: PackedStringArray = [
+	"boulder", "rock_pillar", "rrock", "dead_log",
+	"etree_pine", "etree_oak", "etree_aspen",
+]
+
+static var _hill_descents_cache: Array = []
+
+
+## Отрезки коридоров [from, to] (XZ): по одному на каждую цель теста
+## спусков «Холмов». Кэш статический: высоты детерминированы.
+static func _hill_descents(heights: PackedFloat32Array) -> Array:
+	if not _hill_descents_cache.is_empty():
+		return _hill_descents_cache
+	var peaks: Array[Vector2] = []
+	for z: int in range(-100, 101):
+		for x: int in range(-100, 101):
+			if Vector2(float(x) + 58.0, float(z) - 42.0).length() > 42.0:
+				continue
+			var here: float = heights[_idx(x, z)]
+			if here < 6.0:
+				continue
+			var near_lookout := false
+			for entry: Dictionary in LOOKOUTS:
+				var cell: Vector2i = entry["cell"]
+				if Vector2(float(cell.x) - float(x),
+						float(cell.y) - float(z)).length() < 5.0:
+					near_lookout = true
+					break
+			if near_lookout:
+				continue
+			var is_max := true
+			for dz: int in range(-5, 6):
+				for dx: int in range(-5, 6):
+					if heights[_idx(x + dx, z + dz)] > here:
+						is_max = false
+						break
+				if not is_max:
+					break
+			if not is_max:
+				continue
+			var separated := true
+			for peak: Vector2 in peaks:
+				if peak.distance_to(Vector2(float(x), float(z))) < 14.0:
+					separated = false
+					break
+			if separated:
+				peaks.append(Vector2(float(x), float(z)))
+	var segments: Array = []
+	for peak: Vector2 in peaks:
+		segments.append([
+			peak,
+			peak + (Vector2(0.0, 4.0) - peak).normalized() * HILL_DESCENT_LEG,
+		])
+	for entry: Dictionary in LOOKOUTS:
+		if int(entry["zone"]) != 3:
+			continue  # Утёсы: подход держит запрет 17 м (сборка 2)
+		var cell: Vector2i = entry["cell"]
+		var target := Vector2(float(cell.x), float(cell.y) + 4.5)
+		segments.append([
+			target,
+			target + (Vector2(0.0, 4.0) - target).normalized()
+				* HILL_DESCENT_LEG,
+		])
+	_hill_descents_cache = segments
+	return segments
+
+
+## Пост-фильтр: убрать твёрдый разброс с коридоров спусков. Выполняется
+## после всей расстановки — потоки rng не сдвигаются, вне полос вид
+## не меняется.
+static func _clear_hill_descents(heights: PackedFloat32Array, props: Array) -> void:
+	var segments: Array = _hill_descents(heights)
+	if segments.is_empty():
+		return
+	var kept: Array = []
+	for prop: Dictionary in props:
+		if HILL_DESCENT_REMOVABLE.has(String(prop["type"])):
+			var pos: Vector3 = prop["pos"]
+			var flat := Vector2(pos.x, pos.z)
+			var on_descent := false
+			for segment: Array in segments:
+				var closest := Geometry2D.get_closest_point_to_segment(
+					flat, segment[0], segment[1])
+				if closest.distance_to(flat) <= HILL_DESCENT_CLEARANCE:
+					on_descent = true
+					break
+			if on_descent:
+				continue
+		kept.append(prop)
+	if kept.size() != props.size():
+		props.clear()
+		props.append_array(kept)
 
 
 ## Клетки, возле которых наполнение не ставит твёрдые предметы: спавны и
