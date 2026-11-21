@@ -20,6 +20,16 @@ extends RefCounted
 const SEED_GROUND_DETAIL: int = 20261024
 const GRASS_BOOST_SEED: int = 20261025
 
+## Фикс сборки 5: виды Лугов и низины бросают из СВОИХ потоков (один на
+## зону), как трава-буст из GRASS_BOOST_SEED. Пока все виды сидели на
+## одном общем rng, броски нового биома в его клетках сдвигали поток для
+## всех последующих клеток (Луга на юге идут в цикле раньше) — и принятые
+## раскладки переселялись: gd_boulder1 на Утёсах просел до 10, бот
+## перестал сходить с холмов северо-запада. Правило дальше: новый биом
+## добавляет свой поток и не трогает чужие раскладки.
+const ZONE_KIND_SEED: int = 20261122
+const ZONE_KIND_SEED_OFFSETS: Dictionary = {"meadows": 0, "hollow": 1}
+
 ## Плотность зон (SPEC 3.1: «гуще в Лесу и у руин»).
 const FOREST_DENSITY: float = 2.5
 const RUINS_DENSITY: float = 2.0
@@ -389,9 +399,11 @@ const KINDS: Array[Dictionary] = [
 	{
 		"type": "gd_hollowsnag",
 		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_trunk/dead_quiver_trunk_lo.res"),
+		# Фикс сборки 5: на своём потоке зоны сухостой сел ровно в 10 —
+		# поднята доля, низина мертва без сухостоя (тест: заметно > 10).
 		"scale": Vector2(1.0, 1.9), "range": 80.0, "shadow": true,
 		"solid": false, "light": false, "slope": 0.55, "sink": 0.1,
-		"p": 0.0018, "zone": "hollow",
+		"p": 0.0026, "zone": "hollow",
 	},
 	{
 		"type": "gd_hollowfern",
@@ -418,6 +430,8 @@ const KINDS: Array[Dictionary] = [
 static func build(art: IslandArt, tier: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED_GROUND_DETAIL
+	# Потоки зон сборки 5 (ZONE_KIND_SEED) — лениво, один на зону.
+	var zone_rngs: Dictionary = {}
 	var ruins := _ruin_positions(art)
 	var trunks := _trunk_grid(art)
 	var groups: Dictionary = {}
@@ -434,8 +448,8 @@ static func build(art: IslandArt, tier: int) -> Dictionary:
 			if cell["blocked"] and not cell["beach"]:
 				continue
 			for kind: Dictionary in KINDS:
-				_place_kind(groups[kind["type"]], rng, art, x, z, cell, ruins,
-					trunks)
+				_place_kind(groups[kind["type"]], rng, zone_rngs, art, x, z,
+					cell, ruins, trunks)
 	# Кострище дикого пляжа: единственная постановка (после клеточного
 	# цикла — раскладка видов его не сдвигает).
 	_place_firepit(groups["gd_firepit"], art)
@@ -494,7 +508,8 @@ static func kind_mesh(type: StringName) -> Mesh:
 ## тропа) гасят вероятность до броска, дальше — обычная раскладка «как у
 ## пропсов»: масштаб, поворот, джиттер, высота билинейной выборкой рельефа.
 static func _place_kind(
-	group: Dictionary, rng: RandomNumberGenerator, art: IslandArt,
+	group: Dictionary, main_rng: RandomNumberGenerator,
+	zone_rngs: Dictionary, art: IslandArt,
 	x: int, z: int, cell: Dictionary, ruins: Array[Vector2],
 	trunks: Dictionary,
 ) -> void:
@@ -507,6 +522,10 @@ static func _place_kind(
 	# ("zones" — сухостой общий с Чащей) убраны, у Берега свой сухостой
 	# gd_shoresnag — один ключ = одно крыло, виды биомов не смешиваются.
 	var kind_zone: String = kind.get("zone", "")
+	# Фикс сборки 5: виды зон из ZONE_KIND_SEED_OFFSETS бросают из своего
+	# потока — общий поток остаётся как до сборки 5 (принятые раскладки).
+	var rng: RandomNumberGenerator = _zone_rng(zone_rngs, kind_zone) \
+		if ZONE_KIND_SEED_OFFSETS.has(kind_zone) else main_rng
 	var wing: String = cell["wing"]
 	if kind_zone != "":
 		var fits := kind_zone == wing
@@ -581,6 +600,19 @@ static func _place_kind(
 	group["colors"].append(Color(
 		TINT_COOL.r * brightness, TINT_COOL.g * brightness,
 		TINT_COOL.b * brightness, 1.0))
+
+
+## Поток вида зоны (фикс сборки 5, см. ZONE_KIND_SEED): лениво, один
+## RandomNumberGenerator на зону — добавление биома не сдвигает чужие
+## раскладки, две сборки дают те же трансформы.
+static func _zone_rng(
+	zone_rngs: Dictionary, zone: String,
+) -> RandomNumberGenerator:
+	if not zone_rngs.has(zone):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = ZONE_KIND_SEED + int(ZONE_KIND_SEED_OFFSETS[zone])
+		zone_rngs[zone] = rng
+	return zone_rngs[zone] as RandomNumberGenerator
 
 
 ## Кострище дикого пляжа (расширение карты, сборка 4): единственная
