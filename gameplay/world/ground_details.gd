@@ -324,6 +324,89 @@ const KINDS: Array[Dictionary] = [
 		"solid": false, "light": false, "slope": 0.5, "sink": 0.06,
 		"p": 0.0, "zone": "shore",
 	},
+	# --- Луга (расширение карты, сборка 5): цветочные коврики Poly Haven —
+	# стелющиеся сканы (высота 0.1–0.4 м, sprawling до 4 м в исходнике,
+	# масштаб уводит коврик в ~0.7–1.4 м). Поле "patch": селятся пятнами
+	# того же шума земли, что кочки травы и цветы демо (IslandGen.
+	# _grass_patch) — «цветы пятнами по шуму пятнистости». Второй слой
+	# цветочного поля — цветы демо в поле травы (GrassField, свой буст
+	# на крыле). ---
+	{
+		"type": "gd_empodium",
+		"mesh": preload("res://assets/third_party/polyhaven.com/flower_empodium/flower_empodium_lo.res"),
+		"scale": Vector2(0.55, 0.95), "range": 45.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.003, "zone": "meadows", "patch": true,
+	},
+	{
+		"type": "gd_gazania",
+		"mesh": preload("res://assets/third_party/polyhaven.com/flower_gazania/flower_gazania_lo.res"),
+		"scale": Vector2(0.45, 0.85), "range": 45.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.003, "zone": "meadows", "patch": true,
+	},
+	{
+		"type": "gd_ursinia",
+		"mesh": preload("res://assets/third_party/polyhaven.com/flower_ursinia/flower_ursinia_lo.res"),
+		"scale": Vector2(0.35, 0.6), "range": 45.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.003, "zone": "meadows", "patch": true,
+	},
+	{
+		"type": "gd_dandelion",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dandelion_01/dandelion_01_lo.res"),
+		"scale": Vector2(0.18, 0.32), "range": 45.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.003, "zone": "meadows", "patch": true,
+	},
+	{
+		"type": "gd_periwinkle",
+		"mesh": preload("res://assets/third_party/polyhaven.com/periwinkle_plant/periwinkle_plant_lo.res"),
+		"scale": Vector2(0.6, 1.0), "range": 45.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.003, "zone": "meadows", "patch": true,
+	},
+	{
+		"type": "gd_celandine",
+		"mesh": preload("res://assets/third_party/polyhaven.com/celandine_01/celandine_01_lo.res"),
+		"scale": Vector2(0.35, 0.65), "range": 45.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.6, "sink": 0.02,
+		"p": 0.003, "zone": "meadows", "patch": true,
+	},
+	# --- Мшистая низина (расширение карты, сборка 5): сырая чаша за
+	# Каньоном — подушки мха гуще чащи, сухостой, папоротники и валежник.
+	# Меши те же, что у Чащи, но ключи СВОИ (один ключ = одно крыло,
+	# виды биомов не смешиваются — как gd_shoresnag Берега). Низина
+	# низкая (0.6–2.2 м): часть чаши ниже BEACH_H — для видов зоны
+	# пляжный запрет снят, как у Берега (нижний предел SHORE_KIND_H_MIN). ---
+	{
+		"type": "gd_hollowmoss",
+		"mesh": preload("res://assets/third_party/polyhaven.com/moss_01/moss_01_lo.res"),
+		"scale": Vector2(1.2, 3.0), "range": 35.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.5, "sink": 0.01,
+		"p": 0.014, "zone": "hollow",
+	},
+	{
+		"type": "gd_hollowsnag",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_trunk/dead_quiver_trunk_lo.res"),
+		"scale": Vector2(1.0, 1.9), "range": 80.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.55, "sink": 0.1,
+		"p": 0.0018, "zone": "hollow",
+	},
+	{
+		"type": "gd_hollowfern",
+		"mesh": preload("res://assets/third_party/polyhaven.com/fern_02/fern_lo.res"),
+		"scale": Vector2(0.8, 1.3), "range": 40.0, "shadow": false,
+		"solid": false, "light": true, "slope": 0.65, "sink": 0.04,
+		"p": 0.006, "zone": "hollow", "patch": true,
+	},
+	{
+		"type": "gd_hollowlog",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_tree_trunk/dead_tree_trunk_lo.res"),
+		"scale": Vector2(0.5, 0.9), "range": 90.0, "shadow": true,
+		"solid": true, "light": false, "slope": 0.5, "sink": 0.12,
+		"p": 0.002, "zone": "hollow",
+	},
 ]
 
 
@@ -432,6 +515,13 @@ static func _place_kind(
 			# с запасом клетки (in_thicket_plant): джиттер ±0.3 уводит
 			# floori координат меша в соседа — кромка биома чиста.
 			fits = IslandGen.in_thicket_plant(x, z)
+		if kind_zone == "meadows":
+			# Луга (сборка 5): ядро крыла И перешеек от Леса, с тем же
+			# запасом клетки на джиттер.
+			fits = IslandGen.in_meadows_plant(x, z)
+		if kind_zone == "hollow":
+			# Мшистая низина (сборка 5): ядро крыла И перешеек от Каньона.
+			fits = IslandGen.in_hollow_plant(x, z)
 		if not fits:
 			return
 	else:
@@ -444,8 +534,10 @@ static func _place_kind(
 			return  # прежний высотный предел 15 м — только для прежних видов
 	# Виды Берега (сборка 4) — исключение из пляжного запрета BEACH_H:
 	# песок и есть их место; ниже SHORE_KIND_H_MIN (вода) — как всем.
-	if cell["blocked"] and not (kind_zone == "shore" and cell["beach"]
-			and float(cell["h"]) > SHORE_KIND_H_MIN):
+	# Мшистая низина (сборка 5) — та же льгота: чаша 0.6–2.2 м, часть
+	# ниже BEACH_H — это сырая земля низины, не пляж.
+	if cell["blocked"] and not ((kind_zone == "shore" or kind_zone == "hollow")
+			and cell["beach"] and float(cell["h"]) > SHORE_KIND_H_MIN):
 		return
 	if cell["solid_blocked"] and kind["solid"]:
 		return
@@ -462,9 +554,13 @@ static func _place_kind(
 		p = kind["p"] * RUINS_YARD_DENSITY
 	# Папоротник селят пятна травы (IslandGen._grass_patch — тот же шум,
 	# что растит печёные кочки): по пятнам, а не ровным ковром.
+	# Виды с полем "patch" (цветы Лугов и папоротник низины, сборка 5) —
+	# та же схема: пятнами того же шума, что земля и поле травы.
 	if String(kind["type"]) == "gd_fern":
 		var patch: float = IslandGen._grass_patch(x, z)
 		p *= (0.3 + 0.7 * patch) if cell["forest"] else 0.3
+	elif kind.get("patch", false):
+		p *= 0.1 + 0.9 * IslandGen._grass_patch(x, z)
 		# В Лесу — гуще у стволов etree_* (П18 Сборка 2: статичная замена
 		# папоротникам прежнего динамического поля П17).
 		if cell["forest"] and _near_trunk(trunks, float(x), float(z)):

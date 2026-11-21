@@ -429,6 +429,13 @@ func _apply_graphics_quality() -> void:
 		center = _island.spawn_point("lake")
 		color = IslandGen.zone_blend(Vector2(center.x, center.z), PAL.zone_fog)
 		add_child(GraphicsQuality.make_zone_fog(center, color))
+		# Мшистая низина (расширение карты, сборка 5): третий сгусток —
+		# сырая чаша за Каньоном, туман гуще прочих мест острова.
+		center = _island.spawn_point("hollow")
+		color = IslandGen.zone_blend(
+			Vector2(center.x, center.z), PAL.zone_fog
+		)
+		add_child(GraphicsQuality.make_zone_fog(center, color, 52.0))
 	# Панель замера F3 (П13 3): знает уровень и окружение; повторное
 	# применение возвращает эффекты уровня — галочки сбрасываются.
 	if _debug != null:

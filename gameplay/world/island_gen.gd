@@ -55,11 +55,14 @@ const WING_LAND_FLOOR: float = 0.30
 ## Крылья: имя (как в ZONES), центр, радиус суши, м. Направление на
 ## старый остров считается от центра к (0, 0) — с той стороны крыло
 ## раскрывается навстречу перешейку (без морского уступа).
+## Пятое крыло hollow — Мшистая низина (сборка 5, опция плана утверждена):
+## сырая низина за Каньоном, земля под неё добавлена этой же сборкой.
 const WINGS: Array[Dictionary] = [
 	{"name": "cliffs", "center": Vector2(-170, 30), "land_r": 70.0},
 	{"name": "thicket", "center": Vector2(-130, -130), "land_r": 75.0},
 	{"name": "shore", "center": Vector2(170, -20), "land_r": 65.0},
 	{"name": "meadows", "center": Vector2(-10, -160), "land_r": 75.0},
+	{"name": "hollow", "center": Vector2(60, 150), "land_r": 45.0},
 ]
 
 ## Перешейки-капсулы: отрезок a→b (a — в теле старого острова, b — в
@@ -76,6 +79,15 @@ const ISTHMUSES: Array[Dictionary] = [
 	{"a": Vector2(82, 30), "b": Vector2(135, 10), "half_w": 12.0},
 	# Север Леса/Руин → Луга.
 	{"a": Vector2(-12, -78), "b": Vector2(-11, -128), "half_w": 15.0},
+	# Каньон → Мшистая низина (юг; сборка 5): насыпь от тела старого
+	# острова (юго-восточнее чаши Озера, южнее кромки Каньона) к низине.
+	# a в глубине суши (r≈89, как у перешейков Берега/Чащи): у прежней a
+	# (56, 86) на кромке старого острова базовая суша ~1 м — насыпь 4 м
+	# врезалась ступенями > MAX_STEP и отрезала низину. h_mult 0.55 —
+	# насыпь 2.2 м вровень с чашей низины: без односторонней ступени
+	# на стыке (иначе назад из низины не подняться).
+	{"a": Vector2(40, 80), "b": Vector2(60, 116), "half_w": 12.0,
+		"h_mult": 0.55},
 ]
 
 ## Высота перешейка, м: пол высоты (не ниже — вокруг море), существующий
@@ -180,6 +192,31 @@ const THICKET_MROCK_P: float = 0.005
 ## чаща сгущается к центру, вход читается просветом.
 const THICKET_ISTHMUS_FACTOR: float = 0.65
 
+# --- Луга, северное крыло (расширение карты, сборка 5) ---
+## Свой поток rng Лугов (как THICKET_SEED у чащи): печёная раскладка
+## старого острова не сдвигается, хеш меняют только новые предметы.
+const MEADOWS_SEED: int = 20261121
+## Панорамная точка (Place плана): выпуклый холм у северной кромки —
+## с вершины видны цветочные поля крыла и открытое море. Подъём пологий
+## (градиент бампа ~0.5 м/м < MAX_STEP 0.9 — пешком без подсадки).
+const MEADOW_HILL_C: Vector2 = Vector2(-42.0, -188.0)
+const MEADOW_HILL_H: float = 5.0
+const MEADOW_HILL_R: float = 14.0
+## Плотности Лугов: редкие одиночные деревья (групп нет — крыло открытое),
+## кочки травы гуще чащи (луг), валуны редки — у каждого «гроздь» цветов.
+const MEADOWS_TREE_P: float = 0.0035
+const MEADOWS_ROCK_P: float = 0.0022
+const MEADOWS_TUFT_P: float = 0.85
+## Радиус биома Лугов от центра крыла: ядро (r 75) + перешеек от Леса.
+const MEADOWS_REACH_R: float = 100.0
+## Разрежение на перешейке (вне ядра крыла): луг раскрывается просветом.
+const MEADOWS_ISTHMUS_FACTOR: float = 0.65
+
+# --- Мшистая низина за Каньоном (расширение карты, сборка 5) ---
+## Радиус биома низины от центра крыла: ядро (r 45) + перешеек от
+## Каньона — дальше чужие земли не трогаем.
+const HOLLOW_REACH_R: float = 62.0
+
 ## Чаша озера (доработка П5.13, вынесены для самопроверки воды): d меньше
 ## LAKE_BASIN_R — дно −1.2, до LAKE_BEACH_R — пологий пляж. Плоскость воды
 ## обязана накрывать чашу — берег выше уровня прячет излишек под рельефом.
@@ -201,6 +238,7 @@ const ZONES: Array[Dictionary] = [
 	{"name": "thicket", "center": Vector2(-130, -130), "radius": 75.0},
 	{"name": "shore", "center": Vector2(170, -20), "radius": 65.0},
 	{"name": "meadows", "center": Vector2(-10, -160), "radius": 75.0},
+	{"name": "hollow", "center": Vector2(60, 150), "radius": 45.0},
 ]
 
 ## Смотровые площадки (раздел 9.3): базис-поляна 15 × 15 точек, площадка
@@ -333,6 +371,9 @@ static func generate() -> Dictionary:
 	# раскладки не сдвигаются; поляна резервируется до посадки гущи.
 	_thicket_landmarks(heights, props, reserved)
 	_thicket_forest(heights, props, reserved)
+	# Луга и Мшистая низина (расширение карты, сборка 5): свои потоки rng.
+	_meadows_fill(heights, props, reserved)
+	_hollow_fill(heights, props, reserved)
 	var lookouts: Array = []
 	for entry: Dictionary in LOOKOUTS:
 		var cell: Vector2i = entry["cell"]
@@ -673,7 +714,8 @@ static func _base_height(
 ## Рельеф крыла (расширение карты, сборка 1): правила по имени зоны крыла.
 ## Утёсы — плато 10–14 м, к открытому морю (сторона от старого острова)
 ## уступ до CLIFF_RIM_H; чаща — волнистая равнина 2–6 м (как Лес);
-## берег — пологое побережье 0.7–3 м; луга — открытые холмы 1.5–5.5 м.
+## берег — пологое побережье 0.7–3 м; луга — открытые холмы 1.5–5.5 м
+## с панорамным холмом; низина — сырая чаша 0.6–2.2 м (сборка 5).
 ## Перешеек — только пол высоты ISTMUS_H: насыпь над побережьем, живой
 ## рельеф не режется. is_land отсекает морские клетки кромки — берег
 ## крыла обрывается в море сразу за кромкой (уступ, а не лестница).
@@ -699,9 +741,19 @@ static func _wing_relief(x: int, z: int, h: float, weight: float) -> float:
 			"thicket":
 				result = lerpf(h, clampf(h, 2.0, 6.0), best_w)
 			"meadows":
-				result = lerpf(h, clampf(h, 1.5, 5.5), best_w)
+				# Панорамный холм (сборка 5): гладкий бамп поверх пологих
+				# холмов крыла — вершина ~10 м, склон пешком.
+				var meadow_base: float = clampf(h, 1.5, 5.5)
+				var d_hill: float = offset.distance_to(MEADOW_HILL_C - center)
+				meadow_base += MEADOW_HILL_H * (
+					1.0 - smoothstep(0.0, MEADOW_HILL_R, d_hill))
+				result = lerpf(h, meadow_base, best_w)
 			"shore":
 				result = lerpf(h, clampf(h, 0.7, 3.0), best_w)
+			"hollow":
+				# Мшистая низина (сборка 5): сырая низкая чаша 0.6–2.2 м —
+				# влага низины красит землю грязью и густым мхом.
+				result = lerpf(h, clampf(h, 0.6, 2.2), best_w)
 			"cliffs":
 				# Плато, к морю (от старого острова) — уступ CLIFF_RIM_H.
 				var plateau: float = clampf(h, CLIFF_PLATEAU_MIN, CLIFF_PLATEAU_MAX)
@@ -712,12 +764,17 @@ static func _wing_relief(x: int, z: int, h: float, weight: float) -> float:
 					float(best["land_r"]) * 0.55,
 					float(best["land_r"]) * 0.95, d)
 				result = lerpf(h, lerpf(plateau, CLIFF_RIM_H, edge * sea_face), best_w)
-	# Перешеек: пол высоты поверх (суша капсулы уже гарантирована маской).
+	# Перешеек: пол высоты поверх (суша капсулы уже гарантирована маской);
+	# h_mult занижает пол — у низины насыпь вровень с чашей (сборка 5).
 	var ist_w: float = 0.0
+	var ist_h: float = ISTMUS_H
 	for isthmus: Dictionary in ISTHMUSES:
-		ist_w = maxf(ist_w, _isthmus_weight(isthmus, x, z))
+		var w: float = _isthmus_weight(isthmus, x, z)
+		if w > ist_w:
+			ist_w = w
+			ist_h = ISTMUS_H * float(isthmus.get("h_mult", 1.0))
 	if ist_w > 0.0:
-		result = maxf(result, ISTMUS_H * ist_w)
+		result = maxf(result, ist_h * ist_w)
 	return result
 
 
@@ -1304,6 +1361,175 @@ static func _thicket_forest(
 						"plain", 3)
 
 
+## Клетка принадлежит биому Лугов: новые земли (крыло + перешеек от
+## севера Леса/Руин) в радиусе MEADOWS_REACH_R от центра крыла. Чужие
+## крылья отсечены именем (wing_name_at), чужие перешейки — радиусом
+## (как in_thicket).
+static func in_meadows(x: int, z: int) -> bool:
+	if not _in_new_land(x, z):
+		return false
+	var wing := wing_name_at(x, z)
+	if wing != "" and wing != "meadows":
+		return false
+	return Vector2(float(x), float(z)).distance_to(
+		_wing_center("meadows")) < MEADOWS_REACH_R
+
+
+## Луга (расширение карты, сборка 5): открытое северное крыло — деревьев
+## почти нет (редкие одиночные, группами не растут — вид с панорамного
+## холма не закрывается), кочки травы гуще чащи (луг), редкие валуны несут
+## «гроздья» цветов (тот же приём, что акценты у глыб Леса, свой поток
+## rng). Цветочное поле крыла — два слоя: фотосканы Poly Haven и цветы
+## демо полем травы (GrassField, гуще на крыле — там свой буст).
+static func _meadows_fill(
+		heights: PackedFloat32Array, props: Array, reserved: Dictionary,
+) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = MEADOWS_SEED
+	var trees: Dictionary = {}
+	var rock_cells: Array[Vector2i] = []
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			if not in_meadows(x, z):
+				continue
+			var cell := Vector2i(x, z)
+			if reserved.has(cell):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= 0.9 or h > 12.0:
+				continue
+			# Переход: разрежение у кромки новых земель и на перешейке
+			# (вне ядра крыла луг раскрывается просветом — как чаща).
+			var ramp: float = smoothstep(0.15, 0.7, new_land_weight(x, z))
+			var isthmus: float = MEADOWS_ISTHMUS_FACTOR \
+				if wing_name_at(x, z) != "meadows" else 1.0
+			var factor: float = ramp * isthmus
+			if factor <= 0.0:
+				continue
+			# Одиночные деревья: изрежение крон ещё вдвое против посадки —
+			# «редкие одиночные», силуэт луга держат открытым.
+			if rng.randf() < MEADOWS_TREE_P * factor * 0.5 \
+					and _no_trees_near(trees, x, z, 6):
+				trees[cell] = true
+				_prop(props, rng, cell, h, _forest_kind(x, z), "leaf",
+					_forest_variants(_forest_kind(x, z)), heights)
+			elif rng.randf() < MEADOWS_ROCK_P * factor:
+				_prop(props, rng, cell, h, "rrock", "stone", 3, heights)
+				rock_cells.append(cell)
+	# Печёные кочки травы по пятнам _grass_patch — гуще чащи (луг); под
+	# деревьями пусто, панорамный холм — тот же проход.
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			if not in_meadows(x, z):
+				continue
+			var cell := Vector2i(x, z)
+			if reserved.has(cell) or trees.has(cell):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= 0.9 or h > 12.0:
+				continue
+			if not _is_grassy_forest(heights, x, z):
+				continue
+			var patch: float = _grass_patch(x, z)
+			if patch > 0.05 and rng.randf() < MEADOWS_TUFT_P * patch:
+				var tufts: int = 4
+				if rng.randf() < 0.7:
+					tufts += 1
+				if rng.randf() < 0.45:
+					tufts += 1
+				for i: int in tufts:
+					var tuft_scale: float = rng.randf_range(0.85, 1.25)
+					_add_prop(
+						props, rng, &"rgrass",
+						Vector3(
+							x + rng.randf_range(-0.45, 0.45), h,
+							z + rng.randf_range(-0.45, 0.45)),
+						rng.randf_range(0.0, TAU),
+						Vector3(
+							tuft_scale,
+							tuft_scale * rng.randf_range(0.9, 1.15),
+							tuft_scale),
+						"plain", 3)
+	# «Гроздья» цветов у валунов: ирисы и жёлтые цветы кольцом к камню
+	# (приём акцентов Леса, свой поток — раскладка выше не сдвигается).
+	var flower_rng := RandomNumberGenerator.new()
+	flower_rng.seed = MEADOWS_SEED + 1
+	for cell: Vector2i in rock_cells:
+		var start_angle: float = flower_rng.randf_range(0.0, TAU)
+		for t: int in 5:
+			var ang: float = start_angle + TAU * float(t) / 5.0 \
+					+ flower_rng.randf_range(-0.3, 0.3)
+			var ring: float = flower_rng.randf_range(0.4, 0.95)
+			var spot := Vector2(
+				cell.x + 0.5 + cos(ang) * ring,
+				cell.y + 0.5 + sin(ang) * ring)
+			var spot_cell := Vector2i(floori(spot.x), floori(spot.y))
+			if reserved.has(spot_cell) or trees.has(spot_cell):
+				continue
+			var fh: float = heights[_idx(spot_cell.x, spot_cell.y)]
+			if fh <= 0.9 or fh >= 12.0 \
+					or not _is_grassy_forest(heights, spot_cell.x, spot_cell.y):
+				continue
+			var iris: bool = flower_rng.randf() < 0.4
+			var scale: float = flower_rng.randf_range(1.1, 1.4) \
+				if iris else flower_rng.randf_range(1.8, 2.3)
+			_add_prop(
+				props, flower_rng, &"riris" if iris else &"rflower",
+				Vector3(spot.x, fh, spot.y),
+				flower_rng.randf_range(0.0, TAU),
+				Vector3(scale, scale * flower_rng.randf_range(0.95, 1.2),
+					scale),
+				"plain", 3 if iris else 1)
+
+
+## Клетка принадлежит биому Мшистой низины (крыло + перешеек от Каньона,
+## радиус HOLLOW_REACH_R от центра крыла; чужие крылья отсечены именем).
+static func in_hollow(x: int, z: int) -> bool:
+	if not _in_new_land(x, z):
+		return false
+	var wing := wing_name_at(x, z)
+	if wing != "" and wing != "hollow":
+		return false
+	return Vector2(float(x), float(z)).distance_to(
+		_wing_center("hollow")) < HOLLOW_REACH_R
+
+
+## Мшистая низина (расширение карты, сборка 5): печёной раскладки мало —
+## редкие кочки травы по пятнам (сырой низине хватит мха и коряг — виды
+## наполнения GroundDetails, свой ключ зоны "hollow"). Деревьев нет:
+## низина тёмная и открытая, силуэт держат сухостой и коряги.
+static func _hollow_fill(
+		heights: PackedFloat32Array, props: Array, reserved: Dictionary,
+) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = MEADOWS_SEED + 2
+	for z: int in range(-HALF, HALF + 1):
+		for x: int in range(-HALF, HALF + 1):
+			if not in_hollow(x, z):
+				continue
+			if reserved.has(Vector2i(x, z)):
+				continue
+			var h: float = heights[_idx(x, z)]
+			if h <= 0.9 or h > 3.0:
+				continue
+			if not _is_grassy_forest(heights, x, z):
+				continue
+			var patch: float = _grass_patch(x, z)
+			if patch > 0.05 and rng.randf() < 0.35 * patch:
+				var tuft_scale: float = rng.randf_range(0.85, 1.25)
+				_add_prop(
+					props, rng, &"rgrass",
+					Vector3(
+						x + rng.randf_range(-0.45, 0.45), h,
+						z + rng.randf_range(-0.45, 0.45)),
+					rng.randf_range(0.0, TAU),
+					Vector3(
+						tuft_scale,
+						tuft_scale * rng.randf_range(0.9, 1.15),
+						tuft_scale),
+					"plain", 3)
+
+
 ## Крыло по имени (порядок WINGS не фиксируется — поиском); пустой словарь
 ## для отсутствующего имени обрабатывается весом 0.
 static func _wing_of(name: String) -> Dictionary:
@@ -1315,11 +1541,60 @@ static func _wing_of(name: String) -> Dictionary:
 
 ## Вес крыла по имени (0 — крыла нет): покраска/атмосфера крыльев без
 ## собственной петли по WINGS (как _cliff_plateau_rock у утёсов).
+## Кэш POINTS² на имя с ленивыми NaN-ячейками: поле травы спрашивает
+## вес на каждую клетку круга, а шум кромки на клетку дорог; полный
+## прогрев карты (~0,5 с на крыло) ложился бы в первый замер сборки
+## поля, поэтому шуматся только спрошенные клетки.
+static var _wing_weight_caches: Dictionary = {}
+
+
 static func wing_weight_of(name: String, x: int, z: int) -> float:
 	var wing := _wing_of(name)
 	if wing.is_empty():
 		return 0.0
-	return _wing_weight(wing, x, z)
+	if not _wing_weight_caches.has(name):
+		var fresh := PackedFloat32Array()
+		fresh.resize(POINTS * POINTS)
+		fresh.fill(NAN)
+		_wing_weight_caches[name] = fresh
+	var idx: int = _idx(x, z)
+	var w: float = _wing_weight_caches[name][idx]
+	if is_nan(w):
+		w = _wing_weight(wing, x, z)
+		_wing_weight_caches[name][idx] = w
+	return w
+
+
+## Прямые веса крыльев Лугов и низины (расширение карты, сборка 5):
+## поле травы зовёт их на каждую клетку-кандидата круга, а wing_weight_of
+## с поиском имени и словарём кэшей стоит ~13 мкс — этих двух горячих
+## крыльев достаточно без универсальности (те же ленивые NaN-ячейки).
+static var _meadow_w_cache: PackedFloat32Array
+static var _hollow_w_cache: PackedFloat32Array
+
+
+static func meadow_weight(x: int, z: int) -> float:
+	if _meadow_w_cache.is_empty():
+		_meadow_w_cache.resize(POINTS * POINTS)
+		_meadow_w_cache.fill(NAN)
+	var idx: int = _idx(x, z)
+	var w: float = _meadow_w_cache[idx]
+	if is_nan(w):
+		w = _wing_weight(_wing_of("meadows"), x, z)
+		_meadow_w_cache[idx] = w
+	return w
+
+
+static func hollow_weight(x: int, z: int) -> float:
+	if _hollow_w_cache.is_empty():
+		_hollow_w_cache.resize(POINTS * POINTS)
+		_hollow_w_cache.fill(NAN)
+	var idx: int = _idx(x, z)
+	var w: float = _hollow_w_cache[idx]
+	if is_nan(w):
+		w = _wing_weight(_wing_of("hollow"), x, z)
+		_hollow_w_cache[idx] = w
+	return w
 
 
 ## Центр крыла по имени (порядок WINGS не фиксируется — поиском).
@@ -1348,6 +1623,20 @@ static func in_thicket(x: int, z: int) -> bool:
 static func in_thicket_plant(x: int, z: int) -> bool:
 	return in_thicket(x, z) and in_thicket(x - 1, z) \
 		and in_thicket(x, z - 1) and in_thicket(x - 1, z - 1)
+
+
+## Клетка допускает посадку видов Лугов с джиттером ±0.3 (сборка 5,
+## схема in_thicket_plant): клетка кромки не попадает под меш вида.
+static func in_meadows_plant(x: int, z: int) -> bool:
+	return in_meadows(x, z) and in_meadows(x - 1, z) \
+		and in_meadows(x, z - 1) and in_meadows(x - 1, z - 1)
+
+
+## Клетка допускает посадку видов Мшистой низины с джиттером ±0.3
+## (сборка 5, схема in_thicket_plant).
+static func in_hollow_plant(x: int, z: int) -> bool:
+	return in_hollow(x, z) and in_hollow(x - 1, z) \
+		and in_hollow(x, z - 1) and in_hollow(x - 1, z - 1)
 
 
 ## Вес троп Чащи: расстояние до полилиний THICKET_PATHS, полный внутри
@@ -1429,6 +1718,8 @@ static func tint_hints() -> Dictionary:
 ## Камни духа (по одному на зону) и точки появления --dev-spawn. Возвращает
 ## множество зарезервированных клеток (по ним не растут деревья и не ставятся
 ## декорации), чтобы точка интереса не оказалась внутри ствола.
+## Мшистая низина (сборка 5) — исключение: камня нет (не Place плана,
+## настроение без механики), только спавн.
 static func _points_of_interest(
 	heights: PackedFloat32Array, stones: Array[Vector3], spawns: Dictionary
 ) -> Dictionary:
@@ -1458,6 +1749,7 @@ static func _points_of_interest(
 		"thicket": Vector2i(-130, -122),
 		"shore": Vector2i(170, -16),
 		"meadows": Vector2i(-10, -152),
+		"hollow": Vector2i(58, 146),
 	}
 	for zone: String in spawn_cells:
 		var cell: Vector2i = spawn_cells[zone]

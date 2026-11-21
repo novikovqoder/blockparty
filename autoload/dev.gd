@@ -22,10 +22,10 @@ const DEV_PORT: int = 7777
 const HEADLESS_BOT_MAX_FPS: int = 60
 ## Зоны появления для --dev-spawn (раздел 4 SPEC; Площадь — по умолчанию).
 ## Крылья новых земель (cliffs, thicket, shore, meadows) — расширение
-## карты, сборка 1.
+## карты, сборка 1; Мшистая низина (hollow) — сборка 5.
 const SPAWN_ZONES: PackedStringArray = [
 	"plaza", "forest", "ruins", "hills", "crevasse", "lake",
-	"cliffs", "thicket", "shore", "meadows",
+	"cliffs", "thicket", "shore", "meadows", "hollow",
 ]
 
 var host_mode: bool = false      # --dev-host: запуститься хостом через ENet

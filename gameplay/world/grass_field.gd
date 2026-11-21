@@ -99,6 +99,16 @@ const FLOWER_PATCH_TO: float = 0.75
 ## Вид пятна цветов — крупная клетка FLOWER_CELL м (детерминирован,
 ## в одном пятне виды не смешиваются, по канону П17).
 const FLOWER_CELL: float = 16.0
+## Луга (расширение карты, сборка 5): поле цветов крыла гуще и пятна
+## шире — кап ×MEADOW_FLOWER_MULT, порог пятна съезжает вниз (гуща пятен
+## начинается раньше). Механика поля не меняется — радиусы, чанки и
+## поток rng те же; множители чистые функции координат (вес крыла).
+## Мшистая низина — без цветов поля (сумрачная, как чаща): кап гасится
+## весом крыла hollow, трава реже на HOLLOW_TUFT_FADE.
+const MEADOW_FLOWER_MULT: float = 3.0
+const MEADOW_PATCH_FROM: float = 0.30
+const MEADOW_PATCH_TO: float = 0.60
+const HOLLOW_TUFT_FADE: float = 0.6
 ## Эмиссия травы демо: 0x308040 (grass.js:133) × 0.05.
 const EMISSION_COLOR: Color = Color(
 	0x30 / 255.0, 0x80 / 255.0, 0x40 / 255.0)
@@ -376,9 +386,10 @@ static func build_chunk(art: IslandArt, tier: int, cx: int, cz: int) -> Dictiona
 			# Броски потребляются всегда и в фиксированном порядке — до
 			# любых вычислений (поток клетки не зависит от уровня
 			# качества и зон). Множители зон ≤ 1, поэтому максимум
-			# вероятности пучка — density, цветка — FLOWER_DENSITY:
-			# клетку с двумя «пустыми» бросками можно пропустить до
-			# дорогих карт зон и шума (~четверть клеток круга).
+			# вероятности пучка — density, цветка — FLOWER_DENSITY (на
+			# Лугах, сборка 5, кап цветов до ×MEADOW_FLOWER_MULT по весу
+			# крыла): клетку с двумя «пустыми» бросками можно пропустить
+			# до дорогих карт зон и шума (~четверть клеток круга).
 			var tuft_roll: float = rng.randf()
 			var sx: float = rng.randf_range(SIZE.x, SIZE.x + SIZE_VAR.x)
 			var sy: float = rng.randf_range(SIZE.y, SIZE.y + SIZE_VAR.y)
@@ -395,18 +406,40 @@ static func build_chunk(art: IslandArt, tier: int, cx: int, cz: int) -> Dictiona
 			var fjx: float = rng.randf_range(-0.45, 0.45)
 			var fjz: float = rng.randf_range(-0.45, 0.45)
 			var may_tuft: bool = tuft_roll < density
+			# Кап вне Лугов не выше базового FLOWER_DENSITY — клетки с
+			# двумя «пустыми» бросками вылетают до весов крыльев (они
+			# нужны только клеткам-кандидатам, ~четверть круга).
 			var may_flower: bool = flower_roll < FLOWER_DENSITY
+			if not may_tuft and not may_flower:
+				continue
+			# Крылья Лугов и низины (сборка 5): кап цветов и границы пятен
+			# едут по весу крыла (чистая функция координат — поток rng и
+			# механика поля не меняются). Броски выше уже потреблены.
+			var meadow_w: float = IslandGen.meadow_weight(x, z)
+			var hollow_w: float = IslandGen.hollow_weight(x, z)
+			var flower_cap: float = lerpf(
+				FLOWER_DENSITY, FLOWER_DENSITY * MEADOW_FLOWER_MULT,
+				meadow_w) * (1.0 - hollow_w)
+			var patch_from: float = lerpf(
+				FLOWER_PATCH_FROM, MEADOW_PATCH_FROM, meadow_w)
+			var patch_to: float = lerpf(
+				FLOWER_PATCH_TO, MEADOW_PATCH_TO, meadow_w)
+			may_flower = flower_roll < flower_cap
 			if not may_tuft and not may_flower:
 				continue
 			var cell := GroundDetails._grass_cell_state(art, x, z)
 			if cell["blocked"]:
 				continue
 			# Зоны: луг — база, глубина Леса гасится к FOREST_DENSITY.
+			# Луга (сборка 5) возвращают базовую плотность (вес крыла),
+			# низина сырая — трава реже.
 			var zone: float = 1.0
 			if cell["forest"]:
 				zone = lerpf(1.0, FOREST_DENSITY, clampf(
 					ForestGround._forest_edge_dist(float(x), float(z))
 					/ ForestGround.EDGE_SOFT, 0.0, 1.0))
+			zone = maxf(zone, meadow_w)
+			zone *= 1.0 - hollow_w * HOLLOW_TUFT_FADE
 			# Тропа: к гравию (блок в _grass_cell_state, вес ≥ 0.2)
 			# плотность плавно гаснет.
 			var path_fade: float = 1.0 - clampf(
@@ -429,9 +462,10 @@ static func build_chunk(art: IslandArt, tier: int, cx: int, cz: int) -> Dictiona
 					(groups["tuft"]["transforms"] as Array).append(
 						placed["transform"])
 					tuft_colors.append(Color(cr, cg, 0.1, 1.0))
-			# Цветы: только гуща пятен, ~по 50 на вид на круге HIGH.
-			if may_flower and flower_roll < FLOWER_DENSITY * fades \
-					* smoothstep(FLOWER_PATCH_FROM, FLOWER_PATCH_TO, patch):
+			# Цветы: только гуща пятен, ~по 50 на вид на круге HIGH; на
+			# Лугах кап и границы пятен выше (сборка 5) — поле цветов крыла.
+			if may_flower and flower_roll < flower_cap * fades \
+					* smoothstep(patch_from, patch_to, patch):
 				var placed := _place(
 					art, x, z, Vector2(fjx, fjz),
 					Vector3.ONE * flower_scale, flower_yaw,

@@ -576,14 +576,19 @@ static func _forest_edge_dist(wx: float, wz: float) -> float:
 
 ## Мох: пятна фиксированного шума, гуще во влажных местах, не на камне.
 ## На крыле Чащи (расширение карты, сборка 3) пятна гуще — сырая тёмная
-## гуща; x, z — пиксельные координаты карты (мир − MAP_M/2).
+## гуща; Мшистая низина (сборка 5) — ещё гуще: мох почти сплошь, с
+## прозринами пятен шума. x, z — пиксельные координаты карты (мир −
+## MAP_M/2).
 const THICKET_MOSS_BOOST: float = 0.8
+const HOLLOW_MOSS_BOOST: float = 1.6
 
 static func _moss_weight(
 	noise: FastNoiseLite, x: int, z: int, w_rock: float, w_wet: float) -> float:
 	var patch: float = smoothstep(0.05, 0.75, (noise.get_noise_2d(x, z) + 1.0) * 0.5)
 	var boost := 1.0 + THICKET_MOSS_BOOST * IslandGen.wing_weight_of(
 		"thicket", x - MAP_M / 2, z - MAP_M / 2)
+	boost += HOLLOW_MOSS_BOOST * IslandGen.hollow_weight(
+		x - MAP_M / 2, z - MAP_M / 2)
 	return patch * boost * (1.0 - w_rock) * (0.45 + 0.55 * w_wet)
 
 

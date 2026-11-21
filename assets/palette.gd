@@ -6,7 +6,8 @@
 # Персонажи-«мармеладки»: цвет игрока — один из 6 ярких вариантов по хэшу id.
 # Экземпляр: assets/palette.tres; доступ — `const PAL: Palette = preload(...)`.
 # Порядок зон — IslandGen.ZONES: plaza, forest, ruins, hills, crevasse, lake,
-# cliffs, thicket, shore, meadows (крылья — расширение карты, сборка 1).
+# cliffs, thicket, shore, meadows (крылья — расширение карты, сборка 1),
+# hollow — Мшистая низина (расширение карты, сборка 5).
 class_name Palette
 extends Resource
 
@@ -27,24 +28,28 @@ extends Resource
 	Color("cdbd72"), Color("5f9e58"), Color("9aa88b"), Color("a9d389"),
 	Color("8d8aa0"), Color("e7d5a2"),
 	Color("a79d8c"), Color("4f7f4a"), Color("d9c9a0"), Color("b9d97e"),
+	Color("4a5c48"),
 ]
 ## Камень зоны: обрывы, стены расщелины, скальные уступы, валуны.
 @export var zone_stone: PackedColorArray = [
 	Color("c78f6b"), Color("7d8a70"), Color("9aa7b8"), Color("d9cbb0"),
 	Color("7b7994"), Color("a8cfc7"),
 	Color("8f99a6"), Color("6f7a68"), Color("b8ad98"), Color("a8a894"),
+	Color("5d685f"),
 ]
 ## Листва зоны: кроны деревьев и кустов.
 @export var zone_leaf: PackedColorArray = [
 	Color("aab45e"), Color("3f7d46"), Color("6f9d6a"), Color("7cc26b"),
 	Color("6e7f8d"), Color("77c48f"),
 	Color("4a6b52"), Color("356b3f"), Color("8fa06b"), Color("8cc86b"),
+	Color("3d5a44"),
 ]
 ## Оттенок тумана в зоне (DayCycle мягко сводит к нему цвет тумана).
 @export var zone_fog: PackedColorArray = [
 	Color("e9dcbf"), Color("cfe3c2"), Color("ccd5de"), Color("e3e9d2"),
 	Color("cfc9dd"), Color("d3ecec"),
 	Color("c7d3de"), Color("bcd4b6"), Color("dce6d6"), Color("e2ecc9"),
+	Color("b9c9bf"),
 ]
 
 @export_group("Предметы (раздел 6)")
@@ -84,4 +89,5 @@ static func zone_index(zone_name: String) -> int:
 		"thicket": return 7
 		"shore": return 8
 		"meadows": return 9
+		"hollow": return 10
 	return -1

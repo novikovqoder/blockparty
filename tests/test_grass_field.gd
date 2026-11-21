@@ -22,8 +22,11 @@ const FIELD_SHADER: Shader = preload(
 ## обновлена осознанно — суша выросла вчетверо (крылья + перешейки),
 ## высоты старого пятна сдвинулись на дециметры глобальной эрозией.
 ## Сборка 2 (Утёсы): террасы двух смотровых на гребне крыла — снова
-## осознанно (1998463784).
-const HEIGHTS_CHECKSUM: int = 1998463784
+## осознанно (1998463784). Сборка 5 (Луга + низина): пятое крыло и
+## перешеек от Каньона, опущенный до уровня чаши (ступени кромки
+## отрезали низину) — глобальная эрозия опять сдвинула высоты
+## (2600644825).
+const HEIGHTS_CHECKSUM: int = 2600644825
 
 
 # --- модель пучка демо ---
@@ -405,13 +408,15 @@ func test_p17_scan_field_files_removed() -> void:
 func test_p17_scan_field_licenses_clean() -> void:
 	# LICENSES.md без строк удалённых наборов; строка fern_02 обновлена
 	# (статичные папоротники), набор травы/цветов демо — на месте.
+	# celandine_01 и dandelion_01 исключены из «удалённых»: наборы
+	# возвращены для цветочных ковриков Лугов (расширение карты,
+	# сборка 5), файлы старого поля П17 (celandine.res/dandelion.res)
+	# по-прежнему отсутствуют — см. test_p17_scan_field_files_removed.
 	var licenses := _read_licenses()
 	for row: String in [
 		"grass_medium_01 | Poly Haven",
 		"grass_medium_02 | Poly Haven",
 		"grass_bermuda_01 | Poly Haven",
-		"celandine_01 | Poly Haven",
-		"dandelion_01 | Poly Haven",
 	]:
 		assert_false(licenses.contains(row),
 			"LICENSES.md без строки удалённого набора: %s" % row)
