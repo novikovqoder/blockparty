@@ -252,7 +252,7 @@ const KINDS: Array[Dictionary] = [
 		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_trunk/dead_quiver_trunk_lo.res"),
 		"scale": Vector2(1.0, 1.9), "range": 80.0, "shadow": true,
 		"solid": false, "light": false, "slope": 0.55, "sink": 0.1,
-		"p": 0.0014, "zones": ["thicket", "shore"],
+		"p": 0.0014, "zone": "thicket",
 	},
 	{
 		"type": "gd_dbranch1",
@@ -285,8 +285,10 @@ const KINDS: Array[Dictionary] = [
 	# --- Берег (расширение карты, сборка 4): песчаное побережье востока.
 	# Галька-россыпь и ракушки живут по всему песку до самой кромки воды
 	# (пляжный запрет BEACH_H для них отменён — _place_kind), глыбы реже;
-	# сухостой — общий вид с Чащей (zones обе). Кострище — единственная
-	# постановка (_place_firepit), вероятность 0. ---
+	# сухостой — СВОЙ вид крыла gd_shoresnag (тот же меш, что у чащевого
+	# gd_snag, но ключ отдельный: виды биомов не смешиваются, фикс
+	# сборки 4). Кострище — единственная постановка (_place_firepit),
+	# вероятность 0. ---
 	{
 		"type": "gd_sandrock",
 		"mesh": preload("res://assets/third_party/polyhaven.com/sand_rocks_small_01/sand_rocks_small_01_lo.res"),
@@ -307,6 +309,13 @@ const KINDS: Array[Dictionary] = [
 		"scale": Vector2(0.1, 0.18), "range": 110.0, "shadow": true,
 		"solid": true, "light": false, "slope": 0.55, "sink": 0.35,
 		"p": 0.0012, "zone": "shore",
+	},
+	{
+		"type": "gd_shoresnag",
+		"mesh": preload("res://assets/third_party/polyhaven.com/dead_quiver_trunk/dead_quiver_trunk_lo.res"),
+		"scale": Vector2(1.0, 1.9), "range": 80.0, "shadow": true,
+		"solid": false, "light": false, "slope": 0.55, "sink": 0.1,
+		"p": 0.0014, "zone": "shore",
 	},
 	{
 		"type": "gd_firepit",
@@ -411,24 +420,18 @@ static func _place_kind(
 	# "zone") живут только на своём крыле; прежние виды убраны со всех
 	# новых земель — крылья И перешейки (вес крыла в полосе спада уже
 	# < 0.5, имени нет, а земля новая; крылья ждут своих сборок 3–5),
-	# кроме папоротника на плато Утёсов. Сборка 4: поле "zones" — список
-	# крыльев (сухостой живёт и в Чаще, и на Берегу); "zone" — то же самое
-	# с одним элементом.
-	var zones: Array = kind.get("zones", [])
+	# кроме папоротника на плато Утёсов. Фикс сборки 4: мультизоны
+	# ("zones" — сухостой общий с Чащей) убраны, у Берега свой сухостой
+	# gd_shoresnag — один ключ = одно крыло, виды биомов не смешиваются.
 	var kind_zone: String = kind.get("zone", "")
-	if kind_zone != "":
-		zones = [kind_zone]
 	var wing: String = cell["wing"]
-	if not zones.is_empty():
-		var fits := false
-		for zone_name: String in zones:
-			if zone_name == "thicket":
-				# Чаща (сборка 3): биом — ядро крыла И перешеек от Леса,
-				# с запасом клетки (in_thicket_plant): джиттер ±0.3 уводит
-				# floori координат меша в соседа — кромка биома чиста.
-				fits = fits or IslandGen.in_thicket_plant(x, z)
-			else:
-				fits = fits or zone_name == wing
+	if kind_zone != "":
+		var fits := kind_zone == wing
+		if kind_zone == "thicket":
+			# Чаща (сборка 3): биом — ядро крыла И перешеек от Леса,
+			# с запасом клетки (in_thicket_plant): джиттер ±0.3 уводит
+			# floori координат меша в соседа — кромка биома чиста.
+			fits = IslandGen.in_thicket_plant(x, z)
 		if not fits:
 			return
 	else:
@@ -441,7 +444,7 @@ static func _place_kind(
 			return  # прежний высотный предел 15 м — только для прежних видов
 	# Виды Берега (сборка 4) — исключение из пляжного запрета BEACH_H:
 	# песок и есть их место; ниже SHORE_KIND_H_MIN (вода) — как всем.
-	if cell["blocked"] and not (zones.has("shore") and cell["beach"]
+	if cell["blocked"] and not (kind_zone == "shore" and cell["beach"]
 			and float(cell["h"]) > SHORE_KIND_H_MIN):
 		return
 	if cell["solid_blocked"] and kind["solid"]:

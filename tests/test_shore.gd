@@ -3,7 +3,9 @@
 # крыла × спад по высоте с шумом) и только его; галька, ракушки и глыбы
 # (поле "zone": "shore") живут на крыле до самой кромки воды — пляжный
 # запрет BEACH_H для них снят, ниже SHORE_KIND_H_MIN воды никого нет;
-# сухостой — общий вид с Чащей; кострище дикого пляжа — одна постановка
+# сухостой — СВОЙ вид крыла gd_shoresnag (тот же меш, что у чащевого
+# gd_snag, ключ отдельный — виды биомов не смешиваются, фикс сборки 4);
+# кострище дикого пляжа — одна постановка
 # у камня духа. Пляж проходим: спавн и низкие клетки ядра достижимы
 # пешком с Площади; пара прибрежных глыб CliffLandmarks смотрит лицом
 # на восток. Раскладки детерминированы — два построения дают те же
@@ -14,13 +16,14 @@ const ART: IslandArt = preload("res://gameplay/world/island_art.res")
 const WING_CENTER := Vector2(170.0, -20.0)
 const STONE_CELL := Vector2(166.5, -23.5)
 
-## Виды Берега (поле "zone": "shore" в KINDS); сухостой gd_snag — общий
-## с Чащей (поле "zones"), для него здесь только счёт на крыле.
+## Виды Берега (поле "zone": "shore" в KINDS), включая сухостой
+## gd_shoresnag — свой ключ крыла (общего с Чащей вида больше нет).
 const SHORE_TYPES: PackedStringArray = [
-	"gd_sandrock", "gd_shell", "gd_coastrock",
+	"gd_sandrock", "gd_shell", "gd_coastrock", "gd_shoresnag",
 ]
 const SCATTER_TYPES: PackedStringArray = [
-	"gd_sandrock", "gd_shell", "gd_coastrock", "gd_snag", "gd_firepit",
+	"gd_sandrock", "gd_shell", "gd_coastrock", "gd_shoresnag",
+	"gd_firepit",
 ]
 
 ## Кэш наполнения между тестами файла (build дорогой: вся карта).
@@ -80,7 +83,8 @@ func test_shore_low_ground_fully_sandy() -> void:
 
 func test_shore_kinds_live_only_on_wing() -> void:
 	# Виды Берега селятся заметно и только в круге своего крыла на новых
-	# землях; сухостой дрейфует и на Берег (общий вид с Чащей).
+	# землях — включая свой сухостой gd_shoresnag (чащевый gd_snag на
+	# крыло не заходит: один ключ = одно крыло).
 	var transforms: Dictionary = _scatter()
 	var wing_span: float = 65.0 + IslandGen.WING_EDGE_BAND + 2.0
 	for type: String in SHORE_TYPES:
@@ -93,12 +97,6 @@ func test_shore_kinds_live_only_on_wing() -> void:
 			assert_true(IslandGen._in_new_land(
 					floori(xf.origin.x), floori(xf.origin.z)),
 				"%s только на новых землях" % type)
-	var snags := 0
-	for xf: Transform3D in transforms.get("gd_snag", []):
-		if Vector2(xf.origin.x, xf.origin.z).distance_to(WING_CENTER) \
-				< wing_span:
-			snags += 1
-	assert_gt(snags, 3, "сухостой дрейфует и на Берег")
 
 
 func test_shore_kinds_live_on_sand() -> void:
@@ -220,7 +218,8 @@ func test_shore_assets_present() -> void:
 	# Меши видов Берега заведены в KINDS и не пустые; текстуры песка
 	# на месте (лицензии по каталогу проверяет test_third_party).
 	for type: StringName in [
-			&"gd_sandrock", &"gd_shell", &"gd_coastrock", &"gd_firepit"]:
+			&"gd_sandrock", &"gd_shell", &"gd_coastrock", &"gd_shoresnag",
+			&"gd_firepit"]:
 		var mesh: Mesh = GroundDetails.kind_mesh(type)
 		assert_not_null(mesh, "%s: меш заведён" % type)
 		assert_gt(mesh.get_aabb().size.length(), 0.1,
