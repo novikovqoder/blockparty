@@ -220,8 +220,8 @@ func test_ring_uses_height_texture_and_fade() -> void:
 	# смотровых на гребне крыла, 1329122158; сборка 3, Чаща — гуща
 	# юго-западного крыла, 104214706; сборка 5, Луга + низина — пятое
 	# крыло, перешеек от Каньона (опущен до уровня чаши) и наполнение,
-	# 3729355644).
-	assert_eq(IslandGen.island_hash(IslandGen.generate()), 3729355644,
+	# 3878907717).
+	assert_eq(IslandGen.island_hash(IslandGen.generate()), 3878907717,
 		"хеш острова не изменился")
 
 

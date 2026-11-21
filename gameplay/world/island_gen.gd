@@ -1363,16 +1363,46 @@ static func _thicket_forest(
 
 ## Клетка принадлежит биому Лугов: новые земли (крыло + перешеек от
 ## севера Леса/Руин) в радиусе MEADOWS_REACH_R от центра крыла. Чужие
-## крылья отсечены именем (wing_name_at), чужие перешейки — радиусом
-## (как in_thicket).
+## крылья отсечены именем (wing_name_at); ничейная кромка (вес каждого
+## крыла < 0.5) — только если вес Лугов не слабее чужого: кромки Чащи
+## и Лугов пересекаются на юго-западе, биомы не смешиваются (фикс
+## сборки 5 — пары чащевых деревьев попадали в «одиночные» Лугов).
 static func in_meadows(x: int, z: int) -> bool:
 	if not _in_new_land(x, z):
 		return false
-	var wing := wing_name_at(x, z)
-	if wing != "" and wing != "meadows":
+	if not _wing_is_mine("meadows", x, z):
 		return false
 	return Vector2(float(x), float(z)).distance_to(
 		_wing_center("meadows")) < MEADOWS_REACH_R
+
+
+## Клетка принадлежит биому Мшистой низины (крыло + перешеек от Каньона,
+## радиус HOLLOW_REACH_R от центра крыла; чужие крылья отсечены именем,
+## ничейная кромка — по сильнейшему весу, схема Лугов).
+static func in_hollow(x: int, z: int) -> bool:
+	if not _in_new_land(x, z):
+		return false
+	if not _wing_is_mine("hollow", x, z):
+		return false
+	return Vector2(float(x), float(z)).distance_to(
+		_wing_center("hollow")) < HOLLOW_REACH_R
+
+
+## Клетка крыла name: имя крыла совпадает (ядро, вес ≥ 0.5) или клетка
+## ничейная (кромка) и вес этого крыла не слабее любого чужого.
+static func _wing_is_mine(name: String, x: int, z: int) -> bool:
+	var wing := wing_name_at(x, z)
+	if wing == name:
+		return true
+	if wing != "":
+		return false
+	var own: float = _wing_weight(_wing_of(name), x, z)
+	for other: Dictionary in WINGS:
+		if String(other["name"]) == name:
+			continue
+		if _wing_weight(other, x, z) > own:
+			return false
+	return true
 
 
 ## Луга (расширение карты, сборка 5): открытое северное крыло — деревьев
@@ -1480,18 +1510,6 @@ static func _meadows_fill(
 				Vector3(scale, scale * flower_rng.randf_range(0.95, 1.2),
 					scale),
 				"plain", 3 if iris else 1)
-
-
-## Клетка принадлежит биому Мшистой низины (крыло + перешеек от Каньона,
-## радиус HOLLOW_REACH_R от центра крыла; чужие крылья отсечены именем).
-static func in_hollow(x: int, z: int) -> bool:
-	if not _in_new_land(x, z):
-		return false
-	var wing := wing_name_at(x, z)
-	if wing != "" and wing != "hollow":
-		return false
-	return Vector2(float(x), float(z)).distance_to(
-		_wing_center("hollow")) < HOLLOW_REACH_R
 
 
 ## Мшистая низина (расширение карты, сборка 5): печёной раскладки мало —
