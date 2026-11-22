@@ -36,18 +36,24 @@ const LEG_TIME: float = 20.0
 func before_all() -> void:
 	_saved_ticks = Engine.physics_ticks_per_second
 	Engine.physics_ticks_per_second = FAST_TICKS
+	# Остров строится один раз на весь скрипт: IslandView._ready собирает
+	# статичный мир (~3 мин), тесты его только читают и не меняют.
+	_world()
 
 
 func after_all() -> void:
 	Engine.physics_ticks_per_second = _saved_ticks
+	if _island != null:
+		_island.queue_free()
+		_island = null
+		_cabins.clear()
+		await get_tree().process_frame
 
 
-func before_each() -> void:
-	# Остров регистрируется в autofree и освобождается по концу каждого
-	# теста — кэш _world() обязан сбрасываться, иначе следующие тесты
-	# кастуют освобождённый узел («Trying to cast a freed object»).
-	_island = null
-	_cabins.clear()
+func after_each() -> void:
+	# Игроки тестов удаляются через queue_free: даём кадр, чтобы следующий
+	# тест стартовал без прошлого игрока в общем острове.
+	await get_tree().process_frame
 
 
 # --- Драйвер вместо BotController: идёт к цели, НИКОГДА не прыгает ---
@@ -129,12 +135,22 @@ class Rammer extends BotController:
 
 var _island: Node3D
 var _cabins: Array[Node] = []
+## Кэш данных генератора (generate() ~1.5 мин, детерминирован).
+var _gen_cache: Dictionary = {}
+
+
+func _gen() -> Dictionary:
+	if _gen_cache.is_empty():
+		_gen_cache = IslandGen.generate()
+	return _gen_cache
 
 
 func _world() -> Node3D:
 	if _island == null:
 		_island = ISLAND.instantiate()
-		add_child_autofree(_island)
+		# Не autofree: остров живёт весь скрипт (см. before_all/after_all),
+		# постройка мира в IslandView._ready стоит ~3 мин на каждый тест.
+		add_child(_island)
 		for child in _island.get_children():
 			if child.name.begins_with("Cabin"):
 				_cabins.append(child)
@@ -231,7 +247,7 @@ func test_cabins_grounded_no_gap() -> void:
 func test_no_solid_props_inside_cabins() -> void:
 	# Наполнение и постройки не залезают под срубы: в габарите дома
 	# (13.6 × 16.2) нет предметов вообще — ни твёрдых, ни декоративных.
-	var data: Dictionary = IslandGen.generate()
+	var data: Dictionary = _gen()
 	var intruders: Array[String] = []
 	for plot: Dictionary in data["poi"]["village"]["plots"]:
 		var base: Vector3 = plot["pos"]
