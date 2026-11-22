@@ -22,6 +22,27 @@ const OLD_TYPES: PackedStringArray = [
 ]
 
 
+## Кэш построения HIGH между тестами (build ~3 мин: полный проход 513²).
+## Детерминизм в test_cliff_scatter_is_deterministic проверяется двумя
+## СВЕЖИМИ построениями — кэш туда не идёт.
+var _built_cache: Dictionary = {}
+## Кэш данных генератора (generate() ~1.5 мин).
+var _gen_cache: Dictionary = {}
+
+
+func _built() -> Dictionary:
+	if _built_cache.is_empty():
+		_built_cache = GroundDetails.build(
+			ART, GraphicsQuality.Tier.HIGH)
+	return _built_cache
+
+
+func _gen() -> Dictionary:
+	if _gen_cache.is_empty():
+		_gen_cache = IslandGen.generate()
+	return _gen_cache
+
+
 func test_wing_name_at_splits_island() -> void:
 	# Ядро каждого крыла носит своё имя, старый остров (Площадь) — ничьё:
 	# гейтинг наполнения опирается на эту функцию.
@@ -35,8 +56,7 @@ func test_wing_name_at_splits_island() -> void:
 func test_cliff_kinds_live_only_on_wing() -> void:
 	# Все девять скальных видов селятся, заметно (не пара камней) и только
 	# в круге крыла Утёсов — не на старом острове и не на чужих крыльях.
-	var transforms: Dictionary = GroundDetails.build(
-		ART, GraphicsQuality.Tier.HIGH)["transforms"]
+	var transforms: Dictionary = _built()["transforms"]
 	var wing_span: float = 70.0 + IslandGen.WING_EDGE_BAND + 2.0
 	for type: String in CLIFF_TYPES:
 		var placed: Array = transforms.get(type, [])
@@ -50,8 +70,7 @@ func test_cliff_kinds_live_only_on_wing() -> void:
 func test_old_kinds_leave_wings_except_fern() -> void:
 	# Прежние виды убраны с крыльев (крылья ждут своих сборок 3–5);
 	# исключение — папоротник на плато Утёсов (мшистая нота).
-	var transforms: Dictionary = GroundDetails.build(
-		ART, GraphicsQuality.Tier.HIGH)["transforms"]
+	var transforms: Dictionary = _built()["transforms"]
 	var wings: Array[Vector2] = [
 		WING_CENTER, Vector2(-130.0, -130.0), Vector2(170.0, -20.0),
 		Vector2(-10.0, -160.0),
@@ -74,8 +93,7 @@ func test_old_kinds_leave_wings_except_fern() -> void:
 func test_cliff_kinds_rise_above_old_cap() -> void:
 	# Скальные виды идут по кромке выше прежнего предела 15 м — до вершины
 	# уступа, но не выше (blocked выше CLIFF_RIM_H + 0.5).
-	var transforms: Dictionary = GroundDetails.build(
-		ART, GraphicsQuality.Tier.HIGH)["transforms"]
+	var transforms: Dictionary = _built()["transforms"]
 	var above := 0
 	var type: String = "gd_rockface1"
 	for t: String in ["gd_rockface1", "gd_rockface2", "gd_cliffrock"]:
@@ -153,7 +171,7 @@ func test_cliffs_lookouts_on_wing_with_yaw() -> void:
 			"лестница смотровой Утёсов повернута")
 	assert_eq(cliffs, 2, "на Утёсах две смотровые")
 	# poi несёт yaw в игру (generate_island ставит поворот лестницы).
-	var data: Dictionary = IslandGen.generate()
+	var data: Dictionary = _gen()
 	var yawed := 0
 	for poi: Dictionary in data["poi"]["lookouts"]:
 		if float(poi.get("yaw", 0.0)) != 0.0:
@@ -181,8 +199,7 @@ func test_cliffs_plateau_paints_and_sounds_stone() -> void:
 func test_cliff_scatter_clear_of_cliffs_lookouts() -> void:
 	# Террасы смотровых Утёсов не загорожены твёрдым наполнением
 	# (solid_blocked в радиусе 9 м от площадки).
-	var transforms: Dictionary = GroundDetails.build(
-		ART, GraphicsQuality.Tier.HIGH)["transforms"]
+	var transforms: Dictionary = _built()["transforms"]
 	var solid_types: PackedStringArray = []
 	for kind: Dictionary in GroundDetails.KINDS:
 		if kind["solid"] and String(kind.get("zone", "")) == "cliffs":

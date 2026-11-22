@@ -14,3 +14,4 @@
 | --- | ---: | ---: | ---: | ---: | --- |
 | test_cabin_house | 1579 | 372 | 4.2 | 8/8 | остров строится 1 раз в `before_all` (было: 7 × ~200 с), кэш `IslandGen.generate` |
 | test_island_scene | 1208 | 344 | 3.5 | 5/5 | один остров на 5 тестов (`before_all`, `textured_headless`), generate закэширован |
+| test_cliffs | 1158 | 642 | 1.8 | 10/10 | кэш `GroundDetails.build(HIGH)` (4 одиночных теста делят одно построение), кэш `generate`; детерминизм — 2 свежих построения, как было |
