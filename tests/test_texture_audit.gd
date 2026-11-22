@@ -74,8 +74,13 @@ const RUNTIME_MIP_THRESHOLD: int = 256
 ## Сэмплеры-данные, не визуал (П14 3.1): height_tex — карта высот острова
 ## RFloat 257×257 (как HeightMapShape3D) для смещения вершин кольца и
 ## марша POM; усреднение мипами смазало бы марш — аудита мипов она не
-## подлежит, как и карты покраски размером ниже порога.
-const DATA_SAMPLERS: Array[String] = ["height_tex"]
+## подлежит, как и карты покраски размером ниже порога. shore_sdf —
+## запечённая из карты высот карта расстояния до берега (П15 9.3, не
+## ассет): SDF размывать мипами нельзя. Раньше не попадала в аудит —
+## материал-обход строил остров без textured_headless (вода-заглушка
+## без карты); общий остров скрипта строится в игровом режиме, и карта
+## видна — потому и исключена явно.
+const DATA_SAMPLERS: Array[String] = ["height_tex", "shore_sdf"]
 
 ## Шейдеры игры (сэмплеры обязаны объявлять не-Nearest фильтр явно).
 const SHADER_DIRS: Array[String] = [
@@ -168,6 +173,33 @@ const ALWAYS_UNTEXTURED: Array[String] = [
 ## П7 закрыт: мох камней (mrock/rrock/boulder/rock_pillar/pebble) — текстура
 ## ambientCG Moss001 по верхним граням с мягким переходом (rock_moss.gdshader).
 const TRANSITIONAL_UNTEXTURED: Array[String] = []
+
+## Общий остров + сцена мира на весь скрипт: оба собираются в _ready
+## дольше минуты каждый, а три аудита читают одно и то же живое дерево
+## (материалы частиц в материал-аудит не попадают — GPUParticles3D не
+## MeshInstance3D, порядок тестов неважен). Материалы строит текстурный
+## режим — как в игре, остров и мир создаются с флагом.
+var _island_shared: Node
+var _world_shared: Node
+
+
+func before_all() -> void:
+	WorldMaterials.textured_headless = true
+	_island_shared = ISLAND.instantiate()
+	# Не autofree: живут весь скрипт, освобождаются в after_all.
+	add_child(_island_shared)
+	_world_shared = WORLD.instantiate()
+	add_child(_world_shared)
+	WorldMaterials.textured_headless = false
+
+
+func after_all() -> void:
+	for node: Node in [_world_shared, _island_shared]:
+		if node != null:
+			node.queue_free()
+	_world_shared = null
+	_island_shared = null
+	await get_tree().process_frame
 
 
 func test_project_filter_settings() -> void:
@@ -325,10 +357,7 @@ func test_world_surfaces_textured_or_whitelisted() -> void:
 ## Частицы бега включаем вручную: мир строит их по арту острова, тест
 ## передаёт запечённый ресурс.
 func test_world_particles_textured() -> void:
-	WorldMaterials.textured_headless = true
-	var world := WORLD.instantiate()
-	add_child_autofree(world)
-	WorldMaterials.textured_headless = false
+	var world: Node = _world_shared
 	for node: Node in get_tree().get_nodes_in_group(Player.GROUP):
 		(node as Player).setup_foot_fx(ART)
 	var offenders: Array[String] = []
@@ -429,12 +458,8 @@ func test_runtime_materials_meet_quality_bar() -> void:
 ## per-surface override; null допустим только после них (белый дефолт).
 func _collect_world_surfaces() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var island := ISLAND.instantiate()
-	add_child_autofree(island)
-	var world := WORLD.instantiate()
-	add_child_autofree(world)
-	_collect_surfaces(island, out)
-	_collect_surfaces(world, out)
+	_collect_surfaces(_island_shared, out)
+	_collect_surfaces(_world_shared, out)
 	return out
 
 
@@ -540,15 +565,8 @@ func _collect_images(dir_path: String, out: Array[String]) -> void:
 func _collect_world_materials() -> Array[Dictionary]:
 	var seen: Dictionary = {}
 	var out: Array[Dictionary] = []
-	var island := ISLAND.instantiate()
-	add_child_autofree(island)
-	# Сцена мира — риг неба Sky3D (купол со звёздными текстурами) поверх
-	# того же острова: материалы дедуплицируются, добавляются только небесные.
-	var world := WORLD.instantiate()
-	add_child_autofree(world)
-	# Персонажи (герой BU) — внутри сцены мира: обычный обход их видит.
-	_collect_materials(island, seen, out)
-	_collect_materials(world, seen, out)
+	_collect_materials(_island_shared, seen, out)
+	_collect_materials(_world_shared, seen, out)
 	return out
 
 
