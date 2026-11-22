@@ -21,6 +21,15 @@ const THICKET_TYPES: PackedStringArray = [
 
 ## Кэш наполнения между тестами файла (build дорогой: вся карта).
 static var _gd_cache: Dictionary = {}
+## Кэш данных генератора (generate ~1.5 мин, детерминирован; build
+## детерминизма уже проверяет свежим вторым построением ниже).
+static var _gen_cache: Dictionary = {}
+
+
+func _gen() -> Dictionary:
+	if _gen_cache.is_empty():
+		_gen_cache = IslandGen.generate()
+	return _gen_cache
 
 
 func _scatter() -> Dictionary:
@@ -87,7 +96,7 @@ func test_fern_returns_to_thicket() -> void:
 func test_thicket_forest_denser_than_old_forest() -> void:
 	# Смысл крыла: второй лес ГУЩЕ существующего. Считаем деревья
 	# (не кусты) на м² в старом Лесу и в Чаще по одним данным generate().
-	var data: Dictionary = IslandGen.generate()
+	var data: Dictionary = _gen()
 	var forest_trees := 0
 	var thicket_trees := 0
 	var thicket_cells := 0
@@ -118,7 +127,7 @@ func test_thicket_trails_clear_and_walkable() -> void:
 	# оси), земля красится утоптанной (вес ≥ 0.9 на оси, DIRT под ногами),
 	# и каждая точка оси достижима пешком с Площади (BFS заливка с
 	# барьерами коллизий) — чаща проходима насквозь.
-	var data: Dictionary = IslandGen.generate()
+	var data: Dictionary = _gen()
 	# Клетки деревьев чащи (джиттер ±0.3, запрет при весе тропы ≥ 0.15 —
 	# реальные просветы ~2.5 м от оси; порог теста 2.0 с запасом).
 	var tree_cells: Array[Vector2] = []
@@ -161,7 +170,7 @@ func test_thicket_trails_clear_and_walkable() -> void:
 func test_thicket_giant_clearing() -> void:
 	# Поляна-«комната»: дуб-исполин на своей клетке, в радиусе чистки
 	# никаких других деревьев (гуща вокруг, комната внутри).
-	var data: Dictionary = IslandGen.generate()
+	var data: Dictionary = _gen()
 	var giant: Vector3 = Vector3.INF
 	for prop: Dictionary in data["props"]:
 		if String(prop["type"]) != "etree_giant":
@@ -215,7 +224,7 @@ func test_thicket_moss_grows_thicker() -> void:
 func test_thicket_spawns_and_zone_intact() -> void:
 	# Каркас сборки 1 не сломан: зона, спавн и камень духа Чащи на местах,
 	# рядом с гущей есть проход (спавн достижим — через заливку).
-	var data: Dictionary = IslandGen.generate()
+	var data: Dictionary = _gen()
 	assert_true(data["spawn_zones"].has("thicket"), "спавн THICKET есть")
 	var reach: Dictionary = IslandGen.mechanics_reach(data)["cells"]
 	var spawn: Vector3 = data["spawn_zones"]["thicket"]
