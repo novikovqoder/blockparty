@@ -10,6 +10,29 @@ const PLAYER: PackedScene = preload("res://gameplay/player/player.tscn")
 
 ## Кэш данных генератора между тестами (generate() дорогой, ~10 с).
 static var _gen_cache: Dictionary = {}
+## Кэш острова на весь скрипт: IslandView._ready собирает статичный мир
+## (~3.5 мин), пять тестов читают одно и то же дерево. Строится с
+## textured_headless — как в игре и в тесте воды (материалы не заглушки).
+var _island_cache: Island
+
+
+func before_all() -> void:
+	WorldMaterials.textured_headless = true
+	_island_cache = ISLAND.instantiate() as Island
+	# Не autofree: остров живёт весь скрипт, освобождается в after_all.
+	add_child(_island_cache)
+	WorldMaterials.textured_headless = false
+
+
+func after_all() -> void:
+	if _island_cache != null:
+		_island_cache.queue_free()
+		_island_cache = null
+		await get_tree().process_frame
+
+
+func _island() -> Island:
+	return _island_cache
 
 
 func _island_data() -> Dictionary:
@@ -22,8 +45,7 @@ func test_baked_art_matches_generator() -> void:
 	# П4.5: сцена строится из запечённого island_art.res — карта высот
 	# и предметы совпадают с данными генератора, остров не перегенерирован
 	# молча (IslandView._ready уже построил рельеф и коллизии из ресурса).
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _island()
 	var view := island.get_node("IslandView") as IslandView
 	assert_not_null(view, "в сцене есть IslandView")
 	var data: Dictionary = _island_data()
@@ -51,8 +73,7 @@ func test_baked_art_matches_generator() -> void:
 
 
 func test_scene_contents() -> void:
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _island()
 	var water := 0
 	var markers := 0
 	for child: Node in island.get_children():
@@ -73,8 +94,7 @@ func test_scene_contents() -> void:
 
 
 func test_water_surfaces_configured() -> void:
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _island()
 	for child: Node in island.get_children():
 		if child is WaterArea:
 			var area := child as WaterArea
@@ -92,11 +112,9 @@ func test_water_surfaces_configured() -> void:
 ## в море.
 func test_water_is_shared_ocean_and_lake() -> void:
 	# Шейдерные материалы воды строит только текстурный режим (headless
-	# без флага отдаёт плоские заглушки) — включаем, как тест аудита.
-	WorldMaterials.textured_headless = true
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
-	WorldMaterials.textured_headless = false
+	# без флага отдаёт плоские заглушки) — общий остров построен с флагом
+	# в before_all, отдельное построение не нужно.
+	var island := _island()
 	var sea_material: ShaderMaterial = null
 	var lake_material: ShaderMaterial = null
 	var lake_surface: MeshInstance3D = null
@@ -173,8 +191,7 @@ func test_water_is_shared_ocean_and_lake() -> void:
 func test_player_stands_in_every_spawn_zone() -> void:
 	# Коллизия рельефа (HeightMapShape3D) работает: персонаж не проваливается
 	# ни в одной зоне.
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _island()
 	var player := PLAYER.instantiate() as Player
 	island.add_child(player)
 	for zone: String in island.spawn_zones:
