@@ -41,6 +41,9 @@ const FAST_TICKS: int = 240
 var _saved_ticks: int = 60
 
 
+var _island: Island
+
+
 func before_all() -> void:
 	_saved_ticks = Engine.physics_ticks_per_second
 	Engine.physics_ticks_per_second = FAST_TICKS
@@ -48,6 +51,24 @@ func before_all() -> void:
 
 func after_all() -> void:
 	Engine.physics_ticks_per_second = _saved_ticks
+	if _island != null:
+		_island.queue_free()
+		_island = null
+		await get_tree().process_frame
+
+
+## Остров для трёх физических тестов (вершины/смотровые/расщелина):
+## строится лениво при первом обращении и живёт до конца скрипта —
+## IslandView._ready собирает мир ~3 мин, ходить по нему можно многократно.
+## НЕ в before_all: синтетические рамп-тесты выше по файлу работают на
+## чистом мире с собственным полом в районе начала координат — остров
+## с рельефом Площади наложился бы на их коллизии.
+func _world_island() -> Island:
+	if _island == null:
+		_island = ISLAND.instantiate() as Island
+		# Не autofree: живёт до after_all.
+		add_child(_island)
+	return _island
 
 
 # --- Драйвер вместо BotController: идёт к цели, НИКОГДА не прыгает ---
@@ -437,8 +458,7 @@ func test_bot_climbs_every_hill_and_descends() -> void:
 	# Бот без прыжков: на вершину КАЖДОГО холма зоны «Холмы» и обратно;
 	# по пути — контакт с землёй (привязка к поверхности) и вертикальная
 	# скорость в гравитационных пределах (прыжков нет).
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _world_island()
 	var walker := _walker()
 	var targets: Array[Vector3] = _hill_targets()
 	assert_gt(targets.size(), 4,
@@ -474,8 +494,7 @@ func test_bot_climbs_every_hill_and_descends() -> void:
 func test_lookout_ledges_not_climbable_on_foot() -> void:
 	# Смотровые уступы (+3 м): с кольца-основания бот идёт к центру
 	# площадки — и не попадает на неё без подсадки (стены кольца и уступ).
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _world_island()
 	var walker := _walker()
 	for entry: Dictionary in IslandGen.LOOKOUTS:
 		var center: Vector2i = entry["cell"]
@@ -501,8 +520,7 @@ func test_crevasse_walls_not_walkable() -> void:
 	# Стенки расщелины: бот идёт через каньон вне мостков — на ту сторону
 	# пешеходом не попасть: падает внутрь и зависает на HangPoint (механика),
 	# но не переходит каньон по стенке.
-	var island := ISLAND.instantiate() as Island
-	add_child_autofree(island)
+	var island := _world_island()
 	# X = 70 — вне мостков (BRIDGE_X = 33, 52).
 	var start := Vector3(
 		70.0, IslandGen.CREVASSE_RIM_H + 1.0, float(IslandGen.CREVASSE_Z1 + 6))
