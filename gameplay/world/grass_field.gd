@@ -28,7 +28,9 @@
 # Цветы (3 модели, по ~50 на круге HIGH) — пятнами того же шума земли
 # (только гуща пятен), вид пятна детерминирован крупной клеткой
 # FLOWER_CELL м — в одном пятне виды не смешиваются. Масштаб демо
-# 0.02–0.05 на модель высотой ~86 ед. GLB (итог 0.65–1.63 м).
+# 0.02–0.05 на модель высотой ~86 ед. GLB, сжат ×0.32 фиксом «по
+# колено» (приёмка этапа расширения: демо-масштаб давал 0.56–1.57 м —
+# выше пояса героя) — итог 0.18–0.50 м.
 class_name GrassField
 extends RefCounted
 
@@ -66,14 +68,17 @@ const EDGE_M: float = 12.0
 ## уровня Radeon 780M — П16), но принимает тени: шейдер grass_ez без
 ## ручного light(), стандартный PBR получает тени сам.
 const SHADOW_RING: float = 10.0
-## Масштаб пучка по осям: size {5,4,5} + случайно variation {1,2,1}
-## (grass.js GrassOptions), ×k. Ширина итогового пучка ~3.7–4.5 м,
-## высота ~3.0–4.6 м — буквально пропорции демо (трава ≈ ⅙ ели).
-const SIZE: Vector3 = Vector3(5.0, 4.0, 5.0) * K
-const SIZE_VAR: Vector3 = Vector3(1.0, 2.0, 1.0) * K
-## Цветок: scale.set(s, s, s), s = 0.02 + 0.03·rand (grass.js:247) ×k.
-const FLOWER_SCALE_FROM: float = 0.02 * K
-const FLOWER_SCALE_TO: float = 0.05 * K
+## Масштаб пучка по осям: XZ — демо size {5,±1} ×k (ширина пучка
+## ~3.7–4.5 м — покрытие поля, счёт и перф не меняются), высота — НЕ
+## демо: фикс «по колено» приёмки этапа расширения — демо-высота
+## 4 ± 2 ед. ×k ставила пучки 3.0–4.6 м, вдвое выше героя (рост 1.8 м,
+## remote_player.gd). Y — напрямую в метрах: итог 0.40–0.56 м.
+const SIZE: Vector3 = Vector3(5.0 * K, 0.20, 5.0 * K)
+const SIZE_VAR: Vector3 = Vector3(1.0 * K, 0.08, 1.0 * K)
+## Цветок: пропорция демо s = 0.02 + 0.03·rand (grass.js:247) ×k,
+## сжатая ×0.32 тем же фиксом «по колено»: итог 0.18–0.50 м.
+const FLOWER_SCALE_FROM: float = 0.0064 * K
+const FLOWER_SCALE_TO: float = 0.016 * K
 ## Ниже этой отметки (после дрожания) травы нет: песок чистый.
 const BEACH_H: float = 1.4
 ## Присыпка основания пучка, м (доля масштаба не нужна — основание
@@ -339,7 +344,10 @@ static func _set_common(
 	material.set_shader_parameter("model_height", model_height)
 	material.set_shader_parameter("fade_start", fade.x)
 	material.set_shader_parameter("fade_end", fade.y)
-	material.set_shader_parameter("wind_strength", 0.5 * K)
+	# Ветер 0.5·k демо — амплитуда для 3–4.6-метровых пучков; после
+	# фикса «по колено» (трава ×0.126 высоты) качание сжато той же
+	# пропорцией, иначе полуметровые пучки «штормит» на 40 % высоты.
+	material.set_shader_parameter("wind_strength", 0.06 * K)
 	material.set_shader_parameter("wind_freq", 0.5)
 	material.set_shader_parameter("wind_noise_scale", 70.0 * K)
 
@@ -623,6 +631,16 @@ const LAB_FLOWER_RADIUS: float = (10.0 + 200.0) * K
 static var _lab_patch_noise: FastNoiseLite = null
 
 
+## Демо-пропорции лаборатории ezTree: копия grass.js как есть — трава
+## там гигантская (3.0–4.6 м, цветы 0.56–1.57 м), и лаборатория
+## сверяется с демо на сайте. Мир после фикса «по колено» на них не
+## ориентируется — раскладка лаборатории меряет свои константы.
+const LAB_SIZE: Vector3 = Vector3(5.0, 4.0, 5.0) * K
+const LAB_SIZE_VAR: Vector3 = Vector3(1.0, 2.0, 1.0) * K
+const LAB_FLOWER_SCALE_FROM: float = 0.02 * K
+const LAB_FLOWER_SCALE_TO: float = 0.05 * K
+
+
 ## Шум пятнистости демо в мировых метрах: n = 0.5 + 0.5·simplex2d(xz/scale),
 ## scale = 100 ед. (GrassOptions.scale) × k. Тот же масштаб, что у земли
 ## лаборатории (ez_lab_ground.gdshader) — пятна травы лежат на пятнах
@@ -685,9 +703,12 @@ static func lab_layout(seed_value: int) -> Dictionary:
 			continue
 		if (groups["tuft"]["transforms"] as Array).size() >= LAB_INSTANCE_COUNT:
 			continue
-		var sx: float = rng.randf_range(SIZE.x, SIZE.x + SIZE_VAR.x)
-		var sy: float = rng.randf_range(SIZE.y, SIZE.y + SIZE_VAR.y)
-		var sz: float = rng.randf_range(SIZE.z, SIZE.z + SIZE_VAR.z)
+		var sx: float = rng.randf_range(
+			LAB_SIZE.x, LAB_SIZE.x + LAB_SIZE_VAR.x)
+		var sy: float = rng.randf_range(
+			LAB_SIZE.y, LAB_SIZE.y + LAB_SIZE_VAR.y)
+		var sz: float = rng.randf_range(
+			LAB_SIZE.z, LAB_SIZE.z + LAB_SIZE_VAR.z)
 		var cr: float = 0.25 + rng.randf() * 0.1
 		var cg: float = 0.3 + rng.randf() * 0.3
 		var yaw: float = rng.randf_range(0.0, TAU)
@@ -705,7 +726,7 @@ static func lab_layout(seed_value: int) -> Dictionary:
 			if n > 0.7 and skip_roll + 0.8 > 0.7:
 				continue
 			var scale3: float = rng.randf_range(
-				FLOWER_SCALE_FROM, FLOWER_SCALE_TO)
+				LAB_FLOWER_SCALE_FROM, LAB_FLOWER_SCALE_TO)
 			var yaw: float = rng.randf_range(0.0, TAU)
 			var basis := Basis(Vector3.UP, yaw) * Basis().scaled(
 				Vector3.ONE * scale3)

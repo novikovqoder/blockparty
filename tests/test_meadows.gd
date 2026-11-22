@@ -149,6 +149,20 @@ func test_flower_props_follow_patches() -> void:
 		"цветы сгущаются по пятнам (> 0.5)")
 
 
+func test_meadow_flower_mats_below_waist() -> void:
+	# Фикс «по колено» (приёмка этапа расширения: трава/цветы выше
+	# героя): sanity высоты цветочных ковриков — AABB модели × верх
+	# диапазона масштаба вида не выше пояса героя (рост 1.8 м, П10).
+	const WAIST: float = 1.1
+	for kind: Dictionary in GroundDetails.KINDS:
+		if String(kind.get("zone", "")) != "meadows":
+			continue
+		var h: float = (kind["mesh"] as Mesh).get_aabb().size.y
+		var scale: Vector2 = kind["scale"]
+		assert_lte(h * scale.y, WAIST,
+			"%s — коврик %.2f м не выше пояса" % [kind["type"], h * scale.y])
+
+
 func test_meadows_trees_sparse_and_solitary() -> void:
 	# Смысл крыла — открытость: деревьев мало и все одиночные (в коде
 	# запрет соседей в 6 м; тест проверяет попарно 5 м с запасом джиттера).

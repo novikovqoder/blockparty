@@ -106,6 +106,54 @@ func test_tuft_scale_and_color_demo_ranges() -> void:
 		assert_almost_eq(c.b, 0.1, 0.0001, "тон B = 0.1 демо")
 
 
+# --- фикс «по колено»: высота против роста героя ---
+
+## Рост героя — 1.8 м (remote_player.gd, П10): колено ≈ 0.5 м, пояс
+## ≈ 1.1 м. Приёмка этапа расширения: демо-масштаб ставил пучки
+## 3.0–4.6 м (вдвое выше героя) и цветы 0.56–1.57 м (выше пояса).
+## Высота инстанса = высота модели × Y-масштаб трансформа.
+const PLAYER_HEIGHT: float = 1.8
+const KNEE_LIMIT: float = 0.6
+
+
+func test_tuft_height_at_knee() -> void:
+	# Трава поля — по колено: верх самого высокого пучка пробы не выше
+	# KNEE_LIMIT (колено + запас на дрожание посадки).
+	var gathered := _gather_around(
+		Vector2(20.0, 25.0), GraphicsQuality.Tier.ULTRA)
+	var model_h: float = GrassField.tuft_data()["height"]
+	var max_h := 0.0
+	var count := 0
+	for xf: Transform3D in _tuft_transforms(gathered):
+		max_h = maxf(max_h, model_h * xf.basis.y.length())
+		count += 1
+	assert_gt(count, 500, "проба не холостая (пучков > 500)")
+	assert_lte(max_h, KNEE_LIMIT,
+		"трава поля по колено: верх %.2f м ≤ %.1f м при герое %.1f м"
+			% [max_h, KNEE_LIMIT, PLAYER_HEIGHT])
+
+
+func test_flower_height_at_knee() -> void:
+	# Цветы демо — по колено (0.18–0.50 м): высота инстанса = max AABB
+	# поверхностей модели × равномерный масштаб трансформа.
+	var gathered := _gather_around(
+		Vector2(20.0, 25.0), GraphicsQuality.Tier.ULTRA)
+	for kind: String in ["white", "blue", "yellow"]:
+		var model_h := 0.0
+		for surface: Dictionary in GrassField.flower_data(kind):
+			model_h = maxf(model_h,
+				(surface["mesh"] as ArrayMesh).get_aabb().size.y)
+		var transforms: Array = gathered["flower_%s" % kind]["transforms"]
+		assert_gt(transforms.size(), 0,
+			"цветы вида %s в пробе есть" % kind)
+		var max_h := 0.0
+		for xf: Transform3D in transforms:
+			max_h = maxf(max_h, model_h * xf.basis.y.length())
+		assert_lte(max_h, KNEE_LIMIT,
+			"цветы %s по колено: верх %.2f м ≤ %.1f м при герое %.1f м"
+				% [kind, max_h, KNEE_LIMIT, PLAYER_HEIGHT])
+
+
 # --- детерминизм по мировым клеткам ---
 
 func test_chunk_layout_deterministic() -> void:
@@ -278,7 +326,7 @@ func test_flower_kinds_and_counts() -> void:
 			var scale: float = xf.basis.x.length()
 			assert_between(scale, GrassField.FLOWER_SCALE_FROM - 0.0001,
 				GrassField.FLOWER_SCALE_TO + 0.0001,
-				"масштаб цветка = 0.02–0.05 демо ×k")
+				"масштаб цветка = демо 0.02–0.05 ×k, сжат ×0.32 («по колено»)")
 
 
 func test_flowers_follow_tuft_zones() -> void:
@@ -347,7 +395,8 @@ func test_field_nodes_and_material() -> void:
 		GrassField.radius_for_tier(GraphicsQuality.Tier.HIGH), 0.0001,
 		"кромка заканчивается на радиусе уровня")
 	assert_almost_eq(float(material.get_shader_parameter("wind_strength")),
-		0.5 * GrassField.K, 0.0001, "ветер — амплитуда крон (0.5·k)")
+		0.06 * GrassField.K, 0.0001,
+		"ветер — амплитуда крон (0.5·k), сжат фиксом «по колено» (0.06·k)")
 	assert_almost_eq(float(
 		material.get_shader_parameter("wind_noise_scale")),
 		70.0 * GrassField.K, 0.0001, "масштаб шума ветра крон (70·k)")
