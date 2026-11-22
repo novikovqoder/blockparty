@@ -12,6 +12,18 @@ const GROUND_SHADER: Shader = preload(
 	"res://assets/shaders/forest_ground.gdshader")
 const THIRD_PARTY: String = "res://assets/third_party"
 
+## Кэш построений GroundDetails по тиру между тестами: build — полный
+## проход 513² × 10 видов (~3 мин). Детерминизм в
+## test_details_deterministic_and_sane проверяется СВЕЖИМ вторым
+## построением — кэш в сравнение не идёт.
+var _built_cache: Dictionary = {}
+
+
+func _built(tier: int) -> Dictionary:
+	if not _built_cache.has(tier):
+		_built_cache[tier] = GroundDetails.build(ART, tier)
+	return _built_cache[tier]
+
 
 # --- П12 D: земля ---
 
@@ -155,7 +167,9 @@ func test_details_deterministic_and_sane() -> void:
 	# только у крупных (валуны и пни). Инстанс-данные MultiMesh в headless
 	# не читаются (пустой RenderingServer) — проверка по сырым трансформам
 	# сборки, в игре узел строится из них же.
-	var first: Dictionary = GroundDetails.build(ART, GraphicsQuality.Tier.HIGH)
+	var first: Dictionary = _built(GraphicsQuality.Tier.HIGH)
+	# Второе построение — всегда свежее: проверка детерминизма сравнивает
+	# два независимых прогона build (кэш первым прогоном и был).
 	var second: Dictionary = GroundDetails.build(ART, GraphicsQuality.Tier.HIGH)
 	var transforms: Dictionary = first["transforms"]
 	assert_gte(transforms.size(), 8, "видов наполнения построено (из 10)")
@@ -203,7 +217,7 @@ func test_ferns_static_denser_near_trunks() -> void:
 	# (кольцо FERN_TRUNK_R, множитель FERN_TRUNK_BOOST). Плотность
 	# «у ствола» сравнивается с лесными клетками вдали от стволов
 	# на единицу площади — множитель виден без статистики на глаз.
-	var details: Dictionary = GroundDetails.build(ART, GraphicsQuality.Tier.HIGH)
+	var details: Dictionary = _built(GraphicsQuality.Tier.HIGH)
 	var ferns: Array = details["transforms"]["gd_fern"]
 	assert_gt(ferns.size(), 0, "папоротники в мире есть")
 	var grid: Dictionary = GroundDetails._trunk_grid(ART)
@@ -243,16 +257,14 @@ func test_grass_boost_by_tier() -> void:
 		GraphicsQuality.Tier.NORMAL,
 	]:
 		var types: Array = (
-			GroundDetails.build(ART, tier)["transforms"] as Dictionary).keys()
+			_built(tier)["transforms"] as Dictionary).keys()
 		assert_eq(
 			types.filter(func(type: String) -> bool:
 				return type.begins_with("gd_grass")).size(),
 			0, "буст-травы нет на Tier.%d" % tier,
 		)
-	var high: int = _grass_total(
-		GroundDetails.build(ART, GraphicsQuality.Tier.HIGH))
-	var ultra: int = _grass_total(
-		GroundDetails.build(ART, GraphicsQuality.Tier.ULTRA))
+	var high: int = _grass_total(_built(GraphicsQuality.Tier.HIGH))
+	var ultra: int = _grass_total(_built(GraphicsQuality.Tier.ULTRA))
 	assert_gt(high, 500, "буст на HIGH заметен: %d пучков" % high)
 	assert_almost_eq(
 		float(ultra) / float(high),
